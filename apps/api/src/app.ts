@@ -14,6 +14,7 @@ import { makeAuthService } from './modules/auth/auth.service.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { registerClientsModule } from './modules/clients/clients.module.js';
 import { registerExercisesModule } from './modules/exercises/exercises.module.js';
+import { registerTemplatesModule } from './modules/workout-templates/templates.module.js';
 
 export type AppDeps = { db: Db; cookieSecret: string; isProd: boolean };
 
@@ -42,6 +43,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   registerClientsModule(app, { db: deps.db, clock });
   registerExercisesModule(app, { db: deps.db, clock });
+  registerTemplatesModule(app, { db: deps.db, clock });
 
   healthRoutes(app);
   return app;
