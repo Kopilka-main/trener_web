@@ -29,6 +29,13 @@
       "when": 1780254645066,
       "tag": "0003_shallow_mikhail_rasputin",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780255922282,
+      "tag": "0004_glamorous_metal_master",
+      "breakpoints": true
     }
   ]
 }

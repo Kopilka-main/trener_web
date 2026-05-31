@@ -85,3 +85,32 @@ export const exercises = pgTable('exercises', {
   note: text('note'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const workoutTemplates = pgTable('workout_templates', {
+  id: text('id').primaryKey(),
+  trainerId: text('trainer_id')
+    .notNull()
+    .references(() => trainers.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  categoryTag: text('category_tag'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const workoutTemplateExercises = pgTable(
+  'workout_template_exercises',
+  {
+    templateId: text('template_id')
+      .notNull()
+      .references(() => workoutTemplates.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    exerciseId: text('exercise_id')
+      .notNull()
+      .references(() => exercises.id),
+    sets: integer('sets').notNull(),
+    reps: integer('reps'),
+    weightKg: doublePrecision('weight_kg'),
+    timeSec: integer('time_sec'),
+    restSec: integer('rest_sec').notNull().default(90),
+  },
+  (t) => [primaryKey({ columns: [t.templateId, t.position] })],
+);
