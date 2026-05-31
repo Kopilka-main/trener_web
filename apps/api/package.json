@@ -1,0 +1,26 @@
+{
+  "name": "@trener/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "@trener/shared": "*",
+    "fastify": "^5.2.0",
+    "pino": "^9.5.0",
+    "drizzle-orm": "^0.38.0",
+    "postgres": "^3.4.5",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "drizzle-kit": "^0.30.0",
+    "@types/node": "^22.10.2"
+  }
+}
