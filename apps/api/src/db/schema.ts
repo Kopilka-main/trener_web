@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uniqueIndex, primaryKey } from 'drizzle-orm/pg-core';
 
 // Служебная таблица версий схемы приложения (доменные таблицы добавит Фаза 2+).
 export const schemaMeta = pgTable('schema_meta', {
@@ -34,3 +34,30 @@ export const sessionsAuth = pgTable('sessions_auth', {
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Человек-клиент (общая идентичность, БЕЗ учётки — клиент не логинится).
+export const clients = pgTable('clients', {
+  id: text('id').primaryKey(),
+  firstName: text('first_name').notNull(),
+  lastName: text('last_name').notNull(),
+  phone: text('phone'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Связь тренер↔клиент (M:N) + профиль клиента глазами этого тренера.
+export const trainerClients = pgTable(
+  'trainer_clients',
+  {
+    trainerId: text('trainer_id')
+      .notNull()
+      .references(() => trainers.id, { onDelete: 'cascade' }),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
+    notes: text('notes'),
+    // 'active' | 'archived' — архив через статус; «удаление» = разрыв связи (delete строки).
+    status: text('status').notNull().default('active'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.trainerId, t.clientId] })],
+);
