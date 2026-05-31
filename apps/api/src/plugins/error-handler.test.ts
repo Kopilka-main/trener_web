@@ -23,7 +23,8 @@ describe('errorHandler', () => {
     });
     const res = await app.inject({ method: 'GET', url: '/crash' });
     expect(res.statusCode).toBe(500);
-    expect(res.json().error).toBe('Внутренняя ошибка сервера');
-    expect(JSON.stringify(res.json())).not.toContain('секретные детали');
+    const body = res.json<{ error: string }>();
+    expect(body.error).toBe('Внутренняя ошибка сервера');
+    expect(JSON.stringify(body)).not.toContain('секретные детали');
   });
 });
