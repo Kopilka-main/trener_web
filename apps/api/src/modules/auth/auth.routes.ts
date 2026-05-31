@@ -43,13 +43,21 @@ export function authRoutes(app: FastifyInstance, svc: AuthService, isProd: boole
     },
   );
 
-  typed.post('/api/auth/logout', async (req, reply) => {
-    const token = req.cookies[SESSION_COOKIE];
-    if (token) await svc.logout(token);
-    void reply.clearCookie(SESSION_COOKIE, { path: '/' });
-    return { ok: true };
-  });
+  typed.post(
+    '/api/auth/logout',
+    { schema: { response: { 200: z.object({ ok: z.literal(true) }) } } },
+    async (req, reply) => {
+      const token = req.cookies[SESSION_COOKIE];
+      if (token) await svc.logout(token);
+      void reply.clearCookie(SESSION_COOKIE, { path: '/' });
+      return { ok: true as const };
+    },
+  );
 
+  // `requireAuth` (exported from tenant-context) — это seam для доменных роутов
+  // Фазы 3: они навесят его как preHandler для гварда tenant-доступа. На `/me`
+  // сужение делается инлайн (см. ниже), т.к. без preHandler TS не сузит
+  // `req.trainerId` до non-null. Поэтому экспортируемый guard пока не используется в проде.
   typed.get('/api/auth/me', { schema: { response: { 200: meResponse } } }, async (req) => {
     if (!req.trainerId) throw unauthorized('Требуется вход');
     return { trainer: await svc.me(req.trainerId) };

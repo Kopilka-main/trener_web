@@ -28,6 +28,9 @@ describe.skipIf(!url)('auth routes (integration)', () => {
     expect(reg.statusCode).toBe(201);
     const cookieHeader = reg.cookies.find((c) => c.name === 'sid');
     expect(cookieHeader?.httpOnly).toBe(true);
+    expect(cookieHeader?.sameSite?.toLowerCase()).toBe('lax');
+    // isProd:false → secure НЕ установлен
+    expect(cookieHeader?.secure).toBeFalsy();
 
     const me = await app.inject({
       method: 'GET',
@@ -60,5 +63,22 @@ describe.skipIf(!url)('auth routes (integration)', () => {
       payload: { email: 'a@b.co', password: 'wrong-pass' },
     });
     expect(bad.statusCode).toBe(401);
+  });
+
+  it('isProd:true → cookie помечен secure + sameSite lax', async () => {
+    const prodApp = await buildApp({ db, cookieSecret: 'x'.repeat(40), isProd: true });
+    try {
+      const reg = await prodApp.inject({
+        method: 'POST',
+        url: '/api/auth/register',
+        payload: { email: 'secure@b.co', password: 'longenough1', firstName: 'И', lastName: 'Т' },
+      });
+      expect(reg.statusCode).toBe(201);
+      const cookie = reg.cookies.find((c) => c.name === 'sid');
+      expect(cookie?.secure).toBe(true);
+      expect(cookie?.sameSite?.toLowerCase()).toBe('lax');
+    } finally {
+      await prodApp.close();
+    }
   });
 });
