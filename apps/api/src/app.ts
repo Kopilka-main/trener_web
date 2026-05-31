@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { randomUUID } from 'node:crypto';
 import type { Db } from './db/client.js';
+import { realClock } from './core/app-deps.js';
 import { errorHandler } from './plugins/error-handler.js';
 import { tenantContext } from './plugins/tenant-context.js';
 import { healthRoutes } from './modules/health/health.routes.js';
@@ -24,6 +25,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(helmet);
   await app.register(cookie, { secret: deps.cookieSecret });
 
+  // Общий провайдер newId/now для доменных модулей (Фаза 4 будет переиспользовать).
+  const clock = realClock;
+
   const repo = makeAuthRepo(deps.db);
   const svc = makeAuthService(repo, { newId: () => randomUUID(), now: () => new Date() });
 
@@ -35,7 +39,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     authRoutes(authScope, svc, deps.isProd);
   });
 
-  registerClientsModule(app, { db: deps.db });
+  registerClientsModule(app, { db: deps.db, clock });
 
   healthRoutes(app);
   return app;
