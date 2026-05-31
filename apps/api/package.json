@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b tsconfig.build.json",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "db:generate": "drizzle-kit generate",
