@@ -90,8 +90,20 @@ export function makeSessionsRepo(db: Db) {
     return !!row;
   }
 
+  // Занятие тренера или null (scoped по trainer_id).
+  // Локальная функция, чтобы переиспользовать без проблем с `this`.
+  async function getForTrainerLocal(trainerId: string, id: string): Promise<SessionRow | null> {
+    const [row] = await db
+      .select(cols)
+      .from(sessions)
+      .where(and(eq(sessions.id, id), eq(sessions.trainerId, trainerId)));
+    return row ?? null;
+  }
+
   return {
     isClientLinked,
+
+    getForTrainer: getForTrainerLocal,
 
     // Создание занятия. Вызывающий (service) уже проверил связь клиента.
     async create(input: CreateSessionInput): Promise<SessionRow> {
@@ -126,15 +138,6 @@ export function makeSessionsRepo(db: Db) {
         .orderBy(asc(sessions.date), asc(sessions.startTime));
     },
 
-    // Занятие тренера или null (scoped по trainer_id).
-    async getForTrainer(trainerId: string, id: string): Promise<SessionRow | null> {
-      const [row] = await db
-        .select(cols)
-        .from(sessions)
-        .where(and(eq(sessions.id, id), eq(sessions.trainerId, trainerId)));
-      return row ?? null;
-    },
-
     // Апдейт только своего занятия; вернуть строку или null. Связь clientId проверяет service.
     async update(
       trainerId: string,
@@ -164,7 +167,7 @@ export function makeSessionsRepo(db: Db) {
 
       if (Object.keys(set).length === 0) {
         // Пустой патч — вернуть текущее занятие, если оно своё.
-        return this.getForTrainer(trainerId, id);
+        return getForTrainerLocal(trainerId, id);
       }
 
       const [row] = await db
