@@ -11,6 +11,7 @@ import { healthRoutes } from './modules/health/health.routes.js';
 import { makeAuthRepo } from './modules/auth/auth.repo.js';
 import { makeAuthService } from './modules/auth/auth.service.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
+import { registerClientsModule } from './modules/clients/clients.module.js';
 
 export type AppDeps = { db: Db; cookieSecret: string; isProd: boolean };
 
@@ -33,6 +34,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     await authScope.register(rateLimit, { max: 20, timeWindow: '1 minute' });
     authRoutes(authScope, svc, deps.isProd);
   });
+
+  registerClientsModule(app, { db: deps.db });
 
   healthRoutes(app);
   return app;

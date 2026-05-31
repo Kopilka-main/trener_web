@@ -4,6 +4,11 @@ export default defineConfig({
   test: {
     globals: false,
     include: ['packages/**/*.test.ts', 'apps/**/*.test.ts', 'apps/**/*.itest.ts'],
+    // *.itest.ts шарят одну Postgres-БД и чистят таблицы в beforeEach. При
+    // параллельном прогоне файлов truncate одного файла затирает данные другого
+    // (гонки duplicate key / пустые списки). Сериализуем файлы — изоляция на
+    // уровне БД, а не воркеров.
+    fileParallelism: false,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
