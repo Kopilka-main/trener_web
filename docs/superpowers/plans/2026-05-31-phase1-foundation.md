@@ -14,13 +14,17 @@
 
 Этот план — **Фаза 1 из 7**. Остальные получат собственные детальные планы:
 
+> **Объём — только тренер.** Клиентского приложения/входа/аккаунтов нет (см.
+> spec, раздел «Объём проекта»). Учётка только у тренера; клиенты — записи,
+> которыми управляет тренер. Связь тренер↔клиент остаётся M:N (`trainer_clients`).
+
 1. **Фундамент** (этот план): монорепо, тулинг, API-скелет, БД, CI/CD, Docker.
-2. **Auth + мультитенантность**: `users`/`trainers`/`sessions_auth`, регистрация/вход, argon2, cookie-сессии, `tenant-context`, guard'ы.
-3. **Доменное ядро**: `clients` + `trainer_clients`, паттерн модуля, security/isolation-тесты (эталон изоляции).
+2. **Auth (только тренер)**: `trainers` (с учётными данными) + `sessions_auth`, регистрация/вход тренера, argon2, cookie-сессии, `tenant-context` (`trainerId`), guard'ы `requireAuth`/`requireClientAccess`. Без таблицы `users` и клиентских учёток.
+3. **Доменное ядро**: `clients` (без `user_id`) + `trainer_clients` (M:N), паттерн модуля, security/isolation-тесты (тренер A ≠ тренер B).
 4. **Доменные модули**: exercises, workout-templates, client-workouts, sessions.
 5. **Доменные модули 2**: packages, accounting (expenses/incomes), measurements, chat (polling).
 6. **Файлы**: `@fastify/multipart`, защищённый роут раздачи, progress-photos, медкарта.
-7. **Web SPA + деплой**: React/Vite SPA на новом API, прод-деплой на VPS.
+7. **Web SPA (только тренер) + деплой**: React/Vite SPA на новом API без экрана выбора роли и клиентских экранов, прод-деплой на VPS.
 
 ---
 
