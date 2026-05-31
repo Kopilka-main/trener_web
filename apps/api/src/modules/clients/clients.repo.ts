@@ -46,32 +46,37 @@ export function makeClientsRepo(db: Db) {
       .from(trainerClients)
       .innerJoin(clients, eq(clients.id, trainerClients.clientId))
       .where(and(eq(trainerClients.trainerId, trainerId), eq(trainerClients.clientId, clientId)));
-    return (row as ClientRow | undefined) ?? null;
+    return row ?? null;
+  }
+
+  // Проверка связи тренер↔клиент. Локальная функция, чтобы переиспользовать без проблем с `this`.
+  async function isLinkedLocal(trainerId: string, clientId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ clientId: trainerClients.clientId })
+      .from(trainerClients)
+      .where(and(eq(trainerClients.trainerId, trainerId), eq(trainerClients.clientId, clientId)));
+    return !!row;
   }
 
   return {
     getForTrainer,
 
-    async isLinked(trainerId: string, clientId: string): Promise<boolean> {
-      const [row] = await db
-        .select({ clientId: trainerClients.clientId })
-        .from(trainerClients)
-        .where(and(eq(trainerClients.trainerId, trainerId), eq(trainerClients.clientId, clientId)));
-      return !!row;
-    },
+    isLinked: isLinkedLocal,
 
     async create(input: CreateClientInput): Promise<ClientRow> {
-      await db.insert(clients).values({
-        id: input.clientId,
-        firstName: input.firstName,
-        lastName: input.lastName,
-        phone: input.phone ?? null,
-      });
-      await db.insert(trainerClients).values({
-        trainerId: input.trainerId,
-        clientId: input.clientId,
-        notes: input.notes ?? null,
-        status: 'active',
+      await db.transaction(async (tx) => {
+        await tx.insert(clients).values({
+          id: input.clientId,
+          firstName: input.firstName,
+          lastName: input.lastName,
+          phone: input.phone ?? null,
+        });
+        await tx.insert(trainerClients).values({
+          trainerId: input.trainerId,
+          clientId: input.clientId,
+          notes: input.notes ?? null,
+          status: 'active',
+        });
       });
       const row = await getForTrainer(input.trainerId, input.clientId);
       if (!row) throw new Error('insert failed');
@@ -92,7 +97,7 @@ export function makeClientsRepo(db: Db) {
         .from(trainerClients)
         .innerJoin(clients, eq(clients.id, trainerClients.clientId))
         .where(eq(trainerClients.trainerId, trainerId));
-      return rows as ClientRow[];
+      return rows;
     },
 
     async update(
@@ -100,6 +105,8 @@ export function makeClientsRepo(db: Db) {
       clientId: string,
       patch: UpdateClientInput,
     ): Promise<ClientRow | null> {
+      // Изоляция: без связи тренер↔клиент не мутируем чужую персону.
+      if (!(await isLinkedLocal(trainerId, clientId))) return null;
       const personPatch: Partial<{ firstName: string; lastName: string; phone: string | null }> =
         {};
       if (patch.firstName !== undefined) personPatch.firstName = patch.firstName;

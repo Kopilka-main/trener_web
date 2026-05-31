@@ -47,4 +47,11 @@ describe.skipIf(!url)('clients.repo (integration)', () => {
     expect(await repo.unlink('A', 'c1')).toBe(true);
     expect(await repo.getForTrainer('A', 'c1')).toBeNull();
   });
+
+  it('update изолирован: чужой тренер не мутирует персону', async () => {
+    await repo.create({ clientId: 'c1', trainerId: 'A', firstName: 'Кли', lastName: 'Ент' });
+    expect(await repo.update('B', 'c1', { firstName: 'Hacked' })).toBeNull();
+    const row = await repo.getForTrainer('A', 'c1');
+    expect(row?.firstName).toBe('Кли'); // персона не мутирована
+  });
 });

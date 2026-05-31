@@ -1,4 +1,5 @@
 import { pgTable, text, timestamp, uniqueIndex, primaryKey } from 'drizzle-orm/pg-core';
+import type { ClientStatus } from '@trener/shared';
 
 // Служебная таблица версий схемы приложения (доменные таблицы добавит Фаза 2+).
 export const schemaMeta = pgTable('schema_meta', {
@@ -56,7 +57,7 @@ export const trainerClients = pgTable(
       .references(() => clients.id, { onDelete: 'cascade' }),
     notes: text('notes'),
     // 'active' | 'archived' — архив через статус; «удаление» = разрыв связи (delete строки).
-    status: text('status').notNull().default('active'),
+    status: text('status').$type<ClientStatus>().notNull().default('active'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.trainerId, t.clientId] })],
