@@ -1,0 +1,19 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Деплой только после зелёного CI на том же коммите.
+    needs: []
+    if: github.ref == 'refs/heads/master'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build & push image to GHCR
+        run: 'echo "TODO Фаза 7: docker build + push в ghcr.io"'
+      - name: Deploy to VPS over SSH
+        run: 'echo "TODO Фаза 7: ssh + docker compose pull && up -d && db:migrate + healthcheck"'
