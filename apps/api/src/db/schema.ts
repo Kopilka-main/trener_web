@@ -7,6 +7,7 @@ import {
   integer,
   doublePrecision,
   foreignKey,
+  index,
 } from 'drizzle-orm/pg-core';
 import type { ClientStatus } from '@trener/shared';
 
@@ -176,4 +177,32 @@ export const clientWorkoutSets = pgTable(
       foreignColumns: [clientWorkoutExercises.workoutId, clientWorkoutExercises.position],
     }).onDelete('cascade'),
   ],
+);
+
+// Занятие-календарь тренера (НЕ путать с sessions_auth — это календарь, не аутентификация).
+export const sessions = pgTable(
+  'sessions',
+  {
+    id: text('id').primaryKey(),
+    trainerId: text('trainer_id')
+      .notNull()
+      .references(() => trainers.id, { onDelete: 'cascade' }),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
+    workoutId: text('workout_id').references(() => clientWorkouts.id, { onDelete: 'set null' }),
+    date: text('date').notNull(), // YYYY-MM-DD
+    startTime: text('start_time').notNull(), // HH:MM
+    durationMin: integer('duration_min').notNull().default(60),
+    location: text('location'),
+    title: text('title'),
+    status: text('status')
+      .$type<'planned' | 'completed' | 'cancelled'>()
+      .notNull()
+      .default('planned'),
+    isOnline: integer('is_online').notNull().default(0),
+    note: text('note'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('idx_sessions_trainer_date').on(t.trainerId, t.date)],
 );

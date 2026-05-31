@@ -43,6 +43,13 @@
       "when": 1780257304584,
       "tag": "0005_wooden_hemingway",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780258863062,
+      "tag": "0006_bored_wendell_rand",
+      "breakpoints": true
     }
   ]
 }
