@@ -1,0 +1,15 @@
+# Единые окончания строк во всём репозитории — LF.
+# Без этого core.autocrlf на Windows материализует CRLF, и prettier
+# (endOfLine: lf) роняет format:check при свежем checkout/клоне.
+* text=auto eol=lf
+
+# Бинарные файлы — не трогать.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
