@@ -1,4 +1,12 @@
-import { pgTable, text, timestamp, uniqueIndex, primaryKey } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  primaryKey,
+  integer,
+  doublePrecision,
+} from 'drizzle-orm/pg-core';
 import type { ClientStatus } from '@trener/shared';
 
 // Служебная таблица версий схемы приложения (доменные таблицы добавит Фаза 2+).
@@ -62,3 +70,18 @@ export const trainerClients = pgTable(
   },
   (t) => [primaryKey({ columns: [t.trainerId, t.clientId] })],
 );
+
+export const exercises = pgTable('exercises', {
+  id: text('id').primaryKey(),
+  // NULL = глобальная системная запись (видна всем, read-only); иначе личная запись тренера.
+  trainerId: text('trainer_id').references(() => trainers.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  category: text('category').notNull(),
+  description: text('description'),
+  defaultReps: integer('default_reps'),
+  defaultWeightKg: doublePrecision('default_weight_kg'),
+  defaultTimeSec: integer('default_time_sec'),
+  restSec: integer('rest_sec').notNull().default(90),
+  note: text('note'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
