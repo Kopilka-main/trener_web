@@ -212,15 +212,15 @@ volumes: pgdata, uploads, backups
 
 ### Стандарты кода (enforced автоматически)
 
-| Стандарт | Инструмент | Где проверяется |
-| --- | --- | --- |
-| Форматирование | Prettier (единый конфиг) | pre-commit + CI |
-| Линтинг + правила | ESLint (typescript-eslint, strict) | pre-commit + CI |
-| Типобезопасность | `tsc --noEmit` (strict: true) | pre-commit + CI |
-| Тесты + покрытие | Vitest + порог coverage | CI (gate) |
-| Сообщения коммитов | commitlint (Conventional Commits) | commit-msg hook + CI |
-| Запрет грязного кода | ESLint: no `any`, no unused, no `console` в prod | CI |
-| Граница слоёв | ESLint `no-restricted-imports` | CI |
+| Стандарт             | Инструмент                                       | Где проверяется      |
+| -------------------- | ------------------------------------------------ | -------------------- |
+| Форматирование       | Prettier (единый конфиг)                         | pre-commit + CI      |
+| Линтинг + правила    | ESLint (typescript-eslint, strict)               | pre-commit + CI      |
+| Типобезопасность     | `tsc --noEmit` (strict: true)                    | pre-commit + CI      |
+| Тесты + покрытие     | Vitest + порог coverage                          | CI (gate)            |
+| Сообщения коммитов   | commitlint (Conventional Commits)                | commit-msg hook + CI |
+| Запрет грязного кода | ESLint: no `any`, no unused, no `console` в prod | CI                   |
+| Граница слоёв        | ESLint `no-restricted-imports`                   | CI                   |
 
 - pre-commit через Husky + lint-staged (формат/линт/typecheck на изменённых
   файлах).

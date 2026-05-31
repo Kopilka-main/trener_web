@@ -4,3 +4,7 @@ build
 coverage
 *.tsbuildinfo
 package-lock.json
+
+# Автогенерируемые drizzle-kit файлы — prettier не должен их трогать
+# (drizzle-kit перегенерирует в своём формате → вечный конфликт)
+**/drizzle/meta
