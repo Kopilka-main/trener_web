@@ -6,6 +6,7 @@ import {
   primaryKey,
   integer,
   doublePrecision,
+  foreignKey,
 } from 'drizzle-orm/pg-core';
 import type { ClientStatus } from '@trener/shared';
 
@@ -113,4 +114,66 @@ export const workoutTemplateExercises = pgTable(
     restSec: integer('rest_sec').notNull().default(90),
   },
   (t) => [primaryKey({ columns: [t.templateId, t.position] })],
+);
+
+export const clientWorkouts = pgTable('client_workouts', {
+  id: text('id').primaryKey(),
+  trainerId: text('trainer_id')
+    .notNull()
+    .references(() => trainers.id, { onDelete: 'cascade' }),
+  clientId: text('client_id')
+    .notNull()
+    .references(() => clients.id, { onDelete: 'cascade' }),
+  sourceTemplateId: text('source_template_id').references(() => workoutTemplates.id, {
+    onDelete: 'set null',
+  }),
+  name: text('name').notNull(),
+  status: text('status')
+    .$type<'draft' | 'active' | 'completed' | 'skipped'>()
+    .notNull()
+    .default('draft'),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  durationSec: integer('duration_sec'),
+  trainerNote: text('trainer_note'),
+  rpe: integer('rpe'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const clientWorkoutExercises = pgTable(
+  'client_workout_exercises',
+  {
+    workoutId: text('workout_id')
+      .notNull()
+      .references(() => clientWorkouts.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    exerciseId: text('exercise_id')
+      .notNull()
+      .references(() => exercises.id),
+  },
+  (t) => [primaryKey({ columns: [t.workoutId, t.position] })],
+);
+
+export const clientWorkoutSets = pgTable(
+  'client_workout_sets',
+  {
+    workoutId: text('workout_id').notNull(),
+    exercisePosition: integer('exercise_position').notNull(),
+    setIndex: integer('set_index').notNull(),
+    plannedReps: integer('planned_reps'),
+    plannedWeightKg: doublePrecision('planned_weight_kg'),
+    plannedTimeSec: integer('planned_time_sec'),
+    plannedRestSec: integer('planned_rest_sec'),
+    actualReps: integer('actual_reps'),
+    actualWeightKg: doublePrecision('actual_weight_kg'),
+    actualTimeSec: integer('actual_time_sec'),
+    done: integer('done').notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workoutId, t.exercisePosition, t.setIndex] }),
+    foreignKey({
+      columns: [t.workoutId, t.exercisePosition],
+      foreignColumns: [clientWorkoutExercises.workoutId, clientWorkoutExercises.position],
+    }).onDelete('cascade'),
+  ],
 );
