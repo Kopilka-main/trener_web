@@ -27,4 +27,17 @@ describe('errorHandler', () => {
     expect(body.error).toBe('Внутренняя ошибка сервера');
     expect(JSON.stringify(body)).not.toContain('секретные детали');
   });
+
+  it('маппит ошибку валидации схемы запроса в 400', async () => {
+    const { z } = await import('zod');
+    const { serializerCompiler, validatorCompiler } = await import('fastify-type-provider-zod');
+    const app = Fastify();
+    app.setValidatorCompiler(validatorCompiler);
+    app.setSerializerCompiler(serializerCompiler);
+    app.setErrorHandler(errorHandler);
+    app.post('/v', { schema: { body: z.object({ n: z.number() }) } }, () => ({ ok: true }));
+    const res = await app.inject({ method: 'POST', url: '/v', payload: { n: 'no' } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ code: string }>().code).toBe('VALIDATION_ERROR');
+  });
 });

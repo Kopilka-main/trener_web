@@ -1,5 +1,6 @@
 import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
+import { hasZodFastifySchemaValidationErrors } from 'fastify-type-provider-zod';
 import { AppError } from '../errors.js';
 
 export function errorHandler(
@@ -7,6 +8,14 @@ export function errorHandler(
   request: FastifyRequest,
   reply: FastifyReply,
 ): void {
+  if (hasZodFastifySchemaValidationErrors(error)) {
+    void reply.status(400).send({
+      error: 'Ошибка валидации',
+      code: 'VALIDATION_ERROR',
+      details: error.validation,
+    });
+    return;
+  }
   if (error instanceof AppError) {
     void reply.status(error.status).send({
       error: error.message,
