@@ -11,7 +11,7 @@ export default tseslint.config(
     languageOptions: {
       globals: { ...globals.node },
       parserOptions: {
-        projectService: { allowDefaultProject: ['*.config.ts'] },
+        projectService: { allowDefaultProject: ['*.config.ts', 'apps/*/*.config.ts'] },
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -43,6 +43,11 @@ export default tseslint.config(
   // JS-конфиги (например, сам eslint.config.js) не покрыты ts-проектом — без type-checked правил.
   {
     files: ['**/*.js'],
+    extends: [tseslint.configs.disableTypeChecked],
+  },
+  // TS-конфиги вне tsconfig include (drizzle.config.ts) — без type-checked правил.
+  {
+    files: ['**/*.config.ts'],
     extends: [tseslint.configs.disableTypeChecked],
   },
   prettier,
