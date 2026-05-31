@@ -19,6 +19,10 @@ export const trainers = pgTable(
     bio: text('bio'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
+  // ИНВАРИАНТ: email хранится уже нормализованным (lowercase+trim) — это гарантирует
+  // Zod-контракт (registerRequestSchema/loginRequestSchema). Уникальность регистро-
+  // независима только при условии, что ВСЕ записи email идут через контракт-схему.
+  // Любой обходной путь (seed/админка/импорт) обязан нормализовать email сам.
   (t) => [uniqueIndex('trainers_email_uq').on(t.email)],
 );
 
