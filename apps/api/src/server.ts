@@ -1,15 +1,17 @@
 import { buildApp } from './app.js';
 import { parseEnv } from './env.js';
+import { createDb } from './db/client.js';
 
 const env = parseEnv(process.env);
-const app = buildApp();
+const { db } = createDb(env.DATABASE_URL);
 
-app
-  .listen({ port: env.PORT, host: '0.0.0.0' })
-  .then((address) => {
-    app.log.info(`[trener-api] ${address}`);
-  })
+buildApp({ db, cookieSecret: env.COOKIE_SECRET, isProd: env.NODE_ENV === 'production' })
+  .then((app) =>
+    app.listen({ port: env.PORT, host: '0.0.0.0' }).then((address) => {
+      app.log.info(`[trener-api] ${address}`);
+    }),
+  )
   .catch((err: unknown) => {
-    app.log.error({ err }, 'Не удалось запустить сервер');
+    console.error('Не удалось запустить сервер', err);
     process.exit(1);
   });
