@@ -1,0 +1,25 @@
+# Зависимости
+node_modules/
+
+# Сборки
+dist/
+build/
+*.tsbuildinfo
+
+# Окружение и секреты
+.env
+.env.*
+!.env.example
+
+# Данные и аплоады
+data/
+*.db
+*.sqlite
+
+# Логи
+*.log
+npm-debug.log*
+
+# Системные
+.DS_Store
+Thumbs.db
