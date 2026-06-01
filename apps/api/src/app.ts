@@ -1,6 +1,10 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
+import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { Db } from './db/client.js';
@@ -20,8 +24,13 @@ import { registerPackagesModule } from './modules/packages/packages.module.js';
 import { registerAccountingModule } from './modules/accounting/accounting.module.js';
 import { registerMeasurementsModule } from './modules/measurements/measurements.module.js';
 import { registerChatModule } from './modules/chat/chat.module.js';
+import { registerFilesModule } from './modules/files/files.module.js';
+import { makeStorage } from './files/storage.js';
 
-export type AppDeps = { db: Db; cookieSecret: string; isProd: boolean };
+// uploadsDir опционален: в проде передаётся из env.UPLOADS_DIR (server.ts).
+// В тестах опускается — тогда создаётся изолированный временный каталог,
+// чтобы не ломать существующие вызовы buildApp({db, cookieSecret, isProd}).
+export type AppDeps = { db: Db; cookieSecret: string; isProd: boolean; uploadsDir?: string };
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
@@ -31,6 +40,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   await app.register(helmet);
   await app.register(cookie, { secret: deps.cookieSecret });
+  await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
+
+  const uploadsDir = deps.uploadsDir ?? mkdtempSync(path.join(tmpdir(), 'trener-uploads-'));
+  const storage = makeStorage(uploadsDir);
 
   // Общий провайдер newId/now для auth и доменных модулей (детерминизм в тестах).
   const clock = realClock;
@@ -55,6 +68,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerAccountingModule(app, { db: deps.db, clock });
   registerMeasurementsModule(app, { db: deps.db, clock });
   registerChatModule(app, { db: deps.db, clock });
+  registerFilesModule(app, { db: deps.db, storage });
 
   healthRoutes(app);
   return app;
