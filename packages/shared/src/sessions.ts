@@ -21,7 +21,10 @@ export type CreateSessionRequest = z.infer<typeof createSessionRequestSchema>;
 
 // --- Обновление занятия (частичное + смена статуса) ---
 
+// .partial() наследовал бы .default(60) у durationMin (PATCH без поля → молча 60).
+// Переопределяем durationMin как optional без default, чтобы патч не подменял длительность.
 export const updateSessionRequestSchema = createSessionRequestSchema.partial().extend({
+  durationMin: z.number().int().positive().optional(),
   status: sessionStatusSchema.optional(),
 });
 export type UpdateSessionRequest = z.infer<typeof updateSessionRequestSchema>;

@@ -72,4 +72,14 @@ describe('sessions schemas', () => {
   it('update отклоняет неизвестный статус', () => {
     expect(() => updateSessionRequestSchema.parse({ status: 'paused' })).toThrow();
   });
+
+  it('update НЕ проставляет default durationMin (остаётся undefined)', () => {
+    const r = updateSessionRequestSchema.parse({ title: 'X' });
+    expect(r.durationMin).toBeUndefined();
+  });
+
+  it('update принимает явный durationMin', () => {
+    const r = updateSessionRequestSchema.parse({ durationMin: 30 });
+    expect(r.durationMin).toBe(30);
+  });
 });
