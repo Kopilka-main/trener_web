@@ -297,3 +297,26 @@ export const incomes = pgTable(
   },
   (t) => [index('idx_incomes_trainer_date').on(t.trainerId, t.date)],
 );
+
+// Замер тела клиента (вложен под клиента, scoped по тренеру). Все метрики опциональны.
+export const measurements = pgTable(
+  'measurements',
+  {
+    id: text('id').primaryKey(),
+    trainerId: text('trainer_id')
+      .notNull()
+      .references(() => trainers.id, { onDelete: 'cascade' }),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
+    date: text('date').notNull(), // YYYY-MM-DD
+    weightKg: doublePrecision('weight_kg'),
+    bodyFatPct: doublePrecision('body_fat_pct'),
+    chestCm: doublePrecision('chest_cm'),
+    waistCm: doublePrecision('waist_cm'),
+    hipsCm: doublePrecision('hips_cm'),
+    note: text('note'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('idx_measurements_trainer_client_date').on(t.trainerId, t.clientId, t.date)],
+);
