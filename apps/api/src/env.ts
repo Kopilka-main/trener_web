@@ -5,6 +5,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3001),
   DATABASE_URL: z.string().url(),
   COOKIE_SECRET: z.string().min(32, 'COOKIE_SECRET должен быть не короче 32 символов'),
+  UPLOADS_DIR: z.string().default('/data/uploads'),
 });
 
 export type Env = z.infer<typeof envSchema>;
