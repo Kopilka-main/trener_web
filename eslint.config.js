@@ -35,9 +35,16 @@ export default tseslint.config(
       'no-restricted-imports': ['error', { patterns: ['fastify', '*.routes', '*.routes.js'] }],
     },
   },
+  // Web (браузерный воркспейс): browser-глобалы для .ts/.tsx.
+  {
+    files: ['apps/web/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: { ...globals.browser },
+    },
+  },
   // Тесты: console и any допустимы при необходимости отладки.
   {
-    files: ['**/*.test.ts'],
+    files: ['**/*.test.ts', '**/*.test.tsx'],
     rules: { 'no-console': 'off' },
   },
   // JS-конфиги (например, сам eslint.config.js) не покрыты ts-проектом — без type-checked правил.
