@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, or, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { conversations, messages } from '../../db/schema.js';
 
@@ -98,8 +98,9 @@ export function makeChatRepo(db: Db) {
         );
     },
 
-    // Сообщения диалога пары, сортировка createdAt asc. sinceId — для polling: только
-    // сообщения, созданные строго после сообщения с этим id. Нет диалога → пустой список.
+    // Сообщения диалога пары, сортировка по курсору (createdAt, id) asc. sinceId — для
+    // polling: только сообщения «строго после» курсора. Tie-break по id защищает от потери
+    // сообщений с равным createdAt (разрешение timestamp может совпасть). Нет диалога → [].
     async listMessages(
       trainerId: string,
       clientId: string,
@@ -111,20 +112,27 @@ export function makeChatRepo(db: Db) {
       const filters = [eq(messages.conversationId, conversation.id)];
       if (options.sinceId !== undefined) {
         const [since] = await db
-          .select({ createdAt: messages.createdAt })
+          .select({ id: messages.id, createdAt: messages.createdAt })
           .from(messages)
           .where(
             and(eq(messages.id, options.sinceId), eq(messages.conversationId, conversation.id)),
           );
         // Неизвестный sinceId не относится к диалогу — отдаём весь диалог (без фильтра).
-        if (since) filters.push(gt(messages.createdAt, since.createdAt));
+        // Иначе курсор (createdAt, id): createdAt > s.createdAt OR (createdAt = s.createdAt AND id > s.id).
+        if (since) {
+          const cursor = or(
+            gt(messages.createdAt, since.createdAt),
+            and(eq(messages.createdAt, since.createdAt), gt(messages.id, since.id)),
+          );
+          if (cursor) filters.push(cursor);
+        }
       }
 
       return db
         .select(messageColumns)
         .from(messages)
         .where(and(...filters))
-        .orderBy(asc(messages.createdAt));
+        .orderBy(asc(messages.createdAt), asc(messages.id));
     },
 
     // Создать диалог при отсутствии, вставить сообщение тренера, обновить lastMessageAt.
@@ -136,20 +144,25 @@ export function makeChatRepo(db: Db) {
       now: Date,
     ): Promise<MessageRow> {
       const conversation = await getOrCreateConversation(trainerId, clientId, now);
-      const [row] = await db
-        .insert(messages)
-        .values({
-          id: messageId,
-          conversationId: conversation.id,
-          senderRole: 'trainer',
-          body,
-          createdAt: now,
-        })
-        .returning(messageColumns);
-      await db
-        .update(conversations)
-        .set({ lastMessageAt: now })
-        .where(eq(conversations.id, conversation.id));
+      // insert сообщения + обновление lastMessageAt атомарны: иначе при сбое между ними
+      // диалог «потеряет» свежий lastMessageAt относительно вставленного сообщения.
+      const row = await db.transaction(async (tx) => {
+        const [inserted] = await tx
+          .insert(messages)
+          .values({
+            id: messageId,
+            conversationId: conversation.id,
+            senderRole: 'trainer',
+            body,
+            createdAt: now,
+          })
+          .returning(messageColumns);
+        await tx
+          .update(conversations)
+          .set({ lastMessageAt: now })
+          .where(eq(conversations.id, conversation.id));
+        return inserted;
+      });
       // returning по PK всегда возвращает строку.
       return row!;
     },

@@ -71,6 +71,22 @@ describe.skipIf(!url)('chat.repo (integration)', () => {
     expect((await repo.listMessages('A', 'c1', { sinceId: 'm3' })).map((x) => x.id)).toEqual([]);
   });
 
+  it('listMessages tie-break: два сообщения с равным createdAt — polling по sinceId первого не теряет второе', async () => {
+    const now = new Date('2026-06-01T10:00:00Z');
+    // Равный createdAt у обоих → различает только tie-break по id (m_a < m_b).
+    await repo.addMessage('A', 'c1', 'm_a', 'один', now);
+    await repo.addMessage('A', 'c1', 'm_b', 'два', now);
+
+    // Полный список упорядочен по (createdAt, id).
+    expect((await repo.listMessages('A', 'c1')).map((x) => x.id)).toEqual(['m_a', 'm_b']);
+    // Polling по sinceId первого отдаёт второе, несмотря на равный createdAt.
+    expect((await repo.listMessages('A', 'c1', { sinceId: 'm_a' })).map((x) => x.id)).toEqual([
+      'm_b',
+    ]);
+    // Polling по sinceId второго (последнего) — пусто.
+    expect((await repo.listMessages('A', 'c1', { sinceId: 'm_b' })).map((x) => x.id)).toEqual([]);
+  });
+
   it('listMessages без диалога → пустой список', async () => {
     expect(await repo.listMessages('A', 'c1')).toEqual([]);
   });
