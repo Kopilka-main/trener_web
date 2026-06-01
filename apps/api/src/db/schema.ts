@@ -403,3 +403,24 @@ export const messages = pgTable(
     check('messages_sender_role_chk', sql`${t.senderRole} IN ('trainer', 'client')`),
   ],
 );
+
+// Медкарта клиента (вложена под клиента, scoped по тренеру). Файл опционален:
+// fileId nullable, FK→files set null (удаление файла не сносит запись медкарты).
+// date — YYYY-MM-DD; note обязателен.
+export const medicalRecords = pgTable(
+  'medical_records',
+  {
+    id: text('id').primaryKey(),
+    trainerId: text('trainer_id')
+      .notNull()
+      .references(() => trainers.id, { onDelete: 'cascade' }),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
+    date: text('date').notNull(), // YYYY-MM-DD
+    note: text('note').notNull(),
+    fileId: text('file_id').references(() => files.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('idx_medical_records_trainer_client_date').on(t.trainerId, t.clientId, t.date)],
+);

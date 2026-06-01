@@ -11,3 +11,4 @@ export * from './measurements.js';
 export * from './chat.js';
 export * from './files.js';
 export * from './progress-photos.js';
+export * from './medical.js';
