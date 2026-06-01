@@ -16,6 +16,7 @@ services:
       retries: 10
 
   api:
+    image: ${API_IMAGE:-trener-api:local}
     build: { context: ., dockerfile: apps/api/Dockerfile }
     environment:
       NODE_ENV: production
@@ -28,12 +29,14 @@ services:
       - uploads:/data/uploads
 
   nginx:
+    image: ${WEB_IMAGE:-trener-web:local}
     build: { context: ., dockerfile: apps/web/Dockerfile }
     ports: ['8080:80']
     depends_on: [api]
 
   backup:
     image: postgres:16
+    restart: unless-stopped
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
     depends_on:

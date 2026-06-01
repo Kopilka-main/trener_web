@@ -52,9 +52,28 @@ push в `master` или ручной `workflow_dispatch`).
 1. Push в `master` (или ручной запуск) → GitHub Actions.
 2. Сборка и push образов `ghcr.io/<owner>/<repo>/api` и `.../web`
    (теги `<sha>` + `latest`).
-3. SSH на VPS → `docker compose pull && docker compose up -d`.
-4. Миграции БД: `docker compose run --rm api npm run db:migrate`.
-5. Healthcheck `http://localhost:8080/api/health` (ожидается `ok:true`).
+3. SSH на VPS: экспортируются `API_IMAGE`/`WEB_IMAGE` с тегом `<sha>` →
+   `docker compose pull` тянет именно эти образы из GHCR (закрепление по sha
+   для надёжного отката).
+4. Миграции БД из самого api-образа (без drizzle-kit, через `drizzle-orm`
+   migrator): `docker compose run --rm api node apps/api/dist/migrate.js` —
+   выполняется до `up -d`, чтобы схема была готова к старту сервиса.
+5. `docker compose up -d` поднимает обновлённый стек.
+6. Healthcheck `http://localhost:8080/api/health` (ожидается `ok:true`).
+
+#### Переменные образов (`API_IMAGE` / `WEB_IMAGE`)
+
+Сервисы `api` и `nginx` в `docker-compose.yml` указывают `image:` через
+переменные с локальным дефолтом:
+
+- `api` → `${API_IMAGE:-trener-api:local}`
+- `nginx` → `${WEB_IMAGE:-trener-web:local}`
+
+Локально `docker compose up -d --build` собирает образы и тегирует их
+локальными именами (`trener-api:local`, `trener-web:local`). На VPS воркфлоу
+задаёт `API_IMAGE=ghcr.io/<owner>/<repo>/api:<sha>` и
+`WEB_IMAGE=ghcr.io/<owner>/<repo>/web:<sha>`, после чего `docker compose pull`
+скачивает готовые образы из GHCR (сборка на сервере не нужна).
 
 Ежедневный бэкап выполняет сервис `backup` в `docker-compose.yml`: `pg_dump`
 БД + `tar` каталога `uploads` в volume `backups` (раз в сутки).
