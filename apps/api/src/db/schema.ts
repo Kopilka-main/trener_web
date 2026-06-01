@@ -223,3 +223,29 @@ export const sessions = pgTable(
     check('sessions_status_chk', sql`${t.status} IN ('planned', 'completed', 'cancelled')`),
   ],
 );
+
+// Пакет оплаченных тренировок клиента (вложен под клиента, scoped по тренеру).
+export const paymentPackages = pgTable(
+  'payment_packages',
+  {
+    id: text('id').primaryKey(),
+    trainerId: text('trainer_id')
+      .notNull()
+      .references(() => trainers.id, { onDelete: 'cascade' }),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
+    lessonsPaid: integer('lessons_paid').notNull(),
+    pricePerLesson: doublePrecision('price_per_lesson').notNull(),
+    totalPaid: doublePrecision('total_paid').notNull(),
+    workoutType: text('workout_type'),
+    startsAt: text('starts_at').notNull(), // YYYY-MM-DD
+    status: text('status').$type<'active' | 'closed' | 'cancelled'>().notNull().default('active'),
+    note: text('note'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('idx_payment_packages_trainer_client').on(t.trainerId, t.clientId),
+    check('payment_packages_status_chk', sql`${t.status} IN ('active', 'closed', 'cancelled')`),
+  ],
+);

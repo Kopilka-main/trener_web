@@ -57,6 +57,13 @@
       "when": 1780295981342,
       "tag": "0007_yummy_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780298038523,
+      "tag": "0008_ordinary_radioactive_man",
+      "breakpoints": true
     }
   ]
 }
