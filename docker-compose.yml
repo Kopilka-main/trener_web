@@ -32,6 +32,29 @@ services:
     ports: ['8080:80']
     depends_on: [api]
 
+  backup:
+    image: postgres:16
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    depends_on:
+      postgres: { condition: service_healthy }
+    volumes:
+      - backups:/backups
+      - uploads:/data/uploads:ro
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        while true; do
+          ts=$$(date +%Y%m%d-%H%M%S)
+          echo "[backup] dump $$ts"
+          pg_dump -h postgres -U postgres -d trener -F c -f "/backups/db-$$ts.dump" \
+            && tar czf "/backups/uploads-$$ts.tar.gz" -C /data uploads \
+            && echo "[backup] ok $$ts" \
+            || echo "[backup] FAILED $$ts"
+          sleep 86400
+        done
+
 volumes:
   pgdata:
   uploads:
+  backups:
