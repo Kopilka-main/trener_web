@@ -45,9 +45,9 @@ function fakeRepo(over: Partial<ClientWorkoutsRepo> = {}): ClientWorkoutsRepo {
     getFull: vi.fn(() => Promise.resolve(null)),
     create: vi.fn(() => Promise.resolve(row())),
     listForClient: vi.fn(() => Promise.resolve([])),
-    setStatusActive: vi.fn(() => Promise.resolve(true)),
+    setStatusActive: vi.fn(() => Promise.resolve('updated' as const)),
     updateSet: vi.fn(() => Promise.resolve(row())),
-    complete: vi.fn(() => Promise.resolve(true)),
+    complete: vi.fn(() => Promise.resolve('updated' as const)),
     remove: vi.fn(() => Promise.resolve(false)),
     ...over,
   };
@@ -87,15 +87,12 @@ describe('client-workouts.service', () => {
     await expect(svc.get('A', 'c1', 'missing')).rejects.toMatchObject({ status: 404 });
   });
 
-  it('start из draft → active, использует now() из clock', async () => {
-    const setStatusActive = vi.fn(() => Promise.resolve(true));
+  it('start из draft → active, использует now() из clock (атомарно)', async () => {
+    const setStatusActive = vi.fn(() => Promise.resolve('updated' as const));
     const svc = makeClientWorkoutsService(
       fakeRepo({
-        getFull: vi
-          .fn()
-          .mockResolvedValueOnce(row({ status: 'draft' }))
-          .mockResolvedValueOnce(row({ status: 'active', startedAt: deps.now() })),
         setStatusActive,
+        getFull: vi.fn(() => Promise.resolve(row({ status: 'active', startedAt: deps.now() }))),
       }),
       deps,
     );
@@ -104,14 +101,17 @@ describe('client-workouts.service', () => {
     expect(setStatusActive).toHaveBeenCalledWith('A', 'c1', 'w1', deps.now());
   });
 
-  it('start несуществующей → 404', async () => {
-    const svc = makeClientWorkoutsService(fakeRepo(), deps);
+  it('start несуществующей (repo → not_found) → 404', async () => {
+    const svc = makeClientWorkoutsService(
+      fakeRepo({ setStatusActive: vi.fn(() => Promise.resolve('not_found' as const)) }),
+      deps,
+    );
     await expect(svc.start('A', 'c1', 'missing')).rejects.toMatchObject({ status: 404 });
   });
 
-  it('start из не-draft → 409 BAD_STATUS', async () => {
+  it('start из не-draft (repo → bad_status) → 409 BAD_STATUS', async () => {
     const svc = makeClientWorkoutsService(
-      fakeRepo({ getFull: vi.fn(() => Promise.resolve(row({ status: 'active' }))) }),
+      fakeRepo({ setStatusActive: vi.fn(() => Promise.resolve('bad_status' as const)) }),
       deps,
     );
     await expect(svc.start('A', 'c1', 'w1')).rejects.toMatchObject({
@@ -144,15 +144,14 @@ describe('client-workouts.service', () => {
     );
   });
 
-  it('complete из active → completed, использует now()', async () => {
-    const complete = vi.fn(() => Promise.resolve(true));
+  it('complete из active → completed, использует now() (атомарно)', async () => {
+    const complete = vi.fn(() => Promise.resolve('updated' as const));
     const svc = makeClientWorkoutsService(
       fakeRepo({
-        getFull: vi
-          .fn()
-          .mockResolvedValueOnce(row({ status: 'active' }))
-          .mockResolvedValueOnce(row({ status: 'completed', completedAt: deps.now() })),
         complete,
+        getFull: vi.fn(() =>
+          Promise.resolve(row({ status: 'completed', completedAt: deps.now() })),
+        ),
       }),
       deps,
     );
@@ -167,14 +166,17 @@ describe('client-workouts.service', () => {
     );
   });
 
-  it('complete несуществующей → 404', async () => {
-    const svc = makeClientWorkoutsService(fakeRepo(), deps);
+  it('complete несуществующей (repo → not_found) → 404', async () => {
+    const svc = makeClientWorkoutsService(
+      fakeRepo({ complete: vi.fn(() => Promise.resolve('not_found' as const)) }),
+      deps,
+    );
     await expect(svc.complete('A', 'c1', 'missing', {})).rejects.toMatchObject({ status: 404 });
   });
 
-  it('complete из не-active → 409 BAD_STATUS', async () => {
+  it('complete из не-active (repo → bad_status) → 409 BAD_STATUS', async () => {
     const svc = makeClientWorkoutsService(
-      fakeRepo({ getFull: vi.fn(() => Promise.resolve(row({ status: 'draft' }))) }),
+      fakeRepo({ complete: vi.fn(() => Promise.resolve('bad_status' as const)) }),
       deps,
     );
     await expect(svc.complete('A', 'c1', 'w1', {})).rejects.toMatchObject({

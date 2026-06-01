@@ -77,6 +77,10 @@ export type CompleteInput = {
   rpe?: number | null;
 };
 
+// Результат атомарного статус-перехода: 'updated' — переведено; 'not_found' — нет
+// тренировки в паре (тренер,клиент); 'bad_status' — есть, но статус не позволяет переход.
+export type StatusTransitionResult = 'updated' | 'not_found' | 'bad_status';
+
 export function makeClientWorkoutsRepo(db: Db) {
   // Все exerciseId видимы тренеру (личные его ИЛИ глобальные). Пустой список → true.
   async function areExercisesVisible(trainerId: string, exerciseIds: string[]): Promise<boolean> {
@@ -262,25 +266,28 @@ export function makeClientWorkoutsRepo(db: Db) {
       return result;
     },
 
-    // Перевод в active со startedAt; false если тренировка не принадлежит паре.
+    // Атомарный перевод draft → active со startedAt. Условие статуса в WHERE убирает
+    // TOCTOU; различаем not_found (нет в паре) vs bad_status (есть, но не draft).
     async setStatusActive(
       trainerId: string,
       clientId: string,
       workoutId: string,
       startedAt: Date,
-    ): Promise<boolean> {
+    ): Promise<StatusTransitionResult> {
+      const scope = and(
+        eq(clientWorkouts.id, workoutId),
+        eq(clientWorkouts.trainerId, trainerId),
+        eq(clientWorkouts.clientId, clientId),
+      );
       const res = await db
         .update(clientWorkouts)
         .set({ status: 'active', startedAt })
-        .where(
-          and(
-            eq(clientWorkouts.id, workoutId),
-            eq(clientWorkouts.trainerId, trainerId),
-            eq(clientWorkouts.clientId, clientId),
-          ),
-        )
+        .where(and(scope, eq(clientWorkouts.status, 'draft')))
         .returning({ id: clientWorkouts.id });
-      return res.length > 0;
+      if (res.length > 0) return 'updated';
+      // Ноль строк: либо нет тренировки в паре, либо статус не draft — различаем.
+      const [exists] = await db.select({ id: clientWorkouts.id }).from(clientWorkouts).where(scope);
+      return exists ? 'bad_status' : 'not_found';
     },
 
     // Апдейт факта подхода только если тренировка принадлежит паре; null если не найдено.
@@ -326,14 +333,15 @@ export function makeClientWorkoutsRepo(db: Db) {
       return getFull(trainerId, clientId, workoutId);
     },
 
-    // Перевод в completed; false если тренировка не принадлежит паре.
+    // Атомарный перевод active → completed. Условие статуса в WHERE убирает TOCTOU;
+    // различаем not_found (нет в паре) vs bad_status (есть, но не active).
     async complete(
       trainerId: string,
       clientId: string,
       workoutId: string,
       input: CompleteInput,
       completedAt: Date,
-    ): Promise<boolean> {
+    ): Promise<StatusTransitionResult> {
       const headPatch: {
         status: WorkoutStatus;
         completedAt: Date;
@@ -345,18 +353,19 @@ export function makeClientWorkoutsRepo(db: Db) {
       if (input.trainerNote !== undefined) headPatch.trainerNote = input.trainerNote ?? null;
       if (input.rpe !== undefined) headPatch.rpe = input.rpe ?? null;
 
+      const scope = and(
+        eq(clientWorkouts.id, workoutId),
+        eq(clientWorkouts.trainerId, trainerId),
+        eq(clientWorkouts.clientId, clientId),
+      );
       const res = await db
         .update(clientWorkouts)
         .set(headPatch)
-        .where(
-          and(
-            eq(clientWorkouts.id, workoutId),
-            eq(clientWorkouts.trainerId, trainerId),
-            eq(clientWorkouts.clientId, clientId),
-          ),
-        )
+        .where(and(scope, eq(clientWorkouts.status, 'active')))
         .returning({ id: clientWorkouts.id });
-      return res.length > 0;
+      if (res.length > 0) return 'updated';
+      const [exists] = await db.select({ id: clientWorkouts.id }).from(clientWorkouts).where(scope);
+      return exists ? 'bad_status' : 'not_found';
     },
 
     async remove(trainerId: string, clientId: string, workoutId: string): Promise<boolean> {

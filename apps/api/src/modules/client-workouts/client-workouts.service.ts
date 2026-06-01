@@ -96,12 +96,11 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
       return toResponse(row);
     },
 
-    // draft → active. Иначе 409 BAD_STATUS.
+    // draft → active атомарно. 404 (нет в паре) / 409 BAD_STATUS (не из черновика).
     async start(trainerId: string, clientId: string, workoutId: string): Promise<WorkoutResponse> {
-      const row = await repo.getFull(trainerId, clientId, workoutId);
-      if (!row) throw notFound('Тренировка не найдена');
-      if (row.status !== 'draft') throw badStatus('Тренировку можно начать только из черновика');
-      await repo.setStatusActive(trainerId, clientId, workoutId, deps.now());
+      const res = await repo.setStatusActive(trainerId, clientId, workoutId, deps.now());
+      if (res === 'not_found') throw notFound('Тренировка не найдена');
+      if (res === 'bad_status') throw badStatus('Тренировку можно начать только из черновика');
       const updated = await repo.getFull(trainerId, clientId, workoutId);
       if (!updated) throw notFound('Тренировка не найдена');
       return toResponse(updated);
@@ -135,23 +134,21 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
       return toResponse(row);
     },
 
-    // active → completed. Иначе 409 BAD_STATUS.
+    // active → completed атомарно. 404 (нет в паре) / 409 BAD_STATUS (не активна).
     async complete(
       trainerId: string,
       clientId: string,
       workoutId: string,
       input: CompleteWorkoutRequest,
     ): Promise<WorkoutResponse> {
-      const row = await repo.getFull(trainerId, clientId, workoutId);
-      if (!row) throw notFound('Тренировка не найдена');
-      if (row.status !== 'active') throw badStatus('Завершить можно только активную тренировку');
-
       const repoInput: CompleteInput = {};
       if (input.durationSec !== undefined) repoInput.durationSec = input.durationSec ?? null;
       if (input.trainerNote !== undefined) repoInput.trainerNote = input.trainerNote ?? null;
       if (input.rpe !== undefined) repoInput.rpe = input.rpe ?? null;
 
-      await repo.complete(trainerId, clientId, workoutId, repoInput, deps.now());
+      const res = await repo.complete(trainerId, clientId, workoutId, repoInput, deps.now());
+      if (res === 'not_found') throw notFound('Тренировка не найдена');
+      if (res === 'bad_status') throw badStatus('Завершить можно только активную тренировку');
       const updated = await repo.getFull(trainerId, clientId, workoutId);
       if (!updated) throw notFound('Тренировка не найдена');
       return toResponse(updated);

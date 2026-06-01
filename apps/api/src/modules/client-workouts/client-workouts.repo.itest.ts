@@ -86,15 +86,17 @@ describe.skipIf(!url)('client-workouts.repo (integration)', () => {
     expect(await repo.getFull('B', 'c1', 'w1')).toBeNull();
   });
 
-  it('setStatusActive переводит в active + startedAt', async () => {
+  it('setStatusActive переводит draft → active + startedAt (атомарно)', async () => {
     await repo.create('A', 'c1', plan);
     const at = new Date('2026-05-31T10:00:00.000Z');
-    expect(await repo.setStatusActive('A', 'c1', 'w1', at)).toBe(true);
+    expect(await repo.setStatusActive('A', 'c1', 'w1', at)).toBe('updated');
     const full = await repo.getFull('A', 'c1', 'w1');
     expect(full?.status).toBe('active');
     expect(full?.startedAt?.toISOString()).toBe(at.toISOString());
-    // чужой тренер не переводит
-    expect(await repo.setStatusActive('B', 'c1', 'w1', at)).toBe(false);
+    // повторный вызов: уже active, не draft → bad_status
+    expect(await repo.setStatusActive('A', 'c1', 'w1', at)).toBe('bad_status');
+    // чужой тренер не видит тренировку → not_found
+    expect(await repo.setStatusActive('B', 'c1', 'w1', at)).toBe('not_found');
   });
 
   it('updateSet фиксирует факт подхода', async () => {
@@ -116,19 +118,26 @@ describe.skipIf(!url)('client-workouts.repo (integration)', () => {
     expect(await repo.updateSet('A', 'c1', 'w1', 5, 5, { done: true })).toBeNull();
   });
 
-  it('complete переводит в completed + поля', async () => {
+  it('complete переводит active → completed + поля (атомарно)', async () => {
     await repo.create('A', 'c1', plan);
+    const startAt = new Date('2026-05-31T10:00:00.000Z');
+    // complete из draft невозможен → bad_status
+    expect(await repo.complete('A', 'c1', 'w1', {}, startAt)).toBe('bad_status');
+    await repo.setStatusActive('A', 'c1', 'w1', startAt);
     const at = new Date('2026-05-31T11:00:00.000Z');
     expect(
       await repo.complete('A', 'c1', 'w1', { durationSec: 3600, rpe: 8, trainerNote: 'ок' }, at),
-    ).toBe(true);
+    ).toBe('updated');
     const full = await repo.getFull('A', 'c1', 'w1');
     expect(full?.status).toBe('completed');
     expect(full?.completedAt?.toISOString()).toBe(at.toISOString());
     expect(full?.durationSec).toBe(3600);
     expect(full?.rpe).toBe(8);
     expect(full?.trainerNote).toBe('ок');
-    expect(await repo.complete('B', 'c1', 'w1', {}, at)).toBe(false);
+    // повтор: уже completed, не active → bad_status
+    expect(await repo.complete('A', 'c1', 'w1', {}, at)).toBe('bad_status');
+    // чужой тренер не видит → not_found
+    expect(await repo.complete('B', 'c1', 'w1', {}, at)).toBe('not_found');
   });
 
   it('listForClient возвращает тренировки пары (desc createdAt)', async () => {
