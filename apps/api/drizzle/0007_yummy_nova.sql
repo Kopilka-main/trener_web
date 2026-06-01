@@ -1,0 +1,3 @@
+ALTER TABLE "client_workouts" ADD CONSTRAINT "client_workouts_status_chk" CHECK ("client_workouts"."status" IN ('draft', 'active', 'completed', 'skipped'));--> statement-breakpoint
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_status_chk" CHECK ("sessions"."status" IN ('planned', 'completed', 'cancelled'));--> statement-breakpoint
+ALTER TABLE "trainer_clients" ADD CONSTRAINT "trainer_clients_status_chk" CHECK ("trainer_clients"."status" IN ('active', 'archived'));

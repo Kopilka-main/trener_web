@@ -8,7 +8,9 @@ import {
   doublePrecision,
   foreignKey,
   index,
+  check,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import type { ClientStatus } from '@trener/shared';
 
 // Служебная таблица версий схемы приложения (доменные таблицы добавит Фаза 2+).
@@ -70,7 +72,10 @@ export const trainerClients = pgTable(
     status: text('status').$type<ClientStatus>().notNull().default('active'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.trainerId, t.clientId] })],
+  (t) => [
+    primaryKey({ columns: [t.trainerId, t.clientId] }),
+    check('trainer_clients_status_chk', sql`${t.status} IN ('active', 'archived')`),
+  ],
 );
 
 export const exercises = pgTable('exercises', {
@@ -117,29 +122,38 @@ export const workoutTemplateExercises = pgTable(
   (t) => [primaryKey({ columns: [t.templateId, t.position] })],
 );
 
-export const clientWorkouts = pgTable('client_workouts', {
-  id: text('id').primaryKey(),
-  trainerId: text('trainer_id')
-    .notNull()
-    .references(() => trainers.id, { onDelete: 'cascade' }),
-  clientId: text('client_id')
-    .notNull()
-    .references(() => clients.id, { onDelete: 'cascade' }),
-  sourceTemplateId: text('source_template_id').references(() => workoutTemplates.id, {
-    onDelete: 'set null',
-  }),
-  name: text('name').notNull(),
-  status: text('status')
-    .$type<'draft' | 'active' | 'completed' | 'skipped'>()
-    .notNull()
-    .default('draft'),
-  startedAt: timestamp('started_at', { withTimezone: true }),
-  completedAt: timestamp('completed_at', { withTimezone: true }),
-  durationSec: integer('duration_sec'),
-  trainerNote: text('trainer_note'),
-  rpe: integer('rpe'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const clientWorkouts = pgTable(
+  'client_workouts',
+  {
+    id: text('id').primaryKey(),
+    trainerId: text('trainer_id')
+      .notNull()
+      .references(() => trainers.id, { onDelete: 'cascade' }),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
+    sourceTemplateId: text('source_template_id').references(() => workoutTemplates.id, {
+      onDelete: 'set null',
+    }),
+    name: text('name').notNull(),
+    status: text('status')
+      .$type<'draft' | 'active' | 'completed' | 'skipped'>()
+      .notNull()
+      .default('draft'),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    durationSec: integer('duration_sec'),
+    trainerNote: text('trainer_note'),
+    rpe: integer('rpe'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check(
+      'client_workouts_status_chk',
+      sql`${t.status} IN ('draft', 'active', 'completed', 'skipped')`,
+    ),
+  ],
+);
 
 export const clientWorkoutExercises = pgTable(
   'client_workout_exercises',
@@ -204,5 +218,8 @@ export const sessions = pgTable(
     note: text('note'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('idx_sessions_trainer_date').on(t.trainerId, t.date)],
+  (t) => [
+    index('idx_sessions_trainer_date').on(t.trainerId, t.date),
+    check('sessions_status_chk', sql`${t.status} IN ('planned', 'completed', 'cancelled')`),
+  ],
 );
