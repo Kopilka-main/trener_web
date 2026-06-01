@@ -158,13 +158,23 @@ export function makeExercisesRepo(db: Db) {
       return row ?? null;
     },
 
-    // Удаление только своей записи; boolean.
-    async delete(trainerId: string, id: string): Promise<boolean> {
-      const res = await db
-        .delete(exercises)
-        .where(and(eq(exercises.id, id), eq(exercises.trainerId, trainerId)))
-        .returning({ id: exercises.id });
-      return res.length > 0;
+    // Удаление только своей записи.
+    // 'deleted' — удалено; 'not_found' — глобальная/чужая/несуществующая;
+    // 'in_use' — упражнение ссылается из шаблона/тренировки (FK violation 23503).
+    async delete(trainerId: string, id: string): Promise<'deleted' | 'not_found' | 'in_use'> {
+      try {
+        const res = await db
+          .delete(exercises)
+          .where(and(eq(exercises.id, id), eq(exercises.trainerId, trainerId)))
+          .returning({ id: exercises.id });
+        return res.length > 0 ? 'deleted' : 'not_found';
+      } catch (err) {
+        // postgres-js поднимает PostgresError с SQLSTATE-кодом в .code.
+        if (err && typeof err === 'object' && (err as { code?: unknown }).code === '23503') {
+          return 'in_use';
+        }
+        throw err;
+      }
     },
   };
 }

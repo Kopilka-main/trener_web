@@ -5,7 +5,7 @@ import type {
   ExerciseResponse,
   UpdateExerciseRequest,
 } from '@trener/shared';
-import { notFound } from '../../errors.js';
+import { AppError, notFound } from '../../errors.js';
 
 export type ExercisesDeps = { newId: () => string };
 
@@ -63,8 +63,14 @@ export function makeExercisesService(repo: ExercisesRepo, deps: ExercisesDeps) {
     },
 
     async remove(trainerId: string, id: string): Promise<void> {
-      const ok = await repo.delete(trainerId, id);
-      if (!ok) throw notFound('Упражнение не найдено');
+      const res = await repo.delete(trainerId, id);
+      if (res === 'not_found') throw notFound('Упражнение не найдено');
+      if (res === 'in_use')
+        throw new AppError(
+          409,
+          'EXERCISE_IN_USE',
+          'Упражнение используется в шаблоне или тренировке',
+        );
     },
   };
 }

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { createDb } from '../../db/client.js';
-import { exercises } from '../../db/schema.js';
+import { exercises, workoutTemplates, workoutTemplateExercises } from '../../db/schema.js';
 import { buildApp } from '../../app.js';
 
 const url = process.env.DATABASE_URL;
@@ -12,6 +12,8 @@ describe.skipIf(!url)('exercises routes (integration)', () => {
   let sid: string;
 
   beforeEach(async () => {
+    await db.execute(sql`DELETE FROM workout_template_exercises`);
+    await db.execute(sql`DELETE FROM workout_templates`);
     await db.execute(sql`DELETE FROM exercises`);
     await db.execute(sql`DELETE FROM sessions_auth`);
     await db.execute(sql`DELETE FROM trainers`);
@@ -95,6 +97,31 @@ describe.skipIf(!url)('exercises routes (integration)', () => {
     const got = await app.inject({ method: 'GET', url: '/api/exercises/g1', cookies: { sid } });
     expect(got.statusCode).toBe(200);
     expect(got.json<{ exercise: { isGlobal: boolean } }>().exercise.isGlobal).toBe(true);
+  });
+
+  it('удаление упражнения, используемого в шаблоне → 409 EXERCISE_IN_USE', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/exercises',
+      cookies: { sid },
+      payload: { name: 'Присед', category: 'Ноги', restSec: 90 },
+    });
+    const id = created.json<{ exercise: { id: string } }>().exercise.id;
+    // Создаём шаблон тренера и привязываем к нему упражнение.
+    const me = await app.inject({ method: 'GET', url: '/api/auth/me', cookies: { sid } });
+    const trainerId = me.json<{ trainer: { id: string } }>().trainer.id;
+    await db.insert(workoutTemplates).values({ id: 't1', trainerId, name: 'Шаблон' });
+    await db
+      .insert(workoutTemplateExercises)
+      .values({ templateId: 't1', position: 0, exerciseId: id, sets: 3, restSec: 90 });
+
+    const del = await app.inject({
+      method: 'DELETE',
+      url: `/api/exercises/${id}`,
+      cookies: { sid },
+    });
+    expect(del.statusCode).toBe(409);
+    expect(del.json<{ code: string }>().code).toBe('EXERCISE_IN_USE');
   });
 
   it('создание без auth → 401', async () => {

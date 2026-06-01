@@ -1,7 +1,12 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { createDb } from '../../db/client.js';
-import { trainers, exercises } from '../../db/schema.js';
+import {
+  trainers,
+  exercises,
+  workoutTemplates,
+  workoutTemplateExercises,
+} from '../../db/schema.js';
 import { makeExercisesRepo } from './exercises.repo.js';
 
 const url = process.env.DATABASE_URL;
@@ -11,6 +16,8 @@ describe.skipIf(!url)('exercises.repo (integration)', () => {
   const repo = makeExercisesRepo(db);
 
   beforeEach(async () => {
+    await db.execute(sql`DELETE FROM workout_template_exercises`);
+    await db.execute(sql`DELETE FROM workout_templates`);
     await db.execute(sql`DELETE FROM exercises`);
     await db.execute(sql`DELETE FROM trainers`);
     await db.insert(trainers).values([
@@ -50,15 +57,26 @@ describe.skipIf(!url)('exercises.repo (integration)', () => {
     await repo.create({ id: 'a1', trainerId: 'A', name: 'Присед', category: 'Ноги', restSec: 90 });
     // Глобальную нельзя править/удалять.
     expect(await repo.update('A', 'g1', { name: 'Hacked' })).toBeNull();
-    expect(await repo.delete('A', 'g1')).toBe(false);
+    expect(await repo.delete('A', 'g1')).toBe('not_found');
     // Чужую личную B не трогает.
     expect(await repo.update('B', 'a1', { name: 'Hacked' })).toBeNull();
-    expect(await repo.delete('B', 'a1')).toBe(false);
+    expect(await repo.delete('B', 'a1')).toBe('not_found');
     // Свою — можно.
     const upd = await repo.update('A', 'a1', { name: 'Присед со штангой' });
     expect(upd?.name).toBe('Присед со штангой');
-    expect(await repo.delete('A', 'a1')).toBe(true);
+    expect(await repo.delete('A', 'a1')).toBe('deleted');
     expect(await repo.getOwn('A', 'a1')).toBeNull();
+  });
+
+  it('delete упражнения, используемого в шаблоне → in_use (FK 23503)', async () => {
+    await repo.create({ id: 'a1', trainerId: 'A', name: 'Присед', category: 'Ноги', restSec: 90 });
+    await db.insert(workoutTemplates).values({ id: 't1', trainerId: 'A', name: 'Шаблон' });
+    await db
+      .insert(workoutTemplateExercises)
+      .values({ templateId: 't1', position: 0, exerciseId: 'a1', sets: 3, restSec: 90 });
+    expect(await repo.delete('A', 'a1')).toBe('in_use');
+    // Упражнение осталось на месте (удаление не прошло).
+    expect(await repo.getOwn('A', 'a1')).not.toBeNull();
   });
 
   it('toResponse: isGlobal=true для глобальной, false для личной', async () => {

@@ -26,7 +26,7 @@ function fakeRepo(over: Partial<ExercisesRepo> = {}): ExercisesRepo {
     getOwn: vi.fn(() => Promise.resolve(null)),
     create: vi.fn(() => Promise.resolve(row())),
     update: vi.fn(() => Promise.resolve(null)),
-    delete: vi.fn(() => Promise.resolve(false)),
+    delete: vi.fn(() => Promise.resolve('not_found' as const)),
     ...over,
   };
 }
@@ -71,8 +71,19 @@ describe('exercises.service', () => {
     expect(res.name).toBe('Новое');
   });
 
-  it('remove бросает 404, если delete=false', async () => {
+  it('remove бросает 404, если delete=not_found', async () => {
     const svc = makeExercisesService(fakeRepo(), { newId: () => 'x' });
     await expect(svc.remove('A', 'missing')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('remove бросает 409 EXERCISE_IN_USE, если delete=in_use', async () => {
+    const svc = makeExercisesService(
+      fakeRepo({ delete: vi.fn(() => Promise.resolve('in_use' as const)) }),
+      { newId: () => 'x' },
+    );
+    await expect(svc.remove('A', 'e1')).rejects.toMatchObject({
+      status: 409,
+      code: 'EXERCISE_IN_USE',
+    });
   });
 });
