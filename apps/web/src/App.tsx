@@ -8,7 +8,10 @@ import { MorePage } from './pages/MorePage';
 import { ClientsPage } from './pages/ClientsPage';
 import { ClientCardPage } from './pages/ClientCardPage';
 import { ClientEditPage } from './pages/ClientEditPage';
-import { KnowledgeBasePage, CalendarPage } from './pages/StubPage';
+import { KnowledgeBasePage } from './pages/KnowledgeBasePage';
+import { ExerciseEditPage } from './pages/ExerciseEditPage';
+import { TemplateEditPage } from './pages/TemplateEditPage';
+import { CalendarPage } from './pages/StubPage';
 
 export function App() {
   return (
@@ -28,6 +31,10 @@ export function App() {
         <Route path="/clients/:id" element={<ClientCardPage />} />
         <Route path="/clients/:id/edit" element={<ClientEditPage mode="edit" />} />
         <Route path="/knowledge" element={<KnowledgeBasePage />} />
+        <Route path="/knowledge/exercises/new" element={<ExerciseEditPage mode="create" />} />
+        <Route path="/knowledge/exercises/:id/edit" element={<ExerciseEditPage mode="edit" />} />
+        <Route path="/knowledge/templates/new" element={<TemplateEditPage mode="create" />} />
+        <Route path="/knowledge/templates/:id/edit" element={<TemplateEditPage mode="edit" />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/more" element={<MorePage />} />
       </Route>
