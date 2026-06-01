@@ -144,6 +144,8 @@ export function makeAccountingService(repo: AccountingRepo, deps: AccountingDeps
       id: string,
       input: UpdateExpenseRequest,
     ): Promise<ExpenseResponse> {
+      // Сперва 404, если расхода нет (даже при битых ссылках в payload), затем проверка ссылок.
+      if (!(await repo.getExpense(trainerId, id))) throw notFound('Расход не найден');
       await assertExpenseRefs(trainerId, input.gymId, input.clientId);
       const patch: ExpensePatchInput = {};
       if (input.category !== undefined) patch.category = input.category;

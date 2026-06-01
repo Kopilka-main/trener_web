@@ -120,6 +120,11 @@ describe.skipIf(!url)('accounting isolation (integration)', () => {
     ).toBe(200);
   });
 
+  it('GET /api/expenses без cookie → 401', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/expenses' });
+    expect(res.statusCode).toBe(401);
+  });
+
   it('summary показывает только свои суммы', async () => {
     const sidA = await registerTrainer('a@b.co');
     const sidB = await registerTrainer('b@b.co');

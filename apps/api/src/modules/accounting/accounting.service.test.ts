@@ -118,16 +118,40 @@ describe('accounting.service', () => {
     expect(gymBelongsToTrainer).not.toHaveBeenCalled();
   });
 
-  it('updateExpense с чужим gym → 400, repo.updateExpense не вызван', async () => {
+  it('updateExpense существующего с чужим gym → 400, repo.updateExpense не вызван', async () => {
     const updateExpense = vi.fn(() => Promise.resolve(expenseRow()));
     const svc = makeAccountingService(
-      fakeRepo({ gymBelongsToTrainer: vi.fn(() => Promise.resolve(false)), updateExpense }),
+      fakeRepo({
+        getExpense: vi.fn(() => Promise.resolve(expenseRow())),
+        gymBelongsToTrainer: vi.fn(() => Promise.resolve(false)),
+        updateExpense,
+      }),
       { newId: () => 'x' },
     );
     await expect(svc.updateExpense('A', 'e1', { gymId: 'g9' })).rejects.toMatchObject({
       status: 400,
       code: 'GYM_NOT_FOUND',
     });
+    expect(updateExpense).not.toHaveBeenCalled();
+  });
+
+  it('updateExpense несуществующего → 404 раньше проверки ссылок (даже при битом gymId)', async () => {
+    const gymBelongsToTrainer = vi.fn(() => Promise.resolve(false));
+    const updateExpense = vi.fn(() => Promise.resolve(null));
+    const svc = makeAccountingService(
+      // getExpense → null (нет расхода); ссылки заведомо битые.
+      fakeRepo({
+        getExpense: vi.fn(() => Promise.resolve(null)),
+        gymBelongsToTrainer,
+        updateExpense,
+      }),
+      { newId: () => 'x' },
+    );
+    await expect(svc.updateExpense('A', 'missing', { gymId: 'g9' })).rejects.toMatchObject({
+      status: 404,
+    });
+    // 404 раньше: проверка ссылок и repo.updateExpense не вызывались.
+    expect(gymBelongsToTrainer).not.toHaveBeenCalled();
     expect(updateExpense).not.toHaveBeenCalled();
   });
 
