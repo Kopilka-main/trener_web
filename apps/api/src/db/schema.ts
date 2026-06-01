@@ -320,3 +320,40 @@ export const measurements = pgTable(
   },
   (t) => [index('idx_measurements_trainer_client_date').on(t.trainerId, t.clientId, t.date)],
 );
+
+// Диалог тренера с клиентом (1 на пару). lastMessageAt — для сортировки списка диалогов;
+// trainerLastReadAt — отметка прочтения тренером. UNIQUE (trainerId, clientId) — getOrCreate.
+export const conversations = pgTable(
+  'conversations',
+  {
+    id: text('id').primaryKey(),
+    trainerId: text('trainer_id')
+      .notNull()
+      .references(() => trainers.id, { onDelete: 'cascade' }),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
+    lastMessageAt: timestamp('last_message_at', { withTimezone: true }),
+    trainerLastReadAt: timestamp('trainer_last_read_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('conversations_trainer_client_uq').on(t.trainerId, t.clientId)],
+);
+
+// Сообщение диалога. senderRole фиксируется как 'trainer' в этой фазе; колонка расширяема.
+export const messages = pgTable(
+  'messages',
+  {
+    id: text('id').primaryKey(),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    senderRole: text('sender_role').$type<'trainer' | 'client'>().notNull(),
+    body: text('body').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('idx_messages_conversation_created').on(t.conversationId, t.createdAt),
+    check('messages_sender_role_chk', sql`${t.senderRole} IN ('trainer', 'client')`),
+  ],
+);
