@@ -249,3 +249,51 @@ export const paymentPackages = pgTable(
     check('payment_packages_status_chk', sql`${t.status} IN ('active', 'closed', 'cancelled')`),
   ],
 );
+
+// Зал/площадка тренера (для привязки расходов на аренду и т.п.).
+export const gyms = pgTable('gyms', {
+  id: text('id').primaryKey(),
+  trainerId: text('trainer_id')
+    .notNull()
+    .references(() => trainers.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  monthlyRent: doublePrecision('monthly_rent'),
+  note: text('note'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Расход тренера. gymId/clientId — опциональные привязки (FK set null при удалении связанного).
+export const expenses = pgTable(
+  'expenses',
+  {
+    id: text('id').primaryKey(),
+    trainerId: text('trainer_id')
+      .notNull()
+      .references(() => trainers.id, { onDelete: 'cascade' }),
+    category: text('category').notNull(),
+    amount: doublePrecision('amount').notNull(),
+    date: text('date').notNull(), // YYYY-MM-DD
+    gymId: text('gym_id').references(() => gyms.id, { onDelete: 'set null' }),
+    clientId: text('client_id').references(() => clients.id, { onDelete: 'set null' }),
+    note: text('note'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('idx_expenses_trainer_date').on(t.trainerId, t.date)],
+);
+
+// Доход тренера.
+export const incomes = pgTable(
+  'incomes',
+  {
+    id: text('id').primaryKey(),
+    trainerId: text('trainer_id')
+      .notNull()
+      .references(() => trainers.id, { onDelete: 'cascade' }),
+    category: text('category').notNull(),
+    amount: doublePrecision('amount').notNull(),
+    date: text('date').notNull(), // YYYY-MM-DD
+    note: text('note'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('idx_incomes_trainer_date').on(t.trainerId, t.date)],
+);

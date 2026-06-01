@@ -64,6 +64,13 @@
       "when": 1780298038523,
       "tag": "0008_ordinary_radioactive_man",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1780298745324,
+      "tag": "0009_chubby_the_hood",
+      "breakpoints": true
     }
   ]
 }
