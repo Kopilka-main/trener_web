@@ -3,7 +3,6 @@ import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
-import { randomUUID } from 'node:crypto';
 import type { Db } from './db/client.js';
 import { realClock } from './core/app-deps.js';
 import { errorHandler } from './plugins/error-handler.js';
@@ -29,11 +28,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(helmet);
   await app.register(cookie, { secret: deps.cookieSecret });
 
-  // Общий провайдер newId/now для доменных модулей (Фаза 4 будет переиспользовать).
+  // Общий провайдер newId/now для auth и доменных модулей (детерминизм в тестах).
   const clock = realClock;
 
   const repo = makeAuthRepo(deps.db);
-  const svc = makeAuthService(repo, { newId: () => randomUUID(), now: () => new Date() });
+  const svc = makeAuthService(repo, clock);
 
   await app.register(tenantContext, { findSession: (id) => repo.findSession(id) });
 
