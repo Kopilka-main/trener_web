@@ -341,6 +341,32 @@ export const files = pgTable(
   (t) => [index('idx_files_trainer').on(t.trainerId)],
 );
 
+// Фото прогресса клиента (вложено под клиента, scoped по тренеру). Ссылается на files.
+// angle — ракурс съёмки (фронт/бок/спина); date — YYYY-MM-DD; note опционален.
+export const progressPhotos = pgTable(
+  'progress_photos',
+  {
+    id: text('id').primaryKey(),
+    trainerId: text('trainer_id')
+      .notNull()
+      .references(() => trainers.id, { onDelete: 'cascade' }),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
+    date: text('date').notNull(), // YYYY-MM-DD
+    angle: text('angle').$type<'front' | 'side' | 'back'>().notNull(),
+    fileId: text('file_id')
+      .notNull()
+      .references(() => files.id, { onDelete: 'cascade' }),
+    note: text('note'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('idx_progress_photos_trainer_client_date').on(t.trainerId, t.clientId, t.date),
+    check('progress_photos_angle_chk', sql`${t.angle} IN ('front', 'side', 'back')`),
+  ],
+);
+
 // Диалог тренера с клиентом (1 на пару). lastMessageAt — для сортировки списка диалогов;
 // trainerLastReadAt — отметка прочтения тренером. UNIQUE (trainerId, clientId) — getOrCreate.
 export const conversations = pgTable(

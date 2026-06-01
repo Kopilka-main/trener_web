@@ -10,3 +10,4 @@ export * from './accounting.js';
 export * from './measurements.js';
 export * from './chat.js';
 export * from './files.js';
+export * from './progress-photos.js';
