@@ -321,6 +321,26 @@ export const measurements = pgTable(
   (t) => [index('idx_measurements_trainer_client_date').on(t.trainerId, t.clientId, t.date)],
 );
 
+// Загруженный файл (приватный). Раздаётся только владельцу-тренеру через GET /api/files/:id.
+// clientId опционален: файл может быть привязан к клиенту (фото/медкарта) либо нет.
+// storagePath — относительный путь от UPLOADS_DIR (<trainerId>/<clientId|'_'>/<id>.<ext>).
+export const files = pgTable(
+  'files',
+  {
+    id: text('id').primaryKey(),
+    trainerId: text('trainer_id')
+      .notNull()
+      .references(() => trainers.id, { onDelete: 'cascade' }),
+    clientId: text('client_id').references(() => clients.id, { onDelete: 'cascade' }),
+    mime: text('mime').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    storagePath: text('storage_path').notNull(),
+    originalName: text('original_name'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('idx_files_trainer').on(t.trainerId)],
+);
+
 // Диалог тренера с клиентом (1 на пару). lastMessageAt — для сортировки списка диалогов;
 // trainerLastReadAt — отметка прочтения тренером. UNIQUE (trainerId, clientId) — getOrCreate.
 export const conversations = pgTable(
