@@ -26,6 +26,7 @@ import { registerMeasurementsModule } from './modules/measurements/measurements.
 import { registerChatModule } from './modules/chat/chat.module.js';
 import { registerFilesModule } from './modules/files/files.module.js';
 import { registerProgressPhotosModule } from './modules/progress-photos/progress-photos.module.js';
+import { registerMedicalModule } from './modules/medical-records/medical.module.js';
 import { makeStorage } from './files/storage.js';
 
 // uploadsDir опционален: в проде передаётся из env.UPLOADS_DIR (server.ts).
@@ -71,6 +72,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerChatModule(app, { db: deps.db, clock });
   registerFilesModule(app, { db: deps.db, storage });
   registerProgressPhotosModule(app, { db: deps.db, storage, clock });
+  registerMedicalModule(app, { db: deps.db, storage, clock });
 
   healthRoutes(app);
   return app;
