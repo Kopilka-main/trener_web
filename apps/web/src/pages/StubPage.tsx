@@ -8,10 +8,6 @@ export function StubPage({ title }: { title: string }) {
   );
 }
 
-export function ClientsPage() {
-  return <StubPage title="Клиенты" />;
-}
-
 export function KnowledgeBasePage() {
   return <StubPage title="База знаний" />;
 }

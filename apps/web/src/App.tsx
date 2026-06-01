@@ -5,7 +5,10 @@ import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { HomePage } from './pages/HomePage';
 import { MorePage } from './pages/MorePage';
-import { ClientsPage, KnowledgeBasePage, CalendarPage } from './pages/StubPage';
+import { ClientsPage } from './pages/ClientsPage';
+import { ClientCardPage } from './pages/ClientCardPage';
+import { ClientEditPage } from './pages/ClientEditPage';
+import { KnowledgeBasePage, CalendarPage } from './pages/StubPage';
 
 export function App() {
   return (
@@ -21,6 +24,9 @@ export function App() {
       >
         <Route path="/" element={<HomePage />} />
         <Route path="/clients" element={<ClientsPage />} />
+        <Route path="/clients/new" element={<ClientEditPage mode="create" />} />
+        <Route path="/clients/:id" element={<ClientCardPage />} />
+        <Route path="/clients/:id/edit" element={<ClientEditPage mode="edit" />} />
         <Route path="/knowledge" element={<KnowledgeBasePage />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/more" element={<MorePage />} />
