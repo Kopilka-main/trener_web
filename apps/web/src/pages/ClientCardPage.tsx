@@ -87,7 +87,13 @@ export function ClientCardPage() {
   const c = client.data;
   const isArchived = c.status === 'archived';
   const age = ageFromBirthDate(c.birthDate);
-  const completedCount = workouts.data?.filter((w) => w.status === 'completed').length ?? 0;
+  // Прогресс последней завершённой тренировки = выполненных подходов в ней.
+  const lastCompleted = [...(workouts.data ?? [])]
+    .filter((w) => w.status === 'completed')
+    .sort((a, b) => Date.parse(b.completedAt ?? '') - Date.parse(a.completedAt ?? ''))[0];
+  const lastProgress = lastCompleted
+    ? lastCompleted.exercises.flatMap((e) => e.sets).filter((s) => s.done).length
+    : 0;
   const connected = (c.accountId ?? '').trim() !== '';
 
   return (
@@ -163,7 +169,7 @@ export function ClientCardPage() {
         {/* Сетка плиток-разделов. */}
         <div className="grid grid-cols-2 gap-3">
           {TILES.map(({ key, label, sub, Icon }) => {
-            const showCount = key === 'stats' && completedCount > 0;
+            const showCount = key === 'stats' && lastProgress > 0;
             // «Написать» доступно только при подключённом клиенте (есть accountId).
             const chatLocked = key === 'chat' && !connected;
             return (
@@ -188,7 +194,7 @@ export function ClientCardPage() {
                   )}
                   {showCount && (
                     <span className="text-[22px] font-bold leading-none text-ink">
-                      {completedCount}
+                      {lastProgress}
                     </span>
                   )}
                 </div>
