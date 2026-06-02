@@ -211,6 +211,17 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
                       </button>
                     ))}
                   </div>
+                  {activeType === 'Прочее' && (
+                    <input
+                      value={c.type === 'Прочее' ? '' : c.type}
+                      onChange={(e) =>
+                        setContact(i, { type: e.target.value === '' ? 'Прочее' : e.target.value })
+                      }
+                      placeholder="Название типа (напр. Email)"
+                      aria-label="Название типа контакта"
+                      className="w-full rounded-lg border border-line bg-chip px-3 py-2 text-sm text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
+                    />
+                  )}
                   <input
                     value={c.value}
                     onChange={(e) => setContact(i, { value: e.target.value })}
@@ -224,26 +235,23 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
             <button
               type="button"
               onClick={addContact}
-              className="self-start rounded-xl bg-card-elevated px-3 py-2 text-sm font-semibold text-ink active:bg-card"
+              className="self-center rounded-full bg-card-elevated px-4 py-2 text-sm font-semibold text-ink active:bg-card"
             >
-              + добавить контакт
+              + контакт
             </button>
           </div>
         </Section>
 
         {/* Личное. */}
         <Section title="Личное">
-          <label
-            htmlFor="birthDate"
-            className="flex items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3"
-          >
-            <span className="text-[13px] text-ink-muted">Дата рождения</span>
+          <label htmlFor="birthDate" className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-ink-muted">Дата рождения</span>
             <input
               id="birthDate"
               type="date"
               value={birthDate}
               onChange={(e) => setBirthDate(e.target.value)}
-              className="bg-transparent text-right text-[14px] font-semibold text-ink outline-none"
+              className="w-full rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none focus:border-accent [color-scheme:dark]"
             />
           </label>
         </Section>
