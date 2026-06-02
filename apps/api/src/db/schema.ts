@@ -10,6 +10,7 @@ import {
   index,
   check,
   jsonb,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { ClientStatus } from '@trener/shared';
@@ -63,6 +64,12 @@ export const clients = pgTable('clients', {
   contacts: jsonb('contacts').$type<{ type: string; value: string }[]>().notNull().default([]),
   // Свободные теги клиента.
   tags: jsonb('tags').$type<string[]>().notNull().default([]),
+  // Аватар клиента: ссылка на files. NULL = нет фото, удаление файла → set null.
+  // FK-колбэк ленивый (files объявлена ниже). Тип колонки аннотируем как AnyPgColumn,
+  // чтобы разорвать циклическую инференцию типов (files↔clients) — иначе типы схлопываются в any.
+  avatarFileId: text('avatar_file_id').references((): AnyPgColumn => files.id, {
+    onDelete: 'set null',
+  }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

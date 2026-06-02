@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
@@ -7,10 +7,10 @@ import {
   clientResponseSchema,
   clientListResponseSchema,
 } from '@trener/shared';
-import type { ClientsService } from './clients.service.js';
+import type { ClientsService, AvatarUploadInput } from './clients.service.js';
 import { requireAuth } from '../../plugins/tenant-context.js';
 import { makeRequireClientAccess } from '../../plugins/require-client-access.js';
-import { unauthorized } from '../../errors.js';
+import { AppError, unauthorized } from '../../errors.js';
 
 // guard связи тренер↔клиент — импортируем тип из плагина (не repo/db),
 // чтобы HTTP-слой не нарушал границу *.routes.ts ↔ *.repo/**/db.
@@ -31,6 +31,34 @@ export function clientsRoutes(
   function trainerId(req: { trainerId?: string }): string {
     if (!req.trainerId) throw unauthorized('Требуется вход');
     return req.trainerId;
+  }
+
+  // Читает multipart-запрос аватара: собирает файл `photo` в буфер (по образцу
+  // progress-photos). Прочие файловые части дренируем, чтобы не блокировать поток.
+  async function readAvatar(req: FastifyRequest): Promise<AvatarUploadInput> {
+    let fileBuffer: Buffer | null = null;
+    let mime: string | null = null;
+    let originalName: string | null = null;
+
+    for await (const part of req.parts()) {
+      if (part.type === 'file') {
+        if (part.fieldname === 'photo' && fileBuffer === null) {
+          fileBuffer = await part.toBuffer();
+          mime = part.mimetype;
+          originalName = part.filename || null;
+        } else {
+          await part.toBuffer();
+        }
+      }
+    }
+
+    if (!fileBuffer || mime === null) {
+      throw new AppError(400, 'FILE_REQUIRED', 'Файл `photo` обязателен');
+    }
+    if (!mime.startsWith('image/')) {
+      throw new AppError(400, 'UNSUPPORTED_MEDIA_TYPE', 'Ожидается изображение');
+    }
+    return { fileBuffer, mime, originalName };
   }
 
   typed.post(
@@ -78,6 +106,32 @@ export function clientsRoutes(
     },
     async (req) => {
       await svc.unlink(trainerId(req), req.params.id);
+      return { ok: true as const };
+    },
+  );
+
+  // Аватар клиента: multipart (поле `photo`, image/*). Бизнес-логика — в service.
+  typed.post(
+    '/api/clients/:id/avatar',
+    {
+      preHandler: [requireAuth, requireClientAccess],
+      schema: { params: idParams, response: { 200: clientWrap } },
+    },
+    async (req) => {
+      const input = await readAvatar(req);
+      const client = await svc.setAvatar(trainerId(req), req.params.id, input);
+      return { client };
+    },
+  );
+
+  typed.delete(
+    '/api/clients/:id/avatar',
+    {
+      preHandler: [requireAuth, requireClientAccess],
+      schema: { params: idParams, response: { 200: z.object({ ok: z.literal(true) }) } },
+    },
+    async (req) => {
+      await svc.removeAvatar(trainerId(req), req.params.id);
       return { ok: true as const };
     },
   );

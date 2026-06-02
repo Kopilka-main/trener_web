@@ -60,6 +60,8 @@ export const clientResponseSchema = z.object({
   status: clientStatusSchema,
   contacts: z.array(contactSchema),
   tags: z.array(z.string()),
+  // id файла-аватара (раздаётся через GET /api/files/:id) либо null.
+  avatarFileId: z.string().nullable(),
   createdAt: z.string(),
 });
 export type ClientResponse = z.infer<typeof clientResponseSchema>;

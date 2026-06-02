@@ -61,7 +61,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     authRoutes(authScope, svc, deps.isProd);
   });
 
-  registerClientsModule(app, { db: deps.db, clock });
+  registerClientsModule(app, { db: deps.db, storage, clock });
   registerExercisesModule(app, { db: deps.db, clock });
   registerTemplatesModule(app, { db: deps.db, clock });
   registerClientWorkoutsModule(app, { db: deps.db, clock });

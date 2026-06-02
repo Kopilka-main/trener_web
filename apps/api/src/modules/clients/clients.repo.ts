@@ -14,6 +14,7 @@ export type ClientRow = {
   status: ClientStatus;
   contacts: Contact[];
   tags: string[];
+  avatarFileId: string | null;
   createdAt: Date;
 };
 
@@ -55,6 +56,7 @@ export function makeClientsRepo(db: Db) {
         birthDate: clients.birthDate,
         contacts: clients.contacts,
         tags: clients.tags,
+        avatarFileId: clients.avatarFileId,
         notes: trainerClients.notes,
         status: trainerClients.status,
         createdAt: trainerClients.createdAt,
@@ -114,6 +116,7 @@ export function makeClientsRepo(db: Db) {
           birthDate: clients.birthDate,
           contacts: clients.contacts,
           tags: clients.tags,
+          avatarFileId: clients.avatarFileId,
           notes: trainerClients.notes,
           status: trainerClients.status,
           createdAt: trainerClients.createdAt,
@@ -163,6 +166,24 @@ export function makeClientsRepo(db: Db) {
           );
       }
       return getForTrainer(trainerId, clientId);
+    },
+
+    // Проставляет/снимает аватар клиента (только при наличии связи тренер↔клиент).
+    // Возвращает предыдущий avatarFileId (для best-effort чистки старого файла),
+    // либо undefined, если связи нет (нельзя трогать чужую персону).
+    async setAvatar(
+      trainerId: string,
+      clientId: string,
+      fileId: string | null,
+    ): Promise<{ previousFileId: string | null } | undefined> {
+      if (!(await isLinkedLocal(trainerId, clientId))) return undefined;
+      const [prev] = await db
+        .select({ avatarFileId: clients.avatarFileId })
+        .from(clients)
+        .where(eq(clients.id, clientId));
+      if (!prev) return undefined;
+      await db.update(clients).set({ avatarFileId: fileId }).where(eq(clients.id, clientId));
+      return { previousFileId: prev.avatarFileId };
     },
 
     // «Удаление» = разрыв связи (персона и данные других тренеров сохраняются).

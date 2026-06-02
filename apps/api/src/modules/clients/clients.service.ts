@@ -1,8 +1,23 @@
 import type { ClientsRepo, ClientRow, UpdateClientInput } from './clients.repo.js';
+import type { FilesRepo } from '../files/files.repo.js';
+import type { Storage } from '../../files/storage.js';
 import type { ClientResponse, CreateClientRequest, UpdateClientRequest } from '@trener/shared';
-import { notFound } from '../../errors.js';
+import { AppError, notFound } from '../../errors.js';
 
 export type ClientsDeps = { newId: () => string };
+
+// Расширение файла выводим ИЗ MIME по whitelist (НЕ из имени файла клиента).
+const MIME_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+
+export type AvatarUploadInput = {
+  fileBuffer: Buffer;
+  mime: string;
+  originalName: string | null;
+};
 
 function toResponse(r: ClientRow): ClientResponse {
   return {
@@ -16,11 +31,17 @@ function toResponse(r: ClientRow): ClientResponse {
     status: r.status,
     contacts: r.contacts ?? [],
     tags: r.tags ?? [],
+    avatarFileId: r.avatarFileId,
     createdAt: r.createdAt.toISOString(),
   };
 }
 
-export function makeClientsService(repo: ClientsRepo, deps: ClientsDeps) {
+export function makeClientsService(
+  repo: ClientsRepo,
+  filesRepo: FilesRepo,
+  storage: Storage,
+  deps: ClientsDeps,
+) {
   return {
     async create(trainerId: string, input: CreateClientRequest): Promise<ClientResponse> {
       const row = await repo.create({
@@ -76,6 +97,68 @@ export function makeClientsService(repo: ClientsRepo, deps: ClientsDeps) {
     async unlink(trainerId: string, clientId: string): Promise<void> {
       const ok = await repo.unlink(trainerId, clientId);
       if (!ok) throw notFound('Клиент не найден');
+    },
+
+    // Загрузка аватара. Порядок как в progress-photos: проверка mime → storage.save
+    // → filesRepo.create → repo.setAvatar. Не в транзакции (storage пишет вне БД);
+    // при ошибке БД-вставки чистим только что записанный файл best-effort.
+    // Старый аватар (если был) удаляем best-effort после успешной замены.
+    async setAvatar(
+      trainerId: string,
+      clientId: string,
+      input: AvatarUploadInput,
+    ): Promise<ClientResponse> {
+      const ext = MIME_EXT[input.mime];
+      if (!ext) {
+        throw new AppError(400, 'UNSUPPORTED_MEDIA_TYPE', 'Неподдерживаемый тип файла');
+      }
+
+      const fileId = deps.newId();
+      const saved = await storage.save(trainerId, clientId, fileId, ext, input.fileBuffer);
+
+      let result: { previousFileId: string | null } | undefined;
+      try {
+        await filesRepo.create({
+          id: fileId,
+          trainerId,
+          clientId,
+          mime: input.mime,
+          sizeBytes: saved.sizeBytes,
+          storagePath: saved.storagePath,
+          originalName: input.originalName,
+        });
+        result = await repo.setAvatar(trainerId, clientId, fileId);
+      } catch (err) {
+        await storage.remove(saved.storagePath).catch(() => undefined);
+        throw err;
+      }
+
+      // Нет связи тренер↔клиент: откатываем созданный файл, 404.
+      if (!result) {
+        await filesRepo.delete(trainerId, fileId).catch(() => undefined);
+        await storage.remove(saved.storagePath).catch(() => undefined);
+        throw notFound('Клиент не найден');
+      }
+
+      // Старый аватар: удаляем строку files (каскадом обнулит ссылку) + файл с диска.
+      if (result.previousFileId && result.previousFileId !== fileId) {
+        const old = await filesRepo.delete(trainerId, result.previousFileId).catch(() => null);
+        if (old) await storage.remove(old.storagePath).catch(() => undefined);
+      }
+
+      const row = await repo.getForTrainer(trainerId, clientId);
+      if (!row) throw notFound('Клиент не найден');
+      return toResponse(row);
+    },
+
+    // Снять аватар: avatarFileId = null, старый файл удалить best-effort.
+    async removeAvatar(trainerId: string, clientId: string): Promise<void> {
+      const result = await repo.setAvatar(trainerId, clientId, null);
+      if (!result) throw notFound('Клиент не найден');
+      if (result.previousFileId) {
+        const old = await filesRepo.delete(trainerId, result.previousFileId).catch(() => null);
+        if (old) await storage.remove(old.storagePath).catch(() => undefined);
+      }
     },
   };
 }
