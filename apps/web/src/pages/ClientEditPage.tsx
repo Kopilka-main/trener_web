@@ -235,9 +235,9 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
             <button
               type="button"
               onClick={addContact}
-              className="self-center rounded-full bg-card-elevated px-4 py-2 text-sm font-semibold text-ink active:bg-card"
+              className="w-full rounded-2xl border-2 border-dashed border-line py-3.5 text-sm font-medium text-ink-muted transition-colors active:border-accent"
             >
-              + контакт
+              Добавить контакт
             </button>
           </div>
         </Section>
