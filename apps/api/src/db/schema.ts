@@ -247,6 +247,7 @@ export const paymentPackages = pgTable(
       .notNull()
       .references(() => clients.id, { onDelete: 'cascade' }),
     lessonsPaid: integer('lessons_paid').notNull(),
+    lessonsUsed: integer('lessons_used').notNull().default(0),
     pricePerLesson: doublePrecision('price_per_lesson').notNull(),
     totalPaid: doublePrecision('total_paid').notNull(),
     workoutType: text('workout_type'),
@@ -303,6 +304,7 @@ export const incomes = pgTable(
     category: text('category').notNull(),
     amount: doublePrecision('amount').notNull(),
     date: text('date').notNull(), // YYYY-MM-DD
+    clientId: text('client_id').references(() => clients.id, { onDelete: 'set null' }),
     note: text('note'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

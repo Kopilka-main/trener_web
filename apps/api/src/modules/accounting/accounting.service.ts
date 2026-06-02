@@ -61,6 +61,7 @@ function incomeToResponse(r: IncomeRow): IncomeResponse {
     category: r.category,
     amount: r.amount,
     date: r.date,
+    clientId: r.clientId,
     note: r.note,
     createdAt: r.createdAt.toISOString(),
   };
@@ -167,12 +168,15 @@ export function makeAccountingService(repo: AccountingRepo, deps: AccountingDeps
     // --- Incomes ---
 
     async createIncome(trainerId: string, input: CreateIncomeRequest): Promise<IncomeResponse> {
+      if (input.clientId != null && !(await repo.isClientLinked(trainerId, input.clientId)))
+        throw clientNotLinked();
       const data: CreateIncomeInput = {
         id: deps.newId(),
         category: input.category,
         amount: input.amount,
         date: input.date,
       };
+      if (input.clientId !== undefined) data.clientId = input.clientId ?? null;
       if (input.note !== undefined) data.note = input.note ?? null;
       return incomeToResponse(await repo.createIncome(trainerId, data));
     },
@@ -192,10 +196,15 @@ export function makeAccountingService(repo: AccountingRepo, deps: AccountingDeps
       id: string,
       input: UpdateIncomeRequest,
     ): Promise<IncomeResponse> {
+      // Сперва 404, если дохода нет (даже при битой ссылке clientId), затем проверка ссылки.
+      if (!(await repo.getIncome(trainerId, id))) throw notFound('Доход не найден');
+      if (input.clientId != null && !(await repo.isClientLinked(trainerId, input.clientId)))
+        throw clientNotLinked();
       const patch: IncomePatchInput = {};
       if (input.category !== undefined) patch.category = input.category;
       if (input.amount !== undefined) patch.amount = input.amount;
       if (input.date !== undefined) patch.date = input.date;
+      if (input.clientId !== undefined) patch.clientId = input.clientId ?? null;
       if (input.note !== undefined) patch.note = input.note ?? null;
       const row = await repo.updateIncome(trainerId, id, patch);
       if (!row) throw notFound('Доход не найден');

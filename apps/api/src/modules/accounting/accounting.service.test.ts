@@ -36,6 +36,7 @@ function incomeRow(over: Partial<IncomeRow> = {}): IncomeRow {
     category: 'Тренировки',
     amount: 200,
     date: '2026-06-01',
+    clientId: null,
     note: null,
     createdAt: new Date(0),
     ...over,
@@ -165,6 +166,39 @@ describe('accounting.service', () => {
     const res = await svc.createIncome('A', { category: 'Y', amount: 200, date: '2026-06-01' });
     expect(res.amount).toBe(200);
     expect(typeof res.createdAt).toBe('string');
+  });
+
+  it('createIncome без clientId → ответ с clientId=null, проверка связи не зовётся', async () => {
+    const isClientLinked = vi.fn(() => Promise.resolve(true));
+    const svc = makeAccountingService(fakeRepo({ isClientLinked }), { newId: () => 'x' });
+    const res = await svc.createIncome('A', { category: 'Y', amount: 200, date: '2026-06-01' });
+    expect(res.clientId).toBeNull(); // из incomeRow()
+    expect(isClientLinked).not.toHaveBeenCalled();
+  });
+
+  it('createIncome с clientId прокидывает clientId и проверяет связь', async () => {
+    const createIncome = vi.fn(() => Promise.resolve(incomeRow({ clientId: 'c1' })));
+    const svc = makeAccountingService(fakeRepo({ createIncome }), { newId: () => 'x' });
+    const res = await svc.createIncome('A', {
+      category: 'Y',
+      amount: 200,
+      date: '2026-06-01',
+      clientId: 'c1',
+    });
+    expect(res.clientId).toBe('c1');
+    expect(createIncome).toHaveBeenCalledWith('A', expect.objectContaining({ clientId: 'c1' }));
+  });
+
+  it('createIncome с несвязанным клиентом → 400 CLIENT_NOT_LINKED, repo.createIncome не вызван', async () => {
+    const createIncome = vi.fn(() => Promise.resolve(incomeRow()));
+    const svc = makeAccountingService(
+      fakeRepo({ isClientLinked: vi.fn(() => Promise.resolve(false)), createIncome }),
+      { newId: () => 'x' },
+    );
+    await expect(
+      svc.createIncome('A', { category: 'Y', amount: 200, date: '2026-06-01', clientId: 'c9' }),
+    ).rejects.toMatchObject({ status: 400, code: 'CLIENT_NOT_LINKED' });
+    expect(createIncome).not.toHaveBeenCalled();
   });
 
   it('getIncome/updateIncome/removeIncome несуществующего → 404', async () => {

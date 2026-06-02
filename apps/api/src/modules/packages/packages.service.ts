@@ -14,6 +14,7 @@ function toResponse(r: PackageRow): PackageResponse {
     id: r.id,
     clientId: r.clientId,
     lessonsPaid: r.lessonsPaid,
+    lessonsUsed: r.lessonsUsed,
     pricePerLesson: r.pricePerLesson,
     totalPaid: r.totalPaid,
     workoutType: r.workoutType,
@@ -65,6 +66,7 @@ export function makePackagesService(repo: PackagesRepo, deps: PackagesDeps) {
     ): Promise<PackageResponse> {
       const patch: PackagePatchInput = {};
       if (input.lessonsPaid !== undefined) patch.lessonsPaid = input.lessonsPaid;
+      if (input.lessonsUsed !== undefined) patch.lessonsUsed = input.lessonsUsed;
       if (input.pricePerLesson !== undefined) patch.pricePerLesson = input.pricePerLesson;
       if (input.totalPaid !== undefined) patch.totalPaid = input.totalPaid;
       if (input.workoutType !== undefined) patch.workoutType = input.workoutType ?? null;

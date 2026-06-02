@@ -67,6 +67,7 @@ export const createIncomeRequestSchema = z.object({
   category: z.string().trim().min(1).max(200),
   amount: z.number().positive(),
   date: dateStr,
+  clientId: z.string().nullish(),
   note: noteField,
 });
 export type CreateIncomeRequest = z.infer<typeof createIncomeRequestSchema>;
@@ -79,6 +80,7 @@ export const incomeResponseSchema = z.object({
   category: z.string(),
   amount: z.number(),
   date: z.string(),
+  clientId: z.string().nullable(),
   note: z.string().nullable(),
   createdAt: z.string(),
 });

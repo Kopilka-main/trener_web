@@ -141,6 +141,13 @@
       "when": 1780403388156,
       "tag": "0019_glossy_champions",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1780411947943,
+      "tag": "0020_bumpy_thunderball",
+      "breakpoints": true
     }
   ]
 }

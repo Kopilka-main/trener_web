@@ -8,6 +8,7 @@ function row(over: Partial<PackageRow> = {}): PackageRow {
     trainerId: 'A',
     clientId: 'c1',
     lessonsPaid: 10,
+    lessonsUsed: 0,
     pricePerLesson: 1500,
     totalPaid: 15000,
     workoutType: null,
@@ -44,6 +45,7 @@ describe('packages.service', () => {
     });
     expect(res.clientId).toBe('c1');
     expect(res.status).toBe('active');
+    expect(res.lessonsUsed).toBe(0);
     expect(res.createdAt).toBe(new Date(0).toISOString());
     expect(create).toHaveBeenCalledWith(
       'A',
@@ -94,6 +96,19 @@ describe('packages.service', () => {
       'c1',
       'p1',
       expect.objectContaining({ lessonsPaid: 8, status: 'closed' }),
+    );
+  });
+
+  it('update прокидывает lessonsUsed в patch', async () => {
+    const update = vi.fn(() => Promise.resolve(row({ lessonsUsed: 3 })));
+    const svc = makePackagesService(fakeRepo({ update }), deps);
+    const res = await svc.update('A', 'c1', 'p1', { lessonsUsed: 3 });
+    expect(res.lessonsUsed).toBe(3);
+    expect(update).toHaveBeenCalledWith(
+      'A',
+      'c1',
+      'p1',
+      expect.objectContaining({ lessonsUsed: 3 }),
     );
   });
 

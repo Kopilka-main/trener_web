@@ -9,6 +9,7 @@ export type PackageRow = {
   trainerId: string;
   clientId: string;
   lessonsPaid: number;
+  lessonsUsed: number;
   pricePerLesson: number;
   totalPaid: number;
   workoutType: string | null;
@@ -30,6 +31,7 @@ export type CreatePackageInput = {
 
 export type PackagePatchInput = {
   lessonsPaid?: number;
+  lessonsUsed?: number;
   pricePerLesson?: number;
   totalPaid?: number;
   workoutType?: string | null;
@@ -43,6 +45,7 @@ const columns = {
   trainerId: paymentPackages.trainerId,
   clientId: paymentPackages.clientId,
   lessonsPaid: paymentPackages.lessonsPaid,
+  lessonsUsed: paymentPackages.lessonsUsed,
   pricePerLesson: paymentPackages.pricePerLesson,
   totalPaid: paymentPackages.totalPaid,
   workoutType: paymentPackages.workoutType,
@@ -75,6 +78,7 @@ export function makePackagesRepo(db: Db) {
           trainerId,
           clientId,
           lessonsPaid: input.lessonsPaid,
+          lessonsUsed: 0,
           pricePerLesson: input.pricePerLesson,
           totalPaid: input.totalPaid,
           workoutType: input.workoutType ?? null,

@@ -31,6 +31,7 @@ export type IncomeRow = {
   category: string;
   amount: number;
   date: string;
+  clientId: string | null;
   note: string | null;
   createdAt: Date;
 };
@@ -74,6 +75,7 @@ export type CreateIncomeInput = {
   category: string;
   amount: number;
   date: string;
+  clientId?: string | null;
   note?: string | null;
 };
 
@@ -81,6 +83,7 @@ export type IncomePatchInput = {
   category?: string;
   amount?: number;
   date?: string;
+  clientId?: string | null;
   note?: string | null;
 };
 
@@ -114,6 +117,7 @@ const incomeCols = {
   category: incomes.category,
   amount: incomes.amount,
   date: incomes.date,
+  clientId: incomes.clientId,
   note: incomes.note,
   createdAt: incomes.createdAt,
 };
@@ -283,6 +287,7 @@ export function makeAccountingRepo(db: Db) {
           category: input.category,
           amount: input.amount,
           date: input.date,
+          clientId: input.clientId ?? null,
           note: input.note ?? null,
         })
         .returning(incomeCols);

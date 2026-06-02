@@ -22,6 +22,7 @@ export type CreatePackageRequest = z.infer<typeof createPackageRequestSchema>;
 
 export const updatePackageRequestSchema = createPackageRequestSchema.partial().extend({
   status: packageStatusSchema.optional(),
+  lessonsUsed: z.number().int().min(0).optional(),
 });
 export type UpdatePackageRequest = z.infer<typeof updatePackageRequestSchema>;
 
@@ -31,6 +32,7 @@ export const packageResponseSchema = z.object({
   id: z.string(),
   clientId: z.string(),
   lessonsPaid: z.number(),
+  lessonsUsed: z.number(),
   pricePerLesson: z.number(),
   totalPaid: z.number(),
   workoutType: z.string().nullable(),
