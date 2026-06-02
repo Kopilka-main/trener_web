@@ -1,8 +1,10 @@
 import {
   createPackageRequestSchema,
+  updatePackageRequestSchema,
   packageResponseSchema,
   packageListResponseSchema,
   type CreatePackageRequest,
+  type UpdatePackageRequest,
   type PackageResponse,
 } from '@trener/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -33,6 +35,19 @@ export function createClientPackage(
   }).then((r) => r.package);
 }
 
+/** Частичное обновление пакета занятий (статус, использовано занятий и т.п.). */
+export function updateClientPackage(
+  clientId: string,
+  pid: string,
+  input: UpdatePackageRequest,
+): Promise<PackageResponse> {
+  return apiFetch(`/clients/${clientId}/packages/${pid}`, {
+    method: 'PATCH',
+    body: updatePackageRequestSchema.parse(input),
+    schema: packageEnvelopeSchema,
+  }).then((r) => r.package);
+}
+
 /** Удаление пакета занятий. */
 export function deleteClientPackage(clientId: string, pid: string): Promise<void> {
   return apiFetch(`/clients/${clientId}/packages/${pid}`, {
@@ -54,6 +69,17 @@ export function useCreatePackage(clientId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreatePackageRequest) => createClientPackage(clientId, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: clientPackagesQueryKey(clientId) });
+    },
+  });
+}
+
+export function useUpdatePackage(clientId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ pid, input }: { pid: string; input: UpdatePackageRequest }) =>
+      updateClientPackage(clientId, pid, input),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: clientPackagesQueryKey(clientId) });
     },
