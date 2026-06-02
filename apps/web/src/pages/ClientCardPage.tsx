@@ -16,6 +16,7 @@ import {
 import { useClient, useUpdateClient } from '../api/clients';
 import { useClientWorkouts } from '../api/client-workouts';
 import { useClientPackages } from '../api/packages';
+import { useClientSessions } from '../api/sessions';
 import { aggregateExerciseOverview } from '../lib/workout-stats';
 import { Avatar } from '../components/Avatar';
 
@@ -73,6 +74,7 @@ export function ClientCardPage() {
   const client = useClient(id);
   const workouts = useClientWorkouts(id);
   const packages = useClientPackages(id);
+  const sessions = useClientSessions(id);
   const updateMutation = useUpdateClient(id);
   const [connectOpen, setConnectOpen] = useState(false);
 
@@ -103,6 +105,10 @@ export function ClientCardPage() {
     .reduce((acc, p) => acc + p.lessonsPaid, 0);
   const completedWorkouts = (workouts.data ?? []).filter((w) => w.status === 'completed').length;
   const paidBalance = paidLessons - completedWorkouts;
+  // Календарь: запланировано занятий / баланс по занятиям (оплачено − всего занятий).
+  const sessionList = sessions.data ?? [];
+  const plannedSessions = sessionList.filter((s) => s.status === 'planned').length;
+  const calBalance = paidLessons - sessionList.length;
 
   return (
     <div className="flex min-h-full flex-col">
@@ -205,6 +211,15 @@ export function ClientCardPage() {
                       className="text-danger"
                       aria-label="Нет связи"
                     />
+                  )}
+                  {key === 'calendar' && (plannedSessions > 0 || sessionList.length > 0) && (
+                    <span className="flex items-baseline gap-0.5 text-[22px] font-bold leading-none">
+                      <span className="text-ink">{plannedSessions}</span>
+                      <span className="text-[16px] text-ink-mutedxl">/</span>
+                      <span className={calBalance < 0 ? 'text-danger' : 'text-ink'}>
+                        {calBalance}
+                      </span>
+                    </span>
                   )}
                   {key === 'stats' && achievements > 0 && (
                     <span className="flex items-center gap-1 text-[22px] font-bold leading-none text-ink">
