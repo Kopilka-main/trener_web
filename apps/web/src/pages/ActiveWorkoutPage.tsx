@@ -309,18 +309,7 @@ function ActiveView({
                   set.actualWeightKg !== null ||
                   set.actualTimeSec !== null;
                 return (
-                  <li
-                    key={key}
-                    className="rounded-xl p-2.5"
-                    style={
-                      set.done
-                        ? {
-                            backgroundColor:
-                              'color-mix(in srgb, var(--color-accent) 14%, var(--color-card))',
-                          }
-                        : { backgroundColor: 'var(--color-chip)' }
-                    }
-                  >
+                  <li key={key} className="px-0.5 py-0.5">
                     {isEditing ? (
                       <>
                         <span className="block truncate text-[14px] font-semibold text-ink">
