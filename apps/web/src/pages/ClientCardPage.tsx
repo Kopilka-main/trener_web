@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   BarChart3,
@@ -12,7 +12,7 @@ import {
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
-import { useClient } from '../api/clients';
+import { useClient, useUpdateClient } from '../api/clients';
 import { useClientWorkouts } from '../api/client-workouts';
 import { Avatar } from '../components/Avatar';
 
@@ -69,7 +69,8 @@ export function ClientCardPage() {
 
   const client = useClient(id);
   const workouts = useClientWorkouts(id);
-  const [chatNotice, setChatNotice] = useState(false);
+  const updateMutation = useUpdateClient(id);
+  const [connectOpen, setConnectOpen] = useState(false);
 
   if (client.isPending) {
     return <p className="px-5 py-6 text-sm text-ink-muted">Загрузка…</p>;
@@ -159,25 +160,26 @@ export function ClientCardPage() {
             const showCount = key === 'stats' && completedCount > 0;
             // «Написать» доступно только при подключённом клиенте (есть accountId).
             const chatLocked = key === 'chat' && !connected;
-            const TileIcon = chatLocked ? Unlink : Icon;
             return (
               <button
                 key={key}
                 type="button"
                 onClick={() => {
-                  if (chatLocked) setChatNotice(true);
+                  if (chatLocked) setConnectOpen(true);
                   else void navigate(`/clients/${id}/${key}`);
                 }}
-                className={`tile-shadow flex flex-col gap-3 rounded-2xl p-4 text-left active:scale-[0.98] ${
-                  chatLocked ? 'opacity-60' : ''
-                }`}
+                className="tile-shadow flex flex-col gap-3 rounded-2xl p-4 text-left active:scale-[0.98]"
               >
                 <div className="flex items-start justify-between">
-                  <TileIcon
-                    size={22}
-                    strokeWidth={1.8}
-                    className={chatLocked ? 'text-danger' : 'text-ink'}
-                  />
+                  <Icon size={22} strokeWidth={1.8} className="text-ink" />
+                  {chatLocked && (
+                    <Unlink
+                      size={18}
+                      strokeWidth={1.8}
+                      className="text-danger"
+                      aria-label="Нет связи"
+                    />
+                  )}
                   {showCount && (
                     <span className="text-[22px] font-bold leading-none text-ink">
                       {completedCount}
@@ -186,31 +188,12 @@ export function ClientCardPage() {
                 </div>
                 <span className="flex flex-col">
                   <span className="text-[14px] font-bold leading-tight text-ink">{label}</span>
-                  <span className="text-[11px] text-ink-muted">
-                    {chatLocked ? 'нет подключения' : sub}
-                  </span>
+                  <span className="text-[11px] text-ink-muted">{sub}</span>
                 </span>
               </button>
             );
           })}
         </div>
-
-        {/* Сообщение: для чата нужен клиентский ID. */}
-        {chatNotice && (
-          <div className="flex flex-col gap-2 rounded-2xl bg-card p-4">
-            <p className="text-[13px] leading-relaxed text-ink-muted">
-              Чтобы написать клиенту, укажите его клиентский номер (ID) в профиле — без него связь
-              недоступна.
-            </p>
-            <button
-              type="button"
-              onClick={() => void navigate(`/clients/${id}/edit`)}
-              className="self-start rounded-full bg-accent px-4 py-2 text-[13px] font-semibold text-accent-on active:scale-[0.98]"
-            >
-              Открыть профиль
-            </button>
-          </div>
-        )}
 
         {/* Заметки. */}
         {c.notes && (
@@ -221,6 +204,91 @@ export function ClientCardPage() {
             <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-ink">{c.notes}</p>
           </section>
         )}
+      </div>
+
+      {connectOpen && (
+        <ConnectClientDialog
+          pending={updateMutation.isPending}
+          onConnect={(code) =>
+            updateMutation.mutate(
+              { accountId: code },
+              {
+                onSuccess: () => {
+                  setConnectOpen(false);
+                  void navigate(`/clients/${id}/chat`);
+                },
+              },
+            )
+          }
+          onClose={() => setConnectOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Диалог подключения: объясняет, зачем нужен ID, и принимает его. */
+function ConnectClientDialog({
+  pending,
+  onConnect,
+  onClose,
+}: {
+  pending: boolean;
+  onConnect: (code: string) => void;
+  onClose: () => void;
+}) {
+  const [code, setCode] = useState('');
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl bg-card p-5"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Подключить клиента"
+      >
+        <h2 className="text-[17px] font-bold text-ink">Нет связи с клиентом</h2>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-ink-muted">
+          Чтобы писать клиенту, укажите его клиентский номер (ID) из приложения клиента.
+        </p>
+        <input
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          placeholder="ID клиента"
+          aria-label="ID клиента"
+          autoFocus
+          className="mt-3 w-full rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none focus:border-accent"
+        />
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-xl bg-card-elevated py-3 text-[14px] font-semibold text-ink active:bg-card"
+          >
+            Отмена
+          </button>
+          <button
+            type="button"
+            onClick={() => onConnect(code.trim())}
+            disabled={code.trim() === '' || pending}
+            className="flex-1 rounded-xl bg-accent py-3 text-[14px] font-semibold text-accent-on disabled:opacity-40"
+          >
+            {pending ? '…' : 'Подключить'}
+          </button>
+        </div>
       </div>
     </div>
   );
