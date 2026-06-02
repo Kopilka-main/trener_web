@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react';
+import { ChevronRight, Plus, Search } from 'lucide-react';
 import type { ExerciseResponse, TemplateResponse } from '@trener/shared';
 import { useExercises } from '../api/exercises';
 import { useTemplates } from '../api/workout-templates';
@@ -13,14 +13,6 @@ const FLEX_HINTS = ['растяж', 'кардио', 'йог', 'stretch', 'cardio
 function isFlexCategory(category: string): boolean {
   const c = category.toLowerCase();
   return FLEX_HINTS.some((h) => c.includes(h));
-}
-
-function GlobalBadge() {
-  return (
-    <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 font-mono text-[11px] font-medium uppercase tracking-wide text-accent-on">
-      Глобальное
-    </span>
-  );
 }
 
 function CreateTile({ title, sub, onClick }: { title: string; sub: string; onClick: () => void }) {
@@ -99,7 +91,6 @@ function ExerciseRow({ exercise }: { exercise: ExerciseResponse }) {
         <span className="truncate font-mono text-xs text-ink-muted">{exercise.category}</span>
       </span>
       <span className="flex shrink-0 items-center gap-2">
-        {exercise.isGlobal && <GlobalBadge />}
         <ChevronRight size={16} className="tile-chevron" />
       </span>
     </Link>
@@ -167,15 +158,6 @@ export function KnowledgeBasePage() {
   return (
     <div className="flex min-h-full flex-col">
       <header className="px-5 pt-3">
-        <button
-          type="button"
-          onClick={() => void navigate('/')}
-          aria-label="Назад"
-          className="-ml-2 mb-1 flex h-9 w-9 items-center justify-center rounded-full text-ink-muted active:bg-card-elevated"
-        >
-          <ChevronLeft size={22} strokeWidth={1.8} />
-        </button>
-
         <h1 className="font-[family-name:var(--font-display)] text-[34px] leading-none tracking-[-0.02em] text-ink">
           База знаний
         </h1>
