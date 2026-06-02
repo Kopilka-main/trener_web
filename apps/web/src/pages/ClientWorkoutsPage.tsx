@@ -4,6 +4,7 @@ import { ChevronRight, Dumbbell, Plus, X } from 'lucide-react';
 import type { TemplateResponse, WorkoutResponse, WorkoutStatus } from '@trener/shared';
 import { useClientWorkouts, useCreateWorkout } from '../api/client-workouts';
 import { useTemplates } from '../api/workout-templates';
+import { useClient } from '../api/clients';
 import { ScreenHeader } from '../components/ScreenHeader';
 
 const STATUS_LABEL: Record<WorkoutStatus, string> = {
@@ -32,6 +33,7 @@ function formatDate(iso: string | null): string | null {
 export function ClientWorkoutsPage() {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const client = useClient(id);
   const workouts = useClientWorkouts(id);
   const createWorkout = useCreateWorkout(id);
   const [picking, setPicking] = useState(false);
@@ -73,7 +75,14 @@ export function ClientWorkoutsPage() {
 
   return (
     <div className="flex min-h-full flex-col">
-      <ScreenHeader title="Тренировки" back={`/clients/${id}`} />
+      <ScreenHeader
+        title={
+          client.data
+            ? `Тренировки · ${client.data.firstName} ${client.data.lastName}`
+            : 'Тренировки'
+        }
+        back={`/clients/${id}`}
+      />
 
       <div className="flex flex-1 flex-col gap-6 px-5 pb-28 pt-2">
         {workouts.isPending && <p className="text-sm text-ink-muted">Загрузка…</p>}

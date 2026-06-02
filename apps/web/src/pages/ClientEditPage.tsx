@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Trash2, X } from 'lucide-react';
+import { ChevronRight, Trash2, X } from 'lucide-react';
 import type { Contact } from '@trener/shared';
 import { useClient, useCreateClient, useDeleteClient, useUpdateClient } from '../api/clients';
 import { Avatar } from '../components/Avatar';
@@ -173,22 +173,48 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
         onSubmit={handleSubmit}
         className="flex flex-col gap-5 px-5 pb-8 pt-1"
       >
-        {/* Аватар по центру + кнопка-«цепь» подключения справа. */}
-        <div className="relative flex justify-center pt-1">
+        {/* Аватар по центру. */}
+        <div className="flex justify-center pt-1">
           <Avatar firstName={firstName || 'И'} lastName={lastName || 'Ф'} size={88} />
+        </div>
+
+        {/* Подключение клиента (отдельный раздел). */}
+        <Section title="Подключение">
           <button
             type="button"
             onClick={() => setConnectOpen(true)}
-            aria-label="Подключить клиента"
-            className={`absolute right-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full ${
-              accountId.trim() !== '' ? 'bg-accent text-accent-on' : 'bg-card-elevated text-accent'
-            }`}
+            className="flex w-full items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3 text-left active:bg-card-elevated"
           >
-            <svg viewBox="0 -960 960 960" width="22" height="22" fill="currentColor" aria-hidden>
-              <path d="M680-160v-120H560v-80h120v-120h80v120h120v80H760v120h-80ZM440-280H280q-83 0-141.5-58.5T80-480q0-83 58.5-141.5T280-680h160v80H280q-50 0-85 35t-35 85q0 50 35 85t85 35h160v80ZM320-440v-80h320v80H320Zm560-40h-80q0-50-35-85t-85-35H520v-80h160q83 0 141.5 58.5T880-480Z" />
-            </svg>
+            <span className="flex min-w-0 items-center gap-3">
+              <span
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-card-elevated ${
+                  accountId.trim() !== '' ? 'text-accent' : 'text-ink-muted'
+                }`}
+              >
+                <svg
+                  viewBox="0 -960 960 960"
+                  width="20"
+                  height="20"
+                  fill="currentColor"
+                  aria-hidden
+                >
+                  <path d="M680-160v-120H560v-80h120v-120h80v120h120v80H760v120h-80ZM440-280H280q-83 0-141.5-58.5T80-480q0-83 58.5-141.5T280-680h160v80H280q-50 0-85 35t-35 85q0 50 35 85t85 35h160v80ZM320-440v-80h320v80H320Zm560-40h-80q0-50-35-85t-85-35H520v-80h160q83 0 141.5 58.5T880-480Z" />
+                </svg>
+              </span>
+              <span className="flex min-w-0 flex-col">
+                <span className="text-[14px] font-semibold text-ink">
+                  {accountId.trim() !== '' ? 'Клиент подключён' : 'Подключить клиента'}
+                </span>
+                <span className="truncate text-[12px] text-ink-muted">
+                  {accountId.trim() !== ''
+                    ? `ID: ${accountId.trim()}`
+                    : 'Привязать по коду из приложения клиента'}
+                </span>
+              </span>
+            </span>
+            <ChevronRight size={18} className="tile-chevron shrink-0" />
           </button>
-        </div>
+        </Section>
 
         {/* Имя / Фамилия — 2 колонки. */}
         <div className="grid grid-cols-2 gap-3">
