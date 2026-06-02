@@ -11,6 +11,7 @@ import {
 } from '../api/workout-templates';
 import { Button } from '../components/Button';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { SortableList } from '../components/SortableList';
 
 interface TemplateEditPageProps {
   mode: 'create' | 'edit';
@@ -30,7 +31,20 @@ const GROUP_ORDER = [
   'Йога',
 ];
 
-/** Целевые мышцы по группе мышц (статическая карта — в API упражнения нет поля мышц). */
+/** Варианты «Тип» тренировки. */
+const TEMPLATE_TAGS = [
+  'Сила',
+  'Гипертрофия',
+  'Push',
+  'Pull',
+  'Восстановительная',
+  'Кардио',
+  'Кроссфит',
+  'Йога',
+  'Реабилитация',
+];
+
+/** Целевые мышцы по категории (в API упражнения нет — выводим, как в исходном MVP). */
 const MUSCLES_BY_CATEGORY: Record<string, string[]> = {
   Грудь: ['Грудные', 'Передняя дельта', 'Трицепс'],
   Спина: ['Широчайшие', 'Средняя часть спины', 'Трапеции', 'Бицепс'],
@@ -49,28 +63,21 @@ function musclesFor(category: string): string {
   return m ? m.slice(0, 3).join(', ') : category;
 }
 
-/** Варианты «Тип» тренировки. */
-const TEMPLATE_TAGS = [
-  'Сила',
-  'Гипертрофия',
-  'Push',
-  'Pull',
-  'Восстановительная',
-  'Кардио',
-  'Кроссфит',
-  'Йога',
-  'Реабилитация',
-];
+let entrySeq = 0;
+const nextId = () => `e${String(++entrySeq)}`;
 
-/** Позиция в сборке: значения подходов — строками для удобного ввода. */
+/**
+ * Карточка = одно вхождение упражнения в тренировку (один подход).
+ * Количество подходов = число карточек одного упражнения. Значения — строками
+ * для удобного ввода.
+ */
 interface Draft {
+  id: string;
   exerciseId: string;
   name: string;
   category: string;
-  sets: string;
   reps: string;
   weightKg: string;
-  timeSec: string;
   restSec: string;
 }
 
@@ -83,13 +90,12 @@ function parseOptNum(value: string): number | null {
 
 function draftFromExercise(ex: ExerciseResponse): Draft {
   return {
+    id: nextId(),
     exerciseId: ex.id,
     name: ex.name,
     category: ex.category,
-    sets: '1',
     reps: ex.defaultReps?.toString() ?? '',
     weightKg: ex.defaultWeightKg?.toString() ?? '',
-    timeSec: ex.defaultTimeSec?.toString() ?? '',
     restSec: ex.restSec.toString(),
   };
 }
@@ -129,7 +135,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
     if (group === null && groups.length > 0) setGroup(groups[0] ?? null);
   }, [group, groups]);
 
-  // Загрузка существующего шаблона в режиме редактирования.
+  // Загрузка существующего шаблона: подходы разворачиваются в отдельные карточки.
   useEffect(() => {
     if (editing && existing.data) {
       const t = existing.data;
@@ -137,21 +143,27 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
       setShortDescription(t.shortDescription ?? '');
       setCategoryTag(t.categoryTag);
       setPositions(
-        t.exercises.map((p) => ({
-          exerciseId: p.exerciseId,
-          name: p.exerciseName,
-          category: catalog.data?.find((e) => e.id === p.exerciseId)?.category ?? '',
-          sets: p.sets.toString(),
-          reps: p.reps?.toString() ?? '',
-          weightKg: p.weightKg?.toString() ?? '',
-          timeSec: p.timeSec?.toString() ?? '',
-          restSec: p.restSec.toString(),
-        })),
+        t.exercises.flatMap((p) =>
+          Array.from({ length: Math.max(1, p.sets) }, () => ({
+            id: nextId(),
+            exerciseId: p.exerciseId,
+            name: p.exerciseName,
+            category: catalog.data?.find((e) => e.id === p.exerciseId)?.category ?? '',
+            reps: p.reps?.toString() ?? '',
+            weightKg: p.weightKg?.toString() ?? '',
+            restSec: p.restSec.toString(),
+          })),
+        ),
       );
     }
   }, [editing, existing.data, catalog.data]);
 
-  const pickedIds = useMemo(() => new Set(positions.map((p) => p.exerciseId)), [positions]);
+  const countByExercise = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of positions) map.set(p.exerciseId, (map.get(p.exerciseId) ?? 0) + 1);
+    return map;
+  }, [positions]);
+
   const groupExercises = useMemo(
     () => (catalog.data ?? []).filter((e) => e.category === group),
     [catalog.data, group],
@@ -159,54 +171,50 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
 
   function toggleExercise(ex: ExerciseResponse) {
     setPositions((prev) =>
-      pickedIds.has(ex.id)
+      prev.some((p) => p.exerciseId === ex.id)
         ? prev.filter((p) => p.exerciseId !== ex.id)
         : [...prev, draftFromExercise(ex)],
     );
   }
 
-  function setSets(exerciseId: string, next: number) {
-    if (next < 1) return;
-    setPositions((prev) =>
-      prev.map((p) => (p.exerciseId === exerciseId ? { ...p, sets: String(next) } : p)),
-    );
-  }
-
-  function updatePosition(index: number, patch: Partial<Draft>) {
-    setPositions((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)));
-  }
-
-  function removePosition(index: number) {
-    setPositions((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function movePosition(index: number, dir: -1 | 1) {
+  // Количество подходов = число карточек упражнения.
+  function setCount(ex: ExerciseResponse, n: number) {
+    if (n < 1) return;
     setPositions((prev) => {
-      const target = index + dir;
-      if (target < 0 || target >= prev.length) return prev;
-      const next = [...prev];
-      const item = next[index];
-      if (item === undefined) return prev;
-      next.splice(index, 1);
-      next.splice(target, 0, item);
-      return next;
+      const mine = prev.filter((p) => p.exerciseId === ex.id);
+      if (n === mine.length) return prev;
+      if (n < mine.length) {
+        const dropIds = new Set(mine.slice(n).map((p) => p.id));
+        return prev.filter((p) => !dropIds.has(p.id));
+      }
+      const additions = Array.from({ length: n - mine.length }, () => draftFromExercise(ex));
+      const lastIdx = prev.map((p) => p.exerciseId).lastIndexOf(ex.id);
+      return [...prev.slice(0, lastIdx + 1), ...additions, ...prev.slice(lastIdx + 1)];
     });
+  }
+
+  function updatePosition(rowId: string, patch: Partial<Draft>) {
+    setPositions((prev) => prev.map((p) => (p.id === rowId ? { ...p, ...patch } : p)));
+  }
+
+  function removePosition(rowId: string) {
+    setPositions((prev) => prev.filter((p) => p.id !== rowId));
   }
 
   function buildPayload(): CreateTemplateRequest {
     const exercises: TemplateExercise[] = positions.map((p) => ({
       exerciseId: p.exerciseId,
-      sets: parseOptNum(p.sets) ?? 1,
+      sets: 1,
       reps: parseOptNum(p.reps),
       weightKg: parseOptNum(p.weightKg),
-      timeSec: parseOptNum(p.timeSec),
+      timeSec: null,
       restSec: parseOptNum(p.restSec) ?? 90,
     }));
     const tag = categoryTag?.trim();
     return {
       name: name.trim(),
-      categoryTag: tag ? tag : null,
       shortDescription: shortDescription.trim() === '' ? null : shortDescription.trim(),
+      categoryTag: tag ? tag : null,
       exercises,
     };
   }
@@ -290,8 +298,8 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
               </h2>
               <ul className="flex flex-col gap-2">
                 {groupExercises.map((ex) => {
-                  const picked = pickedIds.has(ex.id);
-                  const count = Number(positions.find((p) => p.exerciseId === ex.id)?.sets ?? '0');
+                  const count = countByExercise.get(ex.id) ?? 0;
+                  const picked = count > 0;
                   return (
                     <li
                       key={ex.id}
@@ -306,10 +314,10 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
                             picked
                               ? 'bg-accent text-accent-on'
-                              : 'border border-line bg-transparent text-transparent'
+                              : 'border border-line bg-transparent'
                           }`}
                         >
-                          <Check picked={picked} />
+                          {picked && <Check />}
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[15px] font-semibold text-ink">
@@ -325,7 +333,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                           <button
                             type="button"
                             aria-label="Меньше подходов"
-                            onClick={() => setSets(ex.id, count - 1)}
+                            onClick={() => setCount(ex, count - 1)}
                             className="flex h-8 w-8 items-center justify-center rounded-full bg-chip text-ink active:scale-95"
                           >
                             <Minus size={15} />
@@ -336,7 +344,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                           <button
                             type="button"
                             aria-label="Больше подходов"
-                            onClick={() => setSets(ex.id, count + 1)}
+                            onClick={() => setCount(ex, count + 1)}
                             className="flex h-8 w-8 items-center justify-center rounded-full bg-chip text-ink active:scale-95"
                           >
                             <Plus size={15} />
@@ -450,16 +458,12 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
             <p className="text-sm text-ink-muted">Вернитесь на шаг 1 и выберите упражнения.</p>
           )}
 
-          <ul className="flex flex-col gap-3">
-            {positions.map((p, index) => (
-              <li
-                key={`${p.exerciseId}-${String(index)}`}
-                className="shelf flex flex-col gap-3 rounded-2xl p-3"
-              >
+          <SortableList
+            items={positions}
+            onReorder={setPositions}
+            renderItem={(p) => (
+              <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-chip font-mono text-xs font-bold text-ink">
-                    {index + 1}
-                  </span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[14px] font-semibold text-ink">{p.name}</div>
                     {p.category && (
@@ -468,67 +472,37 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                       </div>
                     )}
                   </div>
-                  <div className="flex shrink-0 gap-1">
-                    <button
-                      type="button"
-                      aria-label="Вверх"
-                      onClick={() => movePosition(index, -1)}
-                      disabled={index === 0}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-card-elevated text-ink-muted disabled:opacity-40"
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Вниз"
-                      onClick={() => movePosition(index, 1)}
-                      disabled={index === positions.length - 1}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-card-elevated text-ink-muted disabled:opacity-40"
-                    >
-                      ↓
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Убрать упражнение"
-                      onClick={() => removePosition(index)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-card-elevated text-ink-muted"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    aria-label="Убрать упражнение"
+                    onClick={() => removePosition(p.id)}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-card-elevated text-ink-muted"
+                  >
+                    <X size={16} />
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-5 gap-2">
-                  <SetField
-                    label="Подх."
-                    value={p.sets}
-                    onChange={(v) => updatePosition(index, { sets: v })}
-                  />
+                <div className="grid grid-cols-3 gap-2">
                   <SetField
                     label="Повт."
                     value={p.reps}
-                    onChange={(v) => updatePosition(index, { reps: v })}
+                    onChange={(v) => updatePosition(p.id, { reps: v })}
                   />
                   <SetField
                     label="Кг"
                     value={p.weightKg}
-                    onChange={(v) => updatePosition(index, { weightKg: v })}
+                    onChange={(v) => updatePosition(p.id, { weightKg: v })}
                     step="0.5"
-                  />
-                  <SetField
-                    label="Сек"
-                    value={p.timeSec}
-                    onChange={(v) => updatePosition(index, { timeSec: v })}
                   />
                   <SetField
                     label="Отдых"
                     value={p.restSec}
-                    onChange={(v) => updatePosition(index, { restSec: v })}
+                    onChange={(v) => updatePosition(p.id, { restSec: v })}
                   />
                 </div>
-              </li>
-            ))}
-          </ul>
+              </div>
+            )}
+          />
         </section>
 
         {mutation.isError && (
@@ -552,8 +526,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
   );
 }
 
-function Check({ picked }: { picked: boolean }) {
-  if (!picked) return null;
+function Check() {
   return (
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
       <path
