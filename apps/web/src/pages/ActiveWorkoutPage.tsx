@@ -663,34 +663,18 @@ function SetEditor({
   };
 
   const repsShown = showReps || (!showWeight && !showTime);
-  const inputClass =
-    'w-12 bg-transparent text-center font-[family-name:var(--font-mono)] text-[15px] tabular-nums text-ink outline-none';
 
   return (
     <div className="flex items-center gap-2">
-      {/* Поле ввода в формате «8 × 60» — без единиц измерения. */}
-      <div className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-line bg-chip px-3 focus-within:border-accent">
-        {repsShown && (
-          <input
-            inputMode="decimal"
-            value={reps}
-            onChange={(e) => setReps(e.target.value)}
-            aria-label="повторы"
-            className={inputClass}
-          />
-        )}
+      {/* Раздельные поля ввода (без единиц): 8 × 60. */}
+      <div className="flex flex-1 items-center gap-2">
+        {repsShown && <NumBox value={reps} onChange={setReps} ariaLabel="повторы" />}
         {showWeight && (
           <>
             <span className="font-[family-name:var(--font-mono)] text-[14px] text-ink-muted">
               ×
             </span>
-            <input
-              inputMode="decimal"
-              value={weight}
-              onChange={(e) => setWeight(e.target.value)}
-              aria-label="вес"
-              className={inputClass}
-            />
+            <NumBox value={weight} onChange={setWeight} ariaLabel="вес" />
           </>
         )}
         {showTime && (
@@ -700,13 +684,7 @@ function SetEditor({
                 ·
               </span>
             )}
-            <input
-              inputMode="decimal"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-              aria-label="секунды"
-              className={inputClass}
-            />
+            <NumBox value={time} onChange={setTime} ariaLabel="секунды" />
           </>
         )}
       </div>
@@ -739,6 +717,29 @@ function SetEditor({
         onDelete={onDelete}
       />
     </div>
+  );
+}
+
+/** Отдельное числовое поле ввода в рамке. */
+function NumBox({
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <label className="flex h-10 min-w-0 flex-1 items-center rounded-lg border border-line bg-chip px-2 focus-within:border-accent">
+      <input
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={ariaLabel}
+        className="w-full min-w-0 bg-transparent text-center font-[family-name:var(--font-mono)] text-[15px] tabular-nums text-ink outline-none"
+      />
+    </label>
   );
 }
 
