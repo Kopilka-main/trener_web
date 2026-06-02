@@ -7,6 +7,20 @@ import { useTemplates } from '../api/workout-templates';
 
 type Tab = 'templates' | 'exercises' | 'flex';
 
+/** Предпочтительный порядок групп мышц для чипов (остальные категории — следом). */
+const GROUP_ORDER = [
+  'Грудь',
+  'Спина',
+  'Ноги',
+  'Плечи',
+  'Руки',
+  'Корпус',
+  'Пресс/Кор',
+  'Кардио',
+  'Растяжка',
+  'Йога',
+];
+
 /** Категории, относящиеся к вкладке «Растяжка» (растяжка/кардио/йога). */
 const FLEX_HINTS = ['растяж', 'кардио', 'йог', 'stretch', 'cardio', 'yoga'];
 
@@ -102,12 +116,36 @@ export function KnowledgeBasePage() {
   const [tab, setTab] = useState<Tab>('templates');
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('');
+  const [templateGroup, setTemplateGroup] = useState('');
 
   const exercises = useExercises();
   const templates = useTemplates();
 
   const allExercises = useMemo(() => exercises.data ?? [], [exercises.data]);
   const allTemplates = useMemo(() => templates.data ?? [], [templates.data]);
+
+  // Карта exerciseId → группа мышц (категория) — у шаблона своего поля группы нет.
+  const groupByExerciseId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const e of allExercises) m.set(e.id, e.category);
+    return m;
+  }, [allExercises]);
+
+  // Чипы вкладки «Тренировки»: группы мышц, встречающиеся в упражнениях шаблонов.
+  const templateGroups = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of allTemplates) {
+      for (const ex of t.exercises) {
+        const g = groupByExerciseId.get(ex.exerciseId);
+        if (g) set.add(g);
+      }
+    }
+    const ordered = GROUP_ORDER.filter((g) => set.has(g));
+    const extras = [...set]
+      .filter((g) => !GROUP_ORDER.includes(g))
+      .sort((a, b) => a.localeCompare(b, 'ru'));
+    return [...ordered, ...extras];
+  }, [allTemplates, groupByExerciseId]);
 
   const powerExercises = useMemo(
     () => allExercises.filter((e) => !isFlexCategory(e.category)),
@@ -141,19 +179,31 @@ export function KnowledgeBasePage() {
 
   const filteredTemplates = useMemo(() => {
     return allTemplates.filter((t) => {
+      if (templateGroup) {
+        const inGroup = t.exercises.some(
+          (ex) => groupByExerciseId.get(ex.exerciseId) === templateGroup,
+        );
+        if (!inGroup) return false;
+      }
       if (q.length === 0) return true;
       const inName = t.name.toLowerCase().includes(q);
       const inTag = (t.categoryTag ?? '').toLowerCase().includes(q);
       return inName || inTag;
     });
-  }, [allTemplates, q]);
+  }, [allTemplates, q, templateGroup, groupByExerciseId]);
 
   function selectTab(next: Tab) {
     setTab(next);
     setCategory('');
+    setTemplateGroup('');
   }
 
-  const showChips = tab !== 'templates' && categories.length > 0;
+  // Чипы: на вкладке «Тренировки» — группы мышц, иначе — категории упражнений.
+  const isTemplates = tab === 'templates';
+  const chipItems = isTemplates ? templateGroups : categories;
+  const chipValue = isTemplates ? templateGroup : category;
+  const setChip = isTemplates ? setTemplateGroup : setCategory;
+  const showChips = chipItems.length > 0;
 
   return (
     <div className="flex min-h-full flex-col">
@@ -219,11 +269,11 @@ export function KnowledgeBasePage() {
 
         {showChips && (
           <div className="-mx-5 mt-3 flex gap-1.5 overflow-x-auto px-5 pb-1">
-            <CategoryChip active={category === ''} onClick={() => setCategory('')}>
+            <CategoryChip active={chipValue === ''} onClick={() => setChip('')}>
               Все
             </CategoryChip>
-            {categories.map((c) => (
-              <CategoryChip key={c} active={category === c} onClick={() => setCategory(c)}>
+            {chipItems.map((c) => (
+              <CategoryChip key={c} active={chipValue === c} onClick={() => setChip(c)}>
                 {c}
               </CategoryChip>
             ))}
