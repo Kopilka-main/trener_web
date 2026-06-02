@@ -656,67 +656,83 @@ function SetEditor({
     return Number.isFinite(n) ? n : null;
   };
 
+  const repsShown = showReps || (!showWeight && !showTime);
+  const inputClass =
+    'w-12 bg-transparent text-center font-[family-name:var(--font-mono)] text-[15px] tabular-nums text-ink outline-none';
+
   return (
     <div className="flex items-center gap-2">
-      {(showReps || (!showWeight && !showTime)) && (
-        <Field label="повт." value={reps} onChange={setReps} />
-      )}
-      {showWeight && <Field label="кг" value={weight} onChange={setWeight} />}
-      {showTime && <Field label="сек" value={time} onChange={setTime} />}
-      <div className="ml-auto flex items-center gap-2">
-        <button
-          type="button"
-          aria-label="Сохранить подход"
-          onClick={() =>
-            onSave({
-              actualReps: showReps || (!showWeight && !showTime) ? num(reps) : null,
-              actualWeightKg: showWeight ? num(weight) : null,
-              actualTimeSec: showTime ? num(time) : null,
-            })
-          }
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-on active:scale-90"
-        >
-          <Check size={18} strokeWidth={2.8} />
-        </button>
-        <button
-          type="button"
-          aria-label="Отменить"
-          onClick={onCancel}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-90"
-        >
-          <X size={18} strokeWidth={2.2} />
-        </button>
-        <HoldToDelete
-          icon="trash"
-          size="md"
-          label="Удерживайте, чтобы удалить упражнение"
-          onDelete={onDelete}
-        />
+      {/* Поле ввода в формате «8 × 60» — без единиц измерения. */}
+      <div className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-line bg-chip px-3 focus-within:border-accent">
+        {repsShown && (
+          <input
+            inputMode="decimal"
+            value={reps}
+            onChange={(e) => setReps(e.target.value)}
+            aria-label="повторы"
+            className={inputClass}
+          />
+        )}
+        {showWeight && (
+          <>
+            <span className="font-[family-name:var(--font-mono)] text-[14px] text-ink-muted">
+              ×
+            </span>
+            <input
+              inputMode="decimal"
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+              aria-label="вес"
+              className={inputClass}
+            />
+          </>
+        )}
+        {showTime && (
+          <>
+            {repsShown && (
+              <span className="font-[family-name:var(--font-mono)] text-[14px] text-ink-muted">
+                ·
+              </span>
+            )}
+            <input
+              inputMode="decimal"
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+              aria-label="секунды"
+              className={inputClass}
+            />
+          </>
+        )}
       </div>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <label className="flex h-10 items-center gap-1 rounded-lg border border-line bg-chip px-2.5 focus-within:border-accent">
-      <input
-        inputMode="decimal"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-12 bg-transparent text-center font-[family-name:var(--font-mono)] text-[14px] tabular-nums text-ink outline-none"
-        aria-label={label}
+      <button
+        type="button"
+        aria-label="Сохранить подход"
+        onClick={() =>
+          onSave({
+            actualReps: repsShown ? num(reps) : null,
+            actualWeightKg: showWeight ? num(weight) : null,
+            actualTimeSec: showTime ? num(time) : null,
+          })
+        }
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-on active:scale-90"
+      >
+        <Check size={18} strokeWidth={2.8} />
+      </button>
+      <button
+        type="button"
+        aria-label="Отменить"
+        onClick={onCancel}
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-90"
+      >
+        <X size={18} strokeWidth={2.2} />
+      </button>
+      <HoldToDelete
+        icon="trash"
+        size="sm"
+        label="Удерживайте, чтобы удалить упражнение"
+        onDelete={onDelete}
       />
-      <span className="text-[11px] text-ink-muted">{label}</span>
-    </label>
+    </div>
   );
 }
 
