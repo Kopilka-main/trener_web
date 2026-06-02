@@ -71,25 +71,54 @@ function renderPage() {
 }
 
 describe('KnowledgeBasePage', () => {
-  it('рендерит список упражнений с бейджем глобального', () => {
+  it('по умолчанию показывает список тренировок (шаблонов)', () => {
     mockExercises(exercises);
     mockTemplates(templates);
     renderPage();
+
+    expect(screen.getByRole('heading', { name: 'База знаний' })).toBeInTheDocument();
+    expect(screen.getByText('Программа ног')).toBeInTheDocument();
+    expect(screen.getByText('силовая · 1 упр.')).toBeInTheDocument();
+    // Упражнение из другой вкладки пока не отрисовано.
+    expect(screen.queryByText('Присед со штангой')).not.toBeInTheDocument();
+  });
+
+  it('переключение на таб «Упражнения» показывает упражнения с бейджем глобального', () => {
+    mockExercises(exercises);
+    mockTemplates(templates);
+    renderPage();
+
+    fireEvent.click(screen.getByRole('tab', { name: /Упражнения/ }));
 
     expect(screen.getByText('Присед со штангой')).toBeInTheDocument();
     expect(screen.getByText('Глобальное')).toBeInTheDocument();
   });
 
-  it('переключение на таб «Шаблоны» показывает шаблоны', () => {
-    mockExercises(exercises);
+  it('фильтрует упражнения по чипу категории', () => {
+    mockExercises([
+      ...exercises,
+      {
+        id: 'ex2',
+        isGlobal: false,
+        name: 'Жим лёжа',
+        category: 'Грудь',
+        description: null,
+        defaultReps: null,
+        defaultWeightKg: null,
+        defaultTimeSec: null,
+        restSec: 60,
+        note: null,
+      },
+    ]);
     mockTemplates(templates);
     renderPage();
 
-    expect(screen.queryByText('Программа ног')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /Упражнения/ }));
+    expect(screen.getByText('Присед со штангой')).toBeInTheDocument();
+    expect(screen.getByText('Жим лёжа')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Шаблоны' }));
-
-    expect(screen.getByText('Программа ног')).toBeInTheDocument();
-    expect(screen.getByText('1 упр.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Грудь' }));
+    expect(screen.queryByText('Присед со штангой')).not.toBeInTheDocument();
+    expect(screen.getByText('Жим лёжа')).toBeInTheDocument();
   });
 });
