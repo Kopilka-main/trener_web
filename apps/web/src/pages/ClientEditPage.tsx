@@ -30,6 +30,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
   const [tags, setTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState('');
   const [accountId, setAccountId] = useState('');
+  const [birthDate, setBirthDate] = useState('');
   const [connectOpen, setConnectOpen] = useState(false);
 
   useEffect(() => {
@@ -43,6 +44,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
       );
       setTags(c.tags);
       setAccountId(c.accountId ?? '');
+      setBirthDate(c.birthDate ?? '');
     }
   }, [editing, existing.data]);
 
@@ -79,6 +81,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
       phone: phone === '' ? null : phone,
       notes: notes.trim() === '' ? null : notes.trim(),
       accountId: accountId.trim() === '' ? null : accountId.trim(),
+      birthDate: birthDate === '' ? null : birthDate,
       contacts: contacts
         .filter((c) => c.value.trim() !== '')
         .map((c) => ({ type: c.type, value: c.value.trim() })),
@@ -188,33 +191,36 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
         {/* Связь: типизированный список контактов. */}
         <Section title="Связь">
           <div className="flex flex-col gap-2">
-            {contacts.map((c, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <select
-                  value={
-                    CONTACT_TYPES.includes(c.type as (typeof CONTACT_TYPES)[number])
-                      ? c.type
-                      : 'Прочее'
-                  }
-                  onChange={(e) => setContact(i, { type: e.target.value })}
-                  className="shrink-0 rounded-xl border border-line bg-chip px-2.5 py-2.5 text-sm text-ink outline-none focus:border-accent"
-                  aria-label="Тип контакта"
-                >
-                  {CONTACT_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  value={c.value}
-                  onChange={(e) => setContact(i, { value: e.target.value })}
-                  placeholder="Значение"
-                  aria-label="Значение контакта"
-                  className="min-w-0 flex-1 rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
-                />
-              </div>
-            ))}
+            {contacts.map((c, i) => {
+              const activeType = CONTACT_TYPES.includes(c.type as (typeof CONTACT_TYPES)[number])
+                ? c.type
+                : 'Прочее';
+              return (
+                <div key={i} className="flex flex-col gap-2 rounded-2xl bg-card p-2.5">
+                  <div className="flex flex-wrap gap-1.5">
+                    {CONTACT_TYPES.map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setContact(i, { type: t })}
+                        className={`rounded-full px-3 py-1 text-[12px] font-semibold transition-colors ${
+                          activeType === t ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    value={c.value}
+                    onChange={(e) => setContact(i, { value: e.target.value })}
+                    placeholder="Значение"
+                    aria-label="Значение контакта"
+                    className="w-full rounded-lg border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
+                  />
+                </div>
+              );
+            })}
             <button
               type="button"
               onClick={addContact}
@@ -223,6 +229,23 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
               + добавить контакт
             </button>
           </div>
+        </Section>
+
+        {/* Личное. */}
+        <Section title="Личное">
+          <label
+            htmlFor="birthDate"
+            className="flex items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3"
+          >
+            <span className="text-[13px] text-ink-muted">Дата рождения</span>
+            <input
+              id="birthDate"
+              type="date"
+              value={birthDate}
+              onChange={(e) => setBirthDate(e.target.value)}
+              className="bg-transparent text-right text-[14px] font-semibold text-ink outline-none"
+            />
+          </label>
         </Section>
 
         {/* Заметки. */}
