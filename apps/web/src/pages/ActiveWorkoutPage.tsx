@@ -212,7 +212,6 @@ function ActiveView({
 
   const [editing, setEditing] = useState<string | null>(null);
   const [rest, setRest] = useState<{ key: string; sec: number } | null>(null);
-  const [finishing, setFinishing] = useState(false);
   const [adding, setAdding] = useState(false);
 
   const counters = useMemo(() => {
@@ -257,48 +256,48 @@ function ActiveView({
 
   return (
     <div className="flex min-h-full flex-col">
-      <ScreenHeader
-        title={workout.name}
-        back={backTo}
-        right={
-          <button
-            type="button"
-            onClick={() => setFinishing(true)}
-            className="rounded-full px-3 py-1.5 text-[13px] font-semibold text-accent active:bg-card-elevated"
-          >
-            Завершить
-          </button>
-        }
-      />
+      <ScreenHeader title={workout.name} back={backTo} />
 
       <div className="flex flex-1 flex-col gap-3 px-5 pb-28 pt-2">
-        {/* Сводка времени и прогресса; отдых (когда идёт) — между значениями. */}
-        <div className="tile-shadow-primary flex items-center justify-between gap-3 rounded-2xl px-4 py-3">
-          <span className="flex shrink-0 flex-col">
-            <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.06em] opacity-70">
-              Прошло
+        {/* Сводка времени/прогресса, отдых (между значениями) и завершение удержанием. */}
+        <div className="tile-shadow-primary flex flex-col gap-3 rounded-2xl px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="flex shrink-0 flex-col">
+              <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.06em] opacity-70">
+                Прошло
+              </span>
+              <span className="text-2xl font-bold tabular-nums leading-tight">
+                {formatDuration(elapsed)}
+              </span>
             </span>
-            <span className="text-2xl font-bold tabular-nums leading-tight">
-              {formatDuration(elapsed)}
-            </span>
-          </span>
 
-          {rest && (
-            <RestTimer
-              seconds={rest.sec}
-              onDone={() => setRest(null)}
-              onSkip={() => setRest(null)}
-            />
-          )}
+            {rest && (
+              <RestTimer
+                seconds={rest.sec}
+                onDone={() => setRest(null)}
+                onSkip={() => setRest(null)}
+              />
+            )}
 
-          <span className="flex shrink-0 flex-col text-right">
-            <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.06em] opacity-70">
-              Подходов
+            <span className="flex shrink-0 flex-col text-right">
+              <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.06em] opacity-70">
+                Подходов
+              </span>
+              <span className="text-xl font-bold tabular-nums leading-tight">
+                {counters.done} / {counters.total}
+              </span>
             </span>
-            <span className="text-xl font-bold tabular-nums leading-tight">
-              {counters.done} / {counters.total}
-            </span>
-          </span>
+          </div>
+
+          <HoldComplete
+            pending={complete.isPending}
+            onComplete={() =>
+              complete.mutate(
+                { durationSec: elapsed > 0 ? elapsed : null, rpe: null, trainerNote: null },
+                { onSuccess: () => void navigate(backTo, { replace: true }) },
+              )
+            }
+          />
         </div>
 
         <SortableList
@@ -366,19 +365,6 @@ function ActiveView({
 
         <AddExerciseButton onClick={() => setAdding(true)} />
       </div>
-
-      {finishing && (
-        <FinishSheet
-          pending={complete.isPending}
-          onClose={() => setFinishing(false)}
-          onConfirm={(payload) =>
-            complete.mutate(
-              { durationSec: elapsed > 0 ? elapsed : null, ...payload },
-              { onSuccess: () => void navigate(backTo, { replace: true }) },
-            )
-          }
-        />
-      )}
 
       {adding && (
         <ExercisePickerSheet
@@ -743,84 +729,61 @@ function NumBox({
   );
 }
 
-/* ---------- Завершение: RPE + заметка ---------- */
+/* ---------- Завершение удержанием (3 секунды) ---------- */
 
-function FinishSheet({
-  pending,
-  onClose,
-  onConfirm,
-}: {
-  pending: boolean;
-  onClose: () => void;
-  onConfirm: (payload: { rpe: number | null; trainerNote: string | null }) => void;
-}) {
-  const [rpe, setRpe] = useState<number | null>(null);
-  const [note, setNote] = useState('');
+const HOLD_COMPLETE_MS = 3000;
+
+function HoldComplete({ pending, onComplete }: { pending: boolean; onComplete: () => void }) {
+  const [holding, setHolding] = useState(false);
+  const timer = useRef<number | null>(null);
+
+  function clear() {
+    if (timer.current !== null) {
+      window.clearTimeout(timer.current);
+      timer.current = null;
+    }
+  }
+  function start() {
+    if (pending) return;
+    setHolding(true);
+    clear();
+    timer.current = window.setTimeout(() => {
+      setHolding(false);
+      timer.current = null;
+      onComplete();
+    }, HOLD_COMPLETE_MS);
+  }
+  function cancel() {
+    clear();
+    setHolding(false);
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end">
-      <button
-        type="button"
-        aria-label="Закрыть"
-        onClick={onClose}
-        className="absolute inset-0 bg-black/60"
+    <button
+      type="button"
+      aria-label="Удерживайте 3 секунды, чтобы завершить"
+      disabled={pending}
+      onPointerDown={start}
+      onPointerUp={cancel}
+      onPointerLeave={cancel}
+      onPointerCancel={cancel}
+      onContextMenu={(e) => e.preventDefault()}
+      className="relative h-11 w-full touch-none select-none overflow-hidden rounded-xl bg-black/10 text-accent-on disabled:opacity-50"
+    >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 left-0 bg-black/20 ease-linear"
+        style={{
+          width: holding ? '100%' : '0%',
+          transitionProperty: 'width',
+          transitionDuration: holding ? `${String(HOLD_COMPLETE_MS)}ms` : '160ms',
+        }}
       />
-      <div className="relative z-10 flex flex-col gap-4 rounded-t-3xl bg-bg px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-[16px] font-bold text-ink">Завершить тренировку</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Закрыть"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-ink active:bg-card-elevated"
-          >
-            <X size={20} strokeWidth={1.8} />
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <span className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.06em] text-ink-mutedxl">
-            RPE (нагрузка 1–10)
-          </span>
-          <div className="flex flex-wrap gap-1.5">
-            {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => setRpe((cur) => (cur === n ? null : n))}
-                className={`flex h-9 w-9 items-center justify-center rounded-full font-[family-name:var(--font-mono)] text-[14px] font-bold tabular-nums active:scale-95 ${
-                  rpe === n ? 'bg-accent text-accent-on' : 'bg-card text-ink-muted'
-                }`}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <label className="flex flex-col gap-2">
-          <span className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.06em] text-ink-mutedxl">
-            Заметка тренера
-          </span>
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={3}
-            maxLength={2000}
-            placeholder="Как прошло?"
-            className="resize-none rounded-2xl bg-card p-3 text-[14px] text-ink outline-none placeholder:text-ink-muted"
-          />
-        </label>
-
-        <Button
-          className="w-full"
-          disabled={pending}
-          onClick={() => onConfirm({ rpe, trainerNote: note.trim() === '' ? null : note.trim() })}
-        >
-          Завершить
-        </Button>
-      </div>
-    </div>
+      <span className="relative z-10 flex h-full items-center justify-center gap-2 text-[14px] font-bold">
+        <Check size={18} strokeWidth={2.6} />
+        {holding ? 'Держите…' : 'Завершить (удерживайте)'}
+      </span>
+    </button>
   );
 }
 
