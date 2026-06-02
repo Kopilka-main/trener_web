@@ -34,7 +34,11 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
   const createMutation = useCreateExercise();
   const updateMutation = useUpdateExercise(id);
   const deleteMutation = useDeleteExercise();
-  const mutation = editing ? updateMutation : createMutation;
+
+  // Глобальные упражнения из каталога нельзя править на месте — при сохранении
+  // создаётся личная копия (createMutation вместо update).
+  const isGlobalEdit = editing && existing.data?.isGlobal === true;
+  const mutation = editing && !isGlobalEdit ? updateMutation : createMutation;
 
   const [name, setName] = useState('');
   const [category, setCategory] = useState('Грудь');
@@ -104,72 +108,6 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
       <div className="flex flex-col">
         <ScreenHeader title="Упражнение" back="/knowledge" />
         <p className="px-5 py-6 text-sm text-ink-muted">Загрузка…</p>
-      </div>
-    );
-  }
-
-  // Глобальные упражнения из общего каталога — режим просмотра (без правок).
-  if (editing && existing.data?.isGlobal) {
-    const e = existing.data;
-    const params: { label: string; value: number }[] = [];
-    if (e.defaultReps) params.push({ label: 'повт', value: e.defaultReps });
-    if (e.defaultWeightKg) params.push({ label: 'кг', value: e.defaultWeightKg });
-    if (e.defaultTimeSec) params.push({ label: 'сек', value: e.defaultTimeSec });
-    params.push({ label: 'отдых, с', value: e.restSec });
-    return (
-      <div className="flex min-h-full flex-col">
-        <ScreenHeader title="Упражнение" back="/knowledge" />
-        <div className="flex flex-1 flex-col gap-5 px-5 pb-8 pt-2">
-          <div className="flex flex-col gap-2.5">
-            <h1 className="text-2xl font-semibold text-ink">{e.name}</h1>
-            <div className="flex flex-wrap gap-2">
-              <span className="rounded-full bg-chip px-3 py-1 text-[13px] font-semibold text-ink">
-                {e.category}
-              </span>
-              {e.subgroup && (
-                <span className="rounded-full bg-chip px-3 py-1 text-[13px] font-semibold text-ink">
-                  {e.subgroup}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {e.description && <p className="text-[15px] leading-relaxed text-ink">{e.description}</p>}
-
-          <section className="flex flex-col gap-2">
-            <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-              Параметры подхода
-            </h2>
-            <div className="flex flex-wrap gap-2">
-              {params.map((p) => (
-                <div
-                  key={p.label}
-                  className="flex min-w-[64px] flex-col items-center gap-0.5 rounded-2xl bg-card px-4 py-2.5"
-                >
-                  <span className="font-mono text-xl font-bold tabular-nums text-ink">
-                    {p.value}
-                  </span>
-                  <span className="font-mono text-[10px] uppercase tracking-wide text-ink-muted">
-                    {p.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {e.note && (
-            <section className="flex flex-col gap-1.5">
-              <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-                Заметка
-              </h2>
-              <p className="text-[15px] text-ink">{e.note}</p>
-            </section>
-          )}
-
-          <p className="text-xs text-ink-muted">
-            Упражнение из общего каталога — доступно только для просмотра.
-          </p>
-        </div>
       </div>
     );
   }
@@ -305,13 +243,19 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
           />
         </label>
 
+        {isGlobalEdit && (
+          <p className="text-xs text-ink-muted">
+            Упражнение из общего каталога — изменения сохранятся как ваша копия.
+          </p>
+        )}
+
         {mutation.isError && (
           <p className="text-sm text-ink-muted" role="alert">
             Не удалось сохранить. Проверьте поля и попробуйте снова.
           </p>
         )}
 
-        {editing && (
+        {editing && !isGlobalEdit && (
           <Button
             type="button"
             variant="secondary"
