@@ -52,18 +52,24 @@ export function ClientWorkoutsPage() {
   );
 
   function assignTemplate(template: TemplateResponse) {
+    // Плоская модель: каждый подход — отдельное упражнение с одним подходом
+    // (sets:N в шаблоне разворачиваем в N отдельных записей).
     const body = {
       name: template.name,
       sourceTemplateId: template.id,
-      exercises: template.exercises.map((ex) => ({
-        exerciseId: ex.exerciseId,
-        sets: Array.from({ length: Math.max(1, ex.sets) }, () => ({
-          plannedReps: ex.reps,
-          plannedWeightKg: ex.weightKg,
-          plannedTimeSec: ex.timeSec,
-          plannedRestSec: ex.restSec,
+      exercises: template.exercises.flatMap((ex) =>
+        Array.from({ length: Math.max(1, ex.sets) }, () => ({
+          exerciseId: ex.exerciseId,
+          sets: [
+            {
+              plannedReps: ex.reps,
+              plannedWeightKg: ex.weightKg,
+              plannedTimeSec: ex.timeSec,
+              plannedRestSec: ex.restSec,
+            },
+          ],
         })),
-      })),
+      ),
     };
     createWorkout.mutate(body, {
       onSuccess: (workout) => {
