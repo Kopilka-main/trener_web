@@ -18,9 +18,9 @@ import { ActiveWorkoutPage } from './pages/ActiveWorkoutPage';
 import { ClientStatsPage } from './pages/ClientStatsPage';
 import { ClientPaymentsPage } from './pages/ClientPaymentsPage';
 import { ClientMedicalPage } from './pages/ClientMedicalPage';
+import { MessagesPage } from './pages/MessagesPage';
 import {
   CalendarPage,
-  MessagesPage,
   AccountingPage,
   NotificationsPage,
   ProfilePage,

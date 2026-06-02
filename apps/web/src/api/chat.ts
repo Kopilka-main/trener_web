@@ -3,8 +3,10 @@ import {
   sendMessageRequestSchema,
   messageResponseSchema,
   messageListResponseSchema,
+  conversationListResponseSchema,
   type MessageResponse,
   type SendMessageRequest,
+  type ConversationResponse,
 } from '@trener/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from './client';
@@ -52,5 +54,22 @@ export function useSendMessage(clientId: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: clientMessagesQueryKey(clientId) });
     },
+  });
+}
+
+export const conversationsQueryKey = ['conversations'] as const;
+
+export function listConversations(): Promise<ConversationResponse[]> {
+  return apiFetch('/conversations', { schema: conversationListResponseSchema }).then(
+    (r) => r.conversations,
+  );
+}
+
+/** Список диалогов тренера (для экрана «Сообщения»). Опрашивается раз в 8с. */
+export function useConversations() {
+  return useQuery({
+    queryKey: conversationsQueryKey,
+    queryFn: listConversations,
+    refetchInterval: 8000,
   });
 }
