@@ -44,6 +44,18 @@ function withSetDone(w: WorkoutResponse, pos: number, idx: number, done: boolean
     ),
   };
 }
+
+/** Оптимистично переставляет упражнения по новому порядку позиций (с перенумерацией). */
+function withReordered(w: WorkoutResponse, order: number[]): WorkoutResponse {
+  const byPos = new Map(w.exercises.map((e) => [e.position, e]));
+  const exercises = order
+    .map((p, i): WorkoutExerciseResponse | undefined => {
+      const e = byPos.get(p);
+      return e ? { ...e, position: i } : undefined;
+    })
+    .filter((e): e is WorkoutExerciseResponse => e !== undefined);
+  return { ...w, exercises };
+}
 import { useExercises } from '../api/exercises';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Button } from '../components/Button';
@@ -132,6 +144,7 @@ function DraftView({
   backTo: string;
 }) {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const start = useStartWorkout(clientId, workout.id);
   const remove = useDeleteWorkout(clientId);
   const reorder = useReorderWorkoutExercises(clientId, workout.id);
@@ -180,7 +193,14 @@ function DraftView({
 
         <SortableList
           items={items}
-          onReorder={(next) => reorder.mutate(next.map((it) => it.position))}
+          onReorder={(next) => {
+            const order = next.map((it) => it.position);
+            qc.setQueryData(
+              clientWorkoutQueryKey(clientId, workout.id),
+              (prev?: WorkoutResponse) => (prev ? withReordered(prev, order) : prev),
+            );
+            reorder.mutate(order);
+          }}
           renderItem={(ex) => (
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2">
@@ -452,12 +472,14 @@ function ActiveView({
         {pendingItems.length > 0 && (
           <SortableList
             items={pendingItems}
-            onReorder={(next) =>
-              reorder.mutate([
-                ...completed.map((c) => c.position),
-                ...next.map((it) => it.position),
-              ])
-            }
+            onReorder={(next) => {
+              const order = [...completed.map((c) => c.position), ...next.map((it) => it.position)];
+              qc.setQueryData(
+                clientWorkoutQueryKey(clientId, workout.id),
+                (prev?: WorkoutResponse) => (prev ? withReordered(prev, order) : prev),
+              );
+              reorder.mutate(order);
+            }}
             renderItem={(ex) => cardBody(ex)}
           />
         )}
