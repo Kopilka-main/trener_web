@@ -272,26 +272,16 @@ function ActiveView({
       />
 
       <div className="flex flex-1 flex-col gap-3 px-5 pb-28 pt-2">
-        {/* Сводка времени и прогресса + отдых (когда идёт). */}
-        <div className="tile-shadow-primary flex flex-col gap-2.5 rounded-2xl px-4 py-3">
-          <div className="flex items-baseline justify-between">
-            <span className="flex flex-col">
-              <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.06em] opacity-70">
-                Прошло
-              </span>
-              <span className="text-2xl font-bold tabular-nums leading-tight">
-                {formatDuration(elapsed)}
-              </span>
+        {/* Сводка времени и прогресса; отдых (когда идёт) — между значениями. */}
+        <div className="tile-shadow-primary flex items-center justify-between gap-3 rounded-2xl px-4 py-3">
+          <span className="flex shrink-0 flex-col">
+            <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.06em] opacity-70">
+              Прошло
             </span>
-            <span className="flex flex-col text-right">
-              <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.06em] opacity-70">
-                Подходов
-              </span>
-              <span className="text-xl font-bold tabular-nums leading-tight">
-                {counters.done} / {counters.total}
-              </span>
+            <span className="text-2xl font-bold tabular-nums leading-tight">
+              {formatDuration(elapsed)}
             </span>
-          </div>
+          </span>
 
           {rest && (
             <RestTimer
@@ -300,6 +290,15 @@ function ActiveView({
               onSkip={() => setRest(null)}
             />
           )}
+
+          <span className="flex shrink-0 flex-col text-right">
+            <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.06em] opacity-70">
+              Подходов
+            </span>
+            <span className="text-xl font-bold tabular-nums leading-tight">
+              {counters.done} / {counters.total}
+            </span>
+          </span>
         </div>
 
         <SortableList
@@ -598,8 +597,8 @@ function RestTimer({
   const C = 2 * Math.PI * 16;
 
   return (
-    <div className="flex items-center gap-3 rounded-xl bg-black/10 px-3 py-2">
-      <span className="relative flex h-9 w-9 items-center justify-center">
+    <div className="flex min-w-0 items-center gap-2 rounded-full bg-black/10 px-2 py-1">
+      <span className="relative flex h-9 w-9 shrink-0 items-center justify-center">
         <svg aria-hidden viewBox="0 0 36 36" className="absolute inset-0 h-full w-full -rotate-90">
           <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(11,12,16,0.25)" strokeWidth="3" />
           <circle
@@ -615,16 +614,16 @@ function RestTimer({
             style={{ transition: 'stroke-dashoffset 1s linear' }}
           />
         </svg>
-        <span className="font-[family-name:var(--font-mono)] text-[12px] font-bold tabular-nums text-accent-on">
+        <span className="font-[family-name:var(--font-mono)] text-[11px] font-bold tabular-nums text-accent-on">
           {left}
         </span>
       </span>
-      <span className="flex-1 text-[14px] font-semibold text-accent-on">Отдых</span>
+      <span className="truncate text-[13px] font-semibold text-accent-on">Отдых</span>
       <button
         type="button"
         aria-label="Отменить отдых"
         onClick={onSkip}
-        className="flex h-8 w-8 items-center justify-center rounded-full bg-black/10 text-accent-on active:scale-90"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/10 text-accent-on active:scale-90"
       >
         <X size={18} strokeWidth={2.2} />
       </button>
