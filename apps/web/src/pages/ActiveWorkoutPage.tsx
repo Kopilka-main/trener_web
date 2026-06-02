@@ -791,30 +791,51 @@ function HoldComplete({ pending, onComplete }: { pending: boolean; onComplete: (
     setHolding(false);
   }
 
+  const C = 2 * Math.PI * 16;
+
   return (
     <button
       type="button"
-      aria-label="Удерживайте 3 секунды, чтобы завершить"
+      aria-label="Удерживайте, чтобы завершить"
       disabled={pending}
       onPointerDown={start}
       onPointerUp={cancel}
       onPointerLeave={cancel}
       onPointerCancel={cancel}
       onContextMenu={(e) => e.preventDefault()}
-      className="relative h-10 min-w-0 touch-none select-none overflow-hidden rounded-full bg-black/10 px-5 text-accent-on disabled:opacity-50"
+      className="relative flex h-10 touch-none select-none items-center gap-2 rounded-full bg-black/10 px-5 text-accent-on disabled:opacity-50"
     >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-0 bg-black/20 ease-linear"
-        style={{
-          width: holding ? '100%' : '0%',
-          transitionProperty: 'width',
-          transitionDuration: holding ? `${String(HOLD_COMPLETE_MS)}ms` : '160ms',
-        }}
-      />
-      <span className="relative z-10 flex h-full items-center justify-center text-[14px] font-normal">
-        Завершить
+      {/* Кольцо-прогресс: заполняется по часовой за HOLD_COMPLETE_MS. */}
+      <span aria-hidden className="relative flex h-5 w-5 shrink-0 items-center justify-center">
+        <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
+          <circle
+            cx="18"
+            cy="18"
+            r="16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3"
+            opacity="0.25"
+          />
+          <circle
+            cx="18"
+            cy="18"
+            r="16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeDasharray={C}
+            strokeDashoffset={holding ? 0 : C}
+            style={{
+              transitionProperty: 'stroke-dashoffset',
+              transitionTimingFunction: 'linear',
+              transitionDuration: holding ? `${String(HOLD_COMPLETE_MS)}ms` : '160ms',
+            }}
+          />
+        </svg>
       </span>
+      <span className="text-[14px] font-normal">Завершить</span>
     </button>
   );
 }
