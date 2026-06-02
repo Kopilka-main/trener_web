@@ -3,28 +3,59 @@ import {
   Archive,
   ArchiveRestore,
   BarChart3,
-  Camera,
+  CalendarDays,
+  ChevronsRight,
   Dumbbell,
   FileText,
   MessageSquare,
   Pencil,
-  Ruler,
   Trash2,
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
 import { useClient, useDeleteClient, useUpdateClient } from '../api/clients';
+import { useClientWorkouts } from '../api/client-workouts';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Avatar } from '../components/Avatar';
 
-const sections: Array<{ key: string; label: string; sub: string; Icon: LucideIcon }> = [
-  { key: 'workouts', label: 'Тренировки', sub: 'текущая и история', Icon: Dumbbell },
-  { key: 'measurements', label: 'Замеры', sub: 'динамика тела', Icon: Ruler },
-  { key: 'photos', label: 'Фото', sub: 'прогресс', Icon: Camera },
-  { key: 'medcard', label: 'Медкарта', sub: 'заметки врача', Icon: FileText },
-  { key: 'chat', label: 'Чат', sub: 'переписка', Icon: MessageSquare },
-  { key: 'payments', label: 'Оплаты', sub: 'пакеты и баланс', Icon: Wallet },
-  { key: 'stats', label: 'Статистика', sub: 'прогресс', Icon: BarChart3 },
+/** Полных лет по дате рождения (YYYY-MM-DD); null, если дата пуста или некорректна. */
+function ageFromBirthDate(birthDate: string | null): number | null {
+  if (!birthDate) return null;
+  const born = new Date(birthDate);
+  if (Number.isNaN(born.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - born.getFullYear();
+  const monthDiff = now.getMonth() - born.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < born.getDate())) {
+    age -= 1;
+  }
+  return age >= 0 ? age : null;
+}
+
+/** Склонение «год / года / лет» по числу лет. */
+function pluralizeYears(age: number): string {
+  const mod100 = age % 100;
+  const mod10 = age % 10;
+  if (mod100 >= 11 && mod100 <= 14) return 'лет';
+  if (mod10 === 1) return 'год';
+  if (mod10 >= 2 && mod10 <= 4) return 'года';
+  return 'лет';
+}
+
+interface Tile {
+  key: string;
+  label: string;
+  sub: string;
+  Icon: LucideIcon;
+}
+
+const TILES: Tile[] = [
+  { key: 'calendar', label: 'Календарь', sub: 'занятия клиента', Icon: CalendarDays },
+  { key: 'chat', label: 'Написать', sub: 'чат с клиентом', Icon: MessageSquare },
+  { key: 'stats', label: 'Статистика', sub: 'прогресс и история', Icon: BarChart3 },
+  { key: 'payments', label: 'Оплата', sub: 'пакеты и расходы', Icon: Wallet },
+  { key: 'medcard', label: 'Медкарта', sub: 'файлы и заметки', Icon: FileText },
+  { key: 'edit', label: 'Профиль', sub: 'контакты и данные', Icon: Pencil },
 ];
 
 export function ClientCardPage() {
@@ -33,6 +64,7 @@ export function ClientCardPage() {
   const id = params.id ?? '';
 
   const client = useClient(id);
+  const workouts = useClientWorkouts(id);
   const updateMutation = useUpdateClient(id);
   const deleteMutation = useDeleteClient();
 
@@ -72,6 +104,8 @@ export function ClientCardPage() {
 
   const c = client.data;
   const isArchived = c.status === 'archived';
+  const age = ageFromBirthDate(c.birthDate);
+  const completedCount = workouts.data?.filter((w) => w.status === 'completed').length ?? 0;
 
   return (
     <div className="flex min-h-full flex-col">
@@ -82,59 +116,103 @@ export function ClientCardPage() {
           <button
             type="button"
             onClick={() => void navigate(`/clients/${id}/edit`)}
-            aria-label="Редактировать"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-ink active:bg-card-elevated"
+            aria-label="Профиль и подключение"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-accent active:bg-card-elevated"
           >
-            <Pencil size={18} strokeWidth={1.8} />
+            <svg width={22} height={22} viewBox="0 -960 960 960" fill="currentColor" aria-hidden>
+              <path d="M680-160v-120H560v-80h120v-120h80v120h120v80H760v120h-80ZM440-280H280q-83 0-141.5-58.5T80-480q0-83 58.5-141.5T280-680h160v80H280q-50 0-85 35t-35 85q0 50 35 85t85 35h160v80ZM320-440v-80h320v80H320Zm560-40h-80q0-50-35-85t-85-35H520v-80h160q83 0 141.5 58.5T880-480Z" />
+            </svg>
           </button>
         }
       />
 
       <div className="flex flex-col gap-5 px-5 pb-8 pt-1">
-        {/* Шапка: крупные инициалы + имя + телефон + чип статуса. */}
+        {/* Шапка профиля: аватар + имя + возраст. */}
         <div className="flex items-center gap-4">
           <Avatar firstName={c.firstName} lastName={c.lastName} size={64} muted={isArchived} />
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <h1 className="font-[family-name:var(--font-display)] text-[26px] leading-none tracking-[-0.02em] text-ink">
-              {c.firstName} {c.lastName}
-            </h1>
-            <span className="truncate font-[family-name:var(--font-mono)] text-[13px] text-ink-muted">
-              {c.phone ?? 'без телефона'}
-            </span>
-            <span className="mt-0.5 inline-flex w-fit items-center rounded-full bg-chip px-2.5 py-0.5 font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.04em] text-ink-muted">
-              {isArchived ? 'Архив' : 'Активный'}
-            </span>
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <div className="flex items-center gap-2">
+              <h1 className="min-w-0 text-[26px] font-bold leading-tight text-ink">
+                {c.firstName} {c.lastName}
+              </h1>
+              {isArchived && (
+                <span className="inline-flex shrink-0 items-center rounded-full bg-chip px-2.5 py-0.5 font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.04em] text-ink-muted">
+                  Архив
+                </span>
+              )}
+            </div>
+            {age !== null && (
+              <span className="text-[14px] text-ink-muted">
+                {age} {pluralizeYears(age)}
+              </span>
+            )}
           </div>
         </div>
 
+        {/* Теги. */}
+        {c.tags.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {c.tags.map((tag) => (
+              <span key={tag} className="rounded-full bg-chip px-3 py-1 text-[13px] text-ink">
+                {tag.startsWith('#') ? tag : `#${tag}`}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Большая primary-плитка: переход к тренировкам. */}
+        <button
+          type="button"
+          onClick={() => void navigate(`/clients/${id}/workouts`)}
+          className="tile-shadow-primary flex items-center gap-4 rounded-2xl bg-accent px-5 py-5 text-left text-accent-on active:scale-[0.98]"
+        >
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-black/10">
+            <Dumbbell size={24} strokeWidth={2} />
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="text-[17px] font-bold leading-tight">Перейти к тренировкам</span>
+            <span className="text-[13px] opacity-70">текущая + история</span>
+          </span>
+          <ChevronsRight size={26} strokeWidth={2} className="shrink-0" />
+        </button>
+
+        {/* Сетка плиток-разделов. */}
+        <div className="grid grid-cols-2 gap-3">
+          {TILES.map(({ key, label, sub, Icon }) => {
+            const showCount = key === 'stats' && completedCount > 0;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => void navigate(`/clients/${id}/${key}`)}
+                className="tile-shadow flex flex-col gap-3 rounded-2xl p-4 text-left active:scale-[0.98]"
+              >
+                <div className="flex items-start justify-between">
+                  <Icon size={22} strokeWidth={1.8} className="text-accent" />
+                  {showCount && (
+                    <span className="text-[22px] font-bold leading-none text-ink">
+                      {completedCount}
+                    </span>
+                  )}
+                </div>
+                <span className="flex flex-col">
+                  <span className="text-[14px] font-bold leading-tight text-ink">{label}</span>
+                  <span className="text-[11px] text-ink-muted">{sub}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Заметки. */}
         {c.notes && (
           <section className="flex flex-col gap-1.5">
             <h2 className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.06em] text-ink-mutedxl">
               Заметки
             </h2>
-            <p className="whitespace-pre-wrap rounded-2xl bg-card p-4 text-[14px] leading-relaxed text-ink">
-              {c.notes}
-            </p>
+            <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-ink">{c.notes}</p>
           </section>
         )}
-
-        {/* Сетка разделов-плиток. */}
-        <div className="grid grid-cols-2 gap-3">
-          {sections.map(({ key, label, sub, Icon }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => void navigate(`/clients/${id}/${key}`)}
-              className="tile-shadow flex flex-col items-start gap-3 rounded-2xl p-4 text-left active:scale-[0.98]"
-            >
-              <Icon size={22} strokeWidth={1.8} className="text-accent" />
-              <span className="flex flex-col">
-                <span className="text-[14px] font-bold leading-tight text-ink">{label}</span>
-                <span className="text-[11px] text-ink-muted">{sub}</span>
-              </span>
-            </button>
-          ))}
-        </div>
 
         {/* Действия. */}
         <div className="flex flex-col gap-2 pt-1">

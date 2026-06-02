@@ -10,6 +10,7 @@ const CLIENT_SECTION_LABELS: Record<string, string> = {
   medcard: 'Медкарта',
   chat: 'Чат',
   payments: 'Оплаты',
+  calendar: 'Календарь',
   stats: 'Статистика',
 };
 
