@@ -268,7 +268,7 @@ export function KnowledgeBasePage() {
         </div>
 
         {showChips && (
-          <div className="-mx-5 mt-3 flex gap-1.5 overflow-x-auto px-5 pb-1">
+          <div className="mt-3 flex flex-wrap gap-1.5">
             <CategoryChip active={chipValue === ''} onClick={() => setChip('')}>
               Все
             </CategoryChip>
