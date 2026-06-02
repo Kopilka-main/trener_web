@@ -25,6 +25,7 @@ function client(over: Partial<ClientResponse>): ClientResponse {
     lastName: 'Петров',
     phone: null,
     accountId: null,
+    birthDate: null,
     notes: null,
     status: 'active',
     contacts: [],

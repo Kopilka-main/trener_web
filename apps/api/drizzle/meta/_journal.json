@@ -134,6 +134,13 @@
       "when": 1780402643777,
       "tag": "0018_real_sage",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1780403388156,
+      "tag": "0019_glossy_champions",
+      "breakpoints": true
     }
   ]
 }

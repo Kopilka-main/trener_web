@@ -7,6 +7,11 @@ const name = z.string().trim().min(1).max(100);
 const phone = z.string().trim().max(30).nullish();
 const notes = z.string().trim().max(2000).nullish();
 const accountId = z.string().trim().max(100).nullish();
+const birthDate = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/u, 'Дата в формате ГГГГ-ММ-ДД')
+  .nullish();
 
 const contactSchema = z.object({
   type: z.string().trim().min(1).max(40),
@@ -23,6 +28,7 @@ export const createClientRequestSchema = z.object({
   phone,
   notes,
   accountId,
+  birthDate,
   contacts,
   tags,
 });
@@ -35,6 +41,7 @@ export const updateClientRequestSchema = z
     phone,
     notes,
     accountId,
+    birthDate,
     status: clientStatusSchema,
     contacts,
     tags,
@@ -49,6 +56,7 @@ export const clientResponseSchema = z.object({
   phone: z.string().nullable(),
   notes: z.string().nullable(),
   accountId: z.string().nullable(),
+  birthDate: z.string().nullable(),
   status: clientStatusSchema,
   contacts: z.array(contactSchema),
   tags: z.array(z.string()),

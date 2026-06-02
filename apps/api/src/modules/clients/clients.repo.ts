@@ -9,6 +9,7 @@ export type ClientRow = {
   lastName: string;
   phone: string | null;
   accountId: string | null;
+  birthDate: string | null;
   notes: string | null;
   status: ClientStatus;
   contacts: Contact[];
@@ -23,6 +24,7 @@ export type CreateClientInput = {
   lastName: string;
   phone?: string | null;
   accountId?: string | null;
+  birthDate?: string | null;
   notes?: string | null;
   contacts?: Contact[];
   tags?: string[];
@@ -33,6 +35,7 @@ export type UpdateClientInput = {
   lastName?: string;
   phone?: string | null;
   accountId?: string | null;
+  birthDate?: string | null;
   notes?: string | null;
   status?: ClientStatus;
   contacts?: Contact[];
@@ -49,6 +52,7 @@ export function makeClientsRepo(db: Db) {
         lastName: clients.lastName,
         phone: clients.phone,
         accountId: clients.accountId,
+        birthDate: clients.birthDate,
         contacts: clients.contacts,
         tags: clients.tags,
         notes: trainerClients.notes,
@@ -83,6 +87,7 @@ export function makeClientsRepo(db: Db) {
           lastName: input.lastName,
           phone: input.phone ?? null,
           accountId: input.accountId ?? null,
+          birthDate: input.birthDate ?? null,
           contacts: input.contacts ?? [],
           tags: input.tags ?? [],
         });
@@ -106,6 +111,7 @@ export function makeClientsRepo(db: Db) {
           lastName: clients.lastName,
           phone: clients.phone,
           accountId: clients.accountId,
+          birthDate: clients.birthDate,
           contacts: clients.contacts,
           tags: clients.tags,
           notes: trainerClients.notes,
@@ -130,6 +136,7 @@ export function makeClientsRepo(db: Db) {
         lastName: string;
         phone: string | null;
         accountId: string | null;
+        birthDate: string | null;
         contacts: Contact[];
         tags: string[];
       }> = {};
@@ -137,6 +144,7 @@ export function makeClientsRepo(db: Db) {
       if (patch.lastName !== undefined) personPatch.lastName = patch.lastName;
       if (patch.phone !== undefined) personPatch.phone = patch.phone;
       if (patch.accountId !== undefined) personPatch.accountId = patch.accountId;
+      if (patch.birthDate !== undefined) personPatch.birthDate = patch.birthDate;
       if (patch.contacts !== undefined) personPatch.contacts = patch.contacts;
       if (patch.tags !== undefined) personPatch.tags = patch.tags;
       const linkPatch: Partial<{ notes: string | null; status: ClientStatus }> = {};

@@ -9,6 +9,7 @@ function row(over: Partial<ClientRow> = {}): ClientRow {
     lastName: 'Ент',
     phone: null,
     accountId: null,
+    birthDate: null,
     notes: null,
     status: 'active',
     contacts: [],
@@ -114,6 +115,39 @@ describe('clients.service', () => {
     });
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ accountId: null }));
     expect(res.accountId).toBeNull();
+  });
+
+  it('create пробрасывает birthDate в repo и в ответ', async () => {
+    const create = vi.fn(() => Promise.resolve(row({ birthDate: '1990-05-20' })));
+    const repo = fakeRepo({ create });
+    const svc = makeClientsService(repo, { newId: () => 'newid' });
+    const res = await svc.create('A', {
+      firstName: 'Кли',
+      lastName: 'Ент',
+      phone: null,
+      notes: null,
+      birthDate: '1990-05-20',
+      contacts: [],
+      tags: [],
+    });
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ birthDate: '1990-05-20' }));
+    expect(res.birthDate).toBe('1990-05-20');
+  });
+
+  it('create по умолчанию шлёт birthDate null', async () => {
+    const create = vi.fn(() => Promise.resolve(row()));
+    const repo = fakeRepo({ create });
+    const svc = makeClientsService(repo, { newId: () => 'newid' });
+    const res = await svc.create('A', {
+      firstName: 'Кли',
+      lastName: 'Ент',
+      phone: null,
+      notes: null,
+      contacts: [],
+      tags: [],
+    });
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ birthDate: null }));
+    expect(res.birthDate).toBeNull();
   });
 
   it('get бросает 404, если repo вернул null', async () => {
