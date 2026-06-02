@@ -11,6 +11,8 @@ import { ClientEditPage } from './pages/ClientEditPage';
 import { KnowledgeBasePage } from './pages/KnowledgeBasePage';
 import { ExerciseEditPage } from './pages/ExerciseEditPage';
 import { TemplateEditPage } from './pages/TemplateEditPage';
+import { ClientWorkoutsPage } from './pages/ClientWorkoutsPage';
+import { ActiveWorkoutPage } from './pages/ActiveWorkoutPage';
 import {
   CalendarPage,
   MessagesPage,
@@ -38,6 +40,8 @@ export function App() {
           <Route path="/clients/new" element={<ClientEditPage mode="create" />} />
           <Route path="/clients/:id" element={<ClientCardPage />} />
           <Route path="/clients/:id/edit" element={<ClientEditPage mode="edit" />} />
+          <Route path="/clients/:id/workouts" element={<ClientWorkoutsPage />} />
+          <Route path="/clients/:id/workouts/:wid" element={<ActiveWorkoutPage />} />
           <Route path="/clients/:id/:section" element={<ClientSectionPage />} />
           <Route path="/knowledge" element={<KnowledgeBasePage />} />
           <Route path="/knowledge/exercises/new" element={<ExerciseEditPage mode="create" />} />
