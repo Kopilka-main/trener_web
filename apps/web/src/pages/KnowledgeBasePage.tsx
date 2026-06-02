@@ -25,12 +25,10 @@ const GROUP_ORDER = [
 function SegmentTab({
   active,
   onClick,
-  count,
   children,
 }: {
   active: boolean;
   onClick: () => void;
-  count: number;
   children: React.ReactNode;
 }) {
   return (
@@ -39,12 +37,11 @@ function SegmentTab({
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-sm font-semibold transition-colors ${
+      className={`flex flex-1 items-center justify-center rounded-xl py-2 text-sm font-semibold transition-colors ${
         active ? 'bg-accent text-accent-on' : 'text-ink-muted'
       }`}
     >
-      <span>{children}</span>
-      <span className="font-mono text-[12px] tabular-nums">{count}</span>
+      {children}
     </button>
   );
 }
@@ -217,7 +214,7 @@ export function KnowledgeBasePage() {
   return (
     <div className="flex min-h-full flex-col">
       <header className="px-5 pt-3">
-        <h1 className="font-[family-name:var(--font-display)] text-[34px] leading-none tracking-[-0.02em] text-ink">
+        <h1 className="text-[32px] font-bold leading-none tracking-[-0.02em] text-ink">
           База знаний
         </h1>
 
@@ -238,18 +235,10 @@ export function KnowledgeBasePage() {
           aria-label="Разделы базы знаний"
           className="mt-3 flex gap-1 rounded-2xl bg-card-elevated p-1"
         >
-          <SegmentTab
-            active={tab === 'templates'}
-            onClick={() => selectTab('templates')}
-            count={filteredTemplates.length}
-          >
+          <SegmentTab active={tab === 'templates'} onClick={() => selectTab('templates')}>
             Тренировки
           </SegmentTab>
-          <SegmentTab
-            active={tab === 'exercises'}
-            onClick={() => selectTab('exercises')}
-            count={tabExercises.length}
-          >
+          <SegmentTab active={tab === 'exercises'} onClick={() => selectTab('exercises')}>
             Упражнения
           </SegmentTab>
         </div>
