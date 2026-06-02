@@ -25,8 +25,10 @@ export function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col justify-center gap-6 px-6">
-      <h1 className="text-2xl font-semibold text-slate-900">Регистрация</h1>
+    <div className="mx-auto flex min-h-screen max-w-[430px] flex-col justify-center gap-6 bg-bg px-6 py-8">
+      <h1 className="font-[family-name:var(--font-display)] text-[36px] leading-none tracking-[-0.02em] text-accent">
+        Регистрация
+      </h1>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <Field
           label="Имя"
@@ -63,7 +65,7 @@ export function RegisterPage() {
           required
         />
         {registerMutation.isError && (
-          <p className="text-sm text-slate-500" role="alert">
+          <p className="text-sm text-ink-muted" role="alert">
             Не удалось зарегистрироваться. Проверьте введённые данные.
           </p>
         )}
@@ -71,9 +73,9 @@ export function RegisterPage() {
           {registerMutation.isPending ? 'Создаём…' : 'Создать аккаунт'}
         </Button>
       </form>
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-ink-muted">
         Уже есть аккаунт?{' '}
-        <Link to="/login" className="font-medium text-slate-900 underline">
+        <Link to="/login" className="font-medium text-accent">
           Войти
         </Link>
       </p>

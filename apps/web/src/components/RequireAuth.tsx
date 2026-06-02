@@ -11,7 +11,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   if (me.isPending) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-slate-500">
+      <div className="flex min-h-screen items-center justify-center bg-bg text-ink-muted">
         <span>Загрузка…</span>
       </div>
     );

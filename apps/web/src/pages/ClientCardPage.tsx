@@ -1,4 +1,5 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 import { useClient, useDeleteClient, useUpdateClient } from '../api/clients';
 import { Button } from '../components/Button';
 
@@ -34,12 +35,12 @@ export function ClientCardPage() {
   }
 
   if (client.isPending) {
-    return <p className="px-5 py-6 text-sm text-slate-500">Загрузка…</p>;
+    return <p className="px-5 py-6 text-sm text-ink-muted">Загрузка…</p>;
   }
 
   if (client.isError || !client.data) {
     return (
-      <p className="px-5 py-6 text-sm text-slate-500" role="alert">
+      <p className="px-5 py-6 text-sm text-ink-muted" role="alert">
         Не удалось загрузить клиента.
       </p>
     );
@@ -49,25 +50,25 @@ export function ClientCardPage() {
   const isArchived = c.status === 'archived';
 
   return (
-    <div className="flex flex-col gap-6 px-5 py-6">
+    <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-slate-900">
+        <h1 className="font-[family-name:var(--font-display)] text-[30px] leading-none tracking-[-0.02em]">
           {c.firstName} {c.lastName}
         </h1>
-        <span className="text-sm text-slate-500">{isArchived ? 'Архив' : 'Активный'}</span>
+        <span className="text-sm text-ink-muted">{isArchived ? 'Архив' : 'Активный'}</span>
       </div>
 
       <dl className="flex flex-col gap-3">
         {c.phone && (
           <div className="flex flex-col">
-            <dt className="text-sm text-slate-500">Телефон</dt>
-            <dd className="text-base text-slate-900">{c.phone}</dd>
+            <dt className="text-sm text-ink-muted">Телефон</dt>
+            <dd className="text-base text-ink">{c.phone}</dd>
           </div>
         )}
         {c.notes && (
           <div className="flex flex-col">
-            <dt className="text-sm text-slate-500">Заметки</dt>
-            <dd className="whitespace-pre-wrap text-base text-slate-900">{c.notes}</dd>
+            <dt className="text-sm text-ink-muted">Заметки</dt>
+            <dd className="whitespace-pre-wrap text-base text-ink">{c.notes}</dd>
           </div>
         )}
       </dl>
@@ -77,10 +78,10 @@ export function ClientCardPage() {
           <li key={s.key}>
             <Link
               to="/more"
-              className="flex items-center justify-between rounded-2xl bg-slate-100 px-4 py-3 text-base font-medium text-slate-900"
+              className="row-glow flex items-center justify-between rounded-2xl bg-card px-4 py-3 text-base font-semibold text-ink transition-colors active:bg-card-elevated"
             >
               {s.label}
-              <span className="text-slate-400">›</span>
+              <ChevronRight size={16} className="tile-chevron" />
             </Link>
           </li>
         ))}

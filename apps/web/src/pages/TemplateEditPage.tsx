@@ -147,15 +147,17 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
   }
 
   if (mode === 'edit' && existing.isPending) {
-    return <p className="px-5 py-6 text-sm text-slate-500">Загрузка…</p>;
+    return <p className="px-5 py-6 text-sm text-ink-muted">Загрузка…</p>;
   }
 
   const title = mode === 'create' ? 'Новый шаблон' : 'Редактирование шаблона';
   const catalogEmpty = catalog.isSuccess && (catalog.data?.length ?? 0) === 0;
 
   return (
-    <div className="flex flex-col gap-6 px-5 py-6">
-      <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
+    <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
+      <h1 className="font-[family-name:var(--font-display)] text-[26px] leading-none tracking-[-0.02em]">
+        {title}
+      </h1>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <Field
@@ -173,21 +175,21 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
         />
 
         <section className="flex flex-col gap-3">
-          <h2 className="text-base font-medium text-slate-700">Упражнения</h2>
+          <h2 className="text-base font-semibold text-ink">Упражнения</h2>
 
-          {catalog.isPending && <p className="text-sm text-slate-500">Загрузка каталога…</p>}
+          {catalog.isPending && <p className="text-sm text-ink-muted">Загрузка каталога…</p>}
           {catalogEmpty && (
-            <p className="text-sm text-slate-500">Сначала добавьте упражнения в базу знаний.</p>
+            <p className="text-sm text-ink-muted">Сначала добавьте упражнения в базу знаний.</p>
           )}
           {positions.length === 0 && !catalogEmpty && (
-            <p className="text-sm text-slate-500">Добавьте хотя бы одно упражнение.</p>
+            <p className="text-sm text-ink-muted">Добавьте хотя бы одно упражнение.</p>
           )}
 
           <ul className="flex flex-col gap-3">
             {positions.map((p, index) => (
-              <li key={index} className="flex flex-col gap-2 rounded-2xl bg-slate-100 p-3">
+              <li key={index} className="flex flex-col gap-2 rounded-2xl bg-card p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-slate-500">
+                  <span className="text-sm font-medium text-ink-muted">
                     {index + 1}. {exerciseName(p.exerciseId)}
                   </span>
                   <div className="flex gap-1">
@@ -196,7 +198,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                       aria-label="Вверх"
                       onClick={() => movePosition(index, -1)}
                       disabled={index === 0}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-slate-600 disabled:opacity-40"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-card-elevated text-ink-muted disabled:opacity-40"
                     >
                       ↑
                     </button>
@@ -205,7 +207,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                       aria-label="Вниз"
                       onClick={() => movePosition(index, 1)}
                       disabled={index === positions.length - 1}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-slate-600 disabled:opacity-40"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-card-elevated text-ink-muted disabled:opacity-40"
                     >
                       ↓
                     </button>
@@ -213,7 +215,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                       type="button"
                       aria-label="Удалить позицию"
                       onClick={() => removePosition(index)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-slate-600"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-card-elevated text-ink-muted"
                     >
                       ✕
                     </button>
@@ -221,12 +223,12 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                 </div>
 
                 <label className="flex flex-col gap-1">
-                  <span className="text-xs text-slate-500">Упражнение</span>
+                  <span className="text-xs text-ink-muted">Упражнение</span>
                   <select
                     value={p.exerciseId}
                     onChange={(e) => updatePosition(index, { exerciseId: e.target.value })}
                     aria-label={`Упражнение позиции ${String(index + 1)}`}
-                    className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm outline-none focus:border-slate-500"
+                    className="rounded-lg border border-line bg-chip px-2 py-2 text-sm text-ink outline-none focus:border-accent"
                   >
                     {(catalog.data ?? []).map((e) => (
                       <option key={e.id} value={e.id}>
@@ -238,29 +240,29 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
 
                 <div className="grid grid-cols-2 gap-2">
                   <label className="flex flex-col gap-1">
-                    <span className="text-xs text-slate-500">Подходы</span>
+                    <span className="text-xs text-ink-muted">Подходы</span>
                     <input
                       type="number"
                       inputMode="numeric"
                       min={1}
                       value={p.sets}
                       onChange={(e) => updatePosition(index, { sets: e.target.value })}
-                      className="rounded-lg border border-slate-300 px-2 py-2 text-sm outline-none focus:border-slate-500"
+                      className="rounded-lg border border-line bg-chip px-2 py-2 text-sm text-ink outline-none focus:border-accent"
                     />
                   </label>
                   <label className="flex flex-col gap-1">
-                    <span className="text-xs text-slate-500">Повторы</span>
+                    <span className="text-xs text-ink-muted">Повторы</span>
                     <input
                       type="number"
                       inputMode="numeric"
                       min={1}
                       value={p.reps}
                       onChange={(e) => updatePosition(index, { reps: e.target.value })}
-                      className="rounded-lg border border-slate-300 px-2 py-2 text-sm outline-none focus:border-slate-500"
+                      className="rounded-lg border border-line bg-chip px-2 py-2 text-sm text-ink outline-none focus:border-accent"
                     />
                   </label>
                   <label className="flex flex-col gap-1">
-                    <span className="text-xs text-slate-500">Вес, кг</span>
+                    <span className="text-xs text-ink-muted">Вес, кг</span>
                     <input
                       type="number"
                       inputMode="decimal"
@@ -268,22 +270,22 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                       step="0.5"
                       value={p.weightKg}
                       onChange={(e) => updatePosition(index, { weightKg: e.target.value })}
-                      className="rounded-lg border border-slate-300 px-2 py-2 text-sm outline-none focus:border-slate-500"
+                      className="rounded-lg border border-line bg-chip px-2 py-2 text-sm text-ink outline-none focus:border-accent"
                     />
                   </label>
                   <label className="flex flex-col gap-1">
-                    <span className="text-xs text-slate-500">Время, сек</span>
+                    <span className="text-xs text-ink-muted">Время, сек</span>
                     <input
                       type="number"
                       inputMode="numeric"
                       min={1}
                       value={p.timeSec}
                       onChange={(e) => updatePosition(index, { timeSec: e.target.value })}
-                      className="rounded-lg border border-slate-300 px-2 py-2 text-sm outline-none focus:border-slate-500"
+                      className="rounded-lg border border-line bg-chip px-2 py-2 text-sm text-ink outline-none focus:border-accent"
                     />
                   </label>
                   <label className="flex flex-col gap-1">
-                    <span className="text-xs text-slate-500">Отдых, сек</span>
+                    <span className="text-xs text-ink-muted">Отдых, сек</span>
                     <input
                       type="number"
                       inputMode="numeric"
@@ -291,7 +293,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                       max={3600}
                       value={p.restSec}
                       onChange={(e) => updatePosition(index, { restSec: e.target.value })}
-                      className="rounded-lg border border-slate-300 px-2 py-2 text-sm outline-none focus:border-slate-500"
+                      className="rounded-lg border border-line bg-chip px-2 py-2 text-sm text-ink outline-none focus:border-accent"
                     />
                   </label>
                 </div>
@@ -310,7 +312,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
         </section>
 
         {mutation.isError && (
-          <p className="text-sm text-slate-500" role="alert">
+          <p className="text-sm text-ink-muted" role="alert">
             Не удалось сохранить. Проверьте поля и попробуйте снова.
           </p>
         )}

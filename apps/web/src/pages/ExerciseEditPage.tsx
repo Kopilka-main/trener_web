@@ -94,7 +94,7 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
   }
 
   if (mode === 'edit' && existing.isPending) {
-    return <p className="px-5 py-6 text-sm text-slate-500">Загрузка…</p>;
+    return <p className="px-5 py-6 text-sm text-ink-muted">Загрузка…</p>;
   }
 
   // Глобальные упражнения read-only: редактирование запрещено.
@@ -105,8 +105,10 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
   const title = mode === 'create' ? 'Новое упражнение' : 'Редактирование';
 
   return (
-    <div className="flex flex-col gap-6 px-5 py-6">
-      <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
+    <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
+      <h1 className="font-[family-name:var(--font-display)] text-[28px] leading-none tracking-[-0.02em]">
+        {title}
+      </h1>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <Field
@@ -124,14 +126,14 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
           required
         />
         <label htmlFor="description" className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-slate-700">Описание</span>
+          <span className="text-sm font-medium text-ink-muted">Описание</span>
           <textarea
             id="description"
             name="description"
             rows={3}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="rounded-xl border border-slate-300 px-3 py-2.5 text-base outline-none focus:border-slate-500"
+            className="rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
           />
         </label>
         <Field
@@ -173,19 +175,19 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
           onChange={(e) => setRestSec(e.target.value)}
         />
         <label htmlFor="note" className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-slate-700">Заметка</span>
+          <span className="text-sm font-medium text-ink-muted">Заметка</span>
           <textarea
             id="note"
             name="note"
             rows={2}
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            className="rounded-xl border border-slate-300 px-3 py-2.5 text-base outline-none focus:border-slate-500"
+            className="rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
           />
         </label>
 
         {mutation.isError && (
-          <p className="text-sm text-slate-500" role="alert">
+          <p className="text-sm text-ink-muted" role="alert">
             Не удалось сохранить. Проверьте поля и попробуйте снова.
           </p>
         )}
