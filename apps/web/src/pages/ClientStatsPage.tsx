@@ -10,9 +10,15 @@ import {
   Plus,
   Ruler,
 } from 'lucide-react';
-import type { CreateMeasurementRequest, MeasurementResponse, PhotoResponse } from '@trener/shared';
+import type {
+  CreateMeasurementRequest,
+  MeasurementResponse,
+  PhotoResponse,
+  WorkoutResponse,
+} from '@trener/shared';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { HoldToDelete } from '../components/HoldToDelete';
+import { LineChart, type LineChartPoint } from '../components/LineChart';
 import { useClient } from '../api/clients';
 import { useClientWorkouts } from '../api/client-workouts';
 import {
@@ -27,7 +33,11 @@ import {
   useDeleteProgressPhoto,
   useUploadProgressPhoto,
 } from '../api/progress-photos';
-import { aggregateExerciseOverview, type ExerciseOverview } from '../lib/workout-stats';
+import {
+  aggregateExerciseOverview,
+  workoutRowStats,
+  type ExerciseOverview,
+} from '../lib/workout-stats';
 
 type Tab = 'exercises' | 'measurements' | 'photos';
 
@@ -299,9 +309,140 @@ function MeasurementsTab({ clientId }: { clientId: string }) {
         </EmptyState>
       )}
 
+      {items.length > 0 && <MeasurementsAnalytics clientId={clientId} items={items} />}
+
       {items.map((m) => (
         <MeasurementCard key={m.id} m={m} onEdit={() => setEditing(m)} />
       ))}
+    </div>
+  );
+}
+
+// ─── Аналитика (графики динамики) ──────────────────────────────────────────────
+
+interface MetricDef {
+  key: 'weightKg' | 'waistCm' | 'chestCm' | 'hipsCm' | 'bodyFatPct';
+  label: string;
+  suffix: string;
+}
+
+const ANALYTICS_METRICS: MetricDef[] = [
+  { key: 'weightKg', label: 'Вес', suffix: ' кг' },
+  { key: 'waistCm', label: 'Талия', suffix: ' см' },
+  { key: 'chestCm', label: 'Грудь', suffix: ' см' },
+  { key: 'hipsCm', label: 'Бёдра', suffix: ' см' },
+  { key: 'bodyFatPct', label: '% жира', suffix: ' %' },
+];
+
+/** Короткая подпись даты для оси: «1 мая». */
+function shortRuDate(iso: string): string {
+  const [, m, d] = iso.split('-').map(Number);
+  if (!m || !d) return iso;
+  return `${String(d)} ${RU_MONTHS[m - 1] ?? ''}`;
+}
+
+function metricPoints(items: MeasurementResponse[], key: MetricDef['key']): LineChartPoint[] {
+  // Список приходит от новых к старым — для графика разворачиваем по возрастанию даты.
+  const asc = [...items].sort((a, b) => (a.date < b.date ? -1 : 1));
+  const out: LineChartPoint[] = [];
+  asc.forEach((m, i) => {
+    const v = m[key];
+    if (v !== null) out.push({ x: i, y: v, label: shortRuDate(m.date) });
+  });
+  return out;
+}
+
+/**
+ * Блок «Аналитика»: график динамики выбранной метрики замеров (вес/обхваты/% жира)
+ * с чипами-переключателями и отдельная мини-карта тоннажа по завершённым тренировкам.
+ */
+function MeasurementsAnalytics({
+  clientId,
+  items,
+}: {
+  clientId: string;
+  items: MeasurementResponse[];
+}) {
+  // Доступны только метрики с ≥2 значениями (иначе график не построить).
+  const available = useMemo(
+    () => ANALYTICS_METRICS.filter((m) => metricPoints(items, m.key).length >= 2),
+    [items],
+  );
+  const [metricKey, setMetricKey] = useState<MetricDef['key']>('weightKg');
+
+  // Если выбранная метрика стала недоступной — переключаемся на первую доступную.
+  const active = available.find((m) => m.key === metricKey) ?? available[0];
+  const points = useMemo(() => (active ? metricPoints(items, active.key) : []), [items, active]);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <h3 className="px-1 font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.06em] text-ink-mutedxl">
+        Аналитика
+      </h3>
+
+      <div className="tile-shadow flex flex-col gap-3 rounded-2xl p-4">
+        {available.length === 0 ? (
+          <p className="py-4 text-center text-[12px] text-ink-muted">
+            Недостаточно данных для графика — нужно минимум 2 замера с одной метрикой.
+          </p>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-1.5">
+              {available.map((m) => {
+                const isActive = active?.key === m.key;
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => setMetricKey(m.key)}
+                    className={`whitespace-nowrap rounded-full px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                      isActive ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+            <LineChart points={points} suffix={active?.suffix ?? ''} />
+          </>
+        )}
+      </div>
+
+      <TonnageChart clientId={clientId} />
+    </div>
+  );
+}
+
+/** Мини-карта тоннажа по завершённым тренировкам клиента во времени. */
+function TonnageChart({ clientId }: { clientId: string }) {
+  const workouts = useClientWorkouts(clientId);
+
+  const points = useMemo<LineChartPoint[]>(() => {
+    const completed = (workouts.data ?? [])
+      .filter((w: WorkoutResponse) => w.status === 'completed')
+      .map((w) => ({ w, ms: Date.parse(w.completedAt ?? w.startedAt ?? '') }))
+      .filter((e) => Number.isFinite(e.ms))
+      .sort((a, b) => a.ms - b.ms);
+    const out: LineChartPoint[] = [];
+    completed.forEach((e, i) => {
+      const { tonnageKg } = workoutRowStats(e.w);
+      if (tonnageKg > 0) {
+        const iso = new Date(e.ms).toISOString().slice(0, 10);
+        out.push({ x: i, y: tonnageKg, label: shortRuDate(iso) });
+      }
+    });
+    return out;
+  }, [workouts.data]);
+
+  if (points.length < 2) return null;
+
+  return (
+    <div className="tile-shadow flex flex-col gap-3 rounded-2xl p-4">
+      <h4 className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.06em] text-ink-mutedxl">
+        Тоннаж по тренировкам
+      </h4>
+      <LineChart points={points} suffix=" кг" color="var(--color-accent)" />
     </div>
   );
 }
