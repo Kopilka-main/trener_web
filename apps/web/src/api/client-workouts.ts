@@ -3,12 +3,16 @@ import {
   createWorkoutRequestSchema,
   updateSetRequestSchema,
   completeWorkoutRequestSchema,
+  addWorkoutExerciseRequestSchema,
+  reorderWorkoutExercisesRequestSchema,
   workoutResponseSchema,
   workoutListResponseSchema,
   type WorkoutResponse,
   type CreateWorkoutRequest,
   type UpdateSetRequest,
   type CompleteWorkoutRequest,
+  type AddWorkoutExerciseRequest,
+  type ReorderWorkoutExercisesRequest,
 } from '@trener/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from './client';
@@ -81,6 +85,41 @@ export function completeClientWorkout(
   }).then((r) => r.workout);
 }
 
+export function addWorkoutExercise(
+  clientId: string,
+  wid: string,
+  input: AddWorkoutExerciseRequest,
+): Promise<WorkoutResponse> {
+  return apiFetch(`/clients/${clientId}/workouts/${wid}/exercises`, {
+    method: 'POST',
+    body: addWorkoutExerciseRequestSchema.parse(input),
+    schema: workoutEnvelopeSchema,
+  }).then((r) => r.workout);
+}
+
+export function removeWorkoutExercise(
+  clientId: string,
+  wid: string,
+  pos: number,
+): Promise<WorkoutResponse> {
+  return apiFetch(`/clients/${clientId}/workouts/${wid}/exercises/${String(pos)}`, {
+    method: 'DELETE',
+    schema: workoutEnvelopeSchema,
+  }).then((r) => r.workout);
+}
+
+export function reorderWorkoutExercises(
+  clientId: string,
+  wid: string,
+  input: ReorderWorkoutExercisesRequest,
+): Promise<WorkoutResponse> {
+  return apiFetch(`/clients/${clientId}/workouts/${wid}/exercises`, {
+    method: 'PATCH',
+    body: reorderWorkoutExercisesRequestSchema.parse(input),
+    schema: workoutEnvelopeSchema,
+  }).then((r) => r.workout);
+}
+
 export function deleteClientWorkout(clientId: string, wid: string): Promise<{ ok: boolean }> {
   return apiFetch(`/clients/${clientId}/workouts/${wid}`, {
     method: 'DELETE',
@@ -131,6 +170,38 @@ export function useUpdateSet(clientId: string, wid: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (args: UpdateSetArgs) => updateWorkoutSet(clientId, wid, args),
+    onSuccess: (workout) => {
+      qc.setQueryData(clientWorkoutQueryKey(clientId, wid), workout);
+    },
+  });
+}
+
+export function useAddWorkoutExercise(clientId: string, wid: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AddWorkoutExerciseRequest) => addWorkoutExercise(clientId, wid, input),
+    onSuccess: (workout) => {
+      qc.setQueryData(clientWorkoutQueryKey(clientId, wid), workout);
+      void qc.invalidateQueries({ queryKey: clientWorkoutsQueryKey(clientId) });
+    },
+  });
+}
+
+export function useRemoveWorkoutExercise(clientId: string, wid: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (pos: number) => removeWorkoutExercise(clientId, wid, pos),
+    onSuccess: (workout) => {
+      qc.setQueryData(clientWorkoutQueryKey(clientId, wid), workout);
+      void qc.invalidateQueries({ queryKey: clientWorkoutsQueryKey(clientId) });
+    },
+  });
+}
+
+export function useReorderWorkoutExercises(clientId: string, wid: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (order: number[]) => reorderWorkoutExercises(clientId, wid, { order }),
     onSuccess: (workout) => {
       qc.setQueryData(clientWorkoutQueryKey(clientId, wid), workout);
     },
