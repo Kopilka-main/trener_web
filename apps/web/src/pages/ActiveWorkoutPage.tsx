@@ -309,52 +309,45 @@ function ActiveView({
                   set.actualWeightKg !== null ||
                   set.actualTimeSec !== null;
                 return (
-                  <li key={key} className="px-0.5 py-0.5">
+                  <li key={key} className="flex flex-col gap-2 px-0.5 py-1">
+                    <span className="truncate text-[14px] font-semibold text-ink">
+                      {ex.exerciseName}
+                    </span>
                     {isEditing ? (
-                      <>
-                        <span className="block truncate text-[14px] font-semibold text-ink">
-                          {ex.exerciseName}
-                        </span>
-                        <SetEditor
-                          set={set}
-                          onCancel={() => setEditing(null)}
-                          onSave={(patch) => saveFact(ex, set, patch)}
-                          onDelete={() => {
-                            setEditing(null);
-                            removeExercise.mutate(ex.position);
-                          }}
-                        />
-                      </>
+                      <SetEditor
+                        set={set}
+                        onCancel={() => setEditing(null)}
+                        onSave={(patch) => saveFact(ex, set, patch)}
+                        onDelete={() => {
+                          setEditing(null);
+                          removeExercise.mutate(ex.position);
+                        }}
+                      />
                     ) : (
                       <div className="flex items-center justify-between gap-2">
-                        <span className="flex min-w-0 flex-col">
-                          <span className="truncate text-[14px] font-semibold text-ink">
-                            {ex.exerciseName}
-                          </span>
-                          <span className="font-[family-name:var(--font-mono)] text-[12px] tabular-nums text-ink-muted">
-                            {hasFact ? `факт ${actualText(set)}` : `план ${plannedText(set)}`}
-                          </span>
+                        <span className="font-[family-name:var(--font-mono)] text-[13px] tabular-nums text-ink-muted">
+                          {hasFact ? `факт ${actualText(set)}` : `план ${plannedText(set)}`}
                         </span>
-                        <span className="flex shrink-0 items-center gap-1.5">
+                        <span className="flex shrink-0 items-center gap-2">
                           <button
                             type="button"
                             aria-label="Изменить факт"
                             onClick={() => setEditing(key)}
-                            className="flex h-8 w-8 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-95"
+                            className="flex h-10 w-10 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-95"
                           >
-                            <Pencil size={14} strokeWidth={1.8} />
+                            <Pencil size={16} strokeWidth={1.8} />
                           </button>
                           <button
                             type="button"
                             aria-label={set.done ? 'Снять отметку' : 'Отметить выполненным'}
                             onClick={() => toggleDone(ex, set)}
-                            className={`flex h-8 w-8 items-center justify-center rounded-full active:scale-95 ${
+                            className={`flex h-10 w-10 items-center justify-center rounded-full active:scale-95 ${
                               set.done
                                 ? 'bg-accent text-accent-on'
                                 : 'bg-card-elevated text-ink-muted'
                             }`}
                           >
-                            <Check size={16} strokeWidth={2.6} />
+                            <Check size={18} strokeWidth={2.6} />
                           </button>
                         </span>
                       </div>
@@ -664,37 +657,38 @@ function SetEditor({
   };
 
   return (
-    <div className="mt-1 flex items-center gap-2">
+    <div className="flex items-center gap-2">
       {(showReps || (!showWeight && !showTime)) && (
         <Field label="повт." value={reps} onChange={setReps} />
       )}
       {showWeight && <Field label="кг" value={weight} onChange={setWeight} />}
       {showTime && <Field label="сек" value={time} onChange={setTime} />}
-      <button
-        type="button"
-        aria-label="Сохранить подход"
-        onClick={() =>
-          onSave({
-            actualReps: showReps || (!showWeight && !showTime) ? num(reps) : null,
-            actualWeightKg: showWeight ? num(weight) : null,
-            actualTimeSec: showTime ? num(time) : null,
-          })
-        }
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-accent-on active:scale-90"
-      >
-        <Check size={16} strokeWidth={2.8} />
-      </button>
-      <button
-        type="button"
-        aria-label="Отменить"
-        onClick={onCancel}
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-90"
-      >
-        <X size={16} strokeWidth={2.2} />
-      </button>
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-2">
+        <button
+          type="button"
+          aria-label="Сохранить подход"
+          onClick={() =>
+            onSave({
+              actualReps: showReps || (!showWeight && !showTime) ? num(reps) : null,
+              actualWeightKg: showWeight ? num(weight) : null,
+              actualTimeSec: showTime ? num(time) : null,
+            })
+          }
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-on active:scale-90"
+        >
+          <Check size={18} strokeWidth={2.8} />
+        </button>
+        <button
+          type="button"
+          aria-label="Отменить"
+          onClick={onCancel}
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-90"
+        >
+          <X size={18} strokeWidth={2.2} />
+        </button>
         <HoldToDelete
           icon="trash"
+          size="md"
           label="Удерживайте, чтобы удалить упражнение"
           onDelete={onDelete}
         />
@@ -713,7 +707,7 @@ function Field({
   onChange: (v: string) => void;
 }) {
   return (
-    <label className="flex items-center gap-1 rounded-lg bg-card px-2 py-1">
+    <label className="flex h-10 items-center gap-1 rounded-lg border border-line bg-chip px-2.5 focus-within:border-accent">
       <input
         inputMode="decimal"
         value={value}

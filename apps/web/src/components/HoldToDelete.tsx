@@ -8,6 +8,8 @@ interface HoldToDeleteProps {
   label?: string;
   /** Иконка внутри: крестик (по умолчанию) или корзинка. */
   icon?: 'x' | 'trash';
+  /** Размер кнопки: sm (h-8, по умолчанию) или md (h-9). */
+  size?: 'sm' | 'md';
 }
 
 /**
@@ -19,6 +21,7 @@ export function HoldToDelete({
   durationMs = 1100,
   label = 'Удерживайте, чтобы убрать',
   icon = 'x',
+  size = 'sm',
 }: HoldToDeleteProps) {
   const [holding, setHolding] = useState(false);
   const timer = useRef<number | null>(null);
@@ -56,9 +59,9 @@ export function HoldToDelete({
       onPointerLeave={cancel}
       onPointerCancel={cancel}
       onContextMenu={(e) => e.preventDefault()}
-      className={`relative flex h-8 w-8 shrink-0 touch-none select-none items-center justify-center rounded-full bg-card-elevated ${
-        holding ? 'text-danger' : 'text-ink-muted'
-      }`}
+      className={`relative flex shrink-0 touch-none select-none items-center justify-center rounded-full bg-card-elevated ${
+        size === 'md' ? 'h-10 w-10' : 'h-8 w-8'
+      } ${holding ? 'text-danger' : 'text-ink-muted'}`}
     >
       {/* Кольцо-прогресс: заполняется по часовой за durationMs. */}
       <svg
