@@ -42,6 +42,8 @@ export function HoldToDelete({
     setHolding(false);
   }
 
+  const C = 2 * Math.PI * 16; // длина окружности (r=16 в системе координат 36×36)
+
   return (
     <button
       type="button"
@@ -51,18 +53,34 @@ export function HoldToDelete({
       onPointerLeave={cancel}
       onPointerCancel={cancel}
       onContextMenu={(e) => e.preventDefault()}
-      className="relative flex h-8 w-8 shrink-0 touch-none select-none items-center justify-center overflow-hidden rounded-full bg-card-elevated text-ink-muted"
+      className={`relative flex h-8 w-8 shrink-0 touch-none select-none items-center justify-center rounded-full bg-card-elevated ${
+        holding ? 'text-danger' : 'text-ink-muted'
+      }`}
     >
-      <span
+      {/* Кольцо-прогресс: заполняется по часовой за durationMs. */}
+      <svg
         aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-full bg-danger ease-linear"
-        style={{
-          transform: holding ? 'scale(1)' : 'scale(0)',
-          transitionProperty: 'transform',
-          transitionDuration: holding ? `${String(durationMs)}ms` : '160ms',
-        }}
-      />
-      <X size={16} className={`relative z-10 ${holding ? 'text-white' : ''}`} />
+        viewBox="0 0 36 36"
+        className="pointer-events-none absolute inset-0 h-full w-full -rotate-90"
+      >
+        <circle
+          cx="18"
+          cy="18"
+          r="16"
+          fill="none"
+          stroke="var(--color-danger)"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeDasharray={C}
+          strokeDashoffset={holding ? 0 : C}
+          style={{
+            transitionProperty: 'stroke-dashoffset',
+            transitionTimingFunction: 'linear',
+            transitionDuration: holding ? `${String(durationMs)}ms` : '160ms',
+          }}
+        />
+      </svg>
+      <X size={16} className="relative z-10" />
     </button>
   );
 }
