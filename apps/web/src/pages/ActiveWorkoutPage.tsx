@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Check, ChevronRight, Pencil, Plus, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Pencil, Plus, X } from 'lucide-react';
 import type {
   ExerciseResponse,
   WorkoutExerciseResponse,
@@ -213,13 +213,21 @@ function ActiveView({
   const [editing, setEditing] = useState<string | null>(null);
   const [rest, setRest] = useState<{ key: string; sec: number } | null>(null);
   const [adding, setAdding] = useState(false);
+  const [doneExpanded, setDoneExpanded] = useState(false);
 
   const counters = useMemo(() => {
     const all = workout.exercises.flatMap((e) => e.sets);
     return { done: all.filter((s) => s.done).length, total: all.length };
   }, [workout]);
 
-  const items = workout.exercises.map((ex) => ({ ...ex, id: `ex-${String(ex.position)}` }));
+  // Завершённые подходы собираются в коллектор сверху; невыполненные — в списке.
+  const isDoneEx = (ex: WorkoutExerciseResponse) =>
+    ex.sets.length > 0 && ex.sets.every((s) => s.done);
+  const completed = workout.exercises.filter(isDoneEx);
+  const pending = workout.exercises.filter((ex) => !isDoneEx(ex));
+  const pendingItems = pending.map((ex) => ({ ...ex, id: `ex-${String(ex.position)}` }));
+  // Свёрнуто видно только последний завершённый; развёрнуто — все.
+  const visibleCompleted = doneExpanded ? completed : completed.slice(-1);
 
   function toggleDone(ex: WorkoutExerciseResponse, set: WorkoutSetResponse) {
     const nextDone = !set.done;
@@ -253,6 +261,59 @@ function ActiveView({
       },
     );
   }
+
+  const cardBody = (ex: WorkoutExerciseResponse) => (
+    <ul className="flex flex-col gap-2">
+      {ex.sets.map((set) => {
+        const key = `${String(ex.position)}-${String(set.setIndex)}`;
+        const isEditing = editing === key;
+        const hasFact =
+          set.actualReps !== null || set.actualWeightKg !== null || set.actualTimeSec !== null;
+        return (
+          <li key={key} className="flex flex-col gap-2 px-0.5 py-1">
+            <span className="truncate text-[14px] font-semibold text-ink">{ex.exerciseName}</span>
+            {isEditing ? (
+              <SetEditor
+                set={set}
+                onCancel={() => setEditing(null)}
+                onSave={(patch) => saveFact(ex, set, patch)}
+                onDelete={() => {
+                  setEditing(null);
+                  removeExercise.mutate(ex.position);
+                }}
+              />
+            ) : (
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-[family-name:var(--font-mono)] text-[19px] tabular-nums text-ink-muted">
+                  {hasFact ? actualText(set) : plannedText(set)}
+                </span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label="Изменить факт"
+                    onClick={() => setEditing(key)}
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-95"
+                  >
+                    <Pencil size={16} strokeWidth={1.8} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={set.done ? 'Снять отметку' : 'Отметить выполненным'}
+                    onClick={() => toggleDone(ex, set)}
+                    className={`flex h-10 w-10 items-center justify-center rounded-full active:scale-95 ${
+                      set.done ? 'bg-accent text-accent-on' : 'bg-card-elevated text-ink-muted'
+                    }`}
+                  >
+                    <Check size={18} strokeWidth={2.6} />
+                  </button>
+                </span>
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
 
   return (
     <div className="flex min-h-full flex-col">
@@ -298,68 +359,42 @@ function ActiveView({
           </span>
         </div>
 
-        <SortableList
-          items={items}
-          onReorder={(next) => reorder.mutate(next.map((it) => it.position))}
-          renderItem={(ex) => (
-            <ul className="flex flex-col gap-2">
-              {ex.sets.map((set) => {
-                const key = `${String(ex.position)}-${String(set.setIndex)}`;
-                const isEditing = editing === key;
-                const hasFact =
-                  set.actualReps !== null ||
-                  set.actualWeightKg !== null ||
-                  set.actualTimeSec !== null;
-                return (
-                  <li key={key} className="flex flex-col gap-2 px-0.5 py-1">
-                    <span className="truncate text-[14px] font-semibold text-ink">
-                      {ex.exerciseName}
-                    </span>
-                    {isEditing ? (
-                      <SetEditor
-                        set={set}
-                        onCancel={() => setEditing(null)}
-                        onSave={(patch) => saveFact(ex, set, patch)}
-                        onDelete={() => {
-                          setEditing(null);
-                          removeExercise.mutate(ex.position);
-                        }}
-                      />
-                    ) : (
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-[family-name:var(--font-mono)] text-[19px] tabular-nums text-ink-muted">
-                          {hasFact ? actualText(set) : plannedText(set)}
-                        </span>
-                        <span className="flex shrink-0 items-center gap-2">
-                          <button
-                            type="button"
-                            aria-label="Изменить факт"
-                            onClick={() => setEditing(key)}
-                            className="flex h-10 w-10 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-95"
-                          >
-                            <Pencil size={16} strokeWidth={1.8} />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={set.done ? 'Снять отметку' : 'Отметить выполненным'}
-                            onClick={() => toggleDone(ex, set)}
-                            className={`flex h-10 w-10 items-center justify-center rounded-full active:scale-95 ${
-                              set.done
-                                ? 'bg-accent text-accent-on'
-                                : 'bg-card-elevated text-ink-muted'
-                            }`}
-                          >
-                            <Check size={18} strokeWidth={2.6} />
-                          </button>
-                        </span>
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        />
+        {/* Коллектор завершённых: свёрнуто — только последний, развёрнуто — все. */}
+        {completed.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => setDoneExpanded((v) => !v)}
+              className="flex items-center gap-1.5 self-start px-0.5"
+            >
+              <span className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.06em] text-ink-mutedxl">
+                Завершено · {completed.length}
+              </span>
+              <ChevronDown
+                size={14}
+                className={`text-ink-muted transition-transform ${doneExpanded ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {visibleCompleted.map((ex) => (
+              <div key={ex.position} className="shelf rounded-2xl px-3 py-1 opacity-80">
+                {cardBody(ex)}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {pendingItems.length > 0 && (
+          <SortableList
+            items={pendingItems}
+            onReorder={(next) =>
+              reorder.mutate([
+                ...completed.map((c) => c.position),
+                ...next.map((it) => it.position),
+              ])
+            }
+            renderItem={(ex) => cardBody(ex)}
+          />
+        )}
 
         <AddExerciseButton onClick={() => setAdding(true)} />
       </div>
@@ -727,9 +762,9 @@ function NumBox({
   );
 }
 
-/* ---------- Завершение удержанием (3 секунды) ---------- */
+/* ---------- Завершение удержанием ---------- */
 
-const HOLD_COMPLETE_MS = 2000;
+const HOLD_COMPLETE_MS = 1000;
 
 function HoldComplete({ pending, onComplete }: { pending: boolean; onComplete: () => void }) {
   const [holding, setHolding] = useState(false);
