@@ -48,7 +48,6 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
   const [defaultWeightKg, setDefaultWeightKg] = useState(0);
   const [defaultTimeSec, setDefaultTimeSec] = useState(0);
   const [restSec, setRestSec] = useState(90);
-  const [note, setNote] = useState('');
 
   useEffect(() => {
     if (editing && existing.data) {
@@ -61,7 +60,6 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
       setDefaultWeightKg(e.defaultWeightKg ?? 0);
       setDefaultTimeSec(e.defaultTimeSec ?? 0);
       setRestSec(e.restSec);
-      setNote(e.note ?? '');
     }
   }, [editing, existing.data]);
 
@@ -85,7 +83,6 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
       defaultWeightKg: positiveOrNull(defaultWeightKg),
       defaultTimeSec: positiveOrNull(defaultTimeSec),
       restSec,
-      note: note.trim() === '' ? null : note.trim(),
     };
     mutation.mutate(payload, {
       onSuccess: () => {
@@ -229,19 +226,6 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
             <Stepper value={restSec} onChange={setRestSec} step={15} label="отдых" unit="сек" />
           </div>
         </section>
-
-        <label className="flex flex-col gap-1.5">
-          <span className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-            Заметка
-          </span>
-          <textarea
-            rows={2}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Личная пометка…"
-            className="w-full resize-none rounded-xl border border-line bg-card px-4 py-3 text-[15px] text-ink outline-none focus:border-accent"
-          />
-        </label>
 
         {isGlobalEdit && (
           <p className="text-xs text-ink-muted">
