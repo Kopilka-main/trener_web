@@ -1,7 +1,7 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
-import type { CreateTemplateRequest, TemplateExercise } from '@trener/shared';
+import { Minus, Plus, X } from 'lucide-react';
+import type { CreateTemplateRequest, ExerciseResponse, TemplateExercise } from '@trener/shared';
 import { useExercises } from '../api/exercises';
 import {
   useTemplate,
@@ -10,16 +10,44 @@ import {
   useDeleteTemplate,
 } from '../api/workout-templates';
 import { Button } from '../components/Button';
-import { Field } from '../components/Field';
 import { ScreenHeader } from '../components/ScreenHeader';
 
 interface TemplateEditPageProps {
   mode: 'create' | 'edit';
 }
 
-/** Позиция шаблона в форме: значения подходов хранятся строками для удобного ввода. */
-interface PositionDraft {
+/** Предпочтительный порядок групп мышц для чипов (остальные категории — следом). */
+const GROUP_ORDER = [
+  'Грудь',
+  'Спина',
+  'Ноги',
+  'Плечи',
+  'Руки',
+  'Корпус',
+  'Пресс/Кор',
+  'Кардио',
+  'Растяжка',
+  'Йога',
+];
+
+/** Варианты «Тип» тренировки. */
+const TEMPLATE_TAGS = [
+  'Сила',
+  'Гипертрофия',
+  'Push',
+  'Pull',
+  'Восстановительная',
+  'Кардио',
+  'Кроссфит',
+  'Йога',
+  'Реабилитация',
+];
+
+/** Позиция в сборке: значения подходов — строками для удобного ввода. */
+interface Draft {
   exerciseId: string;
+  name: string;
+  category: string;
   sets: string;
   reps: string;
   weightKg: string;
@@ -34,33 +62,64 @@ function parseOptNum(value: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function emptyPosition(exerciseId: string): PositionDraft {
-  return { exerciseId, sets: '3', reps: '', weightKg: '', timeSec: '', restSec: '90' };
+function draftFromExercise(ex: ExerciseResponse): Draft {
+  return {
+    exerciseId: ex.id,
+    name: ex.name,
+    category: ex.category,
+    sets: '1',
+    reps: ex.defaultReps?.toString() ?? '',
+    weightKg: ex.defaultWeightKg?.toString() ?? '',
+    timeSec: ex.defaultTimeSec?.toString() ?? '',
+    restSec: ex.restSec.toString(),
+  };
 }
 
 export function TemplateEditPage({ mode }: TemplateEditPageProps) {
   const navigate = useNavigate();
   const params = useParams<{ id: string }>();
   const id = params.id ?? '';
+  const editing = mode === 'edit';
 
   const catalog = useExercises();
-  const existing = useTemplate(mode === 'edit' ? id : '');
+  const existing = useTemplate(editing ? id : '');
   const createMutation = useCreateTemplate();
   const updateMutation = useUpdateTemplate(id);
   const deleteMutation = useDeleteTemplate();
+  const mutation = editing ? updateMutation : createMutation;
 
+  const [step, setStep] = useState<1 | 2>(editing ? 2 : 1);
   const [name, setName] = useState('');
-  const [categoryTag, setCategoryTag] = useState('');
-  const [positions, setPositions] = useState<PositionDraft[]>([]);
+  const [categoryTag, setCategoryTag] = useState<string | null>(null);
+  const [group, setGroup] = useState<string | null>(null);
+  const [positions, setPositions] = useState<Draft[]>([]);
 
+  // Группы мышц — из реальных категорий каталога, в предпочтительном порядке.
+  const groups = useMemo(() => {
+    const set = new Set((catalog.data ?? []).map((e) => e.category));
+    const ordered = GROUP_ORDER.filter((g) => set.has(g));
+    const extras = [...set]
+      .filter((g) => !GROUP_ORDER.includes(g))
+      .sort((a, b) => a.localeCompare(b));
+    return [...ordered, ...extras];
+  }, [catalog.data]);
+
+  // По умолчанию выбрана первая группа (как в макете — «Грудь»).
   useEffect(() => {
-    if (mode === 'edit' && existing.data) {
+    if (group === null && groups.length > 0) setGroup(groups[0] ?? null);
+  }, [group, groups]);
+
+  // Загрузка существующего шаблона в режиме редактирования.
+  useEffect(() => {
+    if (editing && existing.data) {
       const t = existing.data;
       setName(t.name);
-      setCategoryTag(t.categoryTag ?? '');
+      setCategoryTag(t.categoryTag);
       setPositions(
         t.exercises.map((p) => ({
           exerciseId: p.exerciseId,
+          name: p.exerciseName,
+          category: catalog.data?.find((e) => e.id === p.exerciseId)?.category ?? '',
           sets: p.sets.toString(),
           reps: p.reps?.toString() ?? '',
           weightKg: p.weightKg?.toString() ?? '',
@@ -69,17 +128,30 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
         })),
       );
     }
-  }, [mode, existing.data]);
+  }, [editing, existing.data, catalog.data]);
 
-  const mutation = mode === 'create' ? createMutation : updateMutation;
+  const pickedIds = useMemo(() => new Set(positions.map((p) => p.exerciseId)), [positions]);
+  const groupExercises = useMemo(
+    () => (catalog.data ?? []).filter((e) => e.category === group),
+    [catalog.data, group],
+  );
 
-  function addPosition() {
-    const first = catalog.data?.[0];
-    if (!first) return;
-    setPositions((prev) => [...prev, emptyPosition(first.id)]);
+  function toggleExercise(ex: ExerciseResponse) {
+    setPositions((prev) =>
+      pickedIds.has(ex.id)
+        ? prev.filter((p) => p.exerciseId !== ex.id)
+        : [...prev, draftFromExercise(ex)],
+    );
   }
 
-  function updatePosition(index: number, patch: Partial<PositionDraft>) {
+  function setSets(exerciseId: string, next: number) {
+    if (next < 1) return;
+    setPositions((prev) =>
+      prev.map((p) => (p.exerciseId === exerciseId ? { ...p, sets: String(next) } : p)),
+    );
+  }
+
+  function updatePosition(index: number, patch: Partial<Draft>) {
     setPositions((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)));
   }
 
@@ -109,30 +181,22 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
       timeSec: parseOptNum(p.timeSec),
       restSec: parseOptNum(p.restSec) ?? 90,
     }));
+    const tag = categoryTag?.trim();
     return {
       name: name.trim(),
-      categoryTag: categoryTag.trim() === '' ? null : categoryTag.trim(),
+      categoryTag: tag ? tag : null,
       exercises,
     };
   }
 
-  function handleSubmit(ev: FormEvent<HTMLFormElement>) {
-    ev.preventDefault();
-    if (positions.length === 0) return;
+  function save() {
+    if (name.trim() === '' || positions.length === 0) return;
     const payload = buildPayload();
-    if (mode === 'create') {
-      createMutation.mutate(payload, {
-        onSuccess: () => {
-          void navigate('/knowledge', { replace: true });
-        },
-      });
-    } else {
-      updateMutation.mutate(payload, {
-        onSuccess: () => {
-          void navigate('/knowledge', { replace: true });
-        },
-      });
-    }
+    mutation.mutate(payload, {
+      onSuccess: () => {
+        void navigate('/knowledge', { replace: true });
+      },
+    });
   }
 
   function handleDelete() {
@@ -144,73 +208,231 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
     });
   }
 
-  const title = mode === 'create' ? 'Новый шаблон' : 'Шаблон';
-  const catalogEmpty = catalog.isSuccess && (catalog.data?.length ?? 0) === 0;
+  // ───────────────────────── Шаг 1: выбор группы и упражнений ─────────────────────────
+  if (step === 1) {
+    const catalogEmpty = catalog.isSuccess && (catalog.data?.length ?? 0) === 0;
+    return (
+      <div className="flex min-h-full flex-col">
+        <ScreenHeader
+          title="Сборка тренировки"
+          closeIcon
+          back="/knowledge"
+          right={
+            <button
+              type="button"
+              onClick={() => setStep(2)}
+              disabled={positions.length === 0}
+              className="px-1 text-[14px] font-semibold text-ink disabled:opacity-40"
+            >
+              Дальше
+            </button>
+          }
+        />
+        <div className="flex flex-1 flex-col gap-5 px-5 pb-8 pt-1">
+          <p className="font-mono text-[11px] uppercase tracking-wide text-ink-muted">шаг 1 из 2</p>
 
-  if (mode === 'edit' && existing.isPending) {
+          {catalog.isPending && <p className="text-sm text-ink-muted">Загрузка каталога…</p>}
+          {catalogEmpty && (
+            <p className="text-sm text-ink-muted">Сначала добавьте упражнения в базу знаний.</p>
+          )}
+
+          {groups.length > 0 && (
+            <section className="flex flex-col gap-2">
+              <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+                Группа мышц
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {groups.map((g) => {
+                  const active = g === group;
+                  return (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setGroup(g)}
+                      className={`rounded-full px-4 py-2 text-[14px] font-semibold transition-colors ${
+                        active ? 'bg-accent text-accent-on' : 'bg-chip text-ink'
+                      }`}
+                    >
+                      {g}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {group && (
+            <section className="flex flex-col gap-2">
+              <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+                Упражнения «{group}»
+              </h2>
+              <ul className="flex flex-col gap-2">
+                {groupExercises.map((ex) => {
+                  const picked = pickedIds.has(ex.id);
+                  const count = Number(positions.find((p) => p.exerciseId === ex.id)?.sets ?? '0');
+                  return (
+                    <li
+                      key={ex.id}
+                      className="flex items-center gap-3 rounded-2xl bg-card px-3.5 py-3"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleExercise(ex)}
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                      >
+                        <span
+                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+                            picked ? 'bg-accent text-accent-on' : 'bg-chip text-transparent'
+                          }`}
+                        >
+                          <Check picked={picked} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[15px] font-semibold text-ink">
+                            {ex.name}
+                          </span>
+                          {(ex.description ?? ex.category) && (
+                            <span className="block truncate text-[12px] text-ink-muted">
+                              {ex.description ?? ex.category}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                      {picked && (
+                        <div className="flex shrink-0 items-center gap-2">
+                          <button
+                            type="button"
+                            aria-label="Меньше подходов"
+                            onClick={() => setSets(ex.id, count - 1)}
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-chip text-ink active:scale-95"
+                          >
+                            <Minus size={15} />
+                          </button>
+                          <span className="w-4 text-center font-mono text-[15px] font-bold tabular-nums text-ink">
+                            {count}
+                          </span>
+                          <button
+                            type="button"
+                            aria-label="Больше подходов"
+                            onClick={() => setSets(ex.id, count + 1)}
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-chip text-ink active:scale-95"
+                          >
+                            <Plus size={15} />
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+                {groupExercises.length === 0 && !catalog.isPending && (
+                  <li className="rounded-2xl bg-card py-6 text-center text-sm text-ink-muted">
+                    В этой группе пока нет упражнений
+                  </li>
+                )}
+              </ul>
+            </section>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ───────────────────────── Шаг 2: детали и сохранение ─────────────────────────
+  if (editing && existing.isPending) {
     return (
       <div className="flex flex-col">
-        <ScreenHeader title={title} back="/knowledge" />
+        <ScreenHeader title="Тренировка" back="/knowledge" />
         <p className="px-5 py-6 text-sm text-ink-muted">Загрузка…</p>
       </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex min-h-full flex-col">
-      <ScreenHeader title={title} back="/knowledge" />
-      <div className="flex flex-col gap-4 px-5 pb-6 pt-2">
-        <Field
-          label="Название"
-          name="name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
-        <Field
-          label="Категория"
-          name="categoryTag"
-          value={categoryTag}
-          onChange={(e) => setCategoryTag(e.target.value)}
-        />
+    <div className="flex min-h-full flex-col">
+      <ScreenHeader
+        title={editing ? 'Тренировка' : 'Сборка тренировки'}
+        back={editing ? '/knowledge' : () => setStep(1)}
+        right={
+          <button
+            type="button"
+            onClick={save}
+            disabled={mutation.isPending || name.trim() === '' || positions.length === 0}
+            className="px-1 text-[14px] font-semibold text-ink disabled:opacity-40"
+          >
+            {mutation.isPending ? '…' : editing ? 'Сохранить' : 'Готово'}
+          </button>
+        }
+      />
+      <div className="flex flex-1 flex-col gap-5 px-5 pb-8 pt-1">
+        {!editing && (
+          <p className="font-mono text-[11px] uppercase tracking-wide text-ink-muted">шаг 2 из 2</p>
+        )}
 
-        <section className="flex flex-col gap-3">
+        <label className="flex flex-col gap-1.5">
+          <span className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+            Название
+          </span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Верх · Сила"
+            className="w-full rounded-xl border border-line bg-card px-4 py-3 text-[15px] text-ink outline-none focus:border-accent"
+          />
+        </label>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+            Тип
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {TEMPLATE_TAGS.map((t) => {
+              const active = t === categoryTag;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setCategoryTag(active ? null : t)}
+                  className={`rounded-full px-4 py-2 text-[13px] font-semibold transition-colors ${
+                    active ? 'bg-accent text-accent-on' : 'bg-chip text-ink'
+                  }`}
+                >
+                  {t}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="flex flex-col gap-2">
           <div className="flex items-baseline justify-between">
-            <h2 className="font-display text-sm uppercase tracking-wide text-ink-muted">
+            <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
               Упражнения
             </h2>
-            {positions.length > 0 && (
-              <span className="font-mono text-xs text-ink-muted">{positions.length}</span>
-            )}
+            <span className="font-mono text-[11px] text-ink-muted">{positions.length}</span>
           </div>
 
-          {catalog.isPending && <p className="text-sm text-ink-muted">Загрузка каталога…</p>}
-          {catalogEmpty && (
-            <p className="text-sm text-ink-muted">Сначала добавьте упражнения в базу знаний.</p>
-          )}
-          {positions.length === 0 && !catalogEmpty && (
-            <p className="text-sm text-ink-muted">Добавьте хотя бы одно упражнение.</p>
+          {positions.length === 0 && (
+            <p className="text-sm text-ink-muted">Вернитесь на шаг 1 и выберите упражнения.</p>
           )}
 
           <ul className="flex flex-col gap-3">
             {positions.map((p, index) => (
-              <li key={index} className="shelf flex flex-col gap-3 rounded-2xl p-3">
+              <li
+                key={`${p.exerciseId}-${String(index)}`}
+                className="shelf flex flex-col gap-3 rounded-2xl p-3"
+              >
                 <div className="flex items-center gap-2">
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-chip font-mono text-xs font-bold text-ink">
                     {index + 1}
                   </span>
-                  <select
-                    value={p.exerciseId}
-                    onChange={(e) => updatePosition(index, { exerciseId: e.target.value })}
-                    aria-label={`Упражнение позиции ${String(index + 1)}`}
-                    className="min-w-0 flex-1 truncate rounded-lg border border-line bg-chip px-2 py-2 text-sm font-semibold text-ink outline-none focus:border-accent"
-                  >
-                    {(catalog.data ?? []).map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[14px] font-semibold text-ink">{p.name}</div>
+                    {p.category && (
+                      <div className="truncate font-mono text-[11px] text-ink-muted">
+                        {p.category}
+                      </div>
+                    )}
+                  </div>
                   <div className="flex shrink-0 gap-1">
                     <button
                       type="button"
@@ -219,7 +441,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                       disabled={index === 0}
                       className="flex h-8 w-8 items-center justify-center rounded-lg bg-card-elevated text-ink-muted disabled:opacity-40"
                     >
-                      <ChevronUp size={16} />
+                      ↑
                     </button>
                     <button
                       type="button"
@@ -228,13 +450,13 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                       disabled={index === positions.length - 1}
                       className="flex h-8 w-8 items-center justify-center rounded-lg bg-card-elevated text-ink-muted disabled:opacity-40"
                     >
-                      <ChevronDown size={16} />
+                      ↓
                     </button>
                     <button
                       type="button"
-                      aria-label="Удалить позицию"
+                      aria-label="Убрать упражнение"
                       onClick={() => removePosition(index)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-card-elevated text-danger"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-card-elevated text-ink-muted"
                     >
                       <X size={16} />
                     </button>
@@ -244,38 +466,27 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                 <div className="grid grid-cols-5 gap-2">
                   <SetField
                     label="Подх."
-                    inputMode="numeric"
-                    min={1}
                     value={p.sets}
                     onChange={(v) => updatePosition(index, { sets: v })}
                   />
                   <SetField
                     label="Повт."
-                    inputMode="numeric"
-                    min={1}
                     value={p.reps}
                     onChange={(v) => updatePosition(index, { reps: v })}
                   />
                   <SetField
                     label="Кг"
-                    inputMode="decimal"
-                    min={0}
-                    step="0.5"
                     value={p.weightKg}
                     onChange={(v) => updatePosition(index, { weightKg: v })}
+                    step="0.5"
                   />
                   <SetField
                     label="Сек"
-                    inputMode="numeric"
-                    min={1}
                     value={p.timeSec}
                     onChange={(v) => updatePosition(index, { timeSec: v })}
                   />
                   <SetField
                     label="Отдых"
-                    inputMode="numeric"
-                    min={0}
-                    max={3600}
                     value={p.restSec}
                     onChange={(v) => updatePosition(index, { restSec: v })}
                   />
@@ -283,15 +494,6 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
               </li>
             ))}
           </ul>
-
-          <button
-            type="button"
-            onClick={addPosition}
-            disabled={catalog.data === undefined || catalogEmpty}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line py-3.5 text-sm font-medium text-ink-muted transition-colors active:border-accent disabled:opacity-40"
-          >
-            <Plus size={16} /> Добавить упражнение
-          </button>
         </section>
 
         {mutation.isError && (
@@ -300,7 +502,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
           </p>
         )}
 
-        {mode === 'edit' && (
+        {editing && (
           <Button
             type="button"
             variant="secondary"
@@ -311,16 +513,22 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
           </Button>
         )}
       </div>
+    </div>
+  );
+}
 
-      <div className="sticky bottom-0 z-10 mt-auto flex flex-col gap-2 bg-gradient-to-t from-bg via-bg to-transparent px-5 pb-4 pt-4">
-        <Button type="submit" disabled={mutation.isPending || positions.length === 0}>
-          {mutation.isPending ? 'Сохраняем…' : 'Сохранить'}
-        </Button>
-        <Button type="button" variant="secondary" onClick={() => void navigate(-1)}>
-          Отмена
-        </Button>
-      </div>
-    </form>
+function Check({ picked }: { picked: boolean }) {
+  if (!picked) return null;
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path
+        d="M3.5 8.5l3 3 6-6.5"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -339,6 +547,7 @@ function SetField({
       <span className="font-mono text-[10px] uppercase tracking-wide text-ink-muted">{label}</span>
       <input
         type="number"
+        inputMode="decimal"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-label={label}
