@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   BarChart3,
@@ -7,6 +8,7 @@ import {
   FileText,
   MessageSquare,
   Pencil,
+  Unlink,
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
@@ -67,6 +69,7 @@ export function ClientCardPage() {
 
   const client = useClient(id);
   const workouts = useClientWorkouts(id);
+  const [chatNotice, setChatNotice] = useState(false);
 
   if (client.isPending) {
     return <p className="px-5 py-6 text-sm text-ink-muted">Загрузка…</p>;
@@ -109,18 +112,6 @@ export function ClientCardPage() {
               </span>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => void navigate(`/clients/${id}/edit`)}
-            aria-label={connected ? 'Клиент подключён' : 'Подключить клиента'}
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-card-elevated ${
-              connected ? 'text-accent' : 'text-danger'
-            }`}
-          >
-            <svg width={22} height={22} viewBox="0 -960 960 960" fill="currentColor" aria-hidden>
-              <path d="M680-160v-120H560v-80h120v-120h80v120h120v80H760v120h-80ZM440-280H280q-83 0-141.5-58.5T80-480q0-83 58.5-141.5T280-680h160v80H280q-50 0-85 35t-35 85q0 50 35 85t85 35h160v80ZM320-440v-80h320v80H320Zm560-40h-80q0-50-35-85t-85-35H520v-80h160q83 0 141.5 58.5T880-480Z" />
-            </svg>
-          </button>
         </div>
 
         {/* Теги. */}
@@ -166,15 +157,27 @@ export function ClientCardPage() {
         <div className="grid grid-cols-2 gap-3">
           {TILES.map(({ key, label, sub, Icon }) => {
             const showCount = key === 'stats' && completedCount > 0;
+            // «Написать» доступно только при подключённом клиенте (есть accountId).
+            const chatLocked = key === 'chat' && !connected;
+            const TileIcon = chatLocked ? Unlink : Icon;
             return (
               <button
                 key={key}
                 type="button"
-                onClick={() => void navigate(`/clients/${id}/${key}`)}
-                className="tile-shadow flex flex-col gap-3 rounded-2xl p-4 text-left active:scale-[0.98]"
+                onClick={() => {
+                  if (chatLocked) setChatNotice(true);
+                  else void navigate(`/clients/${id}/${key}`);
+                }}
+                className={`tile-shadow flex flex-col gap-3 rounded-2xl p-4 text-left active:scale-[0.98] ${
+                  chatLocked ? 'opacity-60' : ''
+                }`}
               >
                 <div className="flex items-start justify-between">
-                  <Icon size={22} strokeWidth={1.8} className="text-ink" />
+                  <TileIcon
+                    size={22}
+                    strokeWidth={1.8}
+                    className={chatLocked ? 'text-danger' : 'text-ink'}
+                  />
                   {showCount && (
                     <span className="text-[22px] font-bold leading-none text-ink">
                       {completedCount}
@@ -183,12 +186,31 @@ export function ClientCardPage() {
                 </div>
                 <span className="flex flex-col">
                   <span className="text-[14px] font-bold leading-tight text-ink">{label}</span>
-                  <span className="text-[11px] text-ink-muted">{sub}</span>
+                  <span className="text-[11px] text-ink-muted">
+                    {chatLocked ? 'нет подключения' : sub}
+                  </span>
                 </span>
               </button>
             );
           })}
         </div>
+
+        {/* Сообщение: для чата нужен клиентский ID. */}
+        {chatNotice && (
+          <div className="flex flex-col gap-2 rounded-2xl bg-card p-4">
+            <p className="text-[13px] leading-relaxed text-ink-muted">
+              Чтобы написать клиенту, укажите его клиентский номер (ID) в профиле — без него связь
+              недоступна.
+            </p>
+            <button
+              type="button"
+              onClick={() => void navigate(`/clients/${id}/edit`)}
+              className="self-start rounded-full bg-accent px-4 py-2 text-[13px] font-semibold text-accent-on active:scale-[0.98]"
+            >
+              Открыть профиль
+            </button>
+          </div>
+        )}
 
         {/* Заметки. */}
         {c.notes && (
