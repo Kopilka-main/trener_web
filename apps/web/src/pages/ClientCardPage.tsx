@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useClient, useUpdateClient } from '../api/clients';
 import { useClientWorkouts } from '../api/client-workouts';
+import { useClientPackages } from '../api/packages';
 import { Avatar } from '../components/Avatar';
 
 /** Полных лет по дате рождения (YYYY-MM-DD); null, если дата пуста или некорректна.
@@ -69,6 +70,7 @@ export function ClientCardPage() {
 
   const client = useClient(id);
   const workouts = useClientWorkouts(id);
+  const packages = useClientPackages(id);
   const updateMutation = useUpdateClient(id);
   const [connectOpen, setConnectOpen] = useState(false);
 
@@ -95,6 +97,10 @@ export function ClientCardPage() {
     ? lastCompleted.exercises.flatMap((e) => e.sets).filter((s) => s.done).length
     : 0;
   const connected = (c.accountId ?? '').trim() !== '';
+  // Баланс оплаченных занятий = остаток по активным пакетам.
+  const paidBalance = (packages.data ?? [])
+    .filter((p) => p.status === 'active')
+    .reduce((acc, p) => acc + (p.lessonsPaid - p.lessonsUsed), 0);
 
   return (
     <div className="flex min-h-full flex-col">
@@ -169,7 +175,13 @@ export function ClientCardPage() {
         {/* Сетка плиток-разделов. */}
         <div className="grid grid-cols-2 gap-3">
           {TILES.map(({ key, label, sub, Icon }) => {
-            const showCount = key === 'stats' && lastProgress > 0;
+            // Бейдж справа: прогресс последней тренировки / баланс оплаченных занятий.
+            const badge =
+              key === 'stats' && lastProgress > 0
+                ? String(lastProgress)
+                : key === 'payments' && paidBalance > 0
+                  ? `+${String(paidBalance)}`
+                  : null;
             // «Написать» доступно только при подключённом клиенте (есть accountId).
             const chatLocked = key === 'chat' && !connected;
             return (
@@ -192,10 +204,8 @@ export function ClientCardPage() {
                       aria-label="Нет связи"
                     />
                   )}
-                  {showCount && (
-                    <span className="text-[22px] font-bold leading-none text-ink">
-                      {lastProgress}
-                    </span>
+                  {badge && (
+                    <span className="text-[22px] font-bold leading-none text-ink">{badge}</span>
                   )}
                 </div>
                 <span className="flex flex-col">
