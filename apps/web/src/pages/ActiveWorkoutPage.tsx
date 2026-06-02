@@ -137,7 +137,24 @@ function DraftView({
   const reorder = useReorderWorkoutExercises(clientId, workout.id);
   const add = useAddWorkoutExercise(clientId, workout.id);
   const removeExercise = useRemoveWorkoutExercise(clientId, workout.id);
+  const updateSet = useUpdateSet(clientId, workout.id);
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+
+  function savePlan(
+    pos: number,
+    set: WorkoutSetResponse,
+    patch: {
+      plannedReps: number | null;
+      plannedWeightKg: number | null;
+      plannedTimeSec: number | null;
+    },
+  ) {
+    updateSet.mutate(
+      { pos, idx: set.setIndex, body: patch },
+      { onSuccess: () => setEditing(null) },
+    );
+  }
 
   const items = workout.exercises.map((ex) => ({ ...ex, id: `ex-${String(ex.position)}` }));
 
@@ -172,14 +189,31 @@ function DraftView({
                 </span>
                 <HoldToDelete onDelete={() => removeExercise.mutate(ex.position)} />
               </div>
-              {ex.sets.map((set) => (
-                <span
-                  key={set.setIndex}
-                  className="font-[family-name:var(--font-mono)] text-[19px] tabular-nums text-ink-muted"
-                >
-                  {plannedText(set)}
-                </span>
-              ))}
+              {ex.sets.map((set) => {
+                const key = `${String(ex.position)}-${String(set.setIndex)}`;
+                return editing === key ? (
+                  <PlannedSetEditor
+                    key={set.setIndex}
+                    set={set}
+                    onCancel={() => setEditing(null)}
+                    onSave={(patch) => savePlan(ex.position, set, patch)}
+                  />
+                ) : (
+                  <div key={set.setIndex} className="flex items-center justify-between gap-2">
+                    <span className="font-[family-name:var(--font-mono)] text-[19px] tabular-nums text-ink-muted">
+                      {plannedText(set)}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Изменить план"
+                      onClick={() => setEditing(key)}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-95"
+                    >
+                      <Pencil size={16} strokeWidth={1.8} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         />
@@ -773,6 +807,87 @@ function SetEditor({
         label="Удерживайте, чтобы удалить упражнение"
         onDelete={onDelete}
       />
+    </div>
+  );
+}
+
+/* ---------- Редактор плановых значений подхода (draft) ---------- */
+
+function PlannedSetEditor({
+  set,
+  onCancel,
+  onSave,
+}: {
+  set: WorkoutSetResponse;
+  onCancel: () => void;
+  onSave: (patch: {
+    plannedReps: number | null;
+    plannedWeightKg: number | null;
+    plannedTimeSec: number | null;
+  }) => void;
+}) {
+  const showReps = set.plannedReps !== null || set.plannedWeightKg !== null;
+  const showWeight = set.plannedWeightKg !== null;
+  const showTime = set.plannedTimeSec !== null;
+  const [reps, setReps] = useState(String(set.plannedReps ?? ''));
+  const [weight, setWeight] = useState(String(set.plannedWeightKg ?? ''));
+  const [time, setTime] = useState(String(set.plannedTimeSec ?? ''));
+
+  const num = (s: string): number | null => {
+    const t = s.trim();
+    if (t === '') return null;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const repsShown = showReps || (!showWeight && !showTime);
+
+  return (
+    <div className="flex items-center gap-2">
+      {/* Раздельные поля ввода (без единиц): 8 × 60. */}
+      <div className="flex flex-1 items-center gap-2">
+        {repsShown && <NumBox value={reps} onChange={setReps} ariaLabel="повторы" />}
+        {showWeight && (
+          <>
+            <span className="font-[family-name:var(--font-mono)] text-[14px] text-ink-muted">
+              ×
+            </span>
+            <NumBox value={weight} onChange={setWeight} ariaLabel="вес" />
+          </>
+        )}
+        {showTime && (
+          <>
+            {repsShown && (
+              <span className="font-[family-name:var(--font-mono)] text-[14px] text-ink-muted">
+                ·
+              </span>
+            )}
+            <NumBox value={time} onChange={setTime} ariaLabel="секунды" />
+          </>
+        )}
+      </div>
+      <button
+        type="button"
+        aria-label="Сохранить подход"
+        onClick={() =>
+          onSave({
+            plannedReps: repsShown ? num(reps) : null,
+            plannedWeightKg: showWeight ? num(weight) : null,
+            plannedTimeSec: showTime ? num(time) : null,
+          })
+        }
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-on active:scale-90"
+      >
+        <Check size={18} strokeWidth={2.8} />
+      </button>
+      <button
+        type="button"
+        aria-label="Отменить"
+        onClick={onCancel}
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-90"
+      >
+        <X size={18} strokeWidth={2.2} />
+      </button>
     </div>
   );
 }
