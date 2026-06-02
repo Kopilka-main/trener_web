@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Check, ChevronRight, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Check, ChevronRight, Pencil, Plus, X } from 'lucide-react';
 import type {
   ExerciseResponse,
   WorkoutExerciseResponse,
@@ -675,46 +675,40 @@ function SetEditor({
   };
 
   return (
-    <div className="mt-1 flex flex-col gap-2">
-      <span className="font-[family-name:var(--font-mono)] text-[11px] tabular-nums text-ink-muted">
-        план {plannedText(set)}
-      </span>
-      <div className="flex flex-wrap items-center gap-2">
-        {(showReps || (!showWeight && !showTime)) && (
-          <Field label="повт." value={reps} onChange={setReps} />
-        )}
-        {showWeight && <Field label="кг" value={weight} onChange={setWeight} />}
-        {showTime && <Field label="сек" value={time} onChange={setTime} />}
-        <button
-          type="button"
-          aria-label="Сохранить подход"
-          onClick={() =>
-            onSave({
-              actualReps: showReps || (!showWeight && !showTime) ? num(reps) : null,
-              actualWeightKg: showWeight ? num(weight) : null,
-              actualTimeSec: showTime ? num(time) : null,
-            })
-          }
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-accent-on active:scale-90"
-        >
-          <Check size={16} strokeWidth={2.8} />
-        </button>
-        <button
-          type="button"
-          aria-label="Отменить"
-          onClick={onCancel}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-90"
-        >
-          <X size={16} strokeWidth={2.2} />
-        </button>
-        <button
-          type="button"
-          aria-label="Удалить упражнение"
-          onClick={onDelete}
-          className="ml-auto flex h-9 w-9 items-center justify-center rounded-full bg-card-elevated text-danger active:scale-90"
-        >
-          <Trash2 size={16} strokeWidth={1.9} />
-        </button>
+    <div className="mt-1 flex items-center gap-2">
+      {(showReps || (!showWeight && !showTime)) && (
+        <Field label="повт." value={reps} onChange={setReps} />
+      )}
+      {showWeight && <Field label="кг" value={weight} onChange={setWeight} />}
+      {showTime && <Field label="сек" value={time} onChange={setTime} />}
+      <button
+        type="button"
+        aria-label="Сохранить подход"
+        onClick={() =>
+          onSave({
+            actualReps: showReps || (!showWeight && !showTime) ? num(reps) : null,
+            actualWeightKg: showWeight ? num(weight) : null,
+            actualTimeSec: showTime ? num(time) : null,
+          })
+        }
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-accent-on active:scale-90"
+      >
+        <Check size={16} strokeWidth={2.8} />
+      </button>
+      <button
+        type="button"
+        aria-label="Отменить"
+        onClick={onCancel}
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-90"
+      >
+        <X size={16} strokeWidth={2.2} />
+      </button>
+      <div className="ml-auto">
+        <HoldToDelete
+          icon="trash"
+          label="Удерживайте, чтобы удалить упражнение"
+          onDelete={onDelete}
+        />
       </div>
     </div>
   );

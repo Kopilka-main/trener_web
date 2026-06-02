@@ -1,11 +1,13 @@
 import { useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { Trash2, X } from 'lucide-react';
 
 interface HoldToDeleteProps {
   onDelete: () => void;
   /** Сколько держать до удаления, мс. */
   durationMs?: number;
   label?: string;
+  /** Иконка внутри: крестик (по умолчанию) или корзинка. */
+  icon?: 'x' | 'trash';
 }
 
 /**
@@ -16,6 +18,7 @@ export function HoldToDelete({
   onDelete,
   durationMs = 1100,
   label = 'Удерживайте, чтобы убрать',
+  icon = 'x',
 }: HoldToDeleteProps) {
   const [holding, setHolding] = useState(false);
   const timer = useRef<number | null>(null);
@@ -80,7 +83,11 @@ export function HoldToDelete({
           }}
         />
       </svg>
-      <X size={16} className="relative z-10" />
+      {icon === 'trash' ? (
+        <Trash2 size={16} className="relative z-10" />
+      ) : (
+        <X size={16} className="relative z-10" />
+      )}
     </button>
   );
 }
