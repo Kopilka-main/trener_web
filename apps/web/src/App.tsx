@@ -16,6 +16,7 @@ import {
   AccountingPage,
   NotificationsPage,
   ProfilePage,
+  ClientSectionPage,
 } from './pages/StubPage';
 
 export function App() {
@@ -35,6 +36,7 @@ export function App() {
         <Route path="/clients/new" element={<ClientEditPage mode="create" />} />
         <Route path="/clients/:id" element={<ClientCardPage />} />
         <Route path="/clients/:id/edit" element={<ClientEditPage mode="edit" />} />
+        <Route path="/clients/:id/:section" element={<ClientSectionPage />} />
         <Route path="/knowledge" element={<KnowledgeBasePage />} />
         <Route path="/knowledge/exercises/new" element={<ExerciseEditPage mode="create" />} />
         <Route path="/knowledge/exercises/:id/edit" element={<ExerciseEditPage mode="edit" />} />
