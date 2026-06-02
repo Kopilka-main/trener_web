@@ -4,7 +4,7 @@ import { ChevronRight, Plus, Search } from 'lucide-react';
 import type { ExerciseResponse, TemplateResponse } from '@trener/shared';
 import { useExercises } from '../api/exercises';
 import { useTemplates } from '../api/workout-templates';
-import { orderSubgroups } from '../lib/muscleGroups';
+import { orderSubgroups, subgroupsFor } from '../lib/muscleGroups';
 
 type Tab = 'templates' | 'exercises';
 
@@ -144,15 +144,8 @@ export function KnowledgeBasePage() {
 
   const q = query.trim().toLowerCase();
 
-  // Подгруппы вкладки «Упражнения/Растяжка»: из реально присутствующих среди
-  // упражнений выбранной категории, упорядочены по таксономии.
-  const exerciseSubgroups = useMemo(() => {
-    if (category === '') return [];
-    const present = new Set<string>();
-    for (const e of tabExercises)
-      if (e.category === category && e.subgroup) present.add(e.subgroup);
-    return orderSubgroups(category, present);
-  }, [tabExercises, category]);
+  // Подгруппы вкладки «Упражнения»: полный список из таксономии выбранной группы.
+  const exerciseSubgroups = category === '' ? [] : subgroupsFor(category);
 
   const filteredExercises = useMemo(() => {
     return tabExercises.filter((e) => {

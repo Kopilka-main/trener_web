@@ -13,7 +13,7 @@ import { Button } from '../components/Button';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SortableList } from '../components/SortableList';
 import { HoldToDelete } from '../components/HoldToDelete';
-import { orderSubgroups } from '../lib/muscleGroups';
+import { subgroupsFor } from '../lib/muscleGroups';
 
 interface TemplateEditPageProps {
   mode: 'create' | 'edit';
@@ -172,12 +172,8 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
     [catalog.data, group],
   );
 
-  // Подгруппы — из реально присутствующих у упражнений группы, в порядке таксономии.
-  const subgroupChips = useMemo(() => {
-    const present = new Set<string>();
-    for (const e of groupExercises) if (e.subgroup) present.add(e.subgroup);
-    return group ? orderSubgroups(group, present) : [];
-  }, [groupExercises, group]);
+  // Подгруппы — полный список из таксономии выбранной группы.
+  const subgroupChips = group ? subgroupsFor(group) : [];
 
   // Отфильтрованный по подгруппе список для отображения.
   const visibleExercises = useMemo(
