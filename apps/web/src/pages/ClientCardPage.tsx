@@ -15,6 +15,7 @@ import {
 import { useClient, useUpdateClient } from '../api/clients';
 import { useClientWorkouts } from '../api/client-workouts';
 import { useClientPackages } from '../api/packages';
+import { aggregateExerciseOverview } from '../lib/workout-stats';
 import { Avatar } from '../components/Avatar';
 
 /** Полных лет по дате рождения (YYYY-MM-DD); null, если дата пуста или некорректна.
@@ -89,13 +90,10 @@ export function ClientCardPage() {
   const c = client.data;
   const isArchived = c.status === 'archived';
   const age = ageFromBirthDate(c.birthDate);
-  // Прогресс последней завершённой тренировки = выполненных подходов в ней.
-  const lastCompleted = [...(workouts.data ?? [])]
-    .filter((w) => w.status === 'completed')
-    .sort((a, b) => Date.parse(b.completedAt ?? '') - Date.parse(a.completedAt ?? ''))[0];
-  const lastProgress = lastCompleted
-    ? lastCompleted.exercises.flatMap((e) => e.sets).filter((s) => s.done).length
-    : 0;
+  // Достижения = упражнения с рекордом в последней сессии (зелёная стрелка ↑ в статистике).
+  const achievements = aggregateExerciseOverview(workouts.data ?? []).filter(
+    (o) => o.lastIsRecord,
+  ).length;
   const connected = (c.accountId ?? '').trim() !== '';
   // Баланс оплаченных занятий = остаток по активным пакетам.
   const paidBalance = (packages.data ?? [])
@@ -177,8 +175,8 @@ export function ClientCardPage() {
           {TILES.map(({ key, label, sub, Icon }) => {
             // Бейдж справа: прогресс последней тренировки / баланс оплаченных занятий.
             const badge =
-              key === 'stats' && lastProgress > 0
-                ? String(lastProgress)
+              key === 'stats' && achievements > 0
+                ? String(achievements)
                 : key === 'payments' && paidBalance > 0
                   ? `+${String(paidBalance)}`
                   : null;
