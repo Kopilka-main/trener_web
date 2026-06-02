@@ -96,10 +96,13 @@ export function ClientCardPage() {
     (o) => o.lastIsRecord,
   ).length;
   const connected = (c.accountId ?? '').trim() !== '';
-  // Баланс оплаченных занятий = остаток по активным пакетам.
-  const paidBalance = (packages.data ?? [])
+  // Баланс оплаченных занятий = оплачено (по активным пакетам) − проведено (завершённые
+  // тренировки). Может быть отрицательным — клиент должен за проведённые занятия.
+  const paidLessons = (packages.data ?? [])
     .filter((p) => p.status === 'active')
-    .reduce((acc, p) => acc + (p.lessonsPaid - p.lessonsUsed), 0);
+    .reduce((acc, p) => acc + p.lessonsPaid, 0);
+  const completedWorkouts = (workouts.data ?? []).filter((w) => w.status === 'completed').length;
+  const paidBalance = paidLessons - completedWorkouts;
 
   return (
     <div className="flex min-h-full flex-col">
@@ -203,9 +206,13 @@ export function ClientCardPage() {
                       <TrendingUp size={18} strokeWidth={2.4} className="text-accent" />
                     </span>
                   )}
-                  {key === 'payments' && paidBalance > 0 && (
-                    <span className="text-[22px] font-bold leading-none text-ink">
-                      +{paidBalance}
+                  {key === 'payments' && (
+                    <span
+                      className={`text-[22px] font-bold leading-none ${
+                        paidBalance < 0 ? 'text-danger' : 'text-ink'
+                      }`}
+                    >
+                      {paidBalance > 0 ? `+${String(paidBalance)}` : String(paidBalance)}
                     </span>
                   )}
                 </div>
