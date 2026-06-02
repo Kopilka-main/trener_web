@@ -166,21 +166,20 @@ function DraftView({
           onReorder={(next) => reorder.mutate(next.map((it) => it.position))}
           renderItem={(ex) => (
             <div className="flex flex-col gap-2">
-              <div className="flex items-start justify-between gap-2">
-                <h2 className="text-[15px] font-semibold text-ink">{ex.exerciseName}</h2>
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate text-[14px] font-semibold text-ink">
+                  {ex.exerciseName}
+                </span>
                 <HoldToDelete onDelete={() => removeExercise.mutate(ex.position)} />
               </div>
-              <ul className="flex flex-col gap-1">
-                {ex.sets.map((set) => (
-                  <li
-                    key={set.setIndex}
-                    className="flex items-center justify-between font-[family-name:var(--font-mono)] text-[13px] text-ink-muted"
-                  >
-                    <span>Подход {set.setIndex + 1}</span>
-                    <span className="tabular-nums text-ink">{plannedText(set)}</span>
-                  </li>
-                ))}
-              </ul>
+              {ex.sets.map((set) => (
+                <span
+                  key={set.setIndex}
+                  className="font-[family-name:var(--font-mono)] text-[19px] tabular-nums text-ink-muted"
+                >
+                  {plannedText(set)}
+                </span>
+              ))}
             </div>
           )}
         />
