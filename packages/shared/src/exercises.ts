@@ -8,6 +8,7 @@ const optNum = z.number().positive().nullish();
 export const createExerciseRequestSchema = z.object({
   name,
   category,
+  subgroup: z.string().trim().max(100).nullish(),
   description: z.string().trim().max(4000).nullish(),
   defaultReps: optInt,
   defaultWeightKg: optNum,
@@ -25,6 +26,7 @@ export const exerciseResponseSchema = z.object({
   isGlobal: z.boolean(), // trainerId === null
   name: z.string(),
   category: z.string(),
+  subgroup: z.string().nullable(),
   description: z.string().nullable(),
   defaultReps: z.number().nullable(),
   defaultWeightKg: z.number().nullable(),

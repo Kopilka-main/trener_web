@@ -8,6 +8,7 @@ export type ExerciseRow = {
   trainerId: string | null;
   name: string;
   category: string;
+  subgroup: string | null;
   description: string | null;
   defaultReps: number | null;
   defaultWeightKg: number | null;
@@ -22,6 +23,7 @@ export type CreateExerciseInput = {
   trainerId: string;
   name: string;
   category: string;
+  subgroup?: string | null;
   description?: string | null;
   defaultReps?: number | null;
   defaultWeightKg?: number | null;
@@ -33,6 +35,7 @@ export type CreateExerciseInput = {
 export type UpdateExerciseInput = {
   name?: string;
   category?: string;
+  subgroup?: string | null;
   description?: string | null;
   defaultReps?: number | null;
   defaultWeightKg?: number | null;
@@ -46,6 +49,7 @@ const cols = {
   trainerId: exercises.trainerId,
   name: exercises.name,
   category: exercises.category,
+  subgroup: exercises.subgroup,
   description: exercises.description,
   defaultReps: exercises.defaultReps,
   defaultWeightKg: exercises.defaultWeightKg,
@@ -62,6 +66,7 @@ export function toResponse(r: ExerciseRow): ExerciseResponse {
     isGlobal: r.trainerId === null,
     name: r.name,
     category: r.category,
+    subgroup: r.subgroup,
     description: r.description,
     defaultReps: r.defaultReps,
     defaultWeightKg: r.defaultWeightKg,
@@ -113,6 +118,7 @@ export function makeExercisesRepo(db: Db) {
           trainerId: input.trainerId,
           name: input.name,
           category: input.category,
+          subgroup: input.subgroup ?? null,
           description: input.description ?? null,
           defaultReps: input.defaultReps ?? null,
           defaultWeightKg: input.defaultWeightKg ?? null,
@@ -134,6 +140,7 @@ export function makeExercisesRepo(db: Db) {
       const set: UpdateExerciseInput = {};
       if (patch.name !== undefined) set.name = patch.name;
       if (patch.category !== undefined) set.category = patch.category;
+      if (patch.subgroup !== undefined) set.subgroup = patch.subgroup;
       if (patch.description !== undefined) set.description = patch.description;
       if (patch.defaultReps !== undefined) set.defaultReps = patch.defaultReps;
       if (patch.defaultWeightKg !== undefined) set.defaultWeightKg = patch.defaultWeightKg;

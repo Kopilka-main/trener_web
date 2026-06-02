@@ -28,6 +28,7 @@ export function makeExercisesService(repo: ExercisesRepo, deps: ExercisesDeps) {
         trainerId,
         name: input.name,
         category: input.category,
+        subgroup: input.subgroup ?? null,
         description: input.description ?? null,
         defaultReps: input.defaultReps ?? null,
         defaultWeightKg: input.defaultWeightKg ?? null,
@@ -47,6 +48,7 @@ export function makeExercisesService(repo: ExercisesRepo, deps: ExercisesDeps) {
       const repoPatch: UpdateExerciseInput = {};
       if (patch.name !== undefined) repoPatch.name = patch.name;
       if (patch.category !== undefined) repoPatch.category = patch.category;
+      if (patch.subgroup !== undefined) repoPatch.subgroup = patch.subgroup ?? null;
       if (patch.description !== undefined) repoPatch.description = patch.description ?? null;
       if (patch.defaultReps !== undefined) repoPatch.defaultReps = patch.defaultReps ?? null;
       if (patch.defaultWeightKg !== undefined)

@@ -84,6 +84,7 @@ export const exercises = pgTable('exercises', {
   trainerId: text('trainer_id').references(() => trainers.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   category: text('category').notNull(),
+  subgroup: text('subgroup'),
   description: text('description'),
   defaultReps: integer('default_reps'),
   defaultWeightKg: doublePrecision('default_weight_kg'),

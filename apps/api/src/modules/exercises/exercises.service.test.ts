@@ -8,6 +8,7 @@ function row(over: Partial<ExerciseRow> = {}): ExerciseRow {
     trainerId: 'A',
     name: 'Присед',
     category: 'Ноги',
+    subgroup: null,
     description: null,
     defaultReps: null,
     defaultWeightKg: null,
@@ -40,6 +41,39 @@ describe('exercises.service', () => {
     expect(res.isGlobal).toBe(false);
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'newid', trainerId: 'A', name: 'Присед' }),
+    );
+  });
+
+  it('create по умолчанию subgroup=null в ответе и передаёт null в repo', async () => {
+    const create = vi.fn(() => Promise.resolve(row()));
+    const svc = makeExercisesService(fakeRepo({ create }), { newId: () => 'newid' });
+    const res = await svc.create('A', { name: 'Присед', category: 'Ноги', restSec: 90 });
+    expect(res.subgroup).toBeNull();
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ subgroup: null }));
+  });
+
+  it('create с subgroup пробрасывает его в repo и в ответ', async () => {
+    const create = vi.fn(() => Promise.resolve(row({ subgroup: 'Квадрицепс' })));
+    const svc = makeExercisesService(fakeRepo({ create }), { newId: () => 'newid' });
+    const res = await svc.create('A', {
+      name: 'Присед',
+      category: 'Ноги',
+      subgroup: 'Квадрицепс',
+      restSec: 90,
+    });
+    expect(res.subgroup).toBe('Квадрицепс');
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ subgroup: 'Квадрицепс' }));
+  });
+
+  it('update пробрасывает subgroup в repo-патч', async () => {
+    const update = vi.fn(() => Promise.resolve(row({ subgroup: 'Ягодицы' })));
+    const svc = makeExercisesService(fakeRepo({ update }), { newId: () => 'x' });
+    const res = await svc.update('A', 'e1', { subgroup: 'Ягодицы' });
+    expect(res.subgroup).toBe('Ягодицы');
+    expect(update).toHaveBeenCalledWith(
+      'A',
+      'e1',
+      expect.objectContaining({ subgroup: 'Ягодицы' }),
     );
   });
 
