@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Link2, Trash2, X } from 'lucide-react';
+import { Trash2, X } from 'lucide-react';
 import type { Contact } from '@trener/shared';
 import { useClient, useCreateClient, useDeleteClient, useUpdateClient } from '../api/clients';
 import { Avatar } from '../components/Avatar';
@@ -153,12 +153,12 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
             onClick={() => setConnectOpen(true)}
             aria-label="Подключить клиента"
             className={`absolute right-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full ${
-              accountId.trim() !== ''
-                ? 'bg-accent text-accent-on'
-                : 'bg-card-elevated text-ink-muted'
+              accountId.trim() !== '' ? 'bg-accent text-accent-on' : 'bg-card-elevated text-accent'
             }`}
           >
-            <Link2 size={20} strokeWidth={2} />
+            <svg viewBox="0 -960 960 960" width="22" height="22" fill="currentColor" aria-hidden>
+              <path d="M680-160v-120H560v-80h120v-120h80v120h120v80H760v120h-80ZM440-280H280q-83 0-141.5-58.5T80-480q0-83 58.5-141.5T280-680h160v80H280q-50 0-85 35t-35 85q0 50 35 85t85 35h160v80ZM320-440v-80h320v80H320Zm560-40h-80q0-50-35-85t-85-35H520v-80h160q83 0 141.5 58.5T880-480Z" />
+            </svg>
           </button>
         </div>
 
@@ -303,9 +303,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
               className="min-w-[90px] flex-1 bg-transparent text-base text-ink outline-none placeholder:text-ink-mutedxl"
             />
           </div>
-          <p className="px-1 text-[12px] text-ink-muted">
-            Введите тег и нажмите Enter. Теги помогают быстро группировать клиентов.
-          </p>
+          <p className="px-1 text-[12px] text-ink-muted">Ввод</p>
         </Section>
 
         {mutation.isError && (
