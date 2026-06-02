@@ -32,6 +32,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
   const [accountId, setAccountId] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [connectOpen, setConnectOpen] = useState(false);
+  const [showErrors, setShowErrors] = useState(false);
 
   useEffect(() => {
     if (editing && existing.data) {
@@ -49,6 +50,22 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
   }, [editing, existing.data]);
 
   const mutation = editing ? updateMutation : createMutation;
+
+  function birthDateError(value: string): string {
+    if (value === '') return '';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return 'Некорректная дата';
+    if (d.getTime() > Date.now()) return 'Дата в будущем';
+    if (d.getFullYear() < 1900) return 'Некорректная дата';
+    return '';
+  }
+
+  const errors = {
+    firstName: firstName.trim() === '' ? 'Обязательно к заполнению' : '',
+    lastName: lastName.trim() === '' ? 'Обязательно к заполнению' : '',
+    birthDate: birthDateError(birthDate),
+  };
+  const hasErrors = errors.firstName !== '' || errors.lastName !== '' || errors.birthDate !== '';
 
   function addContact() {
     setContacts((prev) => [...prev, { type: 'Телефон', value: '' }]);
@@ -78,6 +95,10 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (hasErrors) {
+      setShowErrors(true);
+      return;
+    }
     const phone = contacts.find((c) => c.type === 'Телефон')?.value.trim() ?? '';
     const payload = {
       firstName: firstName.trim(),
@@ -146,6 +167,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
 
       <form
         id="client-edit-form"
+        noValidate
         onSubmit={handleSubmit}
         className="flex flex-col gap-5 px-5 pb-8 pt-1"
       >
@@ -173,22 +195,32 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
             <input
               id="firstName"
               name="firstName"
-              required
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
-              className="rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
+              aria-invalid={showErrors && errors.firstName !== ''}
+              className={`rounded-xl border bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent ${
+                showErrors && errors.firstName ? 'border-danger' : 'border-line'
+              }`}
             />
+            {showErrors && errors.firstName && (
+              <span className="text-[12px] text-danger">{errors.firstName}</span>
+            )}
           </label>
           <label htmlFor="lastName" className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-ink-muted">Фамилия</span>
             <input
               id="lastName"
               name="lastName"
-              required
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
-              className="rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
+              aria-invalid={showErrors && errors.lastName !== ''}
+              className={`rounded-xl border bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent ${
+                showErrors && errors.lastName ? 'border-danger' : 'border-line'
+              }`}
             />
+            {showErrors && errors.lastName && (
+              <span className="text-[12px] text-danger">{errors.lastName}</span>
+            )}
           </label>
         </div>
 
@@ -265,8 +297,14 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
               type="date"
               value={birthDate}
               onChange={(e) => setBirthDate(e.target.value)}
-              className="w-full rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none focus:border-accent [color-scheme:dark]"
+              aria-invalid={showErrors && errors.birthDate !== ''}
+              className={`w-full rounded-xl border bg-chip px-3 py-2.5 text-base text-ink outline-none focus:border-accent [color-scheme:dark] ${
+                showErrors && errors.birthDate ? 'border-danger' : 'border-line'
+              }`}
             />
+            {showErrors && errors.birthDate && (
+              <span className="text-[12px] text-danger">{errors.birthDate}</span>
+            )}
           </label>
         </Section>
 
