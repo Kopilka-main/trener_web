@@ -1,25 +1,17 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ChevronDown, ChevronRight, ChevronUp, Dumbbell, Plus, RotateCcw, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Play, Plus, RotateCcw, X } from 'lucide-react';
 import type {
   CreateWorkoutRequest,
   TemplateResponse,
   WorkoutExerciseResponse,
   WorkoutResponse,
-  WorkoutStatus,
   WorkoutSetResponse,
 } from '@trener/shared';
 import { useClientWorkouts, useCreateWorkout } from '../api/client-workouts';
 import { useTemplates } from '../api/workout-templates';
 import { useClient } from '../api/clients';
 import { ScreenHeader } from '../components/ScreenHeader';
-
-const STATUS_LABEL: Record<WorkoutStatus, string> = {
-  draft: 'Черновик',
-  active: 'Идёт',
-  completed: 'Завершена',
-  skipped: 'Пропущена',
-};
 
 function isCurrent(w: WorkoutResponse): boolean {
   return w.status === 'active' || w.status === 'draft';
@@ -30,20 +22,13 @@ function workoutDateMs(w: WorkoutResponse): number {
   return raw ? Date.parse(raw) : 0;
 }
 
-function formatDate(iso: string | null): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-}
-
 export function ClientWorkoutsPage() {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const client = useClient(id);
   const workouts = useClientWorkouts(id);
   const createWorkout = useCreateWorkout(id);
-  const [picking, setPicking] = useState(false);
+  const [picker, setPicker] = useState<'none' | 'template' | 'history'>('none');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Повторить прошлую тренировку: клонируем упражнения и подходы в новый черновик.
@@ -103,11 +88,26 @@ export function ClientWorkoutsPage() {
     };
     createWorkout.mutate(body, {
       onSuccess: (workout) => {
-        setPicking(false);
+        setPicker('none');
         void navigate(`/clients/${id}/workouts/${workout.id}`);
       },
     });
   }
+
+  const currentWorkout = current[0] ?? null;
+
+  // История, сгруппированная по дате (новые сверху).
+  const historyGroups = useMemo(() => {
+    const map = new Map<string, WorkoutResponse[]>();
+    for (const w of history) {
+      const iso = w.completedAt ?? w.startedAt;
+      const key = iso ? iso.slice(0, 10) : 'unknown';
+      const arr = map.get(key);
+      if (arr) arr.push(w);
+      else map.set(key, [w]);
+    }
+    return [...map.entries()];
+  }, [history]);
 
   return (
     <div className="flex min-h-full flex-col">
@@ -129,43 +129,51 @@ export function ClientWorkoutsPage() {
           </p>
         )}
 
-        {workouts.isSuccess && list.length === 0 && (
-          <div className="flex flex-col items-center gap-2 pt-10 text-center">
-            <Dumbbell size={28} strokeWidth={1.6} className="text-ink-muted" />
-            <p className="text-sm text-ink-muted">
-              Пока нет тренировок. Назначьте первую по шаблону.
-            </p>
-          </div>
-        )}
-
-        {current.length > 0 && (
-          <Section title="Текущие">
-            {current.map((w) => (
-              <WorkoutRow key={w.id} clientId={id} workout={w} />
-            ))}
-          </Section>
+        {workouts.isSuccess && (
+          <section className="flex flex-col gap-2">
+            <SectionTitle title="Ближайшая тренировка" />
+            {currentWorkout ? (
+              <CurrentCard clientId={id} workout={currentWorkout} />
+            ) : (
+              <EmptyCurrent
+                onPickTemplate={() => setPicker('template')}
+                onPickHistory={() => setPicker('history')}
+                hasHistory={history.length > 0}
+              />
+            )}
+          </section>
         )}
 
         {history.length > 0 && (
-          <Section title="История">
-            {history.map((w) => (
-              <HistoryRow
-                key={w.id}
-                workout={w}
-                expanded={expandedId === w.id}
-                onToggle={() => setExpandedId(expandedId === w.id ? null : w.id)}
-                onRepeat={() => repeat(w)}
-                repeatPending={createWorkout.isPending}
-              />
+          <section className="flex flex-col gap-3">
+            <SectionTitle title={`История тренировок · ${history.length}`} />
+            {historyGroups.map(([dateKey, items]) => (
+              <div key={dateKey} className="flex flex-col gap-2">
+                <div className="px-1 font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.04em] text-ink-mutedxl">
+                  {formatGroupDate(dateKey)}
+                </div>
+                <ul className="flex flex-col gap-2">
+                  {items.map((w) => (
+                    <HistoryRow
+                      key={w.id}
+                      workout={w}
+                      expanded={expandedId === w.id}
+                      onToggle={() => setExpandedId(expandedId === w.id ? null : w.id)}
+                      onRepeat={() => repeat(w)}
+                      repeatPending={createWorkout.isPending}
+                    />
+                  ))}
+                </ul>
+              </div>
             ))}
-          </Section>
+          </section>
         )}
       </div>
 
       <div className="pointer-events-none sticky bottom-4 z-10 mt-auto flex justify-end px-5">
         <button
           type="button"
-          onClick={() => setPicking(true)}
+          onClick={() => setPicker('template')}
           aria-label="Назначить тренировку"
           className="tile-shadow-primary pointer-events-auto flex h-14 w-14 shrink-0 items-center justify-center rounded-full active:scale-[0.95]"
         >
@@ -173,10 +181,19 @@ export function ClientWorkoutsPage() {
         </button>
       </div>
 
-      {picking && (
+      {picker === 'template' && (
         <TemplatePickerSheet
-          onClose={() => setPicking(false)}
+          onClose={() => setPicker('none')}
           onPick={assignTemplate}
+          pending={createWorkout.isPending}
+        />
+      )}
+
+      {picker === 'history' && (
+        <HistoryPickerSheet
+          history={history}
+          onClose={() => setPicker('none')}
+          onPick={(w) => repeat(w)}
           pending={createWorkout.isPending}
         />
       )}
@@ -184,49 +201,87 @@ export function ClientWorkoutsPage() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function SectionTitle({ title }: { title: string }) {
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.06em] text-ink-mutedxl">
-        {title}
-      </h2>
-      <ul className="flex flex-col gap-2">{children}</ul>
-    </section>
+    <h2 className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.06em] text-ink-mutedxl">
+      {title}
+    </h2>
   );
 }
 
-function WorkoutRow({ clientId, workout }: { clientId: string; workout: WorkoutResponse }) {
-  const date = formatDate(workout.completedAt ?? workout.startedAt);
+/** Карточка ближайшей тренировки (черновик/активная). */
+function CurrentCard({ clientId, workout }: { clientId: string; workout: WorkoutResponse }) {
+  const active = workout.status === 'active';
   return (
-    <li>
-      <Link
-        to={`/clients/${clientId}/workouts/${workout.id}`}
-        className="row-glow flex items-center gap-3 rounded-2xl bg-card px-4 py-3 transition-colors active:bg-card-elevated"
+    <Link
+      to={`/clients/${clientId}/workouts/${workout.id}`}
+      className="flex flex-col gap-3 rounded-3xl bg-card p-4 active:scale-[0.99]"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-[18px] font-bold text-ink">{workout.name}</div>
+          <div className="font-[family-name:var(--font-mono)] text-[12px] text-ink-muted">
+            {workout.exercises.length} упр.{active ? ' · идёт' : ''}
+          </div>
+        </div>
+      </div>
+      <span className="flex items-center justify-center gap-2 rounded-2xl bg-accent py-3 text-[15px] font-semibold text-accent-on">
+        <Play size={16} fill="currentColor" /> {active ? 'Продолжить' : 'Начать тренировку'}
+      </span>
+    </Link>
+  );
+}
+
+/** Пустое состояние ближайшей тренировки (как на макете). */
+function EmptyCurrent({
+  onPickTemplate,
+  onPickHistory,
+  hasHistory,
+}: {
+  onPickTemplate: () => void;
+  onPickHistory: () => void;
+  hasHistory: boolean;
+}) {
+  return (
+    <div className="rounded-3xl border-2 border-dashed border-line p-5 text-center">
+      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-chip text-ink">
+        <Plus size={20} />
+      </div>
+      <div className="mt-3 text-[15px] font-semibold text-ink">Тренировка не запланирована</div>
+      <div className="mx-auto mt-1 max-w-[280px] text-[12px] text-ink-muted">
+        Выберите готовую из базы знаний или повторите одну из прошлых тренировок.
+      </div>
+      <button
+        type="button"
+        onClick={onPickTemplate}
+        className="mt-4 w-full rounded-2xl bg-accent py-3 text-[14px] font-semibold text-accent-on active:scale-[0.99]"
       >
-        <span className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="truncate text-[15px] font-semibold text-ink">{workout.name}</span>
-          <span className="flex items-center gap-2 font-[family-name:var(--font-mono)] text-[12px] text-ink-muted">
-            <span className="rounded-full bg-chip px-2 py-0.5 uppercase tracking-[0.04em]">
-              {STATUS_LABEL[workout.status]}
-            </span>
-            <span>{workout.exercises.length} упр.</span>
-            {date && <span>· {date}</span>}
-          </span>
-        </span>
-        <ChevronRight size={16} className="tile-chevron shrink-0" />
-      </Link>
-    </li>
+        Выбрать из базы
+      </button>
+      <button
+        type="button"
+        onClick={onPickHistory}
+        disabled={!hasHistory}
+        className="mt-2 inline-flex items-center gap-1.5 text-[13px] text-ink-muted disabled:opacity-40"
+      >
+        <RotateCcw size={13} /> или повторить из истории
+      </button>
+    </div>
   );
 }
 
-function dateParts(iso: string | null): { day: string; month: string } | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return {
-    day: String(d.getDate()),
-    month: d.toLocaleDateString('ru-RU', { month: 'short' }).replace('.', ''),
-  };
+/** Заголовок группы истории: Сегодня / Вчера / «5 июня». */
+function formatGroupDate(dateKey: string): string {
+  if (dateKey === 'unknown') return 'Без даты';
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(dateKey);
+  if (!m) return dateKey;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const today = new Date();
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.round((startOfDay(today) - startOfDay(d)) / 86_400_000);
+  if (diffDays === 0) return 'Сегодня';
+  if (diffDays === 1) return 'Вчера';
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
 }
 
 function formatDuration(sec: number): string {
@@ -271,7 +326,6 @@ function HistoryRow({
   onRepeat: () => void;
   repeatPending: boolean;
 }) {
-  const dt = dateParts(workout.completedAt ?? workout.startedAt);
   const skipped = workout.status === 'skipped';
   const meta = skipped
     ? 'Пропущена'
@@ -285,21 +339,7 @@ function HistoryRow({
 
   return (
     <li className="overflow-hidden rounded-2xl bg-card">
-      <div className="flex items-center gap-3 p-3">
-        <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-chip text-center leading-tight">
-          {dt ? (
-            <>
-              <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase text-ink-muted">
-                {dt.month}
-              </span>
-              <span className="font-[family-name:var(--font-mono)] text-sm font-bold tabular-nums text-ink">
-                {dt.day}
-              </span>
-            </>
-          ) : (
-            <Dumbbell size={18} className="text-ink-muted" />
-          )}
-        </div>
+      <div className="flex items-center gap-3 px-4 py-3">
         <button type="button" onClick={onToggle} className="min-w-0 flex-1 text-left">
           <div className="truncate text-[14px] font-semibold text-ink">{workout.name}</div>
           <div className="font-[family-name:var(--font-mono)] text-[11px] text-ink-muted">
@@ -409,6 +449,64 @@ function TemplatePickerSheet({
                 </span>
               </span>
               <ChevronRight size={16} className="tile-chevron shrink-0" />
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HistoryPickerSheet({
+  history,
+  onClose,
+  onPick,
+  pending,
+}: {
+  history: WorkoutResponse[];
+  onClose: () => void;
+  onPick: (workout: WorkoutResponse) => void;
+  pending: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end">
+      <button
+        type="button"
+        aria-label="Закрыть"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/60"
+      />
+      <div className="relative z-10 flex max-h-[75vh] flex-col rounded-t-3xl bg-bg pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="flex items-center justify-between px-5 pb-2 pt-4">
+          <h2 className="text-[16px] font-bold text-ink">Повторить из истории</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Закрыть"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-ink active:bg-card-elevated"
+          >
+            <X size={20} strokeWidth={1.8} />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-2 overflow-y-auto px-5 pt-1">
+          {history.length === 0 && <p className="text-sm text-ink-muted">История пуста.</p>}
+          {history.map((w) => (
+            <button
+              key={w.id}
+              type="button"
+              disabled={pending || w.exercises.length === 0}
+              onClick={() => onPick(w)}
+              className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3 text-left transition-colors active:bg-card-elevated disabled:opacity-50"
+            >
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="truncate text-[15px] font-semibold text-ink">{w.name}</span>
+                <span className="font-[family-name:var(--font-mono)] text-[12px] text-ink-muted">
+                  {formatGroupDate((w.completedAt ?? w.startedAt ?? '').slice(0, 10))} ·{' '}
+                  {w.exercises.length} упр.
+                </span>
+              </span>
+              <RotateCcw size={16} className="shrink-0 text-ink-muted" />
             </button>
           ))}
         </div>

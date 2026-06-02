@@ -81,7 +81,7 @@ describe('ClientWorkoutsPage', () => {
     renderPage();
 
     expect(screen.getByText('Грудь и трицепс')).toBeInTheDocument();
-    expect(screen.getByText('История')).toBeInTheDocument();
+    expect(screen.getByText(/История тренировок/)).toBeInTheDocument();
   });
 
   it('показывает пустое состояние без тренировок', () => {
@@ -94,8 +94,6 @@ describe('ClientWorkoutsPage', () => {
 
     renderPage();
 
-    expect(
-      screen.getByText('Пока нет тренировок. Назначьте первую по шаблону.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Тренировка не запланирована')).toBeInTheDocument();
   });
 });
