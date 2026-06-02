@@ -6,6 +6,7 @@ export type ClientStatus = z.infer<typeof clientStatusSchema>;
 const name = z.string().trim().min(1).max(100);
 const phone = z.string().trim().max(30).nullish();
 const notes = z.string().trim().max(2000).nullish();
+const accountId = z.string().trim().max(100).nullish();
 
 const contactSchema = z.object({
   type: z.string().trim().min(1).max(40),
@@ -21,6 +22,7 @@ export const createClientRequestSchema = z.object({
   lastName: name,
   phone,
   notes,
+  accountId,
   contacts,
   tags,
 });
@@ -32,6 +34,7 @@ export const updateClientRequestSchema = z
     lastName: name,
     phone,
     notes,
+    accountId,
     status: clientStatusSchema,
     contacts,
     tags,
@@ -45,6 +48,7 @@ export const clientResponseSchema = z.object({
   lastName: z.string(),
   phone: z.string().nullable(),
   notes: z.string().nullable(),
+  accountId: z.string().nullable(),
   status: clientStatusSchema,
   contacts: z.array(contactSchema),
   tags: z.array(z.string()),

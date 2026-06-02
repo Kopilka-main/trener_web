@@ -55,6 +55,8 @@ export const clients = pgTable('clients', {
   firstName: text('first_name').notNull(),
   lastName: text('last_name').notNull(),
   phone: text('phone'),
+  // Личный код клиента из клиентского приложения (для будущей связи). NULL = не подключён.
+  accountId: text('account_id'),
   // Типизированный список контактов клиента (телефон/мессенджеры/прочее).
   contacts: jsonb('contacts').$type<{ type: string; value: string }[]>().notNull().default([]),
   // Свободные теги клиента.

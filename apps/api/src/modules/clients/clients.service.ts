@@ -10,6 +10,7 @@ function toResponse(r: ClientRow): ClientResponse {
     firstName: r.firstName,
     lastName: r.lastName,
     phone: r.phone,
+    accountId: r.accountId,
     notes: r.notes,
     status: r.status,
     contacts: r.contacts ?? [],
@@ -27,6 +28,7 @@ export function makeClientsService(repo: ClientsRepo, deps: ClientsDeps) {
         firstName: input.firstName,
         lastName: input.lastName,
         phone: input.phone ?? null,
+        accountId: input.accountId ?? null,
         notes: input.notes ?? null,
         contacts: input.contacts ?? [],
         tags: input.tags ?? [],
@@ -56,6 +58,8 @@ export function makeClientsService(repo: ClientsRepo, deps: ClientsDeps) {
       if (patch.firstName !== undefined) repoPatch.firstName = patch.firstName;
       if (patch.lastName !== undefined) repoPatch.lastName = patch.lastName;
       if (patch.phone != null) repoPatch.phone = patch.phone;
+      // accountId: null трактуем как «отключить» (очистка), undefined — «не трогать».
+      if (patch.accountId !== undefined) repoPatch.accountId = patch.accountId;
       if (patch.notes != null) repoPatch.notes = patch.notes;
       if (patch.status !== undefined) repoPatch.status = patch.status;
       if (patch.contacts !== undefined) repoPatch.contacts = patch.contacts;
