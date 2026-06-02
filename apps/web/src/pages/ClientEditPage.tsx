@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Trash2, X } from 'lucide-react';
 import type { Contact } from '@trener/shared';
 import { useClient, useCreateClient, useDeleteClient, useUpdateClient } from '../api/clients';
-import { Button } from '../components/Button';
 import { Avatar } from '../components/Avatar';
 import { ScreenHeader } from '../components/ScreenHeader';
 
@@ -52,10 +51,6 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
 
   function setContact(index: number, patch: Partial<Contact>) {
     setContacts((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)));
-  }
-
-  function removeContact(index: number) {
-    setContacts((prev) => prev.filter((_, i) => i !== index));
   }
 
   function addTag() {
@@ -202,14 +197,6 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
                   aria-label="Значение контакта"
                   className="min-w-0 flex-1 rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
                 />
-                <button
-                  type="button"
-                  onClick={() => removeContact(i)}
-                  aria-label="Удалить контакт"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-muted active:bg-card-elevated"
-                >
-                  <X size={18} strokeWidth={1.8} />
-                </button>
               </div>
             ))}
             <button
@@ -269,6 +256,9 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
               className="min-w-[90px] flex-1 bg-transparent text-base text-ink outline-none placeholder:text-ink-mutedxl"
             />
           </div>
+          <p className="px-1 text-[12px] text-ink-muted">
+            Введите тег и нажмите Enter. Теги помогают быстро группировать клиентов.
+          </p>
         </Section>
 
         {mutation.isError && (
@@ -276,15 +266,6 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
             Не удалось сохранить. Проверьте поля и попробуйте снова.
           </p>
         )}
-
-        <div className="flex flex-col gap-2">
-          <Button type="submit" disabled={mutation.isPending}>
-            {mutation.isPending ? 'Сохраняем…' : 'Сохранить'}
-          </Button>
-          <Button type="button" variant="secondary" onClick={() => void navigate(-1)}>
-            Отмена
-          </Button>
-        </div>
 
         {editing && (
           <button
