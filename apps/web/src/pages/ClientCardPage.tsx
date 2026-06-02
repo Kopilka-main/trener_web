@@ -8,6 +8,7 @@ import {
   FileText,
   MessageSquare,
   Pencil,
+  TrendingUp,
   Unlink,
   Wallet,
   type LucideIcon,
@@ -174,12 +175,6 @@ export function ClientCardPage() {
         <div className="grid grid-cols-2 gap-3">
           {TILES.map(({ key, label, sub, Icon }) => {
             // Бейдж справа: прогресс последней тренировки / баланс оплаченных занятий.
-            const badge =
-              key === 'stats' && achievements > 0
-                ? String(achievements)
-                : key === 'payments' && paidBalance > 0
-                  ? `+${String(paidBalance)}`
-                  : null;
             // «Написать» доступно только при подключённом клиенте (есть accountId).
             const chatLocked = key === 'chat' && !connected;
             return (
@@ -202,8 +197,16 @@ export function ClientCardPage() {
                       aria-label="Нет связи"
                     />
                   )}
-                  {badge && (
-                    <span className="text-[22px] font-bold leading-none text-ink">{badge}</span>
+                  {key === 'stats' && achievements > 0 && (
+                    <span className="flex items-center gap-1 text-[22px] font-bold leading-none text-ink">
+                      {achievements}
+                      <TrendingUp size={18} strokeWidth={2.4} className="text-accent" />
+                    </span>
+                  )}
+                  {key === 'payments' && paidBalance > 0 && (
+                    <span className="text-[22px] font-bold leading-none text-ink">
+                      +{paidBalance}
+                    </span>
                   )}
                 </div>
                 <span className="flex flex-col">
