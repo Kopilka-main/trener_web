@@ -207,7 +207,7 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
           <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
             Параметры подхода
           </h2>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <Stepper value={defaultReps} onChange={setDefaultReps} label="повторы" unit="повт" />
             <Stepper
               value={defaultWeightKg}
@@ -223,7 +223,6 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
               label="время"
               unit="сек"
             />
-            <Stepper value={restSec} onChange={setRestSec} step={15} label="отдых" unit="сек" />
           </div>
         </section>
 
