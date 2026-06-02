@@ -65,6 +65,10 @@ export type CreateWorkoutInput = {
 };
 
 export type SetPatchInput = {
+  plannedReps?: number | null;
+  plannedWeightKg?: number | null;
+  plannedTimeSec?: number | null;
+  plannedRestSec?: number | null;
   actualReps?: number | null;
   actualWeightKg?: number | null;
   actualTimeSec?: number | null;
@@ -370,11 +374,22 @@ export function makeClientWorkoutsRepo(db: Db) {
       if (!head) return null;
 
       const setPatch: Partial<{
+        plannedReps: number | null;
+        plannedWeightKg: number | null;
+        plannedTimeSec: number | null;
+        plannedRestSec: number | null;
         actualReps: number | null;
         actualWeightKg: number | null;
         actualTimeSec: number | null;
         done: number;
       }> = {};
+      if (patch.plannedReps !== undefined) setPatch.plannedReps = patch.plannedReps ?? null;
+      if (patch.plannedWeightKg !== undefined)
+        setPatch.plannedWeightKg = patch.plannedWeightKg ?? null;
+      if (patch.plannedTimeSec !== undefined)
+        setPatch.plannedTimeSec = patch.plannedTimeSec ?? null;
+      if (patch.plannedRestSec !== undefined)
+        setPatch.plannedRestSec = patch.plannedRestSec ?? null;
       if (patch.actualReps !== undefined) setPatch.actualReps = patch.actualReps ?? null;
       if (patch.actualWeightKg !== undefined)
         setPatch.actualWeightKg = patch.actualWeightKg ?? null;

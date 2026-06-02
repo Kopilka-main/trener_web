@@ -45,6 +45,10 @@ export type ReorderWorkoutExercisesRequest = z.infer<typeof reorderWorkoutExerci
 // --- Фиксация факта по подходу ---
 
 export const updateSetRequestSchema = z.object({
+  plannedReps: z.number().int().positive().nullish(),
+  plannedWeightKg: z.number().positive().nullish(),
+  plannedTimeSec: z.number().int().positive().nullish(),
+  plannedRestSec: z.number().int().min(0).max(3600).nullish(),
   actualReps: z.number().int().nullish(),
   actualWeightKg: optNum,
   actualTimeSec: z.number().int().nullish(),

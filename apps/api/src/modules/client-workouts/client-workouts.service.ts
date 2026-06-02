@@ -116,6 +116,13 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
       patch: UpdateSetRequest,
     ): Promise<WorkoutResponse> {
       const repoPatch: SetPatchInput = {};
+      if (patch.plannedReps !== undefined) repoPatch.plannedReps = patch.plannedReps ?? null;
+      if (patch.plannedWeightKg !== undefined)
+        repoPatch.plannedWeightKg = patch.plannedWeightKg ?? null;
+      if (patch.plannedTimeSec !== undefined)
+        repoPatch.plannedTimeSec = patch.plannedTimeSec ?? null;
+      if (patch.plannedRestSec !== undefined)
+        repoPatch.plannedRestSec = patch.plannedRestSec ?? null;
       if (patch.actualReps !== undefined) repoPatch.actualReps = patch.actualReps ?? null;
       if (patch.actualWeightKg !== undefined)
         repoPatch.actualWeightKg = patch.actualWeightKg ?? null;

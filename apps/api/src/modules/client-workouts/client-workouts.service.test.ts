@@ -147,6 +147,24 @@ describe('client-workouts.service', () => {
     );
   });
 
+  it('updateSet прокидывает плановые значения подхода', async () => {
+    const updateSet = vi.fn(() => Promise.resolve(row()));
+    const svc = makeClientWorkoutsService(fakeRepo({ updateSet }), deps);
+    await svc.updateSet('A', 'c1', 'w1', 0, 0, {
+      plannedReps: 8,
+      plannedWeightKg: 60,
+      plannedTimeSec: null,
+    });
+    expect(updateSet).toHaveBeenCalledWith(
+      'A',
+      'c1',
+      'w1',
+      0,
+      0,
+      expect.objectContaining({ plannedReps: 8, plannedWeightKg: 60, plannedTimeSec: null }),
+    );
+  });
+
   it('complete из active → completed, использует now() (атомарно)', async () => {
     const complete = vi.fn(() => Promise.resolve('updated' as const));
     const svc = makeClientWorkoutsService(
