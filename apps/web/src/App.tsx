@@ -13,6 +13,7 @@ import { ExerciseEditPage } from './pages/ExerciseEditPage';
 import { TemplateEditPage } from './pages/TemplateEditPage';
 import { ClientWorkoutsPage } from './pages/ClientWorkoutsPage';
 import { ClientCalendarPage } from './pages/ClientCalendarPage';
+import { ClientChatPage } from './pages/ClientChatPage';
 import { ActiveWorkoutPage } from './pages/ActiveWorkoutPage';
 import {
   CalendarPage,
@@ -44,6 +45,7 @@ export function App() {
           <Route path="/clients/:id/workouts" element={<ClientWorkoutsPage />} />
           <Route path="/clients/:id/workouts/:wid" element={<ActiveWorkoutPage />} />
           <Route path="/clients/:id/calendar" element={<ClientCalendarPage />} />
+          <Route path="/clients/:id/chat" element={<ClientChatPage />} />
           <Route path="/clients/:id/:section" element={<ClientSectionPage />} />
           <Route path="/knowledge" element={<KnowledgeBasePage />} />
           <Route path="/knowledge/exercises/new" element={<ExerciseEditPage mode="create" />} />
