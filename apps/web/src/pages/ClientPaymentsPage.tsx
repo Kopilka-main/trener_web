@@ -1,17 +1,12 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
 import { Plus, Wallet } from 'lucide-react';
-import type {
-  CreateExpenseRequest,
-  CreateIncomeRequest,
-  CreatePackageRequest,
-  PackageResponse,
-} from '@trener/shared';
+import type { CreateExpenseRequest, CreateIncomeRequest, PackageResponse } from '@trener/shared';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { HoldToDelete } from '../components/HoldToDelete';
 import { useClient } from '../api/clients';
 import { useClientWorkouts } from '../api/client-workouts';
-import { useClientPackages, useCreatePackage, useDeletePackage } from '../api/packages';
+import { useClientPackages, useDeletePackage } from '../api/packages';
 import {
   useCreateExpense,
   useCreateIncome,
@@ -55,9 +50,6 @@ interface Operation {
   note: string | null;
 }
 
-const DASHED_BUTTON =
-  'flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line py-3.5 text-sm font-medium text-ink-muted active:border-accent';
-
 export function ClientPaymentsPage() {
   const { id = '' } = useParams<{ id: string }>();
 
@@ -66,14 +58,12 @@ export function ClientPaymentsPage() {
   const packages = useClientPackages(id);
   const expenses = useExpenses();
   const incomes = useIncomes();
-  const createPackage = useCreatePackage(id);
   const deletePackage = useDeletePackage(id);
   const createExpense = useCreateExpense();
   const deleteExpense = useDeleteExpense();
   const createIncome = useCreateIncome();
   const deleteIncome = useDeleteIncome();
 
-  const [packageFormOpen, setPackageFormOpen] = useState(false);
   const [incomeFormOpen, setIncomeFormOpen] = useState(false);
   const [expenseFormOpen, setExpenseFormOpen] = useState(false);
 
@@ -142,7 +132,7 @@ export function ClientPaymentsPage() {
             Не удалось загрузить пакеты. Попробуйте обновить страницу.
           </p>
         ) : packages.isSuccess && packageList.length === 0 ? (
-          <p className="text-sm text-ink-muted">Пока нет пакетов</p>
+          <p className="py-2 text-center text-sm text-ink-muted">Пока нет пакетов</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {packageList.map((p) => (
@@ -166,32 +156,24 @@ export function ClientPaymentsPage() {
           </ul>
         )}
 
-        {/* Пунктирные кнопки добавления */}
-        <div className="flex flex-col gap-2 pt-1">
-          <button type="button" onClick={() => setPackageFormOpen(true)} className={DASHED_BUTTON}>
-            <Plus size={16} strokeWidth={2} />
-            Добавить пакет
+        {/* Добавление дохода/расхода — пара кнопок по центру */}
+        <div className="flex justify-center gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => setIncomeFormOpen(true)}
+            className="flex items-center gap-1.5 rounded-full bg-card-elevated px-5 py-2.5 text-[14px] font-semibold text-ink active:scale-[0.97]"
+          >
+            <Plus size={16} strokeWidth={2} /> Доход
           </button>
-          <button type="button" onClick={() => setIncomeFormOpen(true)} className={DASHED_BUTTON}>
-            <Plus size={16} strokeWidth={2} />
-            Добавить доход
-          </button>
-          <button type="button" onClick={() => setExpenseFormOpen(true)} className={DASHED_BUTTON}>
-            <Plus size={16} strokeWidth={2} />
-            Добавить расход
+          <button
+            type="button"
+            onClick={() => setExpenseFormOpen(true)}
+            className="flex items-center gap-1.5 rounded-full bg-card-elevated px-5 py-2.5 text-[14px] font-semibold text-ink active:scale-[0.97]"
+          >
+            <Plus size={16} strokeWidth={2} /> Расход
           </button>
         </div>
       </div>
-
-      {packageFormOpen && (
-        <PackageFormSheet
-          onClose={() => setPackageFormOpen(false)}
-          onSubmit={(body) =>
-            createPackage.mutate(body, { onSuccess: () => setPackageFormOpen(false) })
-          }
-          pending={createPackage.isPending}
-        />
-      )}
 
       {incomeFormOpen && (
         <IncomeFormSheet
@@ -344,128 +326,6 @@ function Field({
       {children}
       {error && <span className="text-[12px] text-danger">{error}</span>}
     </label>
-  );
-}
-
-function PackageFormSheet({
-  onClose,
-  onSubmit,
-  pending,
-}: {
-  onClose: () => void;
-  onSubmit: (body: CreatePackageRequest) => void;
-  pending: boolean;
-}) {
-  const [lessons, setLessons] = useState('');
-  const [price, setPrice] = useState('');
-  const [startsAt, setStartsAt] = useState(todayStr());
-  const [workoutType, setWorkoutType] = useState('');
-  const [note, setNote] = useState('');
-  const [showErrors, setShowErrors] = useState(false);
-
-  const lessonsNum = Number(lessons);
-  const priceNum = Number(price);
-
-  const errors = {
-    lessons:
-      lessons.trim() === '' || !Number.isInteger(lessonsNum) || lessonsNum <= 0
-        ? 'Целое число больше 0'
-        : '',
-    price: price.trim() === '' || !(priceNum > 0) ? 'Сумма больше 0' : '',
-    startsAt: startsAt.trim() === '' ? 'Укажите дату' : '',
-  };
-  const hasErrors = errors.lessons !== '' || errors.price !== '' || errors.startsAt !== '';
-
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (hasErrors) {
-      setShowErrors(true);
-      return;
-    }
-    const body: CreatePackageRequest = {
-      lessonsPaid: lessonsNum,
-      pricePerLesson: priceNum,
-      totalPaid: lessonsNum * priceNum,
-      startsAt,
-    };
-    const wt = workoutType.trim();
-    if (wt !== '') body.workoutType = wt;
-    const n = note.trim();
-    if (n !== '') body.note = n;
-    onSubmit(body);
-  }
-
-  const total = errors.lessons === '' && errors.price === '' ? lessonsNum * priceNum : 0;
-
-  return (
-    <Sheet title="Новый пакет" onClose={onClose}>
-      <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-4 pb-4">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Занятий" error={showErrors ? errors.lessons : ''}>
-            <input
-              type="number"
-              inputMode="numeric"
-              min={1}
-              value={lessons}
-              onChange={(ev) => setLessons(ev.target.value)}
-              className={inputClass}
-            />
-          </Field>
-          <Field label="Цена за занятие, ₽" error={showErrors ? errors.price : ''}>
-            <input
-              type="number"
-              inputMode="decimal"
-              min={1}
-              value={price}
-              onChange={(ev) => setPrice(ev.target.value)}
-              className={inputClass}
-            />
-          </Field>
-        </div>
-
-        {total > 0 && (
-          <p className="font-[family-name:var(--font-mono)] text-[13px] text-ink-muted">
-            Итого: <span className="font-bold tabular-nums text-ink">{formatMoney(total)}</span>
-          </p>
-        )}
-
-        <Field label="Дата начала" error={showErrors ? errors.startsAt : ''}>
-          <input
-            type="date"
-            value={startsAt}
-            onChange={(ev) => setStartsAt(ev.target.value)}
-            className={inputClass}
-          />
-        </Field>
-
-        <Field label="Тип тренировок (необязательно)">
-          <input
-            type="text"
-            value={workoutType}
-            onChange={(ev) => setWorkoutType(ev.target.value)}
-            placeholder="Например, персональные"
-            className={inputClass}
-          />
-        </Field>
-
-        <Field label="Заметка (необязательно)">
-          <input
-            type="text"
-            value={note}
-            onChange={(ev) => setNote(ev.target.value)}
-            className={inputClass}
-          />
-        </Field>
-
-        <button
-          type="submit"
-          disabled={pending}
-          className="mt-1 rounded-full bg-accent px-4 py-3 text-[15px] font-semibold text-accent-on active:scale-[0.99] disabled:opacity-50"
-        >
-          {pending ? '…' : 'Добавить пакет'}
-        </button>
-      </form>
-    </Sheet>
   );
 }
 
