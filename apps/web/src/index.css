@@ -260,6 +260,21 @@ input[type='number'] {
   animation-delay: 0.3s;
 }
 
+/* Карточка «всплывает» вверх при попадании в коллектор завершённых. */
+@keyframes collector-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 0.8;
+    transform: translateY(0);
+  }
+}
+.collector-rise {
+  animation: collector-rise 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 /* Hide scrollbars — на мобильных Safari/Chrome они и так overlay */
 html,
 body {

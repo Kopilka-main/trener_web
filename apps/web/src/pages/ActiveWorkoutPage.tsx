@@ -359,29 +359,30 @@ function ActiveView({
           </span>
         </div>
 
-        {/* Коллектор завершённых: свёрнуто — только последний, развёрнуто — все. */}
-        {completed.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => setDoneExpanded((v) => !v)}
-              className="flex items-center gap-1.5 self-start px-0.5"
+        {/* Коллектор завершённых: показывается всегда; свёрнуто — последний, развёрнуто — все. */}
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => setDoneExpanded((v) => !v)}
+            className="flex items-center justify-between gap-2 rounded-xl bg-card px-3.5 py-3"
+          >
+            <span className="font-[family-name:var(--font-mono)] text-[13px] font-semibold uppercase tracking-[0.06em] text-ink-muted">
+              Завершено · {completed.length}
+            </span>
+            <ChevronDown
+              size={18}
+              className={`text-ink-muted transition-transform ${doneExpanded ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {visibleCompleted.map((ex) => (
+            <div
+              key={ex.position}
+              className="collector-rise shelf rounded-2xl px-3 py-1 opacity-80"
             >
-              <span className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.06em] text-ink-mutedxl">
-                Завершено · {completed.length}
-              </span>
-              <ChevronDown
-                size={14}
-                className={`text-ink-muted transition-transform ${doneExpanded ? 'rotate-180' : ''}`}
-              />
-            </button>
-            {visibleCompleted.map((ex) => (
-              <div key={ex.position} className="shelf rounded-2xl px-3 py-1 opacity-80">
-                {cardBody(ex)}
-              </div>
-            ))}
-          </div>
-        )}
+              {cardBody(ex)}
+            </div>
+          ))}
+        </div>
 
         {pendingItems.length > 0 && (
           <SortableList
