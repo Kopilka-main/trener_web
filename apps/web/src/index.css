@@ -204,6 +204,62 @@ input[type='number'] {
   filter: drop-shadow(0 0 6px rgba(11, 12, 16, 0.5));
 }
 
+/* CTA «Перейти к тренировкам»: каскад из трёх шевронов справа (эффект разгона);
+   при удержании все три загораются крупнее, как заполняющийся индикатор. */
+@keyframes cta-chevron-cycle {
+  0% {
+    opacity: 0;
+    transform: translateX(-3px);
+  }
+  25% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  50% {
+    opacity: 0;
+    transform: translateX(3px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(3px);
+  }
+}
+.cta-chevron {
+  opacity: 0;
+  animation: cta-chevron-cycle 2.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  transition:
+    opacity 120ms ease,
+    transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.cta-chevron-1 {
+  animation-delay: 0s;
+}
+.cta-chevron-2 {
+  animation-delay: 0.27s;
+}
+.cta-chevron-3 {
+  animation-delay: 0.54s;
+}
+@keyframes cta-chevron-fill {
+  0% {
+    opacity: 0;
+    transform: translateX(-4px) scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1.4);
+  }
+}
+.cta-launch:active .cta-chevron {
+  animation: cta-chevron-fill 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.cta-launch:active .cta-chevron-2 {
+  animation-delay: 0.15s;
+}
+.cta-launch:active .cta-chevron-3 {
+  animation-delay: 0.3s;
+}
+
 /* Hide scrollbars — на мобильных Safari/Chrome они и так overlay */
 html,
 body {

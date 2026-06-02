@@ -1,19 +1,16 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  Archive,
-  ArchiveRestore,
   BarChart3,
   CalendarDays,
-  ChevronsRight,
+  ChevronRight,
   Dumbbell,
   FileText,
   MessageSquare,
   Pencil,
-  Trash2,
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
-import { useClient, useDeleteClient, useUpdateClient } from '../api/clients';
+import { useClient } from '../api/clients';
 import { useClientWorkouts } from '../api/client-workouts';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Avatar } from '../components/Avatar';
@@ -65,22 +62,6 @@ export function ClientCardPage() {
 
   const client = useClient(id);
   const workouts = useClientWorkouts(id);
-  const updateMutation = useUpdateClient(id);
-  const deleteMutation = useDeleteClient();
-
-  function handleArchive() {
-    const next = client.data?.status === 'archived' ? 'active' : 'archived';
-    updateMutation.mutate({ status: next });
-  }
-
-  function handleDelete() {
-    if (!window.confirm('Удалить клиента? Действие необратимо.')) return;
-    deleteMutation.mutate(id, {
-      onSuccess: () => {
-        void navigate('/clients', { replace: true });
-      },
-    });
-  }
 
   if (client.isPending) {
     return (
@@ -164,16 +145,28 @@ export function ClientCardPage() {
         <button
           type="button"
           onClick={() => void navigate(`/clients/${id}/workouts`)}
-          className="tile-shadow-primary flex items-center gap-4 rounded-2xl bg-accent px-5 py-5 text-left text-accent-on active:scale-[0.98]"
+          className="cta-launch tile-shadow-primary flex items-center gap-4 rounded-2xl bg-accent px-5 py-4 text-left text-accent-on active:scale-[0.98]"
         >
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-black/10">
-            <Dumbbell size={24} strokeWidth={2} />
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black/10">
+            <Dumbbell size={22} strokeWidth={2} />
           </span>
           <span className="flex min-w-0 flex-1 flex-col">
-            <span className="text-[17px] font-bold leading-tight">Перейти к тренировкам</span>
-            <span className="text-[13px] opacity-70">текущая + история</span>
+            <span className="text-[16px] font-bold leading-tight">Перейти к тренировкам</span>
+            <span className="text-[12px] opacity-70">текущая + история</span>
           </span>
-          <ChevronsRight size={26} strokeWidth={2} className="shrink-0" />
+          <span className="flex shrink-0 items-center">
+            <ChevronRight
+              size={22}
+              strokeWidth={2.6}
+              className="cta-chevron cta-chevron-1 -mr-2.5"
+            />
+            <ChevronRight
+              size={22}
+              strokeWidth={2.6}
+              className="cta-chevron cta-chevron-2 -mr-2.5"
+            />
+            <ChevronRight size={22} strokeWidth={2.6} className="cta-chevron cta-chevron-3" />
+          </span>
         </button>
 
         {/* Сетка плиток-разделов. */}
@@ -213,34 +206,6 @@ export function ClientCardPage() {
             <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-ink">{c.notes}</p>
           </section>
         )}
-
-        {/* Действия. */}
-        <div className="flex flex-col gap-2 pt-1">
-          <button
-            type="button"
-            onClick={handleArchive}
-            disabled={updateMutation.isPending}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-card-elevated py-3.5 text-[14px] font-semibold text-ink active:bg-card disabled:opacity-50"
-          >
-            {isArchived ? (
-              <>
-                <ArchiveRestore size={18} strokeWidth={1.8} /> Вернуть из архива
-              </>
-            ) : (
-              <>
-                <Archive size={18} strokeWidth={1.8} /> В архив
-              </>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={deleteMutation.isPending}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-card py-3.5 text-[14px] font-semibold text-ink active:bg-card-elevated disabled:opacity-50"
-          >
-            <Trash2 size={18} strokeWidth={1.8} className="text-danger" /> Удалить
-          </button>
-        </div>
       </div>
     </div>
   );
