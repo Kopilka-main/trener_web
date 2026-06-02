@@ -49,6 +49,9 @@ function fakeRepo(over: Partial<ClientWorkoutsRepo> = {}): ClientWorkoutsRepo {
     updateSet: vi.fn(() => Promise.resolve(row())),
     complete: vi.fn(() => Promise.resolve('updated' as const)),
     remove: vi.fn(() => Promise.resolve(false)),
+    addExercise: vi.fn(() => Promise.resolve(row())),
+    removeExercise: vi.fn(() => Promise.resolve(row())),
+    reorderExercises: vi.fn(() => Promise.resolve(row())),
     ...over,
   };
 }
@@ -188,5 +191,146 @@ describe('client-workouts.service', () => {
   it('remove бросает 404, если repo.remove=false', async () => {
     const svc = makeClientWorkoutsService(fakeRepo(), deps);
     await expect(svc.remove('A', 'c1', 'missing')).rejects.toMatchObject({ status: 404 });
+  });
+
+  // --- addExercise ---
+
+  it('addExercise добавляет упражнение и прокидывает scope+план в repo', async () => {
+    const addExercise = vi.fn(() =>
+      Promise.resolve(
+        row({
+          exercises: [
+            ...row().exercises,
+            {
+              position: 1,
+              exerciseId: 'g2',
+              exerciseName: 'Присед',
+              sets: [
+                {
+                  setIndex: 0,
+                  plannedReps: 8,
+                  plannedWeightKg: null,
+                  plannedTimeSec: null,
+                  plannedRestSec: null,
+                  actualReps: null,
+                  actualWeightKg: null,
+                  actualTimeSec: null,
+                  done: false,
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+    const svc = makeClientWorkoutsService(
+      fakeRepo({ getFull: vi.fn(() => Promise.resolve(row())), addExercise }),
+      deps,
+    );
+    const res = await svc.addExercise('A', 'c1', 'w1', {
+      exerciseId: 'g2',
+      sets: [{ plannedReps: 8 }],
+    });
+    const last = res.exercises.at(-1);
+    expect(last?.position).toBe(1);
+    expect(last?.exerciseId).toBe('g2');
+    expect(addExercise).toHaveBeenCalledWith(
+      'A',
+      'c1',
+      'w1',
+      expect.objectContaining({ exerciseId: 'g2' }),
+    );
+  });
+
+  it('addExercise в отсутствующую тренировку (getFull → null) → 404', async () => {
+    const svc = makeClientWorkoutsService(
+      fakeRepo({ getFull: vi.fn(() => Promise.resolve(null)) }),
+      deps,
+    );
+    await expect(
+      svc.addExercise('A', 'c1', 'missing', { exerciseId: 'g2', sets: [{}] }),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('addExercise с невидимым упражнением → 400 UNKNOWN_EXERCISE', async () => {
+    const svc = makeClientWorkoutsService(
+      fakeRepo({
+        getFull: vi.fn(() => Promise.resolve(row())),
+        areExercisesVisible: vi.fn(() => Promise.resolve(false)),
+      }),
+      deps,
+    );
+    await expect(
+      svc.addExercise('A', 'c1', 'w1', { exerciseId: 'bad', sets: [{}] }),
+    ).rejects.toMatchObject({ status: 400, code: 'UNKNOWN_EXERCISE' });
+  });
+
+  // --- removeExercise ---
+
+  it('removeExercise возвращает обновлённую тренировку с перенумерованными позициями', async () => {
+    const renumbered = row({
+      exercises: [{ position: 0, exerciseId: 'g2', exerciseName: 'Присед', sets: [] }],
+    });
+    const removeExercise = vi.fn(() => Promise.resolve(renumbered));
+    const svc = makeClientWorkoutsService(fakeRepo({ removeExercise }), deps);
+    const res = await svc.removeExercise('A', 'c1', 'w1', 0);
+    expect(res.exercises).toHaveLength(1);
+    expect(res.exercises[0]?.position).toBe(0);
+    expect(removeExercise).toHaveBeenCalledWith('A', 'c1', 'w1', 0);
+  });
+
+  it('removeExercise несуществующей тренировки (repo → null) → 404', async () => {
+    const svc = makeClientWorkoutsService(
+      fakeRepo({ removeExercise: vi.fn(() => Promise.resolve(null)) }),
+      deps,
+    );
+    await expect(svc.removeExercise('A', 'c1', 'missing', 0)).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it('removeExercise несуществующей позиции (repo → not_found_pos) → 404', async () => {
+    const svc = makeClientWorkoutsService(
+      fakeRepo({ removeExercise: vi.fn(() => Promise.resolve('not_found_pos' as const)) }),
+      deps,
+    );
+    await expect(svc.removeExercise('A', 'c1', 'w1', 99)).rejects.toMatchObject({ status: 404 });
+  });
+
+  // --- reorderExercises ---
+
+  it('reorderExercises прокидывает order и возвращает новый порядок', async () => {
+    const reordered = row({
+      exercises: [
+        { position: 0, exerciseId: 'g2', exerciseName: 'Присед', sets: [] },
+        { position: 1, exerciseId: 'g1', exerciseName: 'Жим лёжа', sets: [] },
+      ],
+    });
+    const reorderExercises = vi.fn(() => Promise.resolve(reordered));
+    const svc = makeClientWorkoutsService(fakeRepo({ reorderExercises }), deps);
+    const res = await svc.reorderExercises('A', 'c1', 'w1', [1, 0]);
+    expect(res.exercises.map((e) => e.exerciseId)).toEqual(['g2', 'g1']);
+    expect(reorderExercises).toHaveBeenCalledWith('A', 'c1', 'w1', [1, 0]);
+  });
+
+  it('reorderExercises с неверным набором (repo → bad_order) → 400 BAD_ORDER', async () => {
+    const svc = makeClientWorkoutsService(
+      fakeRepo({ reorderExercises: vi.fn(() => Promise.resolve('bad_order' as const)) }),
+      deps,
+    );
+    await expect(svc.reorderExercises('A', 'c1', 'w1', [0, 5])).rejects.toMatchObject({
+      status: 400,
+      code: 'BAD_ORDER',
+    });
+  });
+
+  it('reorderExercises несуществующей тренировки (repo → null) → 404', async () => {
+    const svc = makeClientWorkoutsService(
+      fakeRepo({ reorderExercises: vi.fn(() => Promise.resolve(null)) }),
+      deps,
+    );
+    await expect(svc.reorderExercises('A', 'c1', 'missing', [0])).rejects.toMatchObject({
+      status: 404,
+    });
   });
 });

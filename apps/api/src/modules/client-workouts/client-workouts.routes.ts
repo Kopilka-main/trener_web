@@ -5,6 +5,8 @@ import {
   createWorkoutRequestSchema,
   updateSetRequestSchema,
   completeWorkoutRequestSchema,
+  addWorkoutExerciseRequestSchema,
+  reorderWorkoutExercisesRequestSchema,
   workoutResponseSchema,
   workoutListResponseSchema,
 } from '@trener/shared';
@@ -24,6 +26,11 @@ const setParams = z.object({
   wid: z.string(),
   pos: z.coerce.number().int().min(0),
   idx: z.coerce.number().int().min(0),
+});
+const exerciseParams = z.object({
+  id: z.string(),
+  wid: z.string(),
+  pos: z.coerce.number().int().min(0),
 });
 const workoutWrap = z.object({ workout: workoutResponseSchema });
 
@@ -102,6 +109,57 @@ export function clientWorkoutsRoutes(
         req.params.pos,
         req.params.idx,
         req.body,
+      ),
+    }),
+  );
+
+  typed.post(
+    '/api/clients/:id/workouts/:wid/exercises',
+    {
+      preHandler,
+      schema: {
+        params: workoutParams,
+        body: addWorkoutExerciseRequestSchema,
+        response: { 200: workoutWrap },
+      },
+    },
+    async (req) => ({
+      workout: await svc.addExercise(trainerId(req), req.params.id, req.params.wid, req.body),
+    }),
+  );
+
+  typed.delete(
+    '/api/clients/:id/workouts/:wid/exercises/:pos',
+    {
+      preHandler,
+      schema: { params: exerciseParams, response: { 200: workoutWrap } },
+    },
+    async (req) => ({
+      workout: await svc.removeExercise(
+        trainerId(req),
+        req.params.id,
+        req.params.wid,
+        req.params.pos,
+      ),
+    }),
+  );
+
+  typed.patch(
+    '/api/clients/:id/workouts/:wid/exercises',
+    {
+      preHandler,
+      schema: {
+        params: workoutParams,
+        body: reorderWorkoutExercisesRequestSchema,
+        response: { 200: workoutWrap },
+      },
+    },
+    async (req) => ({
+      workout: await svc.reorderExercises(
+        trainerId(req),
+        req.params.id,
+        req.params.wid,
+        req.body.order,
       ),
     }),
   );

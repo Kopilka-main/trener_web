@@ -30,6 +30,18 @@ export const createWorkoutRequestSchema = z.object({
 });
 export type CreateWorkoutRequest = z.infer<typeof createWorkoutRequestSchema>;
 
+// --- Редактирование набора упражнений тренировки ---
+
+// Добавление упражнения = тот же план одной позиции (exerciseId + plannedSets).
+export const addWorkoutExerciseRequestSchema = workoutExercisePlanSchema;
+export type AddWorkoutExerciseRequest = z.infer<typeof addWorkoutExerciseRequestSchema>;
+
+// order = массив текущих position в новом порядке (перестановка существующих позиций).
+export const reorderWorkoutExercisesRequestSchema = z.object({
+  order: z.array(z.number().int().min(0)).min(1),
+});
+export type ReorderWorkoutExercisesRequest = z.infer<typeof reorderWorkoutExercisesRequestSchema>;
+
 // --- Фиксация факта по подходу ---
 
 export const updateSetRequestSchema = z.object({

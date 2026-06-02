@@ -12,6 +12,7 @@ import type {
   PlannedSet,
   UpdateSetRequest,
   CompleteWorkoutRequest,
+  AddWorkoutExerciseRequest,
   WorkoutResponse,
 } from '@trener/shared';
 import { AppError, notFound } from '../../errors.js';
@@ -157,6 +158,51 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
     async remove(trainerId: string, clientId: string, workoutId: string): Promise<void> {
       const ok = await repo.remove(trainerId, clientId, workoutId);
       if (!ok) throw notFound('Тренировка не найдена');
+    },
+
+    // Добавляет упражнение в конец тренировки. 404 (нет в паре) / 400 UNKNOWN_EXERCISE (невидимо).
+    async addExercise(
+      trainerId: string,
+      clientId: string,
+      workoutId: string,
+      input: AddWorkoutExerciseRequest,
+    ): Promise<WorkoutResponse> {
+      // Сначала проверяем существование тренировки в паре (404), затем видимость (400).
+      const existing = await repo.getFull(trainerId, clientId, workoutId);
+      if (!existing) throw notFound('Тренировка не найдена');
+      const visible = await repo.areExercisesVisible(trainerId, [input.exerciseId]);
+      if (!visible) throw unknownExercise();
+
+      const row = await repo.addExercise(trainerId, clientId, workoutId, toExerciseInput(input));
+      if (!row) throw notFound('Тренировка не найдена');
+      return toResponse(row);
+    },
+
+    // Удаляет упражнение на позиции pos; оставшиеся позиции перенумеровываются 0..n-1.
+    async removeExercise(
+      trainerId: string,
+      clientId: string,
+      workoutId: string,
+      pos: number,
+    ): Promise<WorkoutResponse> {
+      const res = await repo.removeExercise(trainerId, clientId, workoutId, pos);
+      if (res === null) throw notFound('Тренировка не найдена');
+      if (res === 'not_found_pos') throw notFound('Упражнение не найдено');
+      return toResponse(res);
+    },
+
+    // Переставляет упражнения согласно order (старые position в новом порядке).
+    async reorderExercises(
+      trainerId: string,
+      clientId: string,
+      workoutId: string,
+      order: number[],
+    ): Promise<WorkoutResponse> {
+      const res = await repo.reorderExercises(trainerId, clientId, workoutId, order);
+      if (res === null) throw notFound('Тренировка не найдена');
+      if (res === 'bad_order')
+        throw new AppError(400, 'BAD_ORDER', 'order должен быть перестановкой позиций упражнений');
+      return toResponse(res);
     },
   };
 }
