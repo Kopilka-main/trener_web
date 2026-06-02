@@ -12,21 +12,26 @@ import {
 } from 'lucide-react';
 import { useClient } from '../api/clients';
 import { useClientWorkouts } from '../api/client-workouts';
-import { ScreenHeader } from '../components/ScreenHeader';
 import { Avatar } from '../components/Avatar';
 
-/** Полных лет по дате рождения (YYYY-MM-DD); null, если дата пуста или некорректна. */
+/** Полных лет по дате рождения (YYYY-MM-DD); null, если дата пуста или некорректна.
+ *  Разбираем компоненты строки напрямую (без new Date) — иначе UTC-парсинг даёт
+ *  таймзонный сдвиг и возраст может округлиться в большую сторону. */
 function ageFromBirthDate(birthDate: string | null): number | null {
   if (!birthDate) return null;
-  const born = new Date(birthDate);
-  if (Number.isNaN(born.getTime())) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(birthDate);
+  if (!m) return null;
+  const by = Number(m[1]);
+  const bm = Number(m[2]);
+  const bd = Number(m[3]);
   const now = new Date();
-  let age = now.getFullYear() - born.getFullYear();
-  const monthDiff = now.getMonth() - born.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < born.getDate())) {
-    age -= 1;
-  }
-  return age >= 0 ? age : null;
+  const ty = now.getFullYear();
+  const tm = now.getMonth() + 1;
+  const td = now.getDate();
+  let age = ty - by;
+  // День рождения в этом году ещё не наступил — минус год.
+  if (tm < bm || (tm === bm && td < bd)) age -= 1;
+  return age >= 0 && age < 150 ? age : null;
 }
 
 /** Склонение «год / года / лет» по числу лет. */
@@ -64,22 +69,14 @@ export function ClientCardPage() {
   const workouts = useClientWorkouts(id);
 
   if (client.isPending) {
-    return (
-      <div className="flex min-h-full flex-col">
-        <ScreenHeader title="Клиент" back="/clients" />
-        <p className="px-5 py-6 text-sm text-ink-muted">Загрузка…</p>
-      </div>
-    );
+    return <p className="px-5 py-6 text-sm text-ink-muted">Загрузка…</p>;
   }
 
   if (client.isError || !client.data) {
     return (
-      <div className="flex min-h-full flex-col">
-        <ScreenHeader title="Клиент" back="/clients" />
-        <p className="px-5 py-6 text-sm text-ink-muted" role="alert">
-          Не удалось загрузить клиента.
-        </p>
-      </div>
+      <p className="px-5 py-6 text-sm text-ink-muted" role="alert">
+        Не удалось загрузить клиента.
+      </p>
     );
   }
 
@@ -87,28 +84,12 @@ export function ClientCardPage() {
   const isArchived = c.status === 'archived';
   const age = ageFromBirthDate(c.birthDate);
   const completedCount = workouts.data?.filter((w) => w.status === 'completed').length ?? 0;
+  const connected = (c.accountId ?? '').trim() !== '';
 
   return (
     <div className="flex min-h-full flex-col">
-      <ScreenHeader
-        title=""
-        back="/clients"
-        right={
-          <button
-            type="button"
-            onClick={() => void navigate(`/clients/${id}/edit`)}
-            aria-label="Профиль и подключение"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-accent active:bg-card-elevated"
-          >
-            <svg width={22} height={22} viewBox="0 -960 960 960" fill="currentColor" aria-hidden>
-              <path d="M680-160v-120H560v-80h120v-120h80v120h120v80H760v120h-80ZM440-280H280q-83 0-141.5-58.5T80-480q0-83 58.5-141.5T280-680h160v80H280q-50 0-85 35t-35 85q0 50 35 85t85 35h160v80ZM320-440v-80h320v80H320Zm560-40h-80q0-50-35-85t-85-35H520v-80h160q83 0 141.5 58.5T880-480Z" />
-            </svg>
-          </button>
-        }
-      />
-
-      <div className="flex flex-col gap-5 px-5 pb-8 pt-1">
-        {/* Шапка профиля: аватар + имя + возраст. */}
+      <div className="flex flex-col gap-5 px-5 pb-8 pt-4">
+        {/* Шапка профиля: аватар + имя + возраст + связь (цвет по подключению). */}
         <div className="flex items-center gap-4">
           <Avatar firstName={c.firstName} lastName={c.lastName} size={64} muted={isArchived} />
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -128,6 +109,18 @@ export function ClientCardPage() {
               </span>
             )}
           </div>
+          <button
+            type="button"
+            onClick={() => void navigate(`/clients/${id}/edit`)}
+            aria-label={connected ? 'Клиент подключён' : 'Подключить клиента'}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-card-elevated ${
+              connected ? 'text-accent' : 'text-danger'
+            }`}
+          >
+            <svg width={22} height={22} viewBox="0 -960 960 960" fill="currentColor" aria-hidden>
+              <path d="M680-160v-120H560v-80h120v-120h80v120h120v80H760v120h-80ZM440-280H280q-83 0-141.5-58.5T80-480q0-83 58.5-141.5T280-680h160v80H280q-50 0-85 35t-35 85q0 50 35 85t85 35h160v80ZM320-440v-80h320v80H320Zm560-40h-80q0-50-35-85t-85-35H520v-80h160q83 0 141.5 58.5T880-480Z" />
+            </svg>
+          </button>
         </div>
 
         {/* Теги. */}
@@ -181,7 +174,7 @@ export function ClientCardPage() {
                 className="tile-shadow flex flex-col gap-3 rounded-2xl p-4 text-left active:scale-[0.98]"
               >
                 <div className="flex items-start justify-between">
-                  <Icon size={22} strokeWidth={1.8} className="text-accent" />
+                  <Icon size={22} strokeWidth={1.8} className="text-ink" />
                   {showCount && (
                     <span className="text-[22px] font-bold leading-none text-ink">
                       {completedCount}

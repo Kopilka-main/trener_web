@@ -32,6 +32,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
   const [accountId, setAccountId] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [connectOpen, setConnectOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
 
   useEffect(() => {
@@ -129,8 +130,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
     }
   }
 
-  function handleDelete() {
-    if (!window.confirm('Удалить клиента? Действие необратимо.')) return;
+  function confirmDelete() {
     deleteMutation.mutate(id, {
       onSuccess: () => {
         void navigate('/clients', { replace: true });
@@ -373,7 +373,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
         {editing && (
           <button
             type="button"
-            onClick={handleDelete}
+            onClick={() => setDeleteOpen(true)}
             disabled={deleteMutation.isPending}
             className="mt-2 flex items-center justify-center gap-2 rounded-2xl bg-card py-3.5 text-[14px] font-semibold text-ink active:bg-card-elevated disabled:opacity-50"
           >
@@ -396,6 +396,86 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
           onClose={() => setConnectOpen(false)}
         />
       )}
+
+      {deleteOpen && (
+        <DeleteDialog
+          clientName={`${firstName} ${lastName}`.trim()}
+          pending={deleteMutation.isPending}
+          onConfirm={confirmDelete}
+          onClose={() => setDeleteOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function DeleteDialog({
+  clientName,
+  pending,
+  onConfirm,
+  onClose,
+}: {
+  clientName: string;
+  pending: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState('');
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const matches = draft.trim().toLowerCase() === clientName.toLowerCase() && clientName !== '';
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl bg-card p-5"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Удаление клиента"
+      >
+        <h2 className="text-[17px] font-bold text-ink">Удалить клиента</h2>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-ink-muted">
+          Действие необратимо. Для подтверждения введите имя клиента:{' '}
+          <span className="font-semibold text-ink">{clientName}</span>
+        </p>
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="Имя клиента"
+          aria-label="Имя клиента для подтверждения"
+          autoFocus
+          className="mt-3 w-full rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none focus:border-accent"
+        />
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-xl bg-card-elevated py-3 text-[14px] font-semibold text-ink active:bg-card"
+          >
+            Отмена
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={!matches || pending}
+            className="flex-1 rounded-xl bg-danger py-3 text-[14px] font-semibold text-white disabled:opacity-40"
+          >
+            {pending ? '…' : 'Удалить'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
