@@ -259,45 +259,43 @@ function ActiveView({
       <ScreenHeader title={workout.name} back={backTo} />
 
       <div className="flex flex-1 flex-col gap-3 px-5 pb-28 pt-2">
-        {/* Сводка времени/прогресса, отдых (между значениями) и завершение удержанием. */}
-        <div className="tile-shadow-primary flex flex-col gap-3 rounded-2xl px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <span className="flex shrink-0 flex-col">
-              <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.06em] opacity-70">
-                Прошло
-              </span>
-              <span className="text-2xl font-bold tabular-nums leading-tight">
-                {formatDuration(elapsed)}
-              </span>
+        {/* Сводка; в центре — отдых (во время отдыха) либо завершение удержанием. */}
+        <div className="tile-shadow-primary flex items-center justify-between gap-3 rounded-2xl px-4 py-3">
+          <span className="flex shrink-0 flex-col">
+            <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.06em] opacity-70">
+              Прошло
             </span>
-
-            {rest && (
-              <RestTimer
-                seconds={rest.sec}
-                onDone={() => setRest(null)}
-                onSkip={() => setRest(null)}
-              />
-            )}
-
-            <span className="flex shrink-0 flex-col text-right">
-              <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.06em] opacity-70">
-                Подходов
-              </span>
-              <span className="text-xl font-bold tabular-nums leading-tight">
-                {counters.done} / {counters.total}
-              </span>
+            <span className="text-2xl font-bold tabular-nums leading-tight">
+              {formatDuration(elapsed)}
             </span>
-          </div>
+          </span>
 
-          <HoldComplete
-            pending={complete.isPending}
-            onComplete={() =>
-              complete.mutate(
-                { durationSec: elapsed > 0 ? elapsed : null, rpe: null, trainerNote: null },
-                { onSuccess: () => void navigate(backTo, { replace: true }) },
-              )
-            }
-          />
+          {rest ? (
+            <RestTimer
+              seconds={rest.sec}
+              onDone={() => setRest(null)}
+              onSkip={() => setRest(null)}
+            />
+          ) : (
+            <HoldComplete
+              pending={complete.isPending}
+              onComplete={() =>
+                complete.mutate(
+                  { durationSec: elapsed > 0 ? elapsed : null, rpe: null, trainerNote: null },
+                  { onSuccess: () => void navigate(backTo, { replace: true }) },
+                )
+              }
+            />
+          )}
+
+          <span className="flex shrink-0 flex-col text-right">
+            <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.06em] opacity-70">
+              Подходов
+            </span>
+            <span className="text-xl font-bold tabular-nums leading-tight">
+              {counters.done} / {counters.total}
+            </span>
+          </span>
         </div>
 
         <SortableList
@@ -768,7 +766,7 @@ function HoldComplete({ pending, onComplete }: { pending: boolean; onComplete: (
       onPointerLeave={cancel}
       onPointerCancel={cancel}
       onContextMenu={(e) => e.preventDefault()}
-      className="relative h-11 w-full touch-none select-none overflow-hidden rounded-xl bg-black/10 text-accent-on disabled:opacity-50"
+      className="relative h-10 min-w-0 touch-none select-none overflow-hidden rounded-full bg-black/10 px-5 text-accent-on disabled:opacity-50"
     >
       <span
         aria-hidden
@@ -779,9 +777,8 @@ function HoldComplete({ pending, onComplete }: { pending: boolean; onComplete: (
           transitionDuration: holding ? `${String(HOLD_COMPLETE_MS)}ms` : '160ms',
         }}
       />
-      <span className="relative z-10 flex h-full items-center justify-center gap-2 text-[14px] font-bold">
-        <Check size={18} strokeWidth={2.6} />
-        {holding ? 'Держите…' : 'Завершить (удерживайте)'}
+      <span className="relative z-10 flex h-full items-center justify-center text-[14px] font-bold">
+        Завершить
       </span>
     </button>
   );
