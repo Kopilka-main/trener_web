@@ -1,15 +1,225 @@
 @import 'tailwindcss';
 
+/* GYM Acid Flow — единая тёмная тема проекта. */
+@theme {
+  /* layout */
+  --color-canvas: #000000; /* «обои» вокруг моб-каркаса */
+  --color-bg: #0b0c10; /* фон приложения */
+  --color-card: #15171d; /* panel — основные карточки */
+  --color-card-elevated: #1d2029; /* panel2 — приподнятые блоки/иконки */
+  --color-chip: #1f2128; /* мелкие плашки/чипы */
+  --color-line: rgba(255, 255, 255, 0.1);
+  --color-line-strong: rgba(255, 255, 255, 0.2);
+
+  /* текст: ink → text2 → text3 */
+  --color-ink: #eeeee8; /* основной (НЕ чисто белый — кремовый по спеке) */
+  --color-ink-muted: #9a9da6; /* вторичный */
+  --color-ink-mutedxl: #5e626b; /* третичный (мелкие sub, captions) */
+
+  /* акценты */
+  --color-accent: #d4ff3d; /* лайм */
+  --color-accent-on: #0b0c10; /* текст на лайме (всегда чёрный) */
+  --color-accent-text: #d4ff3d; /* акцент в тексте — на тёмном лайм светится */
+  --color-accent-2: #5c7a0e;
+
+  /* семантика */
+  --color-success: #5c7a0e;
+  --color-success-soft: #1e2818;
+  --color-danger: #e04a2e;
+  --color-danger-soft: #3a1c15;
+  --color-coral: #ff6e4e;
+  --color-amber: #e8b255;
+
+  --font-sans:
+    'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui,
+    sans-serif;
+  --font-display: 'Bowlby One', 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+}
+
 :root {
-  color-scheme: light;
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
 }
 
 body {
   margin: 0;
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
+  font-family: var(--font-sans);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: contain;
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Прячем нативную иконку у date/time-инпутов (календарик/часы) и принудительно
+   убираем AM/PM поле — везде 24-часовой формат, без правой иконки. */
+input[type='date']::-webkit-calendar-picker-indicator,
+input[type='time']::-webkit-calendar-picker-indicator {
+  display: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+input[type='time']::-webkit-datetime-edit-ampm-field {
+  display: none;
+}
+input[type='date'],
+input[type='time'] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Hide native number input arrows */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+/* Mobile container — каркас как на эскизах */
+.app-shell {
+  width: 100%;
+  max-width: 430px;
+  height: 100vh;
+  height: 100dvh;
+  margin-inline: auto;
+  background: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Плитки на главном экране тренера — material-like elevation и
+   лайм-glow при нажатии (active). Два варианта: обычная и primary (лайм). */
+.tile-shadow {
+  background: var(--color-card);
+  color: var(--color-ink);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+    0 0 0 1px var(--color-line),
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 6px 14px -4px rgba(0, 0, 0, 0.45);
+  transition:
+    box-shadow 180ms ease,
+    transform 120ms ease;
+}
+
+.tile-shadow-primary {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-accent) 94%, white 6%),
+    var(--color-accent)
+  );
+  color: var(--color-accent-on);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+    0 2px 4px rgba(0, 0, 0, 0.25),
+    0 8px 16px -6px rgba(212, 255, 61, 0.3);
+  transition:
+    box-shadow 180ms ease,
+    transform 120ms ease;
+}
+
+/* Слот иконки внутри плитки: прозрачный, без фона/обводки. */
+.tile-icon-shell {
+  background: transparent;
+}
+.tile-icon-shell-primary {
+  background: transparent;
+}
+
+/* «Полочка» — карточка с эффектом вдавления (inset shadows).
+   Используется в списке клиентов: row выглядит как утопленная ниша. */
+.shelf {
+  background: var(--color-card);
+  box-shadow:
+    inset 0 1.5px 3px rgba(0, 0, 0, 0.5),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+    0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+
+/* Chevron-стрелка справа в строке-плитке (список клиентов и т.п.):
+   в покое серая, при тапе плитки подсвечивается лаймом и светится. */
+.tile-chevron {
+  color: var(--color-ink-muted);
+  transition:
+    color 180ms ease,
+    filter 180ms ease;
+}
+.tile-shadow:active .tile-chevron,
+.row-glow:active .tile-chevron {
+  color: var(--color-accent);
+  filter: drop-shadow(0 0 6px rgba(212, 255, 61, 0.85))
+    drop-shadow(0 0 12px rgba(212, 255, 61, 0.45));
+}
+
+/* Стрелочка ↗ в правом верхнем углу плитки: при тапе подсвечивается лаймом. */
+.tile-arrow {
+  color: var(--color-ink);
+  opacity: 0.4;
+  transition:
+    color 180ms ease,
+    opacity 180ms ease,
+    filter 180ms ease;
+}
+.tile-shadow:active .tile-arrow {
+  color: var(--color-accent);
+  opacity: 1;
+  filter: drop-shadow(0 0 6px rgba(212, 255, 61, 0.85))
+    drop-shadow(0 0 12px rgba(212, 255, 61, 0.45));
+}
+
+.tile-arrow-primary {
+  color: var(--color-accent-on);
+  opacity: 0.7;
+  transition:
+    opacity 180ms ease,
+    filter 180ms ease;
+}
+.tile-shadow-primary:active .tile-arrow-primary {
+  opacity: 1;
+  filter: drop-shadow(0 0 6px rgba(11, 12, 16, 0.5));
+}
+
+/* Hide scrollbars — на мобильных Safari/Chrome они и так overlay */
+html,
+body {
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.app-shell *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.app-shell * {
+  scrollbar-width: none;
 }
