@@ -6,7 +6,7 @@ import { useExercises } from '../api/exercises';
 import { useTemplates } from '../api/workout-templates';
 import { orderSubgroups } from '../lib/muscleGroups';
 
-type Tab = 'templates' | 'exercises' | 'flex';
+type Tab = 'templates' | 'exercises';
 
 /** Предпочтительный порядок групп мышц для чипов (остальные категории — следом). */
 const GROUP_ORDER = [
@@ -21,14 +21,6 @@ const GROUP_ORDER = [
   'Растяжка',
   'Йога',
 ];
-
-/** Категории, относящиеся к вкладке «Растяжка» (растяжка/кардио/йога). */
-const FLEX_HINTS = ['растяж', 'кардио', 'йог', 'stretch', 'cardio', 'yoga'];
-
-function isFlexCategory(category: string): boolean {
-  const c = category.toLowerCase();
-  return FLEX_HINTS.some((h) => c.includes(h));
-}
 
 function CreateTile({ title, sub, onClick }: { title: string; sub: string; onClick: () => void }) {
   return (
@@ -156,20 +148,10 @@ export function KnowledgeBasePage() {
     return [...ordered, ...extras];
   }, [allTemplates, groupByExerciseId]);
 
-  const powerExercises = useMemo(
-    () => allExercises.filter((e) => !isFlexCategory(e.category)),
-    [allExercises],
-  );
-  const flexExercises = useMemo(
-    () => allExercises.filter((e) => isFlexCategory(e.category)),
-    [allExercises],
-  );
-  const hasFlex = flexExercises.length > 0;
+  // Все упражнения каталога (вкладка «Упражнения»).
+  const tabExercises = allExercises;
 
-  // Упражнения активной вкладки (Упражнения = силовые, Растяжка = flex).
-  const tabExercises = tab === 'flex' ? flexExercises : powerExercises;
-
-  // Чипы категорий — уникальные категории из упражнений активной вкладки.
+  // Чипы категорий — уникальные категории из упражнений.
   const categories = useMemo(() => {
     const set = new Set<string>();
     for (const e of tabExercises) set.add(e.category);
@@ -302,19 +284,10 @@ export function KnowledgeBasePage() {
           <SegmentTab
             active={tab === 'exercises'}
             onClick={() => selectTab('exercises')}
-            count={powerExercises.length}
+            count={tabExercises.length}
           >
             Упражнения
           </SegmentTab>
-          {hasFlex && (
-            <SegmentTab
-              active={tab === 'flex'}
-              onClick={() => selectTab('flex')}
-              count={flexExercises.length}
-            >
-              Растяжка
-            </SegmentTab>
-          )}
         </div>
 
         {showChips && (

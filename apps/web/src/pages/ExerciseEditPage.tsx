@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import type { CreateExerciseRequest } from '@trener/shared';
 import {
@@ -8,95 +8,86 @@ import {
   useDeleteExercise,
 } from '../api/exercises';
 import { Button } from '../components/Button';
-import { Field } from '../components/Field';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { Stepper } from '../components/Stepper';
 import { subgroupsFor } from '../lib/muscleGroups';
 
 interface ExerciseEditPageProps {
   mode: 'create' | 'edit';
 }
 
-/** Парсит число из строки поля; пустая строка → null (поле не задано). */
-function parseOptNum(value: string): number | null {
-  const trimmed = value.trim();
-  if (trimmed === '') return null;
-  const n = Number(trimmed);
-  return Number.isFinite(n) ? n : null;
+/** Группы мышц для выбора категории упражнения. */
+const GROUP_ORDER = ['Грудь', 'Спина', 'Ноги', 'Плечи', 'Руки', 'Пресс/Кор', 'Кардио', 'Растяжка'];
+
+/** Положительное число или null (0/пусто = не задано). */
+function positiveOrNull(value: number): number | null {
+  return value > 0 ? value : null;
 }
 
 export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
   const navigate = useNavigate();
   const params = useParams<{ id: string }>();
   const id = params.id ?? '';
+  const editing = mode === 'edit';
 
-  const existing = useExercise(mode === 'edit' ? id : '');
+  const existing = useExercise(editing ? id : '');
   const createMutation = useCreateExercise();
   const updateMutation = useUpdateExercise(id);
   const deleteMutation = useDeleteExercise();
+  const mutation = editing ? updateMutation : createMutation;
 
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('');
+  const [category, setCategory] = useState('Грудь');
   const [subgroup, setSubgroup] = useState('');
   const [description, setDescription] = useState('');
-  const [defaultReps, setDefaultReps] = useState('');
-  const [defaultWeightKg, setDefaultWeightKg] = useState('');
-  const [defaultTimeSec, setDefaultTimeSec] = useState('');
-  const [restSec, setRestSec] = useState('90');
+  const [defaultReps, setDefaultReps] = useState(10);
+  const [defaultWeightKg, setDefaultWeightKg] = useState(0);
+  const [defaultTimeSec, setDefaultTimeSec] = useState(0);
+  const [restSec, setRestSec] = useState(90);
   const [note, setNote] = useState('');
 
   useEffect(() => {
-    if (mode === 'edit' && existing.data) {
+    if (editing && existing.data) {
       const e = existing.data;
       setName(e.name);
       setCategory(e.category);
       setSubgroup(e.subgroup ?? '');
       setDescription(e.description ?? '');
-      setDefaultReps(e.defaultReps?.toString() ?? '');
-      setDefaultWeightKg(e.defaultWeightKg?.toString() ?? '');
-      setDefaultTimeSec(e.defaultTimeSec?.toString() ?? '');
-      setRestSec(e.restSec.toString());
+      setDefaultReps(e.defaultReps ?? 0);
+      setDefaultWeightKg(e.defaultWeightKg ?? 0);
+      setDefaultTimeSec(e.defaultTimeSec ?? 0);
+      setRestSec(e.restSec);
       setNote(e.note ?? '');
     }
-  }, [mode, existing.data]);
+  }, [editing, existing.data]);
 
-  const mutation = mode === 'create' ? createMutation : updateMutation;
-
-  // При смене категории сбрасываем подгруппу, если она не входит в новый список.
-  function handleCategoryChange(next: string) {
-    setCategory(next);
-    if (subgroup !== '' && !subgroupsFor(next.trim()).includes(subgroup)) {
-      setSubgroup('');
-    }
-  }
-
+  // Категория может прийти кастомная (не из списка) — покажем её тоже.
+  const categoryChips = GROUP_ORDER.includes(category) ? GROUP_ORDER : [category, ...GROUP_ORDER];
   const subgroupOptions = subgroupsFor(category.trim());
 
-  function handleSubmit(ev: FormEvent<HTMLFormElement>) {
-    ev.preventDefault();
+  function selectCategory(next: string) {
+    setCategory(next);
+    if (subgroup !== '' && !subgroupsFor(next.trim()).includes(subgroup)) setSubgroup('');
+  }
+
+  function save() {
+    if (name.trim() === '') return;
     const payload: CreateExerciseRequest = {
       name: name.trim(),
       category: category.trim(),
       subgroup: subgroup.trim() === '' ? null : subgroup.trim(),
       description: description.trim() === '' ? null : description.trim(),
-      defaultReps: parseOptNum(defaultReps),
-      defaultWeightKg: parseOptNum(defaultWeightKg),
-      defaultTimeSec: parseOptNum(defaultTimeSec),
-      restSec: parseOptNum(restSec) ?? 90,
+      defaultReps: positiveOrNull(defaultReps),
+      defaultWeightKg: positiveOrNull(defaultWeightKg),
+      defaultTimeSec: positiveOrNull(defaultTimeSec),
+      restSec,
       note: note.trim() === '' ? null : note.trim(),
     };
-    if (mode === 'create') {
-      createMutation.mutate(payload, {
-        onSuccess: () => {
-          void navigate('/knowledge', { replace: true });
-        },
-      });
-    } else {
-      updateMutation.mutate(payload, {
-        onSuccess: () => {
-          void navigate('/knowledge', { replace: true });
-        },
-      });
-    }
+    mutation.mutate(payload, {
+      onSuccess: () => {
+        void navigate('/knowledge', { replace: true });
+      },
+    });
   }
 
   function handleDelete() {
@@ -108,7 +99,7 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
     });
   }
 
-  if (mode === 'edit' && existing.isPending) {
+  if (editing && existing.isPending) {
     return (
       <div className="flex flex-col">
         <ScreenHeader title="Упражнение" back="/knowledge" />
@@ -117,39 +108,59 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
     );
   }
 
-  // Глобальные упражнения read-only: редактирование запрещено.
-  if (mode === 'edit' && existing.data?.isGlobal) {
+  // Глобальные упражнения read-only.
+  if (editing && existing.data?.isGlobal) {
     return <Navigate to="/knowledge" replace />;
   }
 
-  const title = mode === 'create' ? 'Новое упражнение' : 'Упражнение';
-
   return (
-    <form onSubmit={handleSubmit} className="flex min-h-full flex-col">
-      <ScreenHeader title={title} back="/knowledge" />
-      <div className="flex flex-col gap-4 px-5 pb-6 pt-2">
-        <Field
-          label="Название"
-          name="name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
-        <Field
-          label="Категория"
-          name="category"
-          value={category}
-          onChange={(e) => handleCategoryChange(e.target.value)}
-          required
-        />
+    <div className="flex min-h-full flex-col">
+      <ScreenHeader
+        title={editing ? 'Упражнение' : 'Новое упражнение'}
+        closeIcon={!editing}
+        back="/knowledge"
+        right={
+          <button
+            type="button"
+            onClick={save}
+            disabled={mutation.isPending || name.trim() === ''}
+            className="px-1 text-[14px] font-semibold text-ink disabled:opacity-40"
+          >
+            {mutation.isPending ? '…' : 'Сохранить'}
+          </button>
+        }
+      />
+      <div className="flex flex-1 flex-col gap-5 px-5 pb-8 pt-1">
+        <section className="flex flex-col gap-2">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+            Группа мышц
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {categoryChips.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => selectCategory(c)}
+                className={`rounded-full px-4 py-2 text-[14px] font-semibold transition-colors ${
+                  c === category ? 'bg-accent text-accent-on' : 'bg-chip text-ink'
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        </section>
+
         {subgroupOptions.length > 0 && (
-          <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-ink-muted">Подгруппа</span>
+          <section className="flex flex-col gap-2">
+            <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+              Подгруппа
+            </h2>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => setSubgroup('')}
-                className={`rounded-full px-4 py-2 text-[14px] font-semibold transition-colors ${
+                className={`rounded-full px-4 py-2 text-[13px] font-semibold transition-colors ${
                   subgroup === '' ? 'bg-accent text-accent-on' : 'bg-chip text-ink'
                 }`}
               >
@@ -160,7 +171,7 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
                   key={s}
                   type="button"
                   onClick={() => setSubgroup(s)}
-                  className={`rounded-full px-4 py-2 text-[14px] font-semibold transition-colors ${
+                  className={`rounded-full px-4 py-2 text-[13px] font-semibold transition-colors ${
                     subgroup === s ? 'bg-accent text-accent-on' : 'bg-chip text-ink'
                   }`}
                 >
@@ -168,66 +179,68 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
                 </button>
               ))}
             </div>
-          </div>
+          </section>
         )}
-        <label htmlFor="description" className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-ink-muted">Описание</span>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+            Название
+          </span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Жим ногами под углом 45°"
+            className="w-full rounded-xl border border-line bg-card px-4 py-3 text-[15px] text-ink outline-none focus:border-accent"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+            Описание
+          </span>
           <textarea
-            id="description"
-            name="description"
             rows={3}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
+            placeholder="Техника, цель упражнения…"
+            className="w-full resize-none rounded-xl border border-line bg-card px-4 py-3 text-[15px] text-ink outline-none focus:border-accent"
           />
         </label>
-        <Field
-          label="Повторы по умолчанию"
-          name="defaultReps"
-          type="number"
-          inputMode="numeric"
-          min={1}
-          value={defaultReps}
-          onChange={(e) => setDefaultReps(e.target.value)}
-        />
-        <Field
-          label="Вес по умолчанию, кг"
-          name="defaultWeightKg"
-          type="number"
-          inputMode="decimal"
-          min={0}
-          step="0.5"
-          value={defaultWeightKg}
-          onChange={(e) => setDefaultWeightKg(e.target.value)}
-        />
-        <Field
-          label="Время по умолчанию, сек"
-          name="defaultTimeSec"
-          type="number"
-          inputMode="numeric"
-          min={1}
-          value={defaultTimeSec}
-          onChange={(e) => setDefaultTimeSec(e.target.value)}
-        />
-        <Field
-          label="Отдых, сек"
-          name="restSec"
-          type="number"
-          inputMode="numeric"
-          min={0}
-          max={3600}
-          value={restSec}
-          onChange={(e) => setRestSec(e.target.value)}
-        />
-        <label htmlFor="note" className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-ink-muted">Заметка</span>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+            Параметры подхода
+          </h2>
+          <div className="grid grid-cols-2 gap-2">
+            <Stepper value={defaultReps} onChange={setDefaultReps} label="повторы" unit="повт" />
+            <Stepper
+              value={defaultWeightKg}
+              onChange={setDefaultWeightKg}
+              step={2.5}
+              label="вес"
+              unit="кг"
+            />
+            <Stepper
+              value={defaultTimeSec}
+              onChange={setDefaultTimeSec}
+              step={5}
+              label="время"
+              unit="сек"
+            />
+            <Stepper value={restSec} onChange={setRestSec} step={15} label="отдых" unit="сек" />
+          </div>
+        </section>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+            Заметка
+          </span>
           <textarea
-            id="note"
-            name="note"
             rows={2}
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            className="rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
+            placeholder="Личная пометка…"
+            className="w-full resize-none rounded-xl border border-line bg-card px-4 py-3 text-[15px] text-ink outline-none focus:border-accent"
           />
         </label>
 
@@ -237,7 +250,7 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
           </p>
         )}
 
-        {mode === 'edit' && (
+        {editing && (
           <Button
             type="button"
             variant="secondary"
@@ -248,15 +261,6 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
           </Button>
         )}
       </div>
-
-      <div className="sticky bottom-0 z-10 mt-auto flex flex-col gap-2 bg-gradient-to-t from-bg via-bg to-transparent px-5 pb-4 pt-4">
-        <Button type="submit" disabled={mutation.isPending}>
-          {mutation.isPending ? 'Сохраняем…' : 'Сохранить'}
-        </Button>
-        <Button type="button" variant="secondary" onClick={() => void navigate(-1)}>
-          Отмена
-        </Button>
-      </div>
-    </form>
+    </div>
   );
 }
