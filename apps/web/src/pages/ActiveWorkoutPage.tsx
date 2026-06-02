@@ -328,7 +328,7 @@ function ActiveView({
                     ) : (
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-[family-name:var(--font-mono)] text-[19px] tabular-nums text-ink-muted">
-                          {hasFact ? `факт ${actualText(set)}` : `план ${plannedText(set)}`}
+                          {hasFact ? actualText(set) : plannedText(set)}
                         </span>
                         <span className="flex shrink-0 items-center gap-2">
                           <button
@@ -729,7 +729,7 @@ function NumBox({
 
 /* ---------- Завершение удержанием (3 секунды) ---------- */
 
-const HOLD_COMPLETE_MS = 3000;
+const HOLD_COMPLETE_MS = 2000;
 
 function HoldComplete({ pending, onComplete }: { pending: boolean; onComplete: () => void }) {
   const [holding, setHolding] = useState(false);
@@ -777,7 +777,7 @@ function HoldComplete({ pending, onComplete }: { pending: boolean; onComplete: (
           transitionDuration: holding ? `${String(HOLD_COMPLETE_MS)}ms` : '160ms',
         }}
       />
-      <span className="relative z-10 flex h-full items-center justify-center text-[14px] font-bold">
+      <span className="relative z-10 flex h-full items-center justify-center text-[14px] font-normal">
         Завершить
       </span>
     </button>
