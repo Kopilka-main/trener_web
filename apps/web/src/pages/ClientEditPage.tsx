@@ -58,6 +58,10 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
     setContacts((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)));
   }
 
+  function removeContact(index: number) {
+    setContacts((prev) => prev.filter((_, i) => i !== index));
+  }
+
   function addTag() {
     const t = tagDraft.trim();
     if (t === '' || tags.includes(t)) {
@@ -197,19 +201,29 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
                 : 'Прочее';
               return (
                 <div key={i} className="flex flex-col gap-2 rounded-2xl bg-card p-2.5">
-                  <div className="flex flex-wrap gap-1.5">
-                    {CONTACT_TYPES.map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setContact(i, { type: t })}
-                        className={`rounded-full px-3 py-1 text-[12px] font-semibold transition-colors ${
-                          activeType === t ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
-                        }`}
-                      >
-                        {t}
-                      </button>
-                    ))}
+                  <div className="flex items-start gap-2">
+                    <div className="flex flex-1 flex-wrap gap-1.5">
+                      {CONTACT_TYPES.map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setContact(i, { type: t })}
+                          className={`rounded-full px-3 py-1 text-[12px] font-semibold transition-colors ${
+                            activeType === t ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
+                          }`}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeContact(i)}
+                      aria-label="Удалить контакт"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-muted active:bg-card-elevated"
+                    >
+                      <X size={16} strokeWidth={1.8} />
+                    </button>
                   </div>
                   {activeType === 'Прочее' && (
                     <input
