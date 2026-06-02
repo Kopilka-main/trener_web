@@ -238,6 +238,12 @@ function ActiveView({
   const removeExercise = useRemoveWorkoutExercise(clientId, workout.id);
   const elapsed = useElapsed(workout.startedAt);
 
+  const finishWorkout = () =>
+    complete.mutate(
+      { durationSec: elapsed > 0 ? elapsed : null, rpe: null, trainerNote: null },
+      { onSuccess: () => void navigate(backTo, { replace: true }) },
+    );
+
   const [editing, setEditing] = useState<string | null>(null);
   const [rest, setRest] = useState<{ key: string; sec: number } | null>(null);
   const [adding, setAdding] = useState(false);
@@ -375,15 +381,7 @@ function ActiveView({
               onSkip={() => setRest(null)}
             />
           ) : (
-            <HoldComplete
-              pending={complete.isPending}
-              onComplete={() =>
-                complete.mutate(
-                  { durationSec: elapsed > 0 ? elapsed : null, rpe: null, trainerNote: null },
-                  { onSuccess: () => void navigate(backTo, { replace: true }) },
-                )
-              }
-            />
+            <HoldComplete pending={complete.isPending} onComplete={finishWorkout} />
           )}
 
           <span className="flex shrink-0 flex-col text-right">
@@ -432,6 +430,11 @@ function ActiveView({
         )}
 
         <AddExerciseButton onClick={() => setAdding(true)} />
+
+        {/* Все подходы выполнены — большая кнопка завершения. */}
+        {workout.exercises.length > 0 && pending.length === 0 && (
+          <HoldComplete variant="block" pending={complete.isPending} onComplete={finishWorkout} />
+        )}
       </div>
 
       {adding && (
@@ -801,7 +804,15 @@ function NumBox({
 
 const HOLD_COMPLETE_MS = 1000;
 
-function HoldComplete({ pending, onComplete }: { pending: boolean; onComplete: () => void }) {
+function HoldComplete({
+  pending,
+  onComplete,
+  variant = 'pill',
+}: {
+  pending: boolean;
+  onComplete: () => void;
+  variant?: 'pill' | 'block';
+}) {
   const [holding, setHolding] = useState(false);
   const timer = useRef<number | null>(null);
 
@@ -838,7 +849,11 @@ function HoldComplete({ pending, onComplete }: { pending: boolean; onComplete: (
       onPointerLeave={cancel}
       onPointerCancel={cancel}
       onContextMenu={(e) => e.preventDefault()}
-      className="relative flex h-10 touch-none select-none items-center gap-2 rounded-full bg-black/10 px-5 text-accent-on disabled:opacity-50"
+      className={`relative flex touch-none select-none items-center gap-2 disabled:opacity-50 ${
+        variant === 'block'
+          ? 'h-12 w-full justify-center rounded-2xl bg-accent text-accent-on'
+          : 'h-10 rounded-full bg-black/10 px-5 text-accent-on'
+      }`}
     >
       {/* Кольцо-прогресс: заполняется по часовой за HOLD_COMPLETE_MS. */}
       <span aria-hidden className="relative flex h-5 w-5 shrink-0 items-center justify-center">
