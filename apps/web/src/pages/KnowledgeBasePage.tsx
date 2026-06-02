@@ -22,22 +22,6 @@ const GROUP_ORDER = [
   'Йога',
 ];
 
-function CreateTile({ title, sub, onClick }: { title: string; sub: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="tile-shadow relative flex h-[112px] flex-col items-start justify-end rounded-2xl p-3 text-left active:scale-[0.98]"
-    >
-      <span className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-chip text-ink">
-        <Plus size={16} strokeWidth={2.2} />
-      </span>
-      <span className="text-[14px] font-semibold leading-tight text-ink">{title}</span>
-      <span className="mt-0.5 text-[11px] text-ink-muted">{sub}</span>
-    </button>
-  );
-}
-
 function SegmentTab({
   active,
   onClick,
@@ -256,19 +240,6 @@ export function KnowledgeBasePage() {
           />
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <CreateTile
-            title="Создать тренировку"
-            sub="набор упражнений"
-            onClick={() => void navigate('/knowledge/templates/new')}
-          />
-          <CreateTile
-            title="Создать упражнение"
-            sub="карточка с настройками"
-            onClick={() => void navigate('/knowledge/exercises/new')}
-          />
-        </div>
-
         <div
           role="tablist"
           aria-label="Разделы базы знаний"
@@ -388,6 +359,20 @@ export function KnowledgeBasePage() {
             )}
           </>
         )}
+      </div>
+
+      {/* FAB: создать тренировку (на вкладке «Тренировки») или упражнение. */}
+      <div className="pointer-events-none sticky bottom-4 z-10 mt-auto flex justify-end px-5">
+        <button
+          type="button"
+          onClick={() =>
+            void navigate(isTemplates ? '/knowledge/templates/new' : '/knowledge/exercises/new')
+          }
+          aria-label={isTemplates ? 'Создать тренировку' : 'Создать упражнение'}
+          className="tile-shadow-primary pointer-events-auto flex h-14 w-14 shrink-0 items-center justify-center rounded-full active:scale-[0.95]"
+        >
+          <Plus size={24} strokeWidth={2.2} />
+        </button>
       </div>
     </div>
   );
