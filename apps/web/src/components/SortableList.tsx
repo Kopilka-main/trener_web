@@ -59,12 +59,13 @@ export function SortableList<T extends { id: string }>({
 }
 
 function SortableRow({ id, children }: { id: string; children: ReactNode }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  // transition: null отключает анимацию «оседания» плиток при отпускании.
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({
     id,
+    transition: null,
   });
   const style: CSSProperties = {
     transform: transform ? CSS.Transform.toString({ ...transform, x: 0 }) : undefined,
-    transition,
     opacity: isDragging ? 0.6 : 1,
   };
   return (

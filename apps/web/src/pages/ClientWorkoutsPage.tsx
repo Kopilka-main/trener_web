@@ -459,27 +459,28 @@ function HistoryPickerSheet({
   pending: boolean;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end">
+    <div className="fixed inset-0 z-50 flex flex-col">
       <button
         type="button"
         aria-label="Закрыть"
         onClick={onClose}
         className="absolute inset-0 bg-black/60"
       />
-      <div className="relative z-10 flex max-h-[75vh] flex-col rounded-t-3xl bg-bg pb-[max(1rem,env(safe-area-inset-bottom))]">
-        <div className="flex items-center justify-between px-5 pb-2 pt-4">
-          <h2 className="text-[16px] font-bold text-ink">Повторить из истории</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Закрыть"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-ink active:bg-card-elevated"
-          >
-            <X size={20} strokeWidth={1.8} />
-          </button>
-        </div>
+      {/* Небольшой отступ сверху с крестиком закрытия. */}
+      <div className="relative z-10 flex items-center justify-end px-5 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Закрыть"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-card-elevated text-ink active:scale-95"
+        >
+          <X size={20} strokeWidth={1.8} />
+        </button>
+      </div>
+      <div className="relative z-10 flex flex-1 flex-col overflow-hidden rounded-t-3xl bg-bg pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <h2 className="px-5 pb-2 pt-4 text-[16px] font-bold text-ink">Повторить из истории</h2>
 
-        <div className="flex flex-col gap-2 overflow-y-auto px-5 pt-1">
+        <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-5 pt-1">
           {history.length === 0 && <p className="text-sm text-ink-muted">История пуста.</p>}
           {history.map((w) => (
             <button
