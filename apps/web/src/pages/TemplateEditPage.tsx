@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Minus, Plus, X } from 'lucide-react';
+import { Minus, Plus } from 'lucide-react';
 import type { CreateTemplateRequest, ExerciseResponse, TemplateExercise } from '@trener/shared';
 import { useExercises } from '../api/exercises';
 import {
@@ -12,6 +12,7 @@ import {
 import { Button } from '../components/Button';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SortableList } from '../components/SortableList';
+import { HoldToDelete } from '../components/HoldToDelete';
 
 interface TemplateEditPageProps {
   mode: 'create' | 'edit';
@@ -472,14 +473,10 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                       </div>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    aria-label="Убрать упражнение"
-                    onClick={() => removePosition(p.id)}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-card-elevated text-ink-muted"
-                  >
-                    <X size={16} />
-                  </button>
+                  <HoldToDelete
+                    onDelete={() => removePosition(p.id)}
+                    label="Удерживайте, чтобы убрать упражнение"
+                  />
                 </div>
 
                 <div className="grid grid-cols-3 gap-2">
