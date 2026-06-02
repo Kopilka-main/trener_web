@@ -1,65 +1,117 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useClient, useCreateClient, useUpdateClient } from '../api/clients';
+import { Trash2, X } from 'lucide-react';
+import type { Contact } from '@trener/shared';
+import { useClient, useCreateClient, useDeleteClient, useUpdateClient } from '../api/clients';
 import { Button } from '../components/Button';
-import { Field } from '../components/Field';
+import { Avatar } from '../components/Avatar';
 import { ScreenHeader } from '../components/ScreenHeader';
 
 interface ClientEditPageProps {
   mode: 'create' | 'edit';
 }
 
+const CONTACT_TYPES = ['Телефон', 'WhatsApp', 'Telegram', 'MAX', 'Instagram', 'Прочее'] as const;
+
 export function ClientEditPage({ mode }: ClientEditPageProps) {
   const navigate = useNavigate();
   const params = useParams<{ id: string }>();
   const id = params.id ?? '';
+  const editing = mode === 'edit';
 
-  const existing = useClient(mode === 'edit' ? id : '');
+  const existing = useClient(editing ? id : '');
   const createMutation = useCreateClient();
   const updateMutation = useUpdateClient(id);
+  const deleteMutation = useDeleteClient();
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [phone, setPhone] = useState('');
   const [notes, setNotes] = useState('');
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagDraft, setTagDraft] = useState('');
 
   useEffect(() => {
-    if (mode === 'edit' && existing.data) {
-      setFirstName(existing.data.firstName);
-      setLastName(existing.data.lastName);
-      setPhone(existing.data.phone ?? '');
-      setNotes(existing.data.notes ?? '');
+    if (editing && existing.data) {
+      const c = existing.data;
+      setFirstName(c.firstName);
+      setLastName(c.lastName);
+      setNotes(c.notes ?? '');
+      setContacts(
+        c.contacts.length > 0 ? c.contacts : c.phone ? [{ type: 'Телефон', value: c.phone }] : [],
+      );
+      setTags(c.tags);
     }
-  }, [mode, existing.data]);
+  }, [editing, existing.data]);
 
-  const mutation = mode === 'create' ? createMutation : updateMutation;
+  const mutation = editing ? updateMutation : createMutation;
+
+  function addContact() {
+    setContacts((prev) => [...prev, { type: 'Телефон', value: '' }]);
+  }
+
+  function setContact(index: number, patch: Partial<Contact>) {
+    setContacts((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)));
+  }
+
+  function removeContact(index: number) {
+    setContacts((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function addTag() {
+    const t = tagDraft.trim();
+    if (t === '' || tags.includes(t)) {
+      setTagDraft('');
+      return;
+    }
+    setTags((prev) => [...prev, t]);
+    setTagDraft('');
+  }
+
+  function removeTag(tag: string) {
+    setTags((prev) => prev.filter((t) => t !== tag));
+  }
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const phone = contacts.find((c) => c.type === 'Телефон')?.value.trim() ?? '';
     const payload = {
       firstName: firstName.trim(),
       lastName: lastName.trim(),
-      phone: phone.trim() === '' ? null : phone.trim(),
+      phone: phone === '' ? null : phone,
       notes: notes.trim() === '' ? null : notes.trim(),
+      contacts: contacts
+        .filter((c) => c.value.trim() !== '')
+        .map((c) => ({ type: c.type, value: c.value.trim() })),
+      tags,
     };
-    if (mode === 'create') {
-      createMutation.mutate(payload, {
-        onSuccess: (client) => {
-          void navigate(`/clients/${client.id}`, { replace: true });
-        },
-      });
-    } else {
+    if (editing) {
       updateMutation.mutate(payload, {
         onSuccess: () => {
           void navigate(`/clients/${id}`, { replace: true });
         },
       });
+    } else {
+      createMutation.mutate(payload, {
+        onSuccess: (client) => {
+          void navigate(`/clients/${client.id}`, { replace: true });
+        },
+      });
     }
   }
 
-  const title = mode === 'create' ? 'Новый клиент' : 'Редактирование';
+  function handleDelete() {
+    if (!window.confirm('Удалить клиента? Действие необратимо.')) return;
+    deleteMutation.mutate(id, {
+      onSuccess: () => {
+        void navigate('/clients', { replace: true });
+      },
+    });
+  }
 
-  if (mode === 'edit' && existing.isPending) {
+  const title = editing ? 'Клиент' : 'Новый клиент';
+
+  if (editing && existing.isPending) {
     return (
       <div className="flex flex-col">
         <ScreenHeader title={title} back={() => void navigate(-1)} />
@@ -70,40 +122,154 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
 
   return (
     <div className="flex flex-col">
-      <ScreenHeader title={title} back={() => void navigate(-1)} />
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-5 pb-6 pt-2">
-        <Field
-          label="Имя"
-          name="firstName"
-          value={firstName}
-          onChange={(e) => setFirstName(e.target.value)}
-          required
-        />
-        <Field
-          label="Фамилия"
-          name="lastName"
-          value={lastName}
-          onChange={(e) => setLastName(e.target.value)}
-          required
-        />
-        <Field
-          label="Телефон"
-          name="phone"
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-        />
-        <label htmlFor="notes" className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-ink-muted">Заметки</span>
+      <ScreenHeader
+        title={title}
+        back={() => void navigate(-1)}
+        closeIcon={!editing}
+        right={
+          <button
+            type="submit"
+            form="client-edit-form"
+            disabled={mutation.isPending}
+            className="text-[14px] font-semibold text-accent disabled:opacity-50"
+          >
+            {mutation.isPending ? '…' : 'Сохранить'}
+          </button>
+        }
+      />
+
+      <form
+        id="client-edit-form"
+        onSubmit={handleSubmit}
+        className="flex flex-col gap-5 px-5 pb-8 pt-1"
+      >
+        {/* Аватар по центру. */}
+        <div className="flex justify-center pt-1">
+          <Avatar firstName={firstName || 'И'} lastName={lastName || 'Ф'} size={88} />
+        </div>
+
+        {/* Имя / Фамилия — 2 колонки. */}
+        <div className="grid grid-cols-2 gap-3">
+          <label htmlFor="firstName" className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-ink-muted">Имя</span>
+            <input
+              id="firstName"
+              name="firstName"
+              required
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              className="rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
+            />
+          </label>
+          <label htmlFor="lastName" className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-ink-muted">Фамилия</span>
+            <input
+              id="lastName"
+              name="lastName"
+              required
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              className="rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
+            />
+          </label>
+        </div>
+
+        {/* Связь: типизированный список контактов. */}
+        <Section title="Связь">
+          <div className="flex flex-col gap-2">
+            {contacts.map((c, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <select
+                  value={
+                    CONTACT_TYPES.includes(c.type as (typeof CONTACT_TYPES)[number])
+                      ? c.type
+                      : 'Прочее'
+                  }
+                  onChange={(e) => setContact(i, { type: e.target.value })}
+                  className="shrink-0 rounded-xl border border-line bg-chip px-2.5 py-2.5 text-sm text-ink outline-none focus:border-accent"
+                  aria-label="Тип контакта"
+                >
+                  {CONTACT_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={c.value}
+                  onChange={(e) => setContact(i, { value: e.target.value })}
+                  placeholder="Значение"
+                  aria-label="Значение контакта"
+                  className="min-w-0 flex-1 rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeContact(i)}
+                  aria-label="Удалить контакт"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-muted active:bg-card-elevated"
+                >
+                  <X size={18} strokeWidth={1.8} />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addContact}
+              className="self-start rounded-xl bg-card-elevated px-3 py-2 text-sm font-semibold text-ink active:bg-card"
+            >
+              + добавить контакт
+            </button>
+          </div>
+        </Section>
+
+        {/* Заметки. */}
+        <Section title="Заметки">
           <textarea
             id="notes"
             name="notes"
             rows={4}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
+            placeholder="Заметка о клиенте…"
             className="rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
           />
-        </label>
+        </Section>
+
+        {/* Теги. */}
+        <Section title="Теги">
+          <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-line bg-chip px-3 py-2.5">
+            {tags.map((t) => (
+              <span
+                key={t}
+                className="inline-flex items-center gap-1 rounded-full bg-card-elevated px-2.5 py-1 text-[13px] text-ink"
+              >
+                {t}
+                <button
+                  type="button"
+                  onClick={() => removeTag(t)}
+                  aria-label={`Убрать тег ${t}`}
+                  className="text-ink-muted"
+                >
+                  <X size={13} strokeWidth={2} />
+                </button>
+              </span>
+            ))}
+            <input
+              value={tagDraft}
+              onChange={(e) => setTagDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addTag();
+                }
+              }}
+              onBlur={addTag}
+              placeholder="+ добавить"
+              aria-label="Добавить тег"
+              className="min-w-[90px] flex-1 bg-transparent text-base text-ink outline-none placeholder:text-ink-mutedxl"
+            />
+          </div>
+        </Section>
 
         {mutation.isError && (
           <p className="text-sm text-ink-muted" role="alert">
@@ -119,7 +285,29 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
             Отмена
           </Button>
         </div>
+
+        {editing && (
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleteMutation.isPending}
+            className="mt-2 flex items-center justify-center gap-2 rounded-2xl bg-card py-3.5 text-[14px] font-semibold text-ink active:bg-card-elevated disabled:opacity-50"
+          >
+            <Trash2 size={18} strokeWidth={1.8} className="text-danger" /> Удалить клиента
+          </button>
+        )}
       </form>
     </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.06em] text-ink-mutedxl">
+        {title}
+      </h2>
+      {children}
+    </section>
   );
 }
