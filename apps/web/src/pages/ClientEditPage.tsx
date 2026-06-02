@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Trash2, X } from 'lucide-react';
+import { Link2, Trash2, X } from 'lucide-react';
 import type { Contact } from '@trener/shared';
 import { useClient, useCreateClient, useDeleteClient, useUpdateClient } from '../api/clients';
 import { Avatar } from '../components/Avatar';
@@ -29,6 +29,8 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState('');
+  const [accountId, setAccountId] = useState('');
+  const [connectOpen, setConnectOpen] = useState(false);
 
   useEffect(() => {
     if (editing && existing.data) {
@@ -40,6 +42,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
         c.contacts.length > 0 ? c.contacts : c.phone ? [{ type: 'Телефон', value: c.phone }] : [],
       );
       setTags(c.tags);
+      setAccountId(c.accountId ?? '');
     }
   }, [editing, existing.data]);
 
@@ -75,6 +78,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
       lastName: lastName.trim(),
       phone: phone === '' ? null : phone,
       notes: notes.trim() === '' ? null : notes.trim(),
+      accountId: accountId.trim() === '' ? null : accountId.trim(),
       contacts: contacts
         .filter((c) => c.value.trim() !== '')
         .map((c) => ({ type: c.type, value: c.value.trim() })),
@@ -138,9 +142,21 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
         onSubmit={handleSubmit}
         className="flex flex-col gap-5 px-5 pb-8 pt-1"
       >
-        {/* Аватар по центру. */}
-        <div className="flex justify-center pt-1">
+        {/* Аватар по центру + кнопка-«цепь» подключения справа. */}
+        <div className="relative flex justify-center pt-1">
           <Avatar firstName={firstName || 'И'} lastName={lastName || 'Ф'} size={88} />
+          <button
+            type="button"
+            onClick={() => setConnectOpen(true)}
+            aria-label="Подключить клиента"
+            className={`absolute right-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full ${
+              accountId.trim() !== ''
+                ? 'bg-accent text-accent-on'
+                : 'bg-card-elevated text-ink-muted'
+            }`}
+          >
+            <Link2 size={20} strokeWidth={2} />
+          </button>
         </div>
 
         {/* Имя / Фамилия — 2 колонки. */}
@@ -278,6 +294,103 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
           </button>
         )}
       </form>
+
+      {connectOpen && (
+        <ConnectDialog
+          value={accountId}
+          onApply={(v) => {
+            setAccountId(v);
+            setConnectOpen(false);
+          }}
+          onDisconnect={() => {
+            setAccountId('');
+            setConnectOpen(false);
+          }}
+          onClose={() => setConnectOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function ConnectDialog({
+  value,
+  onApply,
+  onDisconnect,
+  onClose,
+}: {
+  value: string;
+  onApply: (v: string) => void;
+  onDisconnect: () => void;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const connected = value.trim() !== '';
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl bg-card p-5"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Подключить клиента"
+      >
+        <h2 className="text-[17px] font-semibold text-ink">Подключить клиента</h2>
+        <p className="mt-1.5 text-[12px] leading-snug text-ink-muted">
+          Личный код из приложения клиента. Нужен, чтобы отправлять тренировки клиенту на
+          согласование.
+        </p>
+        <label htmlFor="accountId" className="mt-4 flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-ink-muted">ID клиента</span>
+          <input
+            id="accountId"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            autoFocus
+            placeholder="Например, AB12-CD34"
+            className="rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
+          />
+        </label>
+        <div className="mt-5 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-xl bg-card-elevated py-3 text-[14px] font-semibold text-ink active:bg-card"
+          >
+            Отмена
+          </button>
+          {connected && (
+            <button
+              type="button"
+              onClick={onDisconnect}
+              className="flex-1 rounded-xl bg-card-elevated py-3 text-[14px] font-semibold text-ink active:bg-card"
+            >
+              Отключить
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => onApply(draft.trim())}
+            className="flex-1 rounded-xl bg-accent py-3 text-[14px] font-semibold text-accent-on active:opacity-90"
+          >
+            Подключить
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
