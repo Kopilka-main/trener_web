@@ -33,10 +33,6 @@ export function StubPage({ title, back = '/' }: { title: string; back?: string }
   );
 }
 
-export function CalendarPage() {
-  return <StubPage title="Календарь" />;
-}
-
 export function MessagesPage() {
   return <StubPage title="Сообщения" />;
 }

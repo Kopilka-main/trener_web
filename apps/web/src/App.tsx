@@ -19,8 +19,8 @@ import { ClientStatsPage } from './pages/ClientStatsPage';
 import { ClientPaymentsPage } from './pages/ClientPaymentsPage';
 import { ClientMedicalPage } from './pages/ClientMedicalPage';
 import { MessagesPage } from './pages/MessagesPage';
+import { CalendarPage } from './pages/CalendarPage';
 import {
-  CalendarPage,
   AccountingPage,
   NotificationsPage,
   ProfilePage,
