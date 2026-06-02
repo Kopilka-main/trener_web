@@ -8,9 +8,9 @@ import { ScreenHeader } from '../components/ScreenHeader';
 
 type Tab = 'exercises' | 'templates';
 
-function globalBadge() {
+function GlobalBadge() {
   return (
-    <span className="shrink-0 rounded-full bg-card-elevated px-2 py-0.5 text-xs font-medium text-ink-muted">
+    <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 font-mono text-[11px] font-medium uppercase tracking-wide text-accent-on">
       Глобальное
     </span>
   );
@@ -52,22 +52,16 @@ function ExercisesTab() {
       </div>
 
       {categories.length > 0 && (
-        <label htmlFor="category-filter" className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-ink-muted">Категория</span>
-          <select
-            id="category-filter"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none focus:border-accent"
-          >
-            <option value="">Все</option>
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="-mx-5 flex gap-1.5 overflow-x-auto px-5 pb-1">
+          <CategoryChip active={category === ''} onClick={() => setCategory('')}>
+            Все
+          </CategoryChip>
+          {categories.map((c) => (
+            <CategoryChip key={c} active={category === c} onClick={() => setCategory(c)}>
+              {c}
+            </CategoryChip>
+          ))}
+        </div>
       )}
 
       {exercises.isPending && <p className="text-sm text-ink-muted">Загрузка…</p>}
@@ -92,14 +86,14 @@ function ExercisesTab() {
             <li key={e.id}>
               <Link
                 to={`/knowledge/exercises/${e.id}/edit`}
-                className="row-glow flex items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3 transition-colors active:bg-card-elevated"
+                className="shelf row-glow flex items-center justify-between gap-3 rounded-2xl px-4 py-3"
               >
-                <span className="flex min-w-0 flex-col">
+                <span className="flex min-w-0 flex-col gap-0.5">
                   <span className="truncate text-base font-semibold text-ink">{e.name}</span>
-                  <span className="truncate text-sm text-ink-muted">{e.category}</span>
+                  <span className="truncate font-mono text-xs text-ink-muted">{e.category}</span>
                 </span>
                 <span className="flex shrink-0 items-center gap-2">
-                  {e.isGlobal && globalBadge()}
+                  {e.isGlobal && <GlobalBadge />}
                   <ChevronRight size={16} className="tile-chevron" />
                 </span>
               </Link>
@@ -134,21 +128,50 @@ function TemplatesTab() {
             <li key={t.id}>
               <Link
                 to={`/knowledge/templates/${t.id}/edit`}
-                className="row-glow flex items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3 transition-colors active:bg-card-elevated"
+                className="shelf row-glow flex items-center justify-between gap-3 rounded-2xl px-4 py-3"
               >
-                <span className="flex min-w-0 flex-col">
+                <span className="flex min-w-0 flex-col gap-1">
                   <span className="truncate text-base font-semibold text-ink">{t.name}</span>
-                  {t.categoryTag && (
-                    <span className="truncate text-sm text-ink-muted">{t.categoryTag}</span>
-                  )}
+                  <span className="flex items-center gap-2">
+                    {t.categoryTag && (
+                      <span className="shrink-0 rounded-full bg-chip px-2 py-0.5 font-mono text-[11px] text-ink-muted">
+                        {t.categoryTag}
+                      </span>
+                    )}
+                    <span className="truncate font-mono text-xs text-ink-muted">
+                      {t.exercises.length} упр.
+                    </span>
+                  </span>
                 </span>
-                <span className="shrink-0 text-sm text-ink-muted">{t.exercises.length} упр.</span>
+                <ChevronRight size={16} className="tile-chevron shrink-0" />
               </Link>
             </li>
           ))}
         </ul>
       )}
     </div>
+  );
+}
+
+function CategoryChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`shrink-0 rounded-full px-3 py-1.5 font-mono text-xs transition-colors ${
+        active ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 

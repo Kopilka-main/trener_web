@@ -108,12 +108,12 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
     return <Navigate to="/knowledge" replace />;
   }
 
-  const title = mode === 'create' ? 'Новое упражнение' : 'Редактирование';
+  const title = mode === 'create' ? 'Новое упражнение' : 'Упражнение';
 
   return (
-    <div className="flex flex-col">
+    <form onSubmit={handleSubmit} className="flex min-h-full flex-col">
       <ScreenHeader title={title} back="/knowledge" />
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-5 pb-6 pt-2">
+      <div className="flex flex-col gap-4 px-5 pb-6 pt-2">
         <Field
           label="Название"
           name="name"
@@ -195,25 +195,26 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
           </p>
         )}
 
-        <div className="flex flex-col gap-2">
-          <Button type="submit" disabled={mutation.isPending}>
-            {mutation.isPending ? 'Сохраняем…' : 'Сохранить'}
+        {mode === 'edit' && (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleDelete}
+            disabled={deleteMutation.isPending}
+          >
+            Удалить упражнение
           </Button>
-          {mode === 'edit' && (
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleDelete}
-              disabled={deleteMutation.isPending}
-            >
-              Удалить
-            </Button>
-          )}
-          <Button type="button" variant="secondary" onClick={() => void navigate(-1)}>
-            Отмена
-          </Button>
-        </div>
-      </form>
-    </div>
+        )}
+      </div>
+
+      <div className="sticky bottom-0 z-10 mt-auto flex flex-col gap-2 bg-gradient-to-t from-bg via-bg to-transparent px-5 pb-4 pt-4">
+        <Button type="submit" disabled={mutation.isPending}>
+          {mutation.isPending ? 'Сохраняем…' : 'Сохранить'}
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => void navigate(-1)}>
+          Отмена
+        </Button>
+      </div>
+    </form>
   );
 }

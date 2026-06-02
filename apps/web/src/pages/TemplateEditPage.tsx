@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
 import type { CreateTemplateRequest, TemplateExercise } from '@trener/shared';
 import { useExercises } from '../api/exercises';
 import {
@@ -72,10 +73,6 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
 
   const mutation = mode === 'create' ? createMutation : updateMutation;
 
-  function exerciseName(exerciseId: string): string {
-    return catalog.data?.find((e) => e.id === exerciseId)?.name ?? 'Упражнение';
-  }
-
   function addPosition() {
     const first = catalog.data?.[0];
     if (!first) return;
@@ -147,7 +144,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
     });
   }
 
-  const title = mode === 'create' ? 'Новый шаблон' : 'Редактирование шаблона';
+  const title = mode === 'create' ? 'Новый шаблон' : 'Шаблон';
   const catalogEmpty = catalog.isSuccess && (catalog.data?.length ?? 0) === 0;
 
   if (mode === 'edit' && existing.isPending) {
@@ -160,9 +157,9 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
   }
 
   return (
-    <div className="flex flex-col">
+    <form onSubmit={handleSubmit} className="flex min-h-full flex-col">
       <ScreenHeader title={title} back="/knowledge" />
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-5 pb-6 pt-2">
+      <div className="flex flex-col gap-4 px-5 pb-6 pt-2">
         <Field
           label="Название"
           name="name"
@@ -171,14 +168,21 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
           required
         />
         <Field
-          label="Тег категории"
+          label="Категория"
           name="categoryTag"
           value={categoryTag}
           onChange={(e) => setCategoryTag(e.target.value)}
         />
 
         <section className="flex flex-col gap-3">
-          <h2 className="text-base font-semibold text-ink">Упражнения</h2>
+          <div className="flex items-baseline justify-between">
+            <h2 className="font-display text-sm uppercase tracking-wide text-ink-muted">
+              Упражнения
+            </h2>
+            {positions.length > 0 && (
+              <span className="font-mono text-xs text-ink-muted">{positions.length}</span>
+            )}
+          </div>
 
           {catalog.isPending && <p className="text-sm text-ink-muted">Загрузка каталога…</p>}
           {catalogEmpty && (
@@ -190,12 +194,24 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
 
           <ul className="flex flex-col gap-3">
             {positions.map((p, index) => (
-              <li key={index} className="flex flex-col gap-2 rounded-2xl bg-card p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-ink-muted">
-                    {index + 1}. {exerciseName(p.exerciseId)}
+              <li key={index} className="shelf flex flex-col gap-3 rounded-2xl p-3">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-chip font-mono text-xs font-bold text-ink">
+                    {index + 1}
                   </span>
-                  <div className="flex gap-1">
+                  <select
+                    value={p.exerciseId}
+                    onChange={(e) => updatePosition(index, { exerciseId: e.target.value })}
+                    aria-label={`Упражнение позиции ${String(index + 1)}`}
+                    className="min-w-0 flex-1 truncate rounded-lg border border-line bg-chip px-2 py-2 text-sm font-semibold text-ink outline-none focus:border-accent"
+                  >
+                    {(catalog.data ?? []).map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex shrink-0 gap-1">
                     <button
                       type="button"
                       aria-label="Вверх"
@@ -203,7 +219,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                       disabled={index === 0}
                       className="flex h-8 w-8 items-center justify-center rounded-lg bg-card-elevated text-ink-muted disabled:opacity-40"
                     >
-                      ↑
+                      <ChevronUp size={16} />
                     </button>
                     <button
                       type="button"
@@ -212,106 +228,70 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                       disabled={index === positions.length - 1}
                       className="flex h-8 w-8 items-center justify-center rounded-lg bg-card-elevated text-ink-muted disabled:opacity-40"
                     >
-                      ↓
+                      <ChevronDown size={16} />
                     </button>
                     <button
                       type="button"
                       aria-label="Удалить позицию"
                       onClick={() => removePosition(index)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-card-elevated text-ink-muted"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-card-elevated text-danger"
                     >
-                      ✕
+                      <X size={16} />
                     </button>
                   </div>
                 </div>
 
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs text-ink-muted">Упражнение</span>
-                  <select
-                    value={p.exerciseId}
-                    onChange={(e) => updatePosition(index, { exerciseId: e.target.value })}
-                    aria-label={`Упражнение позиции ${String(index + 1)}`}
-                    className="rounded-lg border border-line bg-chip px-2 py-2 text-sm text-ink outline-none focus:border-accent"
-                  >
-                    {(catalog.data ?? []).map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="flex flex-col gap-1">
-                    <span className="text-xs text-ink-muted">Подходы</span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={1}
-                      value={p.sets}
-                      onChange={(e) => updatePosition(index, { sets: e.target.value })}
-                      className="rounded-lg border border-line bg-chip px-2 py-2 text-sm text-ink outline-none focus:border-accent"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    <span className="text-xs text-ink-muted">Повторы</span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={1}
-                      value={p.reps}
-                      onChange={(e) => updatePosition(index, { reps: e.target.value })}
-                      className="rounded-lg border border-line bg-chip px-2 py-2 text-sm text-ink outline-none focus:border-accent"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    <span className="text-xs text-ink-muted">Вес, кг</span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      min={0}
-                      step="0.5"
-                      value={p.weightKg}
-                      onChange={(e) => updatePosition(index, { weightKg: e.target.value })}
-                      className="rounded-lg border border-line bg-chip px-2 py-2 text-sm text-ink outline-none focus:border-accent"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    <span className="text-xs text-ink-muted">Время, сек</span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={1}
-                      value={p.timeSec}
-                      onChange={(e) => updatePosition(index, { timeSec: e.target.value })}
-                      className="rounded-lg border border-line bg-chip px-2 py-2 text-sm text-ink outline-none focus:border-accent"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    <span className="text-xs text-ink-muted">Отдых, сек</span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      max={3600}
-                      value={p.restSec}
-                      onChange={(e) => updatePosition(index, { restSec: e.target.value })}
-                      className="rounded-lg border border-line bg-chip px-2 py-2 text-sm text-ink outline-none focus:border-accent"
-                    />
-                  </label>
+                <div className="grid grid-cols-5 gap-2">
+                  <SetField
+                    label="Подх."
+                    inputMode="numeric"
+                    min={1}
+                    value={p.sets}
+                    onChange={(v) => updatePosition(index, { sets: v })}
+                  />
+                  <SetField
+                    label="Повт."
+                    inputMode="numeric"
+                    min={1}
+                    value={p.reps}
+                    onChange={(v) => updatePosition(index, { reps: v })}
+                  />
+                  <SetField
+                    label="Кг"
+                    inputMode="decimal"
+                    min={0}
+                    step="0.5"
+                    value={p.weightKg}
+                    onChange={(v) => updatePosition(index, { weightKg: v })}
+                  />
+                  <SetField
+                    label="Сек"
+                    inputMode="numeric"
+                    min={1}
+                    value={p.timeSec}
+                    onChange={(v) => updatePosition(index, { timeSec: v })}
+                  />
+                  <SetField
+                    label="Отдых"
+                    inputMode="numeric"
+                    min={0}
+                    max={3600}
+                    value={p.restSec}
+                    onChange={(v) => updatePosition(index, { restSec: v })}
+                  />
                 </div>
               </li>
             ))}
           </ul>
 
-          <Button
+          <button
             type="button"
-            variant="secondary"
             onClick={addPosition}
             disabled={catalog.data === undefined || catalogEmpty}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line py-3.5 text-sm font-medium text-ink-muted transition-colors active:border-accent disabled:opacity-40"
           >
-            + Добавить упражнение
-          </Button>
+            <Plus size={16} /> Добавить упражнение
+          </button>
         </section>
 
         {mutation.isError && (
@@ -320,25 +300,51 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
           </p>
         )}
 
-        <div className="flex flex-col gap-2">
-          <Button type="submit" disabled={mutation.isPending || positions.length === 0}>
-            {mutation.isPending ? 'Сохраняем…' : 'Сохранить'}
+        {mode === 'edit' && (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleDelete}
+            disabled={deleteMutation.isPending}
+          >
+            Удалить шаблон
           </Button>
-          {mode === 'edit' && (
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleDelete}
-              disabled={deleteMutation.isPending}
-            >
-              Удалить
-            </Button>
-          )}
-          <Button type="button" variant="secondary" onClick={() => void navigate(-1)}>
-            Отмена
-          </Button>
-        </div>
-      </form>
-    </div>
+        )}
+      </div>
+
+      <div className="sticky bottom-0 z-10 mt-auto flex flex-col gap-2 bg-gradient-to-t from-bg via-bg to-transparent px-5 pb-4 pt-4">
+        <Button type="submit" disabled={mutation.isPending || positions.length === 0}>
+          {mutation.isPending ? 'Сохраняем…' : 'Сохранить'}
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => void navigate(-1)}>
+          Отмена
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function SetField({
+  label,
+  value,
+  onChange,
+  ...rest
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'>) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="font-mono text-[10px] uppercase tracking-wide text-ink-muted">{label}</span>
+      <input
+        type="number"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={label}
+        className="w-full rounded-lg border border-line bg-chip px-2 py-2 text-center font-mono text-sm text-ink outline-none focus:border-accent"
+        {...rest}
+      />
+    </label>
   );
 }
