@@ -1,24 +1,49 @@
-import { Link } from 'react-router-dom';
-import { ArrowUpRight, BookOpen, CalendarDays, MessageSquare, Users } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowUpRight, BookOpen, CalendarDays, LogOut, MessageSquare, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useMe } from '../api/auth';
+import { useLogout, useMe } from '../api/auth';
 
 const tiles: { to: string; label: string; sub: string; Icon: LucideIcon; primary?: boolean }[] = [
   { to: '/clients', label: 'Клиенты', sub: 'контакты и пакеты', Icon: Users, primary: true },
   { to: '/calendar', label: 'Календарь', sub: 'расписание занятий', Icon: CalendarDays },
-  { to: '/more', label: 'Сообщения', sub: 'клиенты и заметки', Icon: MessageSquare },
+  { to: '/messages', label: 'Сообщения', sub: 'клиенты и заметки', Icon: MessageSquare },
   { to: '/knowledge', label: 'База знаний', sub: 'упражнения и шаблоны', Icon: BookOpen },
 ];
 
 export function HomePage() {
+  const navigate = useNavigate();
   const me = useMe();
-  const name = me.data?.trainer.firstName ?? '';
+  const trainer = me.data?.trainer;
+  const name = trainer?.firstName ?? '';
+  const logoutMutation = useLogout();
+
+  function handleLogout() {
+    logoutMutation.mutate(undefined, {
+      onSuccess: () => {
+        void navigate('/login');
+      },
+    });
+  }
 
   return (
     <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
-      <h1 className="font-[family-name:var(--font-display)] text-[40px] leading-none tracking-[-0.02em] text-accent">
-        {name ? `Привет, ${name}` : 'Главная'}
-      </h1>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-col">
+          <h1 className="font-[family-name:var(--font-display)] text-[40px] leading-none tracking-[-0.02em] text-accent">
+            {name ? `Привет, ${name}` : 'Главная'}
+          </h1>
+          {trainer && <span className="mt-2 truncate text-sm text-ink-muted">{trainer.email}</span>}
+        </div>
+        <button
+          type="button"
+          onClick={handleLogout}
+          disabled={logoutMutation.isPending}
+          aria-label="Выйти"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-card text-ink-muted active:bg-card-elevated disabled:opacity-50"
+        >
+          <LogOut size={20} strokeWidth={1.8} />
+        </button>
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         {tiles.map((tile) => (

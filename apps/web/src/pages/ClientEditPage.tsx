@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useClient, useCreateClient, useUpdateClient } from '../api/clients';
 import { Button } from '../components/Button';
 import { Field } from '../components/Field';
+import { ScreenHeader } from '../components/ScreenHeader';
 
 interface ClientEditPageProps {
   mode: 'create' | 'edit';
@@ -59,16 +60,18 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
   const title = mode === 'create' ? 'Новый клиент' : 'Редактирование';
 
   if (mode === 'edit' && existing.isPending) {
-    return <p className="px-5 py-6 text-sm text-ink-muted">Загрузка…</p>;
+    return (
+      <div className="flex flex-col">
+        <ScreenHeader title={title} back={() => void navigate(-1)} />
+        <p className="px-5 py-6 text-sm text-ink-muted">Загрузка…</p>
+      </div>
+    );
   }
 
   return (
-    <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
-      <h1 className="font-[family-name:var(--font-display)] text-[28px] leading-none tracking-[-0.02em]">
-        {title}
-      </h1>
-
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <div className="flex flex-col">
+      <ScreenHeader title={title} back={() => void navigate(-1)} />
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-5 pb-6 pt-2">
         <Field
           label="Имя"
           name="firstName"

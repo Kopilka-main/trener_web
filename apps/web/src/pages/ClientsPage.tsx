@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ChevronRight, Plus, Search } from 'lucide-react';
 import type { ClientResponse } from '@trener/shared';
 import { useClients } from '../api/clients';
+import { ScreenHeader } from '../components/ScreenHeader';
 
 function statusBadge(status: ClientResponse['status']) {
   const isActive = status === 'active';
@@ -30,11 +31,8 @@ export function ClientsPage() {
 
   return (
     <div className="flex min-h-full flex-col">
-      <div className="flex flex-col gap-4 px-5 pb-6 pt-4">
-        <h1 className="font-[family-name:var(--font-display)] text-[34px] leading-none tracking-[-0.02em]">
-          Клиенты
-        </h1>
-
+      <ScreenHeader title="Клиенты" back="/" />
+      <div className="flex flex-col gap-4 px-5 pb-6 pt-2">
         <div className="relative">
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-muted" />
           <input

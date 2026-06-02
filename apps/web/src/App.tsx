@@ -4,14 +4,13 @@ import { AppShell } from './components/AppShell';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { HomePage } from './pages/HomePage';
-import { MorePage } from './pages/MorePage';
 import { ClientsPage } from './pages/ClientsPage';
 import { ClientCardPage } from './pages/ClientCardPage';
 import { ClientEditPage } from './pages/ClientEditPage';
 import { KnowledgeBasePage } from './pages/KnowledgeBasePage';
 import { ExerciseEditPage } from './pages/ExerciseEditPage';
 import { TemplateEditPage } from './pages/TemplateEditPage';
-import { CalendarPage } from './pages/StubPage';
+import { CalendarPage, MessagesPage } from './pages/StubPage';
 
 export function App() {
   return (
@@ -36,7 +35,7 @@ export function App() {
         <Route path="/knowledge/templates/new" element={<TemplateEditPage mode="create" />} />
         <Route path="/knowledge/templates/:id/edit" element={<TemplateEditPage mode="edit" />} />
         <Route path="/calendar" element={<CalendarPage />} />
-        <Route path="/more" element={<MorePage />} />
+        <Route path="/messages" element={<MessagesPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

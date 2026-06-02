@@ -4,6 +4,7 @@ import { ChevronRight, Plus, Search } from 'lucide-react';
 import type { ExerciseResponse, TemplateResponse } from '@trener/shared';
 import { useExercises } from '../api/exercises';
 import { useTemplates } from '../api/workout-templates';
+import { ScreenHeader } from '../components/ScreenHeader';
 
 type Tab = 'exercises' | 'templates';
 
@@ -159,10 +160,8 @@ export function KnowledgeBasePage() {
 
   return (
     <div className="flex min-h-full flex-col">
-      <div className="flex flex-col gap-4 px-5 pb-6 pt-4">
-        <h1 className="font-[family-name:var(--font-display)] text-[34px] leading-none tracking-[-0.02em]">
-          База знаний
-        </h1>
+      <ScreenHeader title="База знаний" back="/" />
+      <div className="flex flex-col gap-4 px-5 pb-6 pt-2">
         {tab === 'exercises' ? <ExercisesTab /> : <TemplatesTab />}
       </div>
 

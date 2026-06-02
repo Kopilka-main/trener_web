@@ -9,6 +9,7 @@ import {
 } from '../api/exercises';
 import { Button } from '../components/Button';
 import { Field } from '../components/Field';
+import { ScreenHeader } from '../components/ScreenHeader';
 
 interface ExerciseEditPageProps {
   mode: 'create' | 'edit';
@@ -94,7 +95,12 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
   }
 
   if (mode === 'edit' && existing.isPending) {
-    return <p className="px-5 py-6 text-sm text-ink-muted">Загрузка…</p>;
+    return (
+      <div className="flex flex-col">
+        <ScreenHeader title="Упражнение" back="/knowledge" />
+        <p className="px-5 py-6 text-sm text-ink-muted">Загрузка…</p>
+      </div>
+    );
   }
 
   // Глобальные упражнения read-only: редактирование запрещено.
@@ -105,12 +111,9 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
   const title = mode === 'create' ? 'Новое упражнение' : 'Редактирование';
 
   return (
-    <div className="flex flex-col gap-6 px-5 pb-6 pt-4">
-      <h1 className="font-[family-name:var(--font-display)] text-[28px] leading-none tracking-[-0.02em]">
-        {title}
-      </h1>
-
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <div className="flex flex-col">
+      <ScreenHeader title={title} back="/knowledge" />
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-5 pb-6 pt-2">
         <Field
           label="Название"
           name="name"
