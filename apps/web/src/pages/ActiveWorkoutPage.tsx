@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Check, ChevronDown, ChevronRight, Pencil, Plus, X } from 'lucide-react';
 import type {
   ExerciseResponse,
@@ -8,6 +10,7 @@ import type {
   WorkoutSetResponse,
 } from '@trener/shared';
 import {
+  clientWorkoutQueryKey,
   useAddWorkoutExercise,
   useCompleteWorkout,
   useDeleteWorkout,
@@ -17,6 +20,30 @@ import {
   useUpdateSet,
   useWorkout,
 } from '../api/client-workouts';
+
+/** Запускает обновление DOM внутри View Transition (плавный морфинг), где доступно. */
+function runWithTransition(update: () => void): void {
+  const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+  if (typeof doc.startViewTransition === 'function') {
+    doc.startViewTransition(() => {
+      flushSync(update);
+    });
+  } else {
+    update();
+  }
+}
+
+/** Оптимистично проставляет done у конкретного подхода. */
+function withSetDone(w: WorkoutResponse, pos: number, idx: number, done: boolean): WorkoutResponse {
+  return {
+    ...w,
+    exercises: w.exercises.map((ex) =>
+      ex.position !== pos
+        ? ex
+        : { ...ex, sets: ex.sets.map((s) => (s.setIndex === idx ? { ...s, done } : s)) },
+    ),
+  };
+}
 import { useExercises } from '../api/exercises';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Button } from '../components/Button';
@@ -203,6 +230,7 @@ function ActiveView({
   backTo: string;
 }) {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const updateSet = useUpdateSet(clientId, workout.id);
   const complete = useCompleteWorkout(clientId, workout.id);
   const reorder = useReorderWorkoutExercises(clientId, workout.id);
@@ -231,6 +259,12 @@ function ActiveView({
 
   function toggleDone(ex: WorkoutExerciseResponse, set: WorkoutSetResponse) {
     const nextDone = !set.done;
+    // Оптимистично обновляем кэш внутри View Transition — карточки плавно уезжают вверх.
+    runWithTransition(() => {
+      qc.setQueryData(clientWorkoutQueryKey(clientId, workout.id), (prev?: WorkoutResponse) =>
+        prev ? withSetDone(prev, ex.position, set.setIndex, nextDone) : prev,
+      );
+    });
     updateSet.mutate({ pos: ex.position, idx: set.setIndex, body: { done: nextDone } });
     if (nextDone && set.plannedRestSec && set.plannedRestSec > 0) {
       setRest({ key: `${String(ex.position)}-${String(set.setIndex)}`, sec: set.plannedRestSec });
@@ -263,7 +297,10 @@ function ActiveView({
   }
 
   const cardBody = (ex: WorkoutExerciseResponse) => (
-    <ul className="flex flex-col gap-2">
+    <ul
+      className="flex flex-col gap-2"
+      style={{ viewTransitionName: `wex-${String(ex.position)}` }}
+    >
       {ex.sets.map((set) => {
         const key = `${String(ex.position)}-${String(set.setIndex)}`;
         const isEditing = editing === key;
@@ -375,10 +412,7 @@ function ActiveView({
             />
           </button>
           {visibleCompleted.map((ex) => (
-            <div
-              key={ex.position}
-              className="collector-rise shelf rounded-2xl px-3 py-1 opacity-80"
-            >
+            <div key={ex.position} className="shelf rounded-2xl px-3 py-1 opacity-80">
               {cardBody(ex)}
             </div>
           ))}
