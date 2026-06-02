@@ -130,6 +130,7 @@ function ClientRow({ client }: { client: ClientResponse }) {
           lastName={client.lastName}
           size={44}
           muted={archived}
+          src={client.avatarFileId ? `/api/files/${client.avatarFileId}` : null}
         />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-[15px] font-semibold text-ink">

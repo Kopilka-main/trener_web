@@ -5,10 +5,25 @@ interface AvatarProps {
   size?: number;
   /** Приглушённый вид (архивный клиент). */
   muted?: boolean;
+  /** URL фото-аватара. Если задан — рендерим <img>, иначе инициалы. */
+  src?: string | null;
 }
 
-/** Круг с инициалами клиента: лайм-текст на тёмной плашке. */
-export function Avatar({ firstName, lastName, size = 44, muted = false }: AvatarProps) {
+/** Круг с фото клиента либо (если фото нет) с инициалами: лайм-текст на тёмной плашке. */
+export function Avatar({ firstName, lastName, size = 44, muted = false, src = null }: AvatarProps) {
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt={`${firstName} ${lastName}`.trim()}
+        width={size}
+        height={size}
+        className="shrink-0 rounded-full bg-card-elevated object-cover"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+
   const initials = `${firstName[0] ?? ''}${lastName[0] ?? ''}`.toUpperCase() || '?';
   return (
     <span

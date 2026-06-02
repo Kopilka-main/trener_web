@@ -1,8 +1,15 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronRight, Trash2, X } from 'lucide-react';
+import { Camera, ChevronRight, Trash2, X } from 'lucide-react';
 import type { Contact } from '@trener/shared';
-import { useClient, useCreateClient, useDeleteClient, useUpdateClient } from '../api/clients';
+import {
+  useClient,
+  useCreateClient,
+  useDeleteClient,
+  useRemoveClientAvatar,
+  useUpdateClient,
+  useUploadClientAvatar,
+} from '../api/clients';
 import { Avatar } from '../components/Avatar';
 import { ScreenHeader } from '../components/ScreenHeader';
 
@@ -22,6 +29,9 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
   const createMutation = useCreateClient();
   const updateMutation = useUpdateClient(id);
   const deleteMutation = useDeleteClient();
+  const uploadAvatar = useUploadClientAvatar(id);
+  const removeAvatar = useRemoveClientAvatar(id);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -130,6 +140,16 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
     }
   }
 
+  const avatarFileId = existing.data?.avatarFileId ?? null;
+  const avatarBusy = uploadAvatar.isPending || removeAvatar.isPending;
+
+  function onAvatarPicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // позволяем выбрать тот же файл повторно
+    if (!file) return;
+    uploadAvatar.mutate(file);
+  }
+
   function confirmDelete() {
     deleteMutation.mutate(id, {
       onSuccess: () => {
@@ -173,9 +193,66 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
         onSubmit={handleSubmit}
         className="flex flex-col gap-5 px-5 pb-8 pt-1"
       >
-        {/* Аватар по центру. */}
-        <div className="flex justify-center pt-1">
-          <Avatar firstName={firstName || 'И'} lastName={lastName || 'Ф'} size={88} />
+        {/* Аватар по центру. В режиме edit — кликабельный (загрузка фото). */}
+        <div className="flex flex-col items-center gap-2 pt-1">
+          {editing ? (
+            <button
+              type="button"
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={avatarBusy}
+              aria-label="Изменить фото"
+              className="relative rounded-full disabled:opacity-50"
+            >
+              <Avatar
+                firstName={firstName || 'И'}
+                lastName={lastName || 'Ф'}
+                size={88}
+                src={avatarFileId ? `/api/files/${avatarFileId}` : null}
+              />
+              <span className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full bg-accent text-accent-on">
+                <Camera size={15} strokeWidth={2} />
+              </span>
+            </button>
+          ) : (
+            <Avatar firstName={firstName || 'И'} lastName={lastName || 'Ф'} size={88} />
+          )}
+
+          {editing && (
+            <>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={onAvatarPicked}
+              />
+              <div className="flex items-center gap-3 text-[13px]">
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={avatarBusy}
+                  className="font-semibold text-accent disabled:opacity-50"
+                >
+                  {uploadAvatar.isPending ? 'Загрузка…' : 'Изменить фото'}
+                </button>
+                {avatarFileId && (
+                  <button
+                    type="button"
+                    onClick={() => removeAvatar.mutate()}
+                    disabled={avatarBusy}
+                    className="font-semibold text-ink-muted disabled:opacity-50"
+                  >
+                    Удалить фото
+                  </button>
+                )}
+              </div>
+              {(uploadAvatar.isError || removeAvatar.isError) && (
+                <p className="text-[12px] text-ink-muted" role="alert">
+                  Не удалось обновить фото. Попробуйте снова.
+                </p>
+              )}
+            </>
+          )}
         </div>
 
         {/* Подключение клиента (отдельный раздел). */}

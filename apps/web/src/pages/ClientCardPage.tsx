@@ -95,7 +95,13 @@ export function ClientCardPage() {
       <div className="flex flex-col gap-5 px-5 pb-8 pt-4">
         {/* Шапка профиля: аватар + имя + возраст + связь (цвет по подключению). */}
         <div className="flex items-center gap-4">
-          <Avatar firstName={c.firstName} lastName={c.lastName} size={64} muted={isArchived} />
+          <Avatar
+            firstName={c.firstName}
+            lastName={c.lastName}
+            size={64}
+            muted={isArchived}
+            src={c.avatarFileId ? `/api/files/${c.avatarFileId}` : null}
+          />
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <div className="flex items-center gap-2">
               <h1 className="min-w-0 text-[26px] font-bold leading-tight text-ink">
