@@ -10,6 +10,7 @@ import {
 import { Button } from '../components/Button';
 import { Field } from '../components/Field';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { subgroupsFor } from '../lib/muscleGroups';
 
 interface ExerciseEditPageProps {
   mode: 'create' | 'edit';
@@ -35,6 +36,7 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
 
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
+  const [subgroup, setSubgroup] = useState('');
   const [description, setDescription] = useState('');
   const [defaultReps, setDefaultReps] = useState('');
   const [defaultWeightKg, setDefaultWeightKg] = useState('');
@@ -47,6 +49,7 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
       const e = existing.data;
       setName(e.name);
       setCategory(e.category);
+      setSubgroup(e.subgroup ?? '');
       setDescription(e.description ?? '');
       setDefaultReps(e.defaultReps?.toString() ?? '');
       setDefaultWeightKg(e.defaultWeightKg?.toString() ?? '');
@@ -58,11 +61,22 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
 
   const mutation = mode === 'create' ? createMutation : updateMutation;
 
+  // При смене категории сбрасываем подгруппу, если она не входит в новый список.
+  function handleCategoryChange(next: string) {
+    setCategory(next);
+    if (subgroup !== '' && !subgroupsFor(next.trim()).includes(subgroup)) {
+      setSubgroup('');
+    }
+  }
+
+  const subgroupOptions = subgroupsFor(category.trim());
+
   function handleSubmit(ev: FormEvent<HTMLFormElement>) {
     ev.preventDefault();
     const payload: CreateExerciseRequest = {
       name: name.trim(),
       category: category.trim(),
+      subgroup: subgroup.trim() === '' ? null : subgroup.trim(),
       description: description.trim() === '' ? null : description.trim(),
       defaultReps: parseOptNum(defaultReps),
       defaultWeightKg: parseOptNum(defaultWeightKg),
@@ -125,9 +139,37 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
           label="Категория"
           name="category"
           value={category}
-          onChange={(e) => setCategory(e.target.value)}
+          onChange={(e) => handleCategoryChange(e.target.value)}
           required
         />
+        {subgroupOptions.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-ink-muted">Подгруппа</span>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setSubgroup('')}
+                className={`rounded-full px-4 py-2 text-[14px] font-semibold transition-colors ${
+                  subgroup === '' ? 'bg-accent text-accent-on' : 'bg-chip text-ink'
+                }`}
+              >
+                Не указано
+              </button>
+              {subgroupOptions.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSubgroup(s)}
+                  className={`rounded-full px-4 py-2 text-[14px] font-semibold transition-colors ${
+                    subgroup === s ? 'bg-accent text-accent-on' : 'bg-chip text-ink'
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <label htmlFor="description" className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-ink-muted">Описание</span>
           <textarea

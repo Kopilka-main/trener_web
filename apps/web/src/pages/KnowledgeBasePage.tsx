@@ -4,6 +4,7 @@ import { ChevronRight, Plus, Search } from 'lucide-react';
 import type { ExerciseResponse, TemplateResponse } from '@trener/shared';
 import { useExercises } from '../api/exercises';
 import { useTemplates } from '../api/workout-templates';
+import { orderSubgroups } from '../lib/muscleGroups';
 
 type Tab = 'templates' | 'exercises' | 'flex';
 
@@ -117,6 +118,7 @@ export function KnowledgeBasePage() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('');
   const [templateGroup, setTemplateGroup] = useState('');
+  const [subgroup, setSubgroup] = useState('');
 
   const exercises = useExercises();
   const templates = useTemplates();
@@ -128,6 +130,13 @@ export function KnowledgeBasePage() {
   const groupByExerciseId = useMemo(() => {
     const m = new Map<string, string>();
     for (const e of allExercises) m.set(e.id, e.category);
+    return m;
+  }, [allExercises]);
+
+  // Карта exerciseId → подгруппа упражнения (null/'' если не задана).
+  const subgroupByExerciseId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const e of allExercises) if (e.subgroup) m.set(e.id, e.subgroup);
     return m;
   }, [allExercises]);
 
@@ -169,20 +178,51 @@ export function KnowledgeBasePage() {
 
   const q = query.trim().toLowerCase();
 
+  // Подгруппы вкладки «Упражнения/Растяжка»: из реально присутствующих среди
+  // упражнений выбранной категории, упорядочены по таксономии.
+  const exerciseSubgroups = useMemo(() => {
+    if (category === '') return [];
+    const present = new Set<string>();
+    for (const e of tabExercises)
+      if (e.category === category && e.subgroup) present.add(e.subgroup);
+    return orderSubgroups(category, present);
+  }, [tabExercises, category]);
+
   const filteredExercises = useMemo(() => {
     return tabExercises.filter((e) => {
       if (category && e.category !== category) return false;
+      if (subgroup && e.subgroup !== subgroup) return false;
       if (q.length > 0 && !e.name.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [tabExercises, category, q]);
+  }, [tabExercises, category, subgroup, q]);
+
+  // Подгруппы вкладки «Тренировки»: из подгрупп упражнений выбранной группы,
+  // встречающихся в шаблонах, упорядочены по таксономии.
+  const templateSubgroups = useMemo(() => {
+    if (templateGroup === '') return [];
+    const present = new Set<string>();
+    for (const t of allTemplates) {
+      for (const ex of t.exercises) {
+        if (groupByExerciseId.get(ex.exerciseId) !== templateGroup) continue;
+        const sg = subgroupByExerciseId.get(ex.exerciseId);
+        if (sg) present.add(sg);
+      }
+    }
+    return orderSubgroups(templateGroup, present);
+  }, [allTemplates, templateGroup, groupByExerciseId, subgroupByExerciseId]);
 
   const filteredTemplates = useMemo(() => {
     return allTemplates.filter((t) => {
       if (templateGroup) {
-        const inGroup = t.exercises.some(
-          (ex) => groupByExerciseId.get(ex.exerciseId) === templateGroup,
-        );
+        // Шаблон проходит, если есть упражнение выбранной группы И (подгруппа не
+        // выбрана, или у упражнения нет подгруппы, или она совпадает с выбранной).
+        const inGroup = t.exercises.some((ex) => {
+          if (groupByExerciseId.get(ex.exerciseId) !== templateGroup) return false;
+          if (subgroup === '') return true;
+          const sg = subgroupByExerciseId.get(ex.exerciseId);
+          return !sg || sg === subgroup;
+        });
         if (!inGroup) return false;
       }
       if (q.length === 0) return true;
@@ -190,20 +230,30 @@ export function KnowledgeBasePage() {
       const inTag = (t.categoryTag ?? '').toLowerCase().includes(q);
       return inName || inTag;
     });
-  }, [allTemplates, q, templateGroup, groupByExerciseId]);
+  }, [allTemplates, q, templateGroup, subgroup, groupByExerciseId, subgroupByExerciseId]);
 
   function selectTab(next: Tab) {
     setTab(next);
     setCategory('');
     setTemplateGroup('');
+    setSubgroup('');
   }
 
   // Чипы: на вкладке «Тренировки» — группы мышц, иначе — категории упражнений.
   const isTemplates = tab === 'templates';
   const chipItems = isTemplates ? templateGroups : categories;
   const chipValue = isTemplates ? templateGroup : category;
-  const setChip = isTemplates ? setTemplateGroup : setCategory;
+  const setPrimaryChip = isTemplates ? setTemplateGroup : setCategory;
   const showChips = chipItems.length > 0;
+
+  // Смена основной группы сбрасывает выбранную подгруппу.
+  function selectChip(value: string) {
+    setPrimaryChip(value);
+    setSubgroup('');
+  }
+
+  const subgroupChips = isTemplates ? templateSubgroups : exerciseSubgroups;
+  const showSubgroupChips = chipValue !== '' && subgroupChips.length > 0;
 
   return (
     <div className="flex min-h-full flex-col">
@@ -269,12 +319,25 @@ export function KnowledgeBasePage() {
 
         {showChips && (
           <div className="mt-3 flex flex-wrap gap-1.5">
-            <CategoryChip active={chipValue === ''} onClick={() => setChip('')}>
+            <CategoryChip active={chipValue === ''} onClick={() => selectChip('')}>
               Все
             </CategoryChip>
             {chipItems.map((c) => (
-              <CategoryChip key={c} active={chipValue === c} onClick={() => setChip(c)}>
+              <CategoryChip key={c} active={chipValue === c} onClick={() => selectChip(c)}>
                 {c}
+              </CategoryChip>
+            ))}
+          </div>
+        )}
+
+        {showSubgroupChips && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <CategoryChip active={subgroup === ''} onClick={() => setSubgroup('')}>
+              Все
+            </CategoryChip>
+            {subgroupChips.map((s) => (
+              <CategoryChip key={s} active={subgroup === s} onClick={() => setSubgroup(s)}>
+                {s}
               </CategoryChip>
             ))}
           </div>

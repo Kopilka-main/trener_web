@@ -18,6 +18,7 @@ const sample: ExerciseResponse = {
   isGlobal: false,
   name: 'Присед',
   category: 'Ноги',
+  subgroup: null,
   description: null,
   defaultReps: 10,
   defaultWeightKg: null,

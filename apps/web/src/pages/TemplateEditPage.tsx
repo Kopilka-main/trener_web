@@ -13,6 +13,7 @@ import { Button } from '../components/Button';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SortableList } from '../components/SortableList';
 import { HoldToDelete } from '../components/HoldToDelete';
+import { orderSubgroups } from '../lib/muscleGroups';
 
 interface TemplateEditPageProps {
   mode: 'create' | 'edit';
@@ -119,6 +120,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
   const [shortDescription, setShortDescription] = useState('');
   const [categoryTag, setCategoryTag] = useState<string | null>(null);
   const [group, setGroup] = useState<string | null>(null);
+  const [subgroup, setSubgroup] = useState('');
   const [positions, setPositions] = useState<Draft[]>([]);
 
   // Группы мышц — из реальных категорий каталога, в предпочтительном порядке.
@@ -169,6 +171,25 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
     () => (catalog.data ?? []).filter((e) => e.category === group),
     [catalog.data, group],
   );
+
+  // Подгруппы — из реально присутствующих у упражнений группы, в порядке таксономии.
+  const subgroupChips = useMemo(() => {
+    const present = new Set<string>();
+    for (const e of groupExercises) if (e.subgroup) present.add(e.subgroup);
+    return group ? orderSubgroups(group, present) : [];
+  }, [groupExercises, group]);
+
+  // Отфильтрованный по подгруппе список для отображения.
+  const visibleExercises = useMemo(
+    () =>
+      subgroup === '' ? groupExercises : groupExercises.filter((e) => e.subgroup === subgroup),
+    [groupExercises, subgroup],
+  );
+
+  function selectGroup(g: string) {
+    setGroup(g);
+    setSubgroup('');
+  }
 
   function toggleExercise(ex: ExerciseResponse) {
     setPositions((prev) =>
@@ -279,7 +300,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                     <button
                       key={g}
                       type="button"
-                      onClick={() => setGroup(g)}
+                      onClick={() => selectGroup(g)}
                       className={`rounded-full px-4 py-2 text-[14px] font-semibold transition-colors ${
                         active ? 'bg-accent text-accent-on' : 'bg-chip text-ink'
                       }`}
@@ -289,6 +310,31 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                   );
                 })}
               </div>
+              {subgroupChips.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSubgroup('')}
+                    className={`rounded-full px-4 py-2 text-[13px] font-semibold transition-colors ${
+                      subgroup === '' ? 'bg-accent text-accent-on' : 'bg-chip text-ink'
+                    }`}
+                  >
+                    Все
+                  </button>
+                  {subgroupChips.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setSubgroup(s)}
+                      className={`rounded-full px-4 py-2 text-[13px] font-semibold transition-colors ${
+                        subgroup === s ? 'bg-accent text-accent-on' : 'bg-chip text-ink'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
             </section>
           )}
 
@@ -298,7 +344,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                 Упражнения «{group}»
               </h2>
               <ul className="flex flex-col gap-2">
-                {groupExercises.map((ex) => {
+                {visibleExercises.map((ex) => {
                   const count = countByExercise.get(ex.id) ?? 0;
                   const picked = count > 0;
                   return (
@@ -355,7 +401,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                     </li>
                   );
                 })}
-                {groupExercises.length === 0 && !catalog.isPending && (
+                {visibleExercises.length === 0 && !catalog.isPending && (
                   <li className="rounded-2xl bg-card py-6 text-center text-sm text-ink-muted">
                     В этой группе пока нет упражнений
                   </li>
