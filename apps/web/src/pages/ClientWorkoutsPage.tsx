@@ -170,17 +170,6 @@ export function ClientWorkoutsPage() {
         )}
       </div>
 
-      <div className="pointer-events-none sticky bottom-4 z-10 mt-auto flex justify-end px-5">
-        <button
-          type="button"
-          onClick={() => setPicker('template')}
-          aria-label="Назначить тренировку"
-          className="tile-shadow-primary pointer-events-auto flex h-14 w-14 shrink-0 items-center justify-center rounded-full active:scale-[0.95]"
-        >
-          <Plus size={24} strokeWidth={2.2} />
-        </button>
-      </div>
-
       {picker === 'template' && (
         <TemplatePickerSheet
           onClose={() => setPicker('none')}
