@@ -22,13 +22,26 @@ export function ClientsPage() {
       .filter((c) => c.status === filter)
       .filter((c) => {
         if (q.length === 0) return true;
-        const hay = `${c.firstName} ${c.lastName} ${c.phone ?? ''}`.toLowerCase();
+        const hay =
+          `${c.firstName} ${c.lastName} ${c.phone ?? ''} ${c.tags.join(' ')}`.toLowerCase();
         return hay.includes(q);
       })
       .sort((a, b) =>
         `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`, 'ru'),
       );
   }, [list, filter, query]);
+
+  // Группировка по первой букве имени (для алфавитных секций).
+  const groups = useMemo(() => {
+    const map = new Map<string, ClientResponse[]>();
+    for (const c of filtered) {
+      const letter = (c.firstName.trim()[0] ?? '#').toUpperCase();
+      const arr = map.get(letter);
+      if (arr) arr.push(c);
+      else map.set(letter, [c]);
+    }
+    return [...map.entries()];
+  }, [filtered]);
 
   return (
     <div className="flex min-h-full flex-col">
@@ -39,11 +52,11 @@ export function ClientsPage() {
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-muted" />
           <input
             type="search"
-            placeholder="Поиск по имени или телефону"
+            placeholder="Поиск по имени, тегу"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="shelf w-full rounded-2xl py-3 pl-10 pr-4 text-sm text-ink outline-none placeholder:text-ink-muted"
-            aria-label="Поиск по имени или телефону"
+            aria-label="Поиск по имени, тегу"
           />
         </div>
 
@@ -65,13 +78,18 @@ export function ClientsPage() {
           </p>
         )}
 
-        {filtered.length > 0 && (
-          <ul className="flex flex-col gap-2">
-            {filtered.map((c) => (
-              <ClientRow key={c.id} client={c} />
-            ))}
-          </ul>
-        )}
+        {groups.map(([letter, items]) => (
+          <div key={letter} className="flex flex-col gap-2">
+            <div className="px-1 pt-1 font-mono text-[12px] uppercase tracking-wide text-ink-muted">
+              {letter}
+            </div>
+            <ul className="flex flex-col gap-2">
+              {items.map((c) => (
+                <ClientRow key={c.id} client={c} />
+              ))}
+            </ul>
+          </div>
+        ))}
       </div>
 
       {/* Нижняя панель: фильтр статуса (слева) + FAB добавления (справа). */}
