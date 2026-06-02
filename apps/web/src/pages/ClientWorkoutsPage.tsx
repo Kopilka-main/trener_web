@@ -1,7 +1,14 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ChevronRight, Dumbbell, Plus, X } from 'lucide-react';
-import type { TemplateResponse, WorkoutResponse, WorkoutStatus } from '@trener/shared';
+import { ChevronDown, ChevronRight, ChevronUp, Dumbbell, Plus, RotateCcw, X } from 'lucide-react';
+import type {
+  CreateWorkoutRequest,
+  TemplateResponse,
+  WorkoutExerciseResponse,
+  WorkoutResponse,
+  WorkoutStatus,
+  WorkoutSetResponse,
+} from '@trener/shared';
 import { useClientWorkouts, useCreateWorkout } from '../api/client-workouts';
 import { useTemplates } from '../api/workout-templates';
 import { useClient } from '../api/clients';
@@ -37,6 +44,29 @@ export function ClientWorkoutsPage() {
   const workouts = useClientWorkouts(id);
   const createWorkout = useCreateWorkout(id);
   const [picking, setPicking] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Повторить прошлую тренировку: клонируем упражнения и подходы в новый черновик.
+  function repeat(w: WorkoutResponse) {
+    if (w.exercises.length === 0) return;
+    const body: CreateWorkoutRequest = {
+      name: w.name,
+      exercises: w.exercises.map((ex) => ({
+        exerciseId: ex.exerciseId,
+        sets: ex.sets.map((s) => ({
+          plannedReps: s.plannedReps ?? s.actualReps,
+          plannedWeightKg: s.plannedWeightKg ?? s.actualWeightKg,
+          plannedTimeSec: s.plannedTimeSec ?? s.actualTimeSec,
+          plannedRestSec: s.plannedRestSec,
+        })),
+      })),
+    };
+    createWorkout.mutate(body, {
+      onSuccess: (workout) => {
+        void navigate(`/clients/${id}/workouts/${workout.id}`);
+      },
+    });
+  }
 
   const list = workouts.data ?? [];
   const current = useMemo(
@@ -119,7 +149,14 @@ export function ClientWorkoutsPage() {
         {history.length > 0 && (
           <Section title="История">
             {history.map((w) => (
-              <WorkoutRow key={w.id} clientId={id} workout={w} />
+              <HistoryRow
+                key={w.id}
+                workout={w}
+                expanded={expandedId === w.id}
+                onToggle={() => setExpandedId(expandedId === w.id ? null : w.id)}
+                onRepeat={() => repeat(w)}
+                repeatPending={createWorkout.isPending}
+              />
             ))}
           </Section>
         )}
@@ -178,6 +215,137 @@ function WorkoutRow({ clientId, workout }: { clientId: string; workout: WorkoutR
         </span>
         <ChevronRight size={16} className="tile-chevron shrink-0" />
       </Link>
+    </li>
+  );
+}
+
+function dateParts(iso: string | null): { day: string; month: string } | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return {
+    day: String(d.getDate()),
+    month: d.toLocaleDateString('ru-RU', { month: 'short' }).replace('.', ''),
+  };
+}
+
+function formatDuration(sec: number): string {
+  const m = Math.round(sec / 60);
+  if (m < 60) return `${m} мин`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  return rm > 0 ? `${h} ч ${rm} мин` : `${h} ч`;
+}
+
+/** Итог подхода: факт, если есть, иначе план. */
+function setSummary(s: WorkoutSetResponse): string {
+  const reps = s.actualReps ?? s.plannedReps;
+  const weight = s.actualWeightKg ?? s.plannedWeightKg;
+  const time = s.actualTimeSec ?? s.plannedTimeSec;
+  return [
+    reps !== null ? `${reps}` : null,
+    weight !== null ? `× ${weight} кг` : null,
+    time !== null ? `${time} с` : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function exerciseSummary(ex: WorkoutExerciseResponse): string {
+  const first = ex.sets[0];
+  if (!first) return '';
+  const head = ex.sets.length > 1 ? `${ex.sets.length}× ` : '';
+  return `${head}${setSummary(first)}`;
+}
+
+function HistoryRow({
+  workout,
+  expanded,
+  onToggle,
+  onRepeat,
+  repeatPending,
+}: {
+  workout: WorkoutResponse;
+  expanded: boolean;
+  onToggle: () => void;
+  onRepeat: () => void;
+  repeatPending: boolean;
+}) {
+  const dt = dateParts(workout.completedAt ?? workout.startedAt);
+  const skipped = workout.status === 'skipped';
+  const meta = skipped
+    ? 'Пропущена'
+    : [
+        workout.durationSec ? formatDuration(workout.durationSec) : null,
+        workout.rpe ? `RPE ${workout.rpe}` : null,
+        `${workout.exercises.length} упр.`,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+
+  return (
+    <li className="overflow-hidden rounded-2xl bg-card">
+      <div className="flex items-center gap-3 p-3">
+        <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-chip text-center leading-tight">
+          {dt ? (
+            <>
+              <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase text-ink-muted">
+                {dt.month}
+              </span>
+              <span className="font-[family-name:var(--font-mono)] text-sm font-bold tabular-nums text-ink">
+                {dt.day}
+              </span>
+            </>
+          ) : (
+            <Dumbbell size={18} className="text-ink-muted" />
+          )}
+        </div>
+        <button type="button" onClick={onToggle} className="min-w-0 flex-1 text-left">
+          <div className="truncate text-[14px] font-semibold text-ink">{workout.name}</div>
+          <div className="font-[family-name:var(--font-mono)] text-[11px] text-ink-muted">
+            {meta}
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={onRepeat}
+          disabled={repeatPending || workout.exercises.length === 0}
+          aria-label="Повторить тренировку"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-muted active:bg-card-elevated disabled:opacity-40"
+        >
+          <RotateCcw size={16} strokeWidth={1.9} />
+        </button>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={expanded ? 'Свернуть' : 'Развернуть'}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-muted active:bg-card-elevated"
+        >
+          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="flex flex-col gap-1.5 border-t border-line px-4 py-3">
+          {workout.exercises.length === 0 && (
+            <div className="text-[12px] text-ink-muted">Упражнений нет</div>
+          )}
+          {workout.exercises.map((ex) => (
+            <div
+              key={ex.position}
+              className="flex items-baseline justify-between gap-2 text-[12px]"
+            >
+              <span className="min-w-0 truncate font-medium text-ink">{ex.exerciseName}</span>
+              <span className="shrink-0 font-[family-name:var(--font-mono)] tabular-nums text-ink-muted">
+                {exerciseSummary(ex)}
+              </span>
+            </div>
+          ))}
+          {workout.trainerNote && (
+            <div className="pt-1 text-[12px] italic text-ink-muted">«{workout.trainerNote}»</div>
+          )}
+        </div>
+      )}
     </li>
   );
 }
