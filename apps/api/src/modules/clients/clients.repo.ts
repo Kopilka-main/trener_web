@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { clients, trainerClients } from '../../db/schema.js';
-import type { ClientStatus } from '@trener/shared';
+import type { ClientStatus, Contact } from '@trener/shared';
 
 export type ClientRow = {
   id: string;
@@ -10,6 +10,8 @@ export type ClientRow = {
   phone: string | null;
   notes: string | null;
   status: ClientStatus;
+  contacts: Contact[];
+  tags: string[];
   createdAt: Date;
 };
 
@@ -20,6 +22,8 @@ export type CreateClientInput = {
   lastName: string;
   phone?: string | null;
   notes?: string | null;
+  contacts?: Contact[];
+  tags?: string[];
 };
 
 export type UpdateClientInput = {
@@ -28,6 +32,8 @@ export type UpdateClientInput = {
   phone?: string | null;
   notes?: string | null;
   status?: ClientStatus;
+  contacts?: Contact[];
+  tags?: string[];
 };
 
 export function makeClientsRepo(db: Db) {
@@ -39,6 +45,8 @@ export function makeClientsRepo(db: Db) {
         firstName: clients.firstName,
         lastName: clients.lastName,
         phone: clients.phone,
+        contacts: clients.contacts,
+        tags: clients.tags,
         notes: trainerClients.notes,
         status: trainerClients.status,
         createdAt: trainerClients.createdAt,
@@ -70,6 +78,8 @@ export function makeClientsRepo(db: Db) {
           firstName: input.firstName,
           lastName: input.lastName,
           phone: input.phone ?? null,
+          contacts: input.contacts ?? [],
+          tags: input.tags ?? [],
         });
         await tx.insert(trainerClients).values({
           trainerId: input.trainerId,
@@ -90,6 +100,8 @@ export function makeClientsRepo(db: Db) {
           firstName: clients.firstName,
           lastName: clients.lastName,
           phone: clients.phone,
+          contacts: clients.contacts,
+          tags: clients.tags,
           notes: trainerClients.notes,
           status: trainerClients.status,
           createdAt: trainerClients.createdAt,
@@ -107,11 +119,18 @@ export function makeClientsRepo(db: Db) {
     ): Promise<ClientRow | null> {
       // Изоляция: без связи тренер↔клиент не мутируем чужую персону.
       if (!(await isLinkedLocal(trainerId, clientId))) return null;
-      const personPatch: Partial<{ firstName: string; lastName: string; phone: string | null }> =
-        {};
+      const personPatch: Partial<{
+        firstName: string;
+        lastName: string;
+        phone: string | null;
+        contacts: Contact[];
+        tags: string[];
+      }> = {};
       if (patch.firstName !== undefined) personPatch.firstName = patch.firstName;
       if (patch.lastName !== undefined) personPatch.lastName = patch.lastName;
       if (patch.phone !== undefined) personPatch.phone = patch.phone;
+      if (patch.contacts !== undefined) personPatch.contacts = patch.contacts;
+      if (patch.tags !== undefined) personPatch.tags = patch.tags;
       const linkPatch: Partial<{ notes: string | null; status: ClientStatus }> = {};
       if (patch.notes !== undefined) linkPatch.notes = patch.notes;
       if (patch.status !== undefined) linkPatch.status = patch.status;

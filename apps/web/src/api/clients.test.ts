@@ -17,6 +17,8 @@ function client(over: Partial<ClientResponse> = {}): ClientResponse {
     phone: null,
     notes: null,
     status: 'active',
+    contacts: [],
+    tags: [],
     createdAt: '2026-01-01T00:00:00.000Z',
     ...over,
   };
@@ -43,7 +45,14 @@ describe('clients api', () => {
 
   it('createClient шлёт POST с телом', async () => {
     mockedApiFetch.mockResolvedValue({ client: client() });
-    await createClient({ firstName: 'Иван', lastName: 'Петров', phone: null, notes: null });
+    await createClient({
+      firstName: 'Иван',
+      lastName: 'Петров',
+      phone: null,
+      notes: null,
+      contacts: [],
+      tags: [],
+    });
     expect(mockedApiFetch).toHaveBeenCalledWith(
       '/clients',
       expect.objectContaining({ method: 'POST' }),

@@ -26,6 +26,8 @@ function client(over: Partial<ClientResponse>): ClientResponse {
     phone: null,
     notes: null,
     status: 'active',
+    contacts: [],
+    tags: [],
     createdAt: '2026-01-01T00:00:00.000Z',
     ...over,
   };

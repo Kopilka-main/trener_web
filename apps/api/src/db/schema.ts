@@ -9,6 +9,7 @@ import {
   foreignKey,
   index,
   check,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { ClientStatus } from '@trener/shared';
@@ -54,6 +55,10 @@ export const clients = pgTable('clients', {
   firstName: text('first_name').notNull(),
   lastName: text('last_name').notNull(),
   phone: text('phone'),
+  // Типизированный список контактов клиента (телефон/мессенджеры/прочее).
+  contacts: jsonb('contacts').$type<{ type: string; value: string }[]>().notNull().default([]),
+  // Свободные теги клиента.
+  tags: jsonb('tags').$type<string[]>().notNull().default([]),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

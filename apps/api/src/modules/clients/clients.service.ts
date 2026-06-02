@@ -12,6 +12,8 @@ function toResponse(r: ClientRow): ClientResponse {
     phone: r.phone,
     notes: r.notes,
     status: r.status,
+    contacts: r.contacts ?? [],
+    tags: r.tags ?? [],
     createdAt: r.createdAt.toISOString(),
   };
 }
@@ -26,6 +28,8 @@ export function makeClientsService(repo: ClientsRepo, deps: ClientsDeps) {
         lastName: input.lastName,
         phone: input.phone ?? null,
         notes: input.notes ?? null,
+        contacts: input.contacts ?? [],
+        tags: input.tags ?? [],
       });
       return toResponse(row);
     },
@@ -54,6 +58,8 @@ export function makeClientsService(repo: ClientsRepo, deps: ClientsDeps) {
       if (patch.phone != null) repoPatch.phone = patch.phone;
       if (patch.notes != null) repoPatch.notes = patch.notes;
       if (patch.status !== undefined) repoPatch.status = patch.status;
+      if (patch.contacts !== undefined) repoPatch.contacts = patch.contacts;
+      if (patch.tags !== undefined) repoPatch.tags = patch.tags;
       const row = await repo.update(trainerId, clientId, repoPatch);
       if (!row) throw notFound('Клиент не найден');
       return toResponse(row);
