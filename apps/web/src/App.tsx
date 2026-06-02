@@ -10,7 +10,13 @@ import { ClientEditPage } from './pages/ClientEditPage';
 import { KnowledgeBasePage } from './pages/KnowledgeBasePage';
 import { ExerciseEditPage } from './pages/ExerciseEditPage';
 import { TemplateEditPage } from './pages/TemplateEditPage';
-import { CalendarPage, MessagesPage } from './pages/StubPage';
+import {
+  CalendarPage,
+  MessagesPage,
+  AccountingPage,
+  NotificationsPage,
+  ProfilePage,
+} from './pages/StubPage';
 
 export function App() {
   return (
@@ -36,6 +42,9 @@ export function App() {
         <Route path="/knowledge/templates/:id/edit" element={<TemplateEditPage mode="edit" />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/messages" element={<MessagesPage />} />
+        <Route path="/accounting" element={<AccountingPage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
