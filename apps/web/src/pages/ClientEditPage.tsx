@@ -60,6 +60,8 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
     return '';
   }
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+
   const errors = {
     firstName: firstName.trim() === '' ? 'Обязательно к заполнению' : '',
     lastName: lastName.trim() === '' ? 'Обязательно к заполнению' : '',
@@ -296,13 +298,15 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
               id="birthDate"
               type="date"
               value={birthDate}
+              min="1900-01-01"
+              max={todayStr}
               onChange={(e) => setBirthDate(e.target.value)}
-              aria-invalid={showErrors && errors.birthDate !== ''}
+              aria-invalid={errors.birthDate !== ''}
               className={`w-full rounded-xl border bg-chip px-3 py-2.5 text-base text-ink outline-none focus:border-accent [color-scheme:dark] ${
-                showErrors && errors.birthDate ? 'border-danger' : 'border-line'
+                errors.birthDate ? 'border-danger' : 'border-line'
               }`}
             />
-            {showErrors && errors.birthDate && (
+            {errors.birthDate && (
               <span className="text-[12px] text-danger">{errors.birthDate}</span>
             )}
           </label>
@@ -355,7 +359,9 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
               className="min-w-[90px] flex-1 bg-transparent text-base text-ink outline-none placeholder:text-ink-mutedxl"
             />
           </div>
-          <p className="px-1 text-[12px] text-ink-muted">Ввод</p>
+          <p className="px-1 text-[12px] text-ink-muted">
+            Введите тег и нажмите ввод. Теги помогают быстро группировать клиентов.
+          </p>
         </Section>
 
         {mutation.isError && (
