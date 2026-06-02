@@ -188,12 +188,16 @@ export function ClientCardPage() {
                   if (chatLocked) setConnectOpen(true);
                   else void navigate(`/clients/${id}/${key}`);
                 }}
-                className={`tile-shadow flex flex-col gap-3 rounded-2xl p-4 text-left active:scale-[0.98] ${
-                  chatLocked ? 'opacity-50' : ''
+                className={`flex flex-col gap-3 rounded-2xl p-4 text-left ${
+                  chatLocked ? 'shelf opacity-60' : 'tile-shadow active:scale-[0.98]'
                 }`}
               >
                 <div className="flex items-start justify-between">
-                  <Icon size={22} strokeWidth={1.8} className="text-ink" />
+                  <Icon
+                    size={22}
+                    strokeWidth={1.8}
+                    className={chatLocked ? 'text-ink-muted' : 'text-ink'}
+                  />
                   {chatLocked && (
                     <Unlink
                       size={18}
