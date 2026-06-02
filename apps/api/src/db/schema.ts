@@ -100,6 +100,7 @@ export const workoutTemplates = pgTable('workout_templates', {
     .references(() => trainers.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   categoryTag: text('category_tag'),
+  shortDescription: text('short_description'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

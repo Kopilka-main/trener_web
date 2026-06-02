@@ -18,6 +18,7 @@ export type TemplateExercise = z.infer<typeof templateExerciseSchema>;
 export const createTemplateRequestSchema = z.object({
   name,
   categoryTag,
+  shortDescription: z.string().trim().max(2000).nullish(),
   exercises: z.array(templateExerciseSchema).min(1),
 });
 export type CreateTemplateRequest = z.infer<typeof createTemplateRequestSchema>;
@@ -30,6 +31,7 @@ export const templateResponseSchema = z.object({
   id: z.string(),
   name: z.string(),
   categoryTag: z.string().nullable(),
+  shortDescription: z.string().nullable(),
   exercises: z.array(
     z.object({
       position: z.number(),

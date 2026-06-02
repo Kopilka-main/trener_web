@@ -8,6 +8,7 @@ function row(over: Partial<TemplateRow> = {}): TemplateRow {
     trainerId: 'A',
     name: 'День ног',
     categoryTag: 'legs',
+    shortDescription: null,
     createdAt: new Date(0),
     exercises: [
       {
@@ -52,6 +53,32 @@ describe('templates.service', () => {
       'A',
       expect.objectContaining({ id: 'newid', trainerId: 'A', name: 'День ног' }),
     );
+  });
+
+  it('create прокидывает shortDescription в repo и возвращает его в ответе', async () => {
+    const create = vi.fn(() => Promise.resolve(row({ shortDescription: 'Силовая на верх' })));
+    const svc = makeTemplatesService(fakeRepo({ create }), { newId: () => 'newid' });
+    const res = await svc.create('A', {
+      name: 'День ног',
+      shortDescription: 'Силовая на верх',
+      exercises: [{ exerciseId: 'g1', sets: 3, restSec: 90 }],
+    });
+    expect(res.shortDescription).toBe('Силовая на верх');
+    expect(create).toHaveBeenCalledWith(
+      'A',
+      expect.objectContaining({ shortDescription: 'Силовая на верх' }),
+    );
+  });
+
+  it('create без shortDescription → null в repo и в ответе', async () => {
+    const create = vi.fn(() => Promise.resolve(row()));
+    const svc = makeTemplatesService(fakeRepo({ create }), { newId: () => 'newid' });
+    const res = await svc.create('A', {
+      name: 'День ног',
+      exercises: [{ exerciseId: 'g1', sets: 3, restSec: 90 }],
+    });
+    expect(res.shortDescription).toBeNull();
+    expect(create).toHaveBeenCalledWith('A', expect.objectContaining({ shortDescription: null }));
   });
 
   it('create с невидимым упражнением (repo.create → null) → 400 UNKNOWN_EXERCISE', async () => {

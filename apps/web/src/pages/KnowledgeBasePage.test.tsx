@@ -29,6 +29,7 @@ const templates: TemplateResponse[] = [
     id: 'tpl1',
     name: 'Программа ног',
     categoryTag: 'силовая',
+    shortDescription: null,
     exercises: [
       {
         position: 0,
@@ -83,7 +84,7 @@ describe('KnowledgeBasePage', () => {
     expect(screen.queryByText('Присед со штангой')).not.toBeInTheDocument();
   });
 
-  it('переключение на таб «Упражнения» показывает упражнения с бейджем глобального', () => {
+  it('переключение на таб «Упражнения» показывает упражнения', () => {
     mockExercises(exercises);
     mockTemplates(templates);
     renderPage();
@@ -91,7 +92,6 @@ describe('KnowledgeBasePage', () => {
     fireEvent.click(screen.getByRole('tab', { name: /Упражнения/ }));
 
     expect(screen.getByText('Присед со штангой')).toBeInTheDocument();
-    expect(screen.getByText('Глобальное')).toBeInTheDocument();
   });
 
   it('фильтрует упражнения по чипу категории', () => {

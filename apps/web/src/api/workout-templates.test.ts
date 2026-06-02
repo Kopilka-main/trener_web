@@ -17,6 +17,7 @@ const sample: TemplateResponse = {
   id: 'tpl1',
   name: 'Ноги A',
   categoryTag: 'силовая',
+  shortDescription: null,
   exercises: [
     {
       position: 0,

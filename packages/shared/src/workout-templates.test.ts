@@ -29,6 +29,21 @@ describe('workout-templates schemas', () => {
     expect(r.exercises[0]?.restSec).toBe(90);
   });
 
+  it('create тримит shortDescription; по умолчанию необязателен', () => {
+    const r = createTemplateRequestSchema.parse({
+      name: 'День груди',
+      shortDescription: '  Силовая на верх  ',
+      exercises: [{ exerciseId: 'ex1', sets: 4 }],
+    });
+    expect(r.shortDescription).toBe('Силовая на верх');
+
+    const r2 = createTemplateRequestSchema.parse({
+      name: 'День груди',
+      exercises: [{ exerciseId: 'ex1', sets: 4 }],
+    });
+    expect(r2.shortDescription).toBeUndefined();
+  });
+
   it('create отклоняет пустое имя', () => {
     expect(() =>
       createTemplateRequestSchema.parse({ name: '', exercises: [{ exerciseId: 'ex1', sets: 1 }] }),

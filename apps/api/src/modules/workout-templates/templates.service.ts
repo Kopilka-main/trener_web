@@ -22,6 +22,7 @@ function toResponse(r: TemplateRow): TemplateResponse {
     id: r.id,
     name: r.name,
     categoryTag: r.categoryTag,
+    shortDescription: r.shortDescription,
     exercises: r.exercises.map((e) => ({
       position: e.position,
       exerciseId: e.exerciseId,
@@ -67,6 +68,7 @@ export function makeTemplatesService(repo: TemplatesRepo, deps: TemplatesDeps) {
         trainerId,
         name: input.name,
         categoryTag: input.categoryTag ?? null,
+        shortDescription: input.shortDescription ?? null,
         exercises: input.exercises.map(toInput),
       });
       // null = одно из упражнений невидимо тренеру.
@@ -83,6 +85,8 @@ export function makeTemplatesService(repo: TemplatesRepo, deps: TemplatesDeps) {
       const repoPatch: UpdateTemplateInput = {};
       if (patch.name !== undefined) repoPatch.name = patch.name;
       if (patch.categoryTag !== undefined) repoPatch.categoryTag = patch.categoryTag ?? null;
+      if (patch.shortDescription !== undefined)
+        repoPatch.shortDescription = patch.shortDescription ?? null;
       if (patch.exercises !== undefined) repoPatch.exercises = patch.exercises.map(toInput);
 
       // repo.update вернёт null если: чужой/нет (→404) ИЛИ невидимое упражнение (→400).

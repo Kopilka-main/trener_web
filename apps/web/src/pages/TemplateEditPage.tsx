@@ -30,6 +30,25 @@ const GROUP_ORDER = [
   'Йога',
 ];
 
+/** Целевые мышцы по группе мышц (статическая карта — в API упражнения нет поля мышц). */
+const MUSCLES_BY_CATEGORY: Record<string, string[]> = {
+  Грудь: ['Грудные', 'Передняя дельта', 'Трицепс'],
+  Спина: ['Широчайшие', 'Средняя часть спины', 'Трапеции', 'Бицепс'],
+  Ноги: ['Квадрицепс', 'Бицепс бедра', 'Ягодицы', 'Икры'],
+  Плечи: ['Передняя дельта', 'Средняя дельта', 'Задняя дельта', 'Трапеции'],
+  Руки: ['Бицепс', 'Трицепс', 'Брахиалис', 'Предплечья'],
+  Корпус: ['Прямая мышца живота', 'Косые', 'Поперечная'],
+  'Пресс/Кор': ['Прямая мышца живота', 'Косые', 'Поперечная'],
+  Кардио: ['Квадрицепс', 'Бицепс бедра', 'Ягодицы', 'Икры'],
+  Растяжка: ['Бицепс бедра', 'Ягодицы', 'Грудные', 'Широчайшие'],
+  Йога: ['Корпус', 'Грудные', 'Ягодицы'],
+};
+
+function musclesFor(category: string): string {
+  const m = MUSCLES_BY_CATEGORY[category];
+  return m ? m.slice(0, 3).join(', ') : category;
+}
+
 /** Варианты «Тип» тренировки. */
 const TEMPLATE_TAGS = [
   'Сила',
@@ -90,6 +109,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
 
   const [step, setStep] = useState<1 | 2>(editing ? 2 : 1);
   const [name, setName] = useState('');
+  const [shortDescription, setShortDescription] = useState('');
   const [categoryTag, setCategoryTag] = useState<string | null>(null);
   const [group, setGroup] = useState<string | null>(null);
   const [positions, setPositions] = useState<Draft[]>([]);
@@ -114,6 +134,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
     if (editing && existing.data) {
       const t = existing.data;
       setName(t.name);
+      setShortDescription(t.shortDescription ?? '');
       setCategoryTag(t.categoryTag);
       setPositions(
         t.exercises.map((p) => ({
@@ -185,6 +206,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
     return {
       name: name.trim(),
       categoryTag: tag ? tag : null,
+      shortDescription: shortDescription.trim() === '' ? null : shortDescription.trim(),
       exercises,
     };
   }
@@ -282,7 +304,9 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                       >
                         <span
                           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
-                            picked ? 'bg-accent text-accent-on' : 'bg-chip text-transparent'
+                            picked
+                              ? 'bg-accent text-accent-on'
+                              : 'border border-line bg-transparent text-transparent'
                           }`}
                         >
                           <Check picked={picked} />
@@ -291,11 +315,9 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                           <span className="block truncate text-[15px] font-semibold text-ink">
                             {ex.name}
                           </span>
-                          {(ex.description ?? ex.category) && (
-                            <span className="block truncate text-[12px] text-ink-muted">
-                              {ex.description ?? ex.category}
-                            </span>
-                          )}
+                          <span className="block truncate text-[12px] text-ink-muted">
+                            {musclesFor(ex.category)}
+                          </span>
                         </span>
                       </button>
                       {picked && (
@@ -377,6 +399,19 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
             onChange={(e) => setName(e.target.value)}
             placeholder="Верх · Сила"
             className="w-full rounded-xl border border-line bg-card px-4 py-3 text-[15px] text-ink outline-none focus:border-accent"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+            Краткое описание
+          </span>
+          <textarea
+            rows={2}
+            value={shortDescription}
+            onChange={(e) => setShortDescription(e.target.value)}
+            placeholder="Силовая на верх — грудь, спина, плечи…"
+            className="w-full resize-none rounded-xl border border-line bg-card px-4 py-3 text-[15px] text-ink outline-none focus:border-accent"
           />
         </label>
 

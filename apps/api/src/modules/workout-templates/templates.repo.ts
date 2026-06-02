@@ -19,6 +19,7 @@ export type TemplateRow = {
   trainerId: string;
   name: string;
   categoryTag: string | null;
+  shortDescription: string | null;
   createdAt: Date;
   exercises: TemplateExerciseRow[];
 };
@@ -38,12 +39,14 @@ export type CreateTemplateInput = {
   trainerId: string;
   name: string;
   categoryTag?: string | null;
+  shortDescription?: string | null;
   exercises: TemplateExerciseInput[];
 };
 
 export type UpdateTemplateInput = {
   name?: string;
   categoryTag?: string | null;
+  shortDescription?: string | null;
   // undefined = не трогать список; массив = заменить целиком.
   exercises?: TemplateExerciseInput[];
 };
@@ -91,6 +94,7 @@ export function makeTemplatesRepo(db: Db) {
         trainerId: workoutTemplates.trainerId,
         name: workoutTemplates.name,
         categoryTag: workoutTemplates.categoryTag,
+        shortDescription: workoutTemplates.shortDescription,
         createdAt: workoutTemplates.createdAt,
       })
       .from(workoutTemplates)
@@ -139,6 +143,7 @@ export function makeTemplatesRepo(db: Db) {
           trainerId,
           name: input.name,
           categoryTag: input.categoryTag ?? null,
+          shortDescription: input.shortDescription ?? null,
         });
         await insertExercises(tx, input.id, input.exercises);
       });
@@ -152,6 +157,7 @@ export function makeTemplatesRepo(db: Db) {
           trainerId: workoutTemplates.trainerId,
           name: workoutTemplates.name,
           categoryTag: workoutTemplates.categoryTag,
+          shortDescription: workoutTemplates.shortDescription,
           createdAt: workoutTemplates.createdAt,
         })
         .from(workoutTemplates)
@@ -182,9 +188,14 @@ export function makeTemplatesRepo(db: Db) {
         if (!visible) return null;
       }
 
-      const headPatch: Partial<{ name: string; categoryTag: string | null }> = {};
+      const headPatch: Partial<{
+        name: string;
+        categoryTag: string | null;
+        shortDescription: string | null;
+      }> = {};
       if (patch.name !== undefined) headPatch.name = patch.name;
       if (patch.categoryTag !== undefined) headPatch.categoryTag = patch.categoryTag;
+      if (patch.shortDescription !== undefined) headPatch.shortDescription = patch.shortDescription;
 
       await db.transaction(async (tx) => {
         if (Object.keys(headPatch).length > 0) {
