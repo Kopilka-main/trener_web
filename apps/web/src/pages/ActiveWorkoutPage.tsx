@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Check, ChevronRight, Pencil, Plus, X } from 'lucide-react';
+import { Check, ChevronRight, Pencil, Plus, Trash2, X } from 'lucide-react';
 import type {
   ExerciseResponse,
   WorkoutExerciseResponse,
@@ -300,77 +300,80 @@ function ActiveView({
           items={items}
           onReorder={(next) => reorder.mutate(next.map((it) => it.position))}
           renderItem={(ex) => (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-start justify-between gap-2">
-                <h2 className="text-[15px] font-semibold text-ink">{ex.exerciseName}</h2>
-                <HoldToDelete onDelete={() => removeExercise.mutate(ex.position)} />
-              </div>
-              <ul className="flex flex-col gap-2">
-                {ex.sets.map((set) => {
-                  const key = `${String(ex.position)}-${String(set.setIndex)}`;
-                  const isEditing = editing === key;
-                  return (
-                    <li
-                      key={key}
-                      className="rounded-xl p-2.5"
-                      style={
-                        set.done
-                          ? {
-                              backgroundColor:
-                                'color-mix(in srgb, var(--color-accent) 14%, var(--color-card))',
-                            }
-                          : { backgroundColor: 'var(--color-chip)' }
-                      }
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.04em] text-ink-muted">
-                          Подход {set.setIndex + 1}
+            <ul className="flex flex-col gap-2">
+              {ex.sets.map((set) => {
+                const key = `${String(ex.position)}-${String(set.setIndex)}`;
+                const isEditing = editing === key;
+                const hasFact =
+                  set.actualReps !== null ||
+                  set.actualWeightKg !== null ||
+                  set.actualTimeSec !== null;
+                return (
+                  <li
+                    key={key}
+                    className="rounded-xl p-2.5"
+                    style={
+                      set.done
+                        ? {
+                            backgroundColor:
+                              'color-mix(in srgb, var(--color-accent) 14%, var(--color-card))',
+                          }
+                        : { backgroundColor: 'var(--color-chip)' }
+                    }
+                  >
+                    {isEditing ? (
+                      <>
+                        <span className="block truncate text-[14px] font-semibold text-ink">
+                          {ex.exerciseName}
                         </span>
-                        <span className="font-[family-name:var(--font-mono)] text-[12px] tabular-nums text-ink-muted">
-                          план {plannedText(set)}
-                        </span>
-                      </div>
-
-                      {isEditing ? (
                         <SetEditor
                           set={set}
                           onCancel={() => setEditing(null)}
                           onSave={(patch) => saveFact(ex, set, patch)}
+                          onDelete={() => {
+                            setEditing(null);
+                            removeExercise.mutate(ex.position);
+                          }}
                         />
-                      ) : (
-                        <div className="mt-2 flex items-center justify-between gap-2">
-                          <span className="font-[family-name:var(--font-mono)] text-[13px] tabular-nums text-ink">
-                            факт {actualText(set)}
+                      </>
+                    ) : (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex min-w-0 flex-col">
+                          <span className="truncate text-[14px] font-semibold text-ink">
+                            {ex.exerciseName}
                           </span>
-                          <span className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              aria-label="Изменить факт"
-                              onClick={() => setEditing(key)}
-                              className="flex h-8 w-8 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-95"
-                            >
-                              <Pencil size={14} strokeWidth={1.8} />
-                            </button>
-                            <button
-                              type="button"
-                              aria-label={set.done ? 'Снять отметку' : 'Отметить выполненным'}
-                              onClick={() => toggleDone(ex, set)}
-                              className={`flex h-8 w-8 items-center justify-center rounded-full active:scale-95 ${
-                                set.done
-                                  ? 'bg-accent text-accent-on'
-                                  : 'bg-card-elevated text-ink-muted'
-                              }`}
-                            >
-                              <Check size={16} strokeWidth={2.6} />
-                            </button>
+                          <span className="font-[family-name:var(--font-mono)] text-[12px] tabular-nums text-ink-muted">
+                            {hasFact ? `факт ${actualText(set)}` : `план ${plannedText(set)}`}
                           </span>
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1.5">
+                          <button
+                            type="button"
+                            aria-label="Изменить факт"
+                            onClick={() => setEditing(key)}
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-95"
+                          >
+                            <Pencil size={14} strokeWidth={1.8} />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={set.done ? 'Снять отметку' : 'Отметить выполненным'}
+                            onClick={() => toggleDone(ex, set)}
+                            className={`flex h-8 w-8 items-center justify-center rounded-full active:scale-95 ${
+                              set.done
+                                ? 'bg-accent text-accent-on'
+                                : 'bg-card-elevated text-ink-muted'
+                            }`}
+                          >
+                            <Check size={16} strokeWidth={2.6} />
+                          </button>
+                        </span>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
           )}
         />
 
@@ -646,6 +649,7 @@ function SetEditor({
   set,
   onCancel,
   onSave,
+  onDelete,
 }: {
   set: WorkoutSetResponse;
   onCancel: () => void;
@@ -654,6 +658,7 @@ function SetEditor({
     actualWeightKg: number | null;
     actualTimeSec: number | null;
   }) => void;
+  onDelete: () => void;
 }) {
   const showReps = set.plannedReps !== null || set.plannedWeightKg !== null;
   const showWeight = set.plannedWeightKg !== null;
@@ -670,34 +675,47 @@ function SetEditor({
   };
 
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-2">
-      {(showReps || (!showWeight && !showTime)) && (
-        <Field label="повт." value={reps} onChange={setReps} />
-      )}
-      {showWeight && <Field label="кг" value={weight} onChange={setWeight} />}
-      {showTime && <Field label="сек" value={time} onChange={setTime} />}
-      <button
-        type="button"
-        aria-label="Сохранить подход"
-        onClick={() =>
-          onSave({
-            actualReps: showReps || (!showWeight && !showTime) ? num(reps) : null,
-            actualWeightKg: showWeight ? num(weight) : null,
-            actualTimeSec: showTime ? num(time) : null,
-          })
-        }
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-accent-on active:scale-90"
-      >
-        <Check size={16} strokeWidth={2.8} />
-      </button>
-      <button
-        type="button"
-        aria-label="Отменить"
-        onClick={onCancel}
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-90"
-      >
-        <X size={16} strokeWidth={2.2} />
-      </button>
+    <div className="mt-1 flex flex-col gap-2">
+      <span className="font-[family-name:var(--font-mono)] text-[11px] tabular-nums text-ink-muted">
+        план {plannedText(set)}
+      </span>
+      <div className="flex flex-wrap items-center gap-2">
+        {(showReps || (!showWeight && !showTime)) && (
+          <Field label="повт." value={reps} onChange={setReps} />
+        )}
+        {showWeight && <Field label="кг" value={weight} onChange={setWeight} />}
+        {showTime && <Field label="сек" value={time} onChange={setTime} />}
+        <button
+          type="button"
+          aria-label="Сохранить подход"
+          onClick={() =>
+            onSave({
+              actualReps: showReps || (!showWeight && !showTime) ? num(reps) : null,
+              actualWeightKg: showWeight ? num(weight) : null,
+              actualTimeSec: showTime ? num(time) : null,
+            })
+          }
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-accent-on active:scale-90"
+        >
+          <Check size={16} strokeWidth={2.8} />
+        </button>
+        <button
+          type="button"
+          aria-label="Отменить"
+          onClick={onCancel}
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-90"
+        >
+          <X size={16} strokeWidth={2.2} />
+        </button>
+        <button
+          type="button"
+          aria-label="Удалить упражнение"
+          onClick={onDelete}
+          className="ml-auto flex h-9 w-9 items-center justify-center rounded-full bg-card-elevated text-danger active:scale-90"
+        >
+          <Trash2 size={16} strokeWidth={1.9} />
+        </button>
+      </div>
     </div>
   );
 }
