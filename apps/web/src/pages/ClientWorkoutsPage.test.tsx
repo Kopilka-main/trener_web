@@ -5,6 +5,7 @@ import type { WorkoutResponse } from '@trener/shared';
 import { ClientWorkoutsPage } from './ClientWorkoutsPage';
 import { useClientWorkouts, useCreateWorkout } from '../api/client-workouts';
 import { useTemplates } from '../api/workout-templates';
+import { useClient } from '../api/clients';
 
 vi.mock('../api/client-workouts', () => ({
   useClientWorkouts: vi.fn(),
@@ -13,10 +14,14 @@ vi.mock('../api/client-workouts', () => ({
 vi.mock('../api/workout-templates', () => ({
   useTemplates: vi.fn(),
 }));
+vi.mock('../api/clients', () => ({
+  useClient: vi.fn(),
+}));
 
 const mockedUseClientWorkouts = vi.mocked(useClientWorkouts);
 const mockedUseCreateWorkout = vi.mocked(useCreateWorkout);
 const mockedUseTemplates = vi.mocked(useTemplates);
+const mockedUseClient = vi.mocked(useClient);
 
 function workout(over: Partial<WorkoutResponse>): WorkoutResponse {
   return {
@@ -48,6 +53,10 @@ beforeEach(() => {
   mockedUseClientWorkouts.mockReset();
   mockedUseCreateWorkout.mockReset();
   mockedUseTemplates.mockReset();
+  mockedUseClient.mockReset();
+  mockedUseClient.mockReturnValue({
+    data: undefined,
+  } as unknown as ReturnType<typeof useClient>);
   mockedUseCreateWorkout.mockReturnValue({
     mutate: vi.fn(),
     isPending: false,
