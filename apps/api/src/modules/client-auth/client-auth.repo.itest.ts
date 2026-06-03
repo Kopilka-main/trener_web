@@ -109,4 +109,24 @@ describe.skipIf(!url)('client-auth.repo (integration)', () => {
     expect(await repo.accountExists('ca-exist')).toBe(true);
     expect(await repo.accountExists('nope')).toBe(false);
   });
+
+  it('updateAccount меняет профильные поля', async () => {
+    await repo.createAccount({
+      id: 'ca-upd',
+      email: 'upd@b.co',
+      passwordHash: 'h',
+      firstName: 'Имя',
+      lastName: 'Фам',
+    });
+    const updated = await repo.updateAccount('ca-upd', {
+      firstName: 'Новое',
+      birthDate: '1990-05-20',
+      contacts: [{ type: 'Телефон', value: '+7900' }],
+      bio: 'Цель — присед 100',
+    });
+    expect(updated?.firstName).toBe('Новое');
+    expect(updated?.birthDate).toBe('1990-05-20');
+    expect(updated?.contacts).toEqual([{ type: 'Телефон', value: '+7900' }]);
+    expect(updated?.bio).toBe('Цель — присед 100');
+  });
 });

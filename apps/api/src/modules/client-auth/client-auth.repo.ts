@@ -50,6 +50,28 @@ export function makeClientAuthRepo(db: Db) {
       return row ?? null;
     },
 
+    async updateAccount(
+      id: string,
+      patch: {
+        firstName?: string;
+        lastName?: string;
+        birthDate?: string | null;
+        contacts?: { type: string; value: string }[];
+        bio?: string | null;
+      },
+    ) {
+      if (Object.keys(patch).length === 0) {
+        const [row] = await db.select().from(clientAccounts).where(eq(clientAccounts.id, id));
+        return row ?? null;
+      }
+      const [row] = await db
+        .update(clientAccounts)
+        .set(patch)
+        .where(eq(clientAccounts.id, id))
+        .returning();
+      return row ?? null;
+    },
+
     // Существует ли клиентский аккаунт с таким id (для валидации привязки тренером).
     async accountExists(id: string): Promise<boolean> {
       const [row] = await db
