@@ -9,7 +9,7 @@ interface AvatarProps {
   src?: string | null;
 }
 
-/** Круг с фото клиента либо (если фото нет) с инициалами: лайм-текст на тёмной плашке. */
+/** Круг с фото клиента либо (если фото нет) с инициалами: обычный текст на тёмной плашке. */
 export function Avatar({ firstName, lastName, size = 44, muted = false, src = null }: AvatarProps) {
   if (src) {
     return (
@@ -28,12 +28,12 @@ export function Avatar({ firstName, lastName, size = 44, muted = false, src = nu
   return (
     <span
       aria-hidden
-      className="flex shrink-0 items-center justify-center rounded-full bg-card-elevated font-[family-name:var(--font-display)] leading-none tracking-[-0.02em]"
+      className="flex shrink-0 items-center justify-center rounded-full bg-card-elevated font-semibold leading-none"
       style={{
         width: size,
         height: size,
-        fontSize: Math.round(size * 0.34),
-        color: muted ? 'var(--color-ink-muted)' : 'var(--color-accent)',
+        fontSize: Math.round(size * 0.36),
+        color: muted ? 'var(--color-ink-muted)' : 'var(--color-ink)',
       }}
     >
       {initials}

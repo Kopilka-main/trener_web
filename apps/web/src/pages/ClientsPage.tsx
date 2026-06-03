@@ -280,8 +280,7 @@ function ClientRow({
             {client.firstName} {client.lastName}
           </span>
           {nearest ? (
-            <span className="flex items-center gap-1 font-[family-name:var(--font-mono)] text-[12px] text-accent">
-              <CalendarClock size={12} strokeWidth={2} />
+            <span className="font-[family-name:var(--font-mono)] text-[12px] text-ink-muted">
               {showTime ? nearest.time : formatNearest(nearest.date)}
             </span>
           ) : (
