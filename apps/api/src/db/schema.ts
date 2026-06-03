@@ -86,6 +86,9 @@ export const clientAccounts = pgTable(
     passwordHash: text('password_hash').notNull(),
     firstName: text('first_name').notNull(),
     lastName: text('last_name').notNull(),
+    birthDate: text('birth_date'),
+    contacts: jsonb('contacts').$type<{ type: string; value: string }[]>().notNull().default([]),
+    bio: text('bio'),
     avatarFileId: text('avatar_file_id').references((): AnyPgColumn => files.id, {
       onDelete: 'set null',
     }),

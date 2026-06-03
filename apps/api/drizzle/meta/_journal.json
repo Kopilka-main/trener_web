@@ -176,6 +176,13 @@
       "when": 1780475374714,
       "tag": "0024_nifty_maddog",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1780490173885,
+      "tag": "0025_superb_glorian",
+      "breakpoints": true
     }
   ]
 }
