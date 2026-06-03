@@ -1,24 +1,18 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
-import { Minus, Plus, Wallet } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import type {
   CreateExpenseRequest,
   CreateIncomeRequest,
   CreatePackageRequest,
   ExpenseResponse,
   IncomeResponse,
-  PackageResponse,
 } from '@trener/shared';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { HoldToDelete } from '../components/HoldToDelete';
 import { useClient } from '../api/clients';
 import { useClientWorkouts } from '../api/client-workouts';
-import {
-  useClientPackages,
-  useCreatePackage,
-  useDeletePackage,
-  useUpdatePackage,
-} from '../api/packages';
+import { useClientPackages, useCreatePackage } from '../api/packages';
 import {
   useCreateExpense,
   useCreateIncome,
@@ -52,12 +46,6 @@ function formatDate(value: string): string {
 
 const todayStr = (): string => new Date().toISOString().slice(0, 10);
 
-const PACKAGE_STATUS_LABEL: Record<PackageResponse['status'], string> = {
-  active: 'активен',
-  closed: 'закрыт',
-  cancelled: 'отменён',
-};
-
 export function ClientPaymentsPage() {
   const { id = '' } = useParams<{ id: string }>();
 
@@ -67,8 +55,6 @@ export function ClientPaymentsPage() {
   const expenses = useExpenses();
   const incomes = useIncomes();
   const createPackage = useCreatePackage(id);
-  const updatePackage = useUpdatePackage(id);
-  const deletePackage = useDeletePackage(id);
   const createExpense = useCreateExpense();
   const deleteExpense = useDeleteExpense();
   const createIncome = useCreateIncome();
@@ -82,11 +68,6 @@ export function ClientPaymentsPage() {
     if (!c) return '';
     return `${c.firstName} ${c.lastName}`.trim();
   }, [client.data]);
-
-  const packageList = useMemo(() => {
-    const list = packages.data ?? [];
-    return [...list].sort((a, b) => Date.parse(b.startsAt) - Date.parse(a.startsAt));
-  }, [packages.data]);
 
   // Доходы по клиенту — по убыванию даты.
   const incomeList = useMemo<IncomeResponse[]>(() => {
@@ -123,38 +104,8 @@ export function ClientPaymentsPage() {
         {/* Баланс тренировок */}
         <BalanceCard done={balance.done} remaining={balance.remaining} loading={balanceLoading} />
 
-        {/* Пакеты */}
-        <section className="flex flex-col gap-2">
-          <SectionHeader title="Пакеты" />
-          {packages.isError ? (
-            <p className="text-[13px] text-ink-muted" role="alert">
-              Не удалось загрузить пакеты
-            </p>
-          ) : packages.isPending ? (
-            <p className="py-2 text-center text-[13px] text-ink-muted">Загрузка…</p>
-          ) : packageList.length === 0 ? (
-            <p className="py-2 text-center text-[13px] text-ink-muted">Пока нет пакетов</p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {packageList.map((p) => (
-                <PackageCard
-                  key={p.id}
-                  pkg={p}
-                  onUse={(lessonsUsed) =>
-                    updatePackage.mutate({ pid: p.id, input: { lessonsUsed } })
-                  }
-                  onDelete={() => deletePackage.mutate(p.id)}
-                  pending={updatePackage.isPending}
-                />
-              ))}
-            </ul>
-          )}
-        </section>
-
         {/* Доход */}
         <section className="flex flex-col gap-2">
-          <SectionHeader title="Доходы" />
-
           {incomeList.length > 0 && (
             <ul className="flex flex-col gap-2">
               {incomeList.map((i) => (
@@ -191,8 +142,6 @@ export function ClientPaymentsPage() {
 
         {/* Расход */}
         <section className="flex flex-col gap-2">
-          <SectionHeader title="Расходы" />
-
           {expenseList.length > 0 && (
             <ul className="flex flex-col gap-2">
               {expenseList.map((e) => (
@@ -267,84 +216,6 @@ function BalanceCard({
         </div>
       </div>
     </section>
-  );
-}
-
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <h2 className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.06em] text-ink-mutedxl">
-      {title}
-    </h2>
-  );
-}
-
-// ─── Пакеты ─────────────────────────────────────────────────────────────────
-
-function PackageCard({
-  pkg,
-  onUse,
-  onDelete,
-  pending,
-}: {
-  pkg: PackageResponse;
-  onUse: (lessonsUsed: number) => void;
-  onDelete: () => void;
-  pending: boolean;
-}) {
-  const used = pkg.lessonsUsed;
-  const closed = pkg.status !== 'active';
-  const meta = [`с ${formatDate(pkg.startsAt)}`, PACKAGE_STATUS_LABEL[pkg.status]];
-  if (pkg.workoutType) meta.push(pkg.workoutType);
-  if (pkg.note) meta.push(pkg.note);
-
-  const setUsed = (next: number) => {
-    const clamped = Math.max(0, Math.min(pkg.lessonsPaid, next));
-    if (clamped !== used) onUse(clamped);
-  };
-
-  return (
-    <li
-      className={`flex flex-col gap-3 rounded-2xl bg-card px-4 py-3 ${closed ? 'opacity-60' : ''}`}
-    >
-      <div className="flex items-center gap-3">
-        <Wallet size={20} strokeWidth={1.8} className="shrink-0 text-ink-muted" />
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="text-[15px] font-medium text-ink">
-            {pkg.lessonsPaid} × {formatMoney(pkg.pricePerLesson)} = {formatMoney(pkg.totalPaid)}
-          </span>
-          <span className="text-[12px] text-ink-muted">{meta.join(' · ')}</span>
-        </div>
-        <HoldToDelete onDelete={onDelete} label="Удерживайте, чтобы удалить пакет" />
-      </div>
-
-      {/* Степпер списания: использовано из оплаченных. */}
-      <div className="flex items-center justify-between rounded-xl bg-chip px-3 py-2">
-        <button
-          type="button"
-          aria-label="Вернуть тренировку"
-          disabled={pending || used <= 0}
-          onClick={() => setUsed(used - 1)}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-card-elevated text-ink active:scale-95 disabled:opacity-40"
-        >
-          <Minus size={16} strokeWidth={2.2} />
-        </button>
-        <span className="flex flex-col items-center leading-tight">
-          <span className="font-[family-name:var(--font-mono)] text-[15px] font-bold tabular-nums text-ink">
-            {used} / {pkg.lessonsPaid}
-          </span>
-          <span className="text-[11px] text-ink-muted">использовано</span>
-        </span>
-        <button
-          type="button"
-          aria-label="Списать тренировку"
-          disabled={pending || used >= pkg.lessonsPaid}
-          onClick={() => setUsed(used + 1)}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-card-elevated text-ink active:scale-95 disabled:opacity-40"
-        >
-          <Plus size={16} strokeWidth={2.2} />
-        </button>
-      </div>
-    </li>
   );
 }
 
