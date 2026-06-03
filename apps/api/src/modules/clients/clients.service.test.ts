@@ -308,6 +308,20 @@ describe('clients.service', () => {
     expect(accountExists).not.toHaveBeenCalled();
   });
 
+  it('verifyConnectCode: пустой код → false без обращения к accountExists', async () => {
+    const accountExists = vi.fn(() => Promise.resolve(true));
+    const svc = makeSvc({ accountExists });
+    expect(await svc.verifyConnectCode('   ')).toBe(false);
+    expect(accountExists).not.toHaveBeenCalled();
+  });
+
+  it('verifyConnectCode: непустой код делегирует accountExists', async () => {
+    const accountExists = vi.fn(() => Promise.resolve(true));
+    const svc = makeSvc({ accountExists });
+    expect(await svc.verifyConnectCode(' code1 ')).toBe(true);
+    expect(accountExists).toHaveBeenCalledWith('code1');
+  });
+
   it('create с несуществующим accountId → 422 CLIENT_ACCOUNT_NOT_FOUND', async () => {
     const accountExists = vi.fn(() => Promise.resolve(false));
     const create = vi.fn(() => Promise.resolve(row()));

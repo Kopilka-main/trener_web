@@ -66,6 +66,13 @@ export function makeClientsService(
       return toResponse(row);
     },
 
+    // Проверка кода привязки тренером ДО сохранения: существует ли такой
+    // клиентский аккаунт. Пустой код → false. Используется диалогом «Подключить».
+    verifyConnectCode(code: string): Promise<boolean> {
+      const c = code.trim();
+      return c === '' ? Promise.resolve(false) : deps.accountExists(c);
+    },
+
     async list(trainerId: string): Promise<ClientResponse[]> {
       const rows = await repo.listByTrainer(trainerId);
       return rows.map(toResponse);

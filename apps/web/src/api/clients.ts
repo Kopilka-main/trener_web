@@ -25,6 +25,14 @@ export function getClient(id: string): Promise<ClientResponse> {
   return apiFetch(`/clients/${id}`, { schema: clientEnvelopeSchema }).then((r) => r.client);
 }
 
+/** Проверяет, существует ли клиентский аккаунт с таким кодом привязки (для диалога «Подключить»). */
+export function verifyConnectCode(code: string): Promise<boolean> {
+  const params = new URLSearchParams({ code });
+  return apiFetch(`/clients/connect-code/check?${params.toString()}`, {
+    schema: z.object({ exists: z.boolean() }),
+  }).then((r) => r.exists);
+}
+
 export function createClient(input: CreateClientRequest): Promise<ClientResponse> {
   return apiFetch('/clients', {
     method: 'POST',

@@ -80,6 +80,23 @@ export function clientsRoutes(
     async (req) => ({ clients: await svc.list(trainerId(req)) }),
   );
 
+  // Проверка кода привязки до сохранения клиента (для диалога «Подключить»).
+  // Статический сегмент connect-code/check не пересекается с параметрическим /:id.
+  typed.get(
+    '/api/clients/connect-code/check',
+    {
+      preHandler: requireAuth,
+      schema: {
+        querystring: z.object({ code: z.string() }),
+        response: { 200: z.object({ exists: z.boolean() }) },
+      },
+    },
+    async (req) => {
+      trainerId(req); // гард: только авторизованный тренер
+      return { exists: await svc.verifyConnectCode(req.query.code) };
+    },
+  );
+
   typed.get(
     '/api/clients/:id',
     {

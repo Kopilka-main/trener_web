@@ -9,6 +9,7 @@ import {
   useRemoveClientAvatar,
   useUpdateClient,
   useUploadClientAvatar,
+  verifyConnectCode,
 } from '../api/clients';
 import { ApiError } from '../api/client';
 import { Avatar } from '../components/Avatar';
@@ -601,6 +602,8 @@ function ConnectDialog({
 }) {
   const [draft, setDraft] = useState(value);
   const [scanning, setScanning] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -611,6 +614,26 @@ function ConnectDialog({
   }, [onClose]);
 
   const connected = value.trim() !== '';
+
+  // Проверяем код на сервере ПЕРЕД применением: нет такого аккаунта → ошибка, диалог не закрываем.
+  async function apply() {
+    const code = draft.trim();
+    if (code === '') return;
+    setChecking(true);
+    setError('');
+    try {
+      const exists = await verifyConnectCode(code);
+      if (!exists) {
+        setError('Клиент с таким кодом не найден. Проверьте код или отсканируйте QR.');
+        return;
+      }
+      onApply(code);
+    } catch {
+      setError('Не удалось проверить код. Попробуйте снова.');
+    } finally {
+      setChecking(false);
+    }
+  }
 
   return (
     <div
@@ -635,11 +658,18 @@ function ConnectDialog({
           <input
             id="accountId"
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              setError('');
+            }}
             autoFocus
             placeholder="Например, AB12-CD34"
-            className="rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
+            aria-invalid={error !== ''}
+            className={`rounded-xl border bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent ${
+              error !== '' ? 'border-danger' : 'border-line'
+            }`}
           />
+          {error !== '' && <span className="text-[12px] text-ink-muted">{error}</span>}
         </label>
 
         <button
@@ -654,6 +684,7 @@ function ConnectDialog({
           <QrScanner
             onResult={(text) => {
               setDraft(text);
+              setError('');
               setScanning(false);
             }}
             onClose={() => setScanning(false)}
@@ -678,10 +709,11 @@ function ConnectDialog({
           )}
           <button
             type="button"
-            onClick={() => onApply(draft.trim())}
-            className="flex-1 rounded-xl bg-accent py-3 text-[14px] font-semibold text-accent-on active:opacity-90"
+            onClick={() => void apply()}
+            disabled={checking || draft.trim() === ''}
+            className="flex-1 rounded-xl bg-accent py-3 text-[14px] font-semibold text-accent-on active:opacity-90 disabled:opacity-50"
           >
-            Подключить
+            {checking ? 'Проверка…' : 'Подключить'}
           </button>
         </div>
       </div>
