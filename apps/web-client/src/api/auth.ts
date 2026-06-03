@@ -4,6 +4,7 @@ import {
   type ClientLoginRequest,
   type ClientMeResponse,
   type ClientRegisterRequest,
+  type UpdateClientAccountRequest,
 } from '@trener/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
@@ -61,6 +62,17 @@ export function useClientLogout() {
         method: 'POST',
         schema: z.object({ ok: z.literal(true) }),
       }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: clientMeQueryKey });
+    },
+  });
+}
+
+export function useUpdateClientProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateClientAccountRequest) =>
+      apiFetch('/client/auth/me', { method: 'PATCH', body: input, schema: accountEnvelope }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: clientMeQueryKey });
     },
