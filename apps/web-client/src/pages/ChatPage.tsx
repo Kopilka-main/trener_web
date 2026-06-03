@@ -22,10 +22,13 @@ export function ChatPage() {
     endRef.current?.scrollIntoView({ block: 'end' });
   }, [count]);
 
+  // Перечитываем при открытии И при каждом новом входящем сообщении тренера —
+  // иначе пока чат открыт новые сообщения не отмечаются прочитанными.
+  const lastTrainerMsgId = [...items].reverse().find((m) => m.senderRole === 'trainer')?.id ?? null;
   const markReadMutate = markRead.mutate;
   useEffect(() => {
     if (linked) markReadMutate();
-  }, [linked, markReadMutate]);
+  }, [linked, lastTrainerMsgId, markReadMutate]);
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();

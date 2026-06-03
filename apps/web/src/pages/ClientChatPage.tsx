@@ -31,12 +31,13 @@ export function ClientChatPage() {
     listEndRef.current?.scrollIntoView({ block: 'end' });
   }, [list.length]);
 
-  // Отметить диалог прочитанным при открытии (сбрасывает непрочитанные тренера,
-  // и у клиента появляется «прочитано» на его сообщениях).
+  // Отметить диалог прочитанным при открытии И при каждом новом входящем от клиента
+  // (иначе пока чат открыт у клиента не появляется ✓✓, а у тренера висят непрочитанные).
+  const lastClientMsgId = [...list].reverse().find((m) => m.senderRole === 'client')?.id ?? null;
   const markReadMutate = markRead.mutate;
   useEffect(() => {
     if (id.length > 0) markReadMutate();
-  }, [id, markReadMutate]);
+  }, [id, lastClientMsgId, markReadMutate]);
 
   function submit() {
     const body = draft.trim();
