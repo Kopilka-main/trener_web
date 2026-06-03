@@ -58,6 +58,7 @@ describe.skipIf(!url)('client-app-workouts (isolation)', () => {
       url: '/api/auth/register',
       payload: { email: 'tr@b.co', password: 'longenough1', firstName: 'T', lastName: 'R' },
     });
+    expect(regT.statusCode).toBe(201);
     const cookieT = trainerCookie(regT);
     const cli = await app.inject({
       method: 'POST',

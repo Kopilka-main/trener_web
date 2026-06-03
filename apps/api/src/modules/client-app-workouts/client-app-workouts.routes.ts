@@ -31,9 +31,10 @@ export function clientAppWorkoutsRoutes(
     async (req) => {
       const { trainerId, clientId } = await scope(req);
       const all = await svc.list(trainerId, clientId);
+      const ts = (iso: string | null): number => (iso ? new Date(iso).getTime() : 0);
       const workouts = all
         .filter((w) => w.status === 'completed')
-        .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
+        .sort((a, b) => ts(b.completedAt) - ts(a.completedAt));
       return { workouts };
     },
   );
