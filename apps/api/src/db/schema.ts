@@ -74,6 +74,34 @@ export const clients = pgTable('clients', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Клиентская учётка (логин клиентского приложения). id = «код подключения»,
+// который клиент передаёт тренеру; тренер кладёт его в clients.accountId.
+export const clientAccounts = pgTable(
+  'client_accounts',
+  {
+    id: text('id').primaryKey(),
+    email: text('email').notNull(),
+    passwordHash: text('password_hash').notNull(),
+    firstName: text('first_name').notNull(),
+    lastName: text('last_name').notNull(),
+    avatarFileId: text('avatar_file_id').references((): AnyPgColumn => files.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  // email нормализован контрактом clientRegisterRequestSchema (lowercase+trim).
+  (t) => [uniqueIndex('client_accounts_email_uq').on(t.email)],
+);
+
+export const clientSessionsAuth = pgTable('client_sessions_auth', {
+  id: text('id').primaryKey(), // случайный токен сессии
+  clientAccountId: text('client_account_id')
+    .notNull()
+    .references(() => clientAccounts.id, { onDelete: 'cascade' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 // Связь тренер↔клиент (M:N) + профиль клиента глазами этого тренера.
 export const trainerClients = pgTable(
   'trainer_clients',
