@@ -1,9 +1,7 @@
 import { QRCodeSVG } from 'qrcode.react';
 import { useNavigate } from 'react-router-dom';
-import { useClientLogout } from '../api/auth';
 
 export function ConnectPage({ code }: { code: string }) {
-  const logout = useClientLogout();
   const navigate = useNavigate();
   return (
     <div className="flex flex-1 flex-col justify-center gap-6 px-6 py-8 text-center">
@@ -26,14 +24,6 @@ export function ConnectPage({ code }: { code: string }) {
         className="rounded-xl bg-accent py-3 font-semibold text-accent-on active:opacity-90"
       >
         Продолжить
-      </button>
-      <button
-        type="button"
-        onClick={() => logout.mutate()}
-        disabled={logout.isPending}
-        className="text-sm font-medium text-ink-muted disabled:opacity-60"
-      >
-        Выйти
       </button>
     </div>
   );
