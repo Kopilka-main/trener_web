@@ -2,6 +2,9 @@ import { z } from 'zod';
 
 const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/); // YYYY-MM-DD
 const noteField = z.string().trim().max(2000).nullish();
+// Хэштеги операции: без ведущего «#», без пустых, до 30 штук.
+const tagsField = z.array(z.string().trim().min(1).max(40)).max(30).optional();
+const tagsResponse = z.array(z.string());
 
 // --- Залы (gyms) ---
 
@@ -38,6 +41,7 @@ export const createExpenseRequestSchema = z.object({
   gymId: z.string().nullish(),
   clientId: z.string().nullish(),
   note: noteField,
+  tags: tagsField,
 });
 export type CreateExpenseRequest = z.infer<typeof createExpenseRequestSchema>;
 
@@ -52,6 +56,7 @@ export const expenseResponseSchema = z.object({
   gymId: z.string().nullable(),
   clientId: z.string().nullable(),
   note: z.string().nullable(),
+  tags: tagsResponse,
   createdAt: z.string(),
 });
 export type ExpenseResponse = z.infer<typeof expenseResponseSchema>;
@@ -69,6 +74,7 @@ export const createIncomeRequestSchema = z.object({
   date: dateStr,
   clientId: z.string().nullish(),
   note: noteField,
+  tags: tagsField,
 });
 export type CreateIncomeRequest = z.infer<typeof createIncomeRequestSchema>;
 
@@ -82,6 +88,11 @@ export const incomeResponseSchema = z.object({
   date: z.string(),
   clientId: z.string().nullable(),
   note: z.string().nullable(),
+  tags: tagsResponse,
+  // Доп. детализация (заполняется для синтетических строк-пакетов; иначе null):
+  // title — название (тип тренировки), subtitle — пояснение (напр. «20 трен.»).
+  title: z.string().nullable(),
+  subtitle: z.string().nullable(),
   createdAt: z.string(),
 });
 export type IncomeResponse = z.infer<typeof incomeResponseSchema>;

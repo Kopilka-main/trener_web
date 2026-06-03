@@ -10,9 +10,10 @@ import type {
 } from '@trener/shared';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { HoldToDelete } from '../components/HoldToDelete';
+import { TagInput } from '../components/TagInput';
 import { useClient } from '../api/clients';
 import { useClientWorkouts } from '../api/client-workouts';
-import { useClientPackages, useCreatePackage } from '../api/packages';
+import { useClientPackages, useCreatePackage, useDeletePackage } from '../api/packages';
 import {
   useCreateExpense,
   useCreateIncome,
@@ -55,6 +56,7 @@ export function ClientPaymentsPage() {
   const expenses = useExpenses();
   const incomes = useIncomes();
   const createPackage = useCreatePackage(id);
+  const deletePackage = useDeletePackage(id);
   const createExpense = useCreateExpense();
   const deleteExpense = useDeleteExpense();
   const createIncome = useCreateIncome();
@@ -112,11 +114,18 @@ export function ClientPaymentsPage() {
                 <OperationRow
                   key={i.id}
                   category={i.category}
+                  title={i.title}
+                  subtitle={i.subtitle}
                   amount={i.amount}
                   date={i.date}
                   note={i.note}
+                  tags={i.tags}
                   sign="+"
-                  onDelete={() => deleteIncome.mutate(i.id)}
+                  onDelete={() =>
+                    i.id.startsWith('pkg:')
+                      ? deletePackage.mutate(i.id.slice(4))
+                      : deleteIncome.mutate(i.id)
+                  }
                 />
               ))}
             </ul>
@@ -151,6 +160,7 @@ export function ClientPaymentsPage() {
                   amount={e.amount}
                   date={e.date}
                   note={e.note}
+                  tags={e.tags}
                   sign="−"
                   onDelete={() => deleteExpense.mutate(e.id)}
                 />
@@ -221,35 +231,62 @@ function BalanceCard({
 
 function OperationRow({
   category,
+  title = null,
+  subtitle = null,
   amount,
   date,
   note,
+  tags = [],
   sign,
   onDelete,
 }: {
   category: string;
+  title?: string | null;
+  subtitle?: string | null;
   amount: number;
   date: string;
   note: string | null;
+  tags?: string[];
   sign: '+' | '−';
   onDelete: () => void;
 }) {
-  const meta = [formatDate(date)];
-  if (note) meta.push(note);
+  // primary — название (тип тренировки) либо тип операции; если оба есть, тип уходит в kicker.
+  const primary = title ?? category;
+  const showType = primary !== category;
+  const meta = [formatDate(date), subtitle, note].filter(Boolean) as string[];
   return (
-    <li className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3">
+    <li className="flex items-start gap-3 rounded-2xl bg-card px-4 py-3">
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-[15px] font-medium text-ink">{category}</span>
+        {showType && (
+          <span className="font-[family-name:var(--font-mono)] text-[10px] font-bold uppercase tracking-[0.08em] text-ink-mutedxl">
+            {category}
+          </span>
+        )}
+        <span className="truncate text-[15px] font-medium text-ink">{primary}</span>
         <span className="text-[12px] text-ink-muted">{meta.join(' · ')}</span>
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 pt-0.5">
+            {tags.map((t) => (
+              <span
+                key={t}
+                className="rounded-full bg-chip px-2 py-0.5 text-[11px] font-semibold text-ink-muted"
+              >
+                #{t}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
-      <span
-        className={`shrink-0 font-[family-name:var(--font-mono)] text-[15px] font-bold tabular-nums ${
-          sign === '+' ? 'text-accent' : 'text-ink'
-        }`}
-      >
-        {formatSigned(amount, sign)}
-      </span>
-      <HoldToDelete onDelete={onDelete} label="Удерживайте, чтобы удалить операцию" />
+      <div className="flex shrink-0 flex-col items-end gap-2">
+        <span
+          className={`font-[family-name:var(--font-mono)] text-[15px] font-bold tabular-nums ${
+            sign === '+' ? 'text-accent' : 'text-ink'
+          }`}
+        >
+          {formatSigned(amount, sign)}
+        </span>
+        <HoldToDelete onDelete={onDelete} label="Удерживайте, чтобы удалить операцию" />
+      </div>
     </li>
   );
 }
@@ -420,6 +457,7 @@ function PackageFields({
   const [startsAt, setStartsAt] = useState(todayStr());
   const [workoutType, setWorkoutType] = useState('');
   const [note, setNote] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
   const [showErrors, setShowErrors] = useState(false);
 
   const lessonsNum = Number(lessons);
@@ -455,6 +493,7 @@ function PackageFields({
     if (t !== '') body.workoutType = t;
     const n = note.trim();
     if (n !== '') body.note = n;
+    if (tags.length > 0) body.tags = tags;
     onSubmit(body);
   }
 
@@ -511,6 +550,10 @@ function PackageFields({
         />
       </Field>
 
+      <Field label="Хэштеги">
+        <TagInput tags={tags} onChange={setTags} placeholder="напр. скидка, сертификат" />
+      </Field>
+
       <div className="rounded-xl bg-chip px-3 py-2 text-center text-[12px] text-ink-muted">
         Итого пакет:{' '}
         <span className="font-[family-name:var(--font-mono)] font-bold tabular-nums text-ink">
@@ -537,6 +580,7 @@ function SimpleIncomeFields({
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(todayStr());
   const [note, setNote] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
   const [showErrors, setShowErrors] = useState(false);
 
   const amountNum = Number(amount);
@@ -561,6 +605,7 @@ function SimpleIncomeFields({
     };
     const n = note.trim();
     if (n !== '') body.note = n;
+    if (tags.length > 0) body.tags = tags;
     onSubmit(body);
   }
 
@@ -595,6 +640,10 @@ function SimpleIncomeFields({
         />
       </Field>
 
+      <Field label="Хэштеги">
+        <TagInput tags={tags} onChange={setTags} placeholder="напр. скидка" />
+      </Field>
+
       <SubmitButton pending={pending} label="Добавить доход" />
     </form>
   );
@@ -619,6 +668,7 @@ function ExpenseForm({
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(todayStr());
   const [note, setNote] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
   const [showErrors, setShowErrors] = useState(false);
 
   const amountNum = Number(amount);
@@ -643,6 +693,7 @@ function ExpenseForm({
     };
     const n = note.trim();
     if (n !== '') body.note = n;
+    if (tags.length > 0) body.tags = tags;
     onSubmit(body);
   }
 
@@ -688,6 +739,10 @@ function ExpenseForm({
             onChange={(ev) => setNote(ev.target.value)}
             className={inputClass}
           />
+        </Field>
+
+        <Field label="Хэштеги">
+          <TagInput tags={tags} onChange={setTags} placeholder="напр. аренда, июнь" />
         </Field>
 
         <SubmitButton pending={pending} label="Добавить расход" />

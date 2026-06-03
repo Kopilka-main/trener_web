@@ -32,6 +32,7 @@ export const trainers = pgTable(
     lastName: text('last_name').notNull(),
     title: text('title'),
     bio: text('bio'),
+    contacts: jsonb('contacts').$type<{ type: string; value: string }[]>().notNull().default([]),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   // ИНВАРИАНТ: email хранится уже нормализованным (lowercase+trim) — это гарантирует
@@ -261,6 +262,7 @@ export const paymentPackages = pgTable(
     startsAt: text('starts_at').notNull(), // YYYY-MM-DD
     status: text('status').$type<'active' | 'closed' | 'cancelled'>().notNull().default('active'),
     note: text('note'),
+    tags: text('tags').array().notNull().default([]),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -295,6 +297,7 @@ export const expenses = pgTable(
     gymId: text('gym_id').references(() => gyms.id, { onDelete: 'set null' }),
     clientId: text('client_id').references(() => clients.id, { onDelete: 'set null' }),
     note: text('note'),
+    tags: text('tags').array().notNull().default([]),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('idx_expenses_trainer_date').on(t.trainerId, t.date)],
@@ -313,6 +316,7 @@ export const incomes = pgTable(
     date: text('date').notNull(), // YYYY-MM-DD
     clientId: text('client_id').references(() => clients.id, { onDelete: 'set null' }),
     note: text('note'),
+    tags: text('tags').array().notNull().default([]),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('idx_incomes_trainer_date').on(t.trainerId, t.date)],

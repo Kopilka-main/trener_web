@@ -1,5 +1,10 @@
 import type { AuthRepo } from './auth.repo.js';
-import type { LoginRequest, RegisterRequest, TrainerResponse } from '@trener/shared';
+import type {
+  LoginRequest,
+  RegisterRequest,
+  TrainerResponse,
+  UpdateTrainerRequest,
+} from '@trener/shared';
 import { hashPassword, verifyPassword } from '../../auth/password.js';
 import { AppError, unauthorized } from '../../errors.js';
 
@@ -16,6 +21,7 @@ function toTrainerResponse(t: {
   lastName: string;
   title: string | null;
   bio: string | null;
+  contacts: { type: string; value: string }[];
 }): TrainerResponse {
   return {
     id: t.id,
@@ -24,6 +30,7 @@ function toTrainerResponse(t: {
     lastName: t.lastName,
     title: t.title,
     bio: t.bio,
+    contacts: t.contacts,
   };
 }
 
@@ -69,6 +76,24 @@ export function makeAuthService(repo: AuthRepo, deps: AuthDeps) {
 
     async me(trainerId: string): Promise<TrainerResponse> {
       const trainer = await repo.findTrainerById(trainerId);
+      if (!trainer) throw unauthorized('Сессия недействительна');
+      return toTrainerResponse(trainer);
+    },
+
+    async updateMe(trainerId: string, input: UpdateTrainerRequest): Promise<TrainerResponse> {
+      const patch: {
+        firstName?: string;
+        lastName?: string;
+        title?: string | null;
+        bio?: string | null;
+        contacts?: { type: string; value: string }[];
+      } = {};
+      if (input.firstName !== undefined) patch.firstName = input.firstName;
+      if (input.lastName !== undefined) patch.lastName = input.lastName;
+      if (input.title !== undefined) patch.title = input.title ?? null;
+      if (input.bio !== undefined) patch.bio = input.bio ?? null;
+      if (input.contacts !== undefined) patch.contacts = input.contacts;
+      const trainer = await repo.updateTrainer(trainerId, patch);
       if (!trainer) throw unauthorized('Сессия недействительна');
       return toTrainerResponse(trainer);
     },

@@ -20,12 +20,10 @@ import { ClientPaymentsPage } from './pages/ClientPaymentsPage';
 import { ClientMedicalPage } from './pages/ClientMedicalPage';
 import { MessagesPage } from './pages/MessagesPage';
 import { CalendarPage } from './pages/CalendarPage';
-import {
-  AccountingPage,
-  NotificationsPage,
-  ProfilePage,
-  ClientSectionPage,
-} from './pages/StubPage';
+import { AccountingPage } from './pages/AccountingPage';
+import { ProfilePage } from './pages/ProfilePage';
+import { NotificationsPage } from './pages/NotificationsPage';
+import { ClientSectionPage } from './pages/StubPage';
 
 export function App() {
   return (

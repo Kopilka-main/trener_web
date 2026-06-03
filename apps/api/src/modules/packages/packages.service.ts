@@ -21,6 +21,7 @@ function toResponse(r: PackageRow): PackageResponse {
     startsAt: r.startsAt,
     status: r.status,
     note: r.note,
+    tags: r.tags,
     createdAt: r.createdAt.toISOString(),
   };
 }
@@ -42,6 +43,7 @@ export function makePackagesService(repo: PackagesRepo, deps: PackagesDeps) {
       };
       if (input.workoutType !== undefined) data.workoutType = input.workoutType ?? null;
       if (input.note !== undefined) data.note = input.note ?? null;
+      if (input.tags !== undefined) data.tags = input.tags;
 
       const row = await repo.create(trainerId, clientId, data);
       return toResponse(row);
@@ -73,6 +75,7 @@ export function makePackagesService(repo: PackagesRepo, deps: PackagesDeps) {
       if (input.startsAt !== undefined) patch.startsAt = input.startsAt;
       if (input.status !== undefined) patch.status = input.status;
       if (input.note !== undefined) patch.note = input.note ?? null;
+      if (input.tags !== undefined) patch.tags = input.tags;
 
       const row = await repo.update(trainerId, clientId, packageId, patch);
       if (!row) throw notFound('Пакет не найден');

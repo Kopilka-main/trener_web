@@ -260,6 +260,29 @@ input[type='number'] {
   animation-delay: 0.3s;
 }
 
+/* Прогресс-рамка «удержания»: заполняется по периметру кнопки за время удержания.
+   Анимируем угол conic-gradient через регистрируемое свойство --hold-p. */
+@property --hold-p {
+  syntax: '<percentage>';
+  /* true — чтобы псевдоэлемент ::before наследовал анимируемое значение от кнопки. */
+  inherits: true;
+  initial-value: 0%;
+}
+.hold-ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2.5px;
+  background: conic-gradient(currentColor var(--hold-p, 0%), transparent 0);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
 /* Плавный неспешный морфинг при перемещении карточек (View Transitions API). */
 ::view-transition-group(*) {
   animation-duration: 420ms;

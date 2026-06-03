@@ -1,7 +1,12 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { registerRequestSchema, loginRequestSchema, trainerResponseSchema } from '@trener/shared';
+import {
+  registerRequestSchema,
+  loginRequestSchema,
+  trainerResponseSchema,
+  updateTrainerRequestSchema,
+} from '@trener/shared';
 import type { AuthService, Session } from './auth.service.js';
 import { SESSION_COOKIE } from '../../plugins/tenant-context.js';
 import { unauthorized } from '../../errors.js';
@@ -62,4 +67,13 @@ export function authRoutes(app: FastifyInstance, svc: AuthService, isProd: boole
     if (!req.trainerId) throw unauthorized('Требуется вход');
     return { trainer: await svc.me(req.trainerId) };
   });
+
+  typed.patch(
+    '/api/auth/me',
+    { schema: { body: updateTrainerRequestSchema, response: { 200: meResponse } } },
+    async (req) => {
+      if (!req.trainerId) throw unauthorized('Требуется вход');
+      return { trainer: await svc.updateMe(req.trainerId, req.body) };
+    },
+  );
 }

@@ -215,3 +215,91 @@ export function aggregateExerciseOverview(workouts: WorkoutResponse[]): Exercise
   });
   return out;
 }
+
+/** Одна сессия в истории конкретного упражнения. */
+export interface ExerciseHistoryPoint {
+  workoutId: string;
+  /** ISO-дата завершения тренировки; null — нет. */
+  date: string | null;
+  /** Кол-во выполненных подходов в этой сессии. */
+  totalSets: number;
+  /** Максимальный рабочий вес в сессии, кг; null — без веса. */
+  maxWeightKg: number | null;
+  /** Тоннаж сессии, кг (Σ вес × повторы по done-подходам). */
+  tonnage: number;
+  /** Максимальное время в подходе, сек; null — без времени. */
+  maxTimeSec: number | null;
+  /** Суммарное время в сессии, сек. */
+  totalTimeSec: number;
+}
+
+/** История одного упражнения по завершённым тренировкам (точки по возрастанию даты). */
+export interface ExerciseHistory {
+  name: string;
+  isTimeBased: boolean;
+  points: ExerciseHistoryPoint[];
+}
+
+/**
+ * Собирает историю одного упражнения по завершённым тренировкам клиента:
+ * по точке на каждую сессию, где упражнение реально делалось (есть done-подходы).
+ * Точки идут от старых к новым.
+ */
+export function aggregateExerciseHistory(
+  workouts: WorkoutResponse[],
+  exerciseId: string,
+): ExerciseHistory | null {
+  const completed = workouts
+    .filter((w) => w.status === 'completed')
+    .slice()
+    .sort((a, b) => completedAtMs(a) - completedAtMs(b));
+
+  const points: ExerciseHistoryPoint[] = [];
+  let name = '';
+  let weightSetCount = 0;
+  let timeSetCount = 0;
+
+  for (const w of completed) {
+    const date = w.completedAt ?? w.startedAt;
+    for (const ex of w.exercises) {
+      if (ex.exerciseId !== exerciseId) continue;
+      name = ex.exerciseName;
+
+      let totalSets = 0;
+      let maxWeightKg: number | null = null;
+      let tonnage = 0;
+      let maxTimeSec: number | null = null;
+      let totalTimeSec = 0;
+
+      for (const set of ex.sets) {
+        if (!set.done) continue;
+        totalSets += 1;
+        if (set.actualWeightKg !== null) {
+          weightSetCount += 1;
+          maxWeightKg = Math.max(maxWeightKg ?? 0, set.actualWeightKg);
+          if (set.actualReps !== null) tonnage += set.actualWeightKg * set.actualReps;
+        }
+        if (set.actualTimeSec !== null) {
+          timeSetCount += 1;
+          maxTimeSec = Math.max(maxTimeSec ?? 0, set.actualTimeSec);
+          totalTimeSec += set.actualTimeSec;
+        }
+      }
+
+      if (totalSets > 0) {
+        points.push({
+          workoutId: w.id,
+          date: date ?? null,
+          totalSets,
+          maxWeightKg,
+          tonnage: Math.round(tonnage),
+          maxTimeSec,
+          totalTimeSec,
+        });
+      }
+    }
+  }
+
+  if (points.length === 0) return null;
+  return { name, isTimeBased: timeSetCount > weightSetCount, points };
+}

@@ -16,6 +16,7 @@ export type PackageRow = {
   startsAt: string;
   status: PackageStatus;
   note: string | null;
+  tags: string[];
   createdAt: Date;
 };
 
@@ -27,6 +28,7 @@ export type CreatePackageInput = {
   workoutType?: string | null;
   startsAt: string;
   note?: string | null;
+  tags?: string[];
 };
 
 export type PackagePatchInput = {
@@ -38,6 +40,7 @@ export type PackagePatchInput = {
   startsAt?: string;
   status?: PackageStatus;
   note?: string | null;
+  tags?: string[];
 };
 
 const columns = {
@@ -52,6 +55,7 @@ const columns = {
   startsAt: paymentPackages.startsAt,
   status: paymentPackages.status,
   note: paymentPackages.note,
+  tags: paymentPackages.tags,
   createdAt: paymentPackages.createdAt,
 };
 
@@ -84,6 +88,7 @@ export function makePackagesRepo(db: Db) {
           workoutType: input.workoutType ?? null,
           startsAt: input.startsAt,
           note: input.note ?? null,
+          tags: input.tags ?? [],
         })
         .returning(columns);
       // returning по PK всегда возвращает строку.

@@ -24,6 +24,23 @@ export function makeAuthRepo(db: Db) {
       const [row] = await db.select().from(trainers).where(eq(trainers.id, id));
       return row ?? null;
     },
+    async updateTrainer(
+      id: string,
+      patch: {
+        firstName?: string;
+        lastName?: string;
+        title?: string | null;
+        bio?: string | null;
+        contacts?: { type: string; value: string }[];
+      },
+    ) {
+      if (Object.keys(patch).length === 0) {
+        const [row] = await db.select().from(trainers).where(eq(trainers.id, id));
+        return row ?? null;
+      }
+      const [row] = await db.update(trainers).set(patch).where(eq(trainers.id, id)).returning();
+      return row ?? null;
+    },
     async createSession(s: { id: string; trainerId: string; expiresAt: Date }) {
       await db.insert(sessionsAuth).values(s);
     },

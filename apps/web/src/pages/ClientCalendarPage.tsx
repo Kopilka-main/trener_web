@@ -21,11 +21,12 @@ const STATUS_LABEL: Record<SessionStatus, string> = {
 
 const DURATION_OPTIONS = [30, 45, 60, 90, 120] as const;
 
+/** Компактная подпись на чипе: 30м · 45м · 1ч · 1ч30м · 2ч. */
 function formatDuration(min: number): string {
-  if (min < 60) return `${String(min)} мин`;
+  if (min < 60) return `${String(min)}м`;
   const h = Math.floor(min / 60);
   const rest = min % 60;
-  return rest === 0 ? `${String(h)} ч` : `${String(h)} ч ${String(rest)} мин`;
+  return rest === 0 ? `${String(h)}ч` : `${String(h)}ч${String(rest)}м`;
 }
 
 /** Тап по пустому слоту: предзаполненные дата+время для новой сессии. */
@@ -126,6 +127,9 @@ function SessionSheet({
   const [title, setTitle] = useState(session?.title ?? '');
   const [location, setLocation] = useState(session?.location ?? '');
   const [durationMin, setDurationMin] = useState(session?.durationMin ?? 60);
+  const [customDuration, setCustomDuration] = useState(
+    !DURATION_OPTIONS.includes((session?.durationMin ?? 60) as (typeof DURATION_OPTIONS)[number]),
+  );
   const [isOnline, setIsOnline] = useState(session?.isOnline ?? false);
   const [status, setStatus] = useState<SessionStatus>(session?.status ?? 'planned');
   const [showErrors, setShowErrors] = useState(false);
@@ -145,6 +149,7 @@ function SessionSheet({
     }
     const trimmedTitle = title.trim();
     const trimmedLocation = location.trim();
+    const safeDuration = Math.max(5, durationMin);
     if (isEdit && session) {
       updateMutation.mutate(
         {
@@ -152,7 +157,7 @@ function SessionSheet({
           patch: {
             date,
             startTime,
-            durationMin,
+            durationMin: safeDuration,
             title: trimmedTitle === '' ? null : trimmedTitle,
             location: trimmedLocation === '' ? null : trimmedLocation,
             isOnline,
@@ -167,7 +172,7 @@ function SessionSheet({
           clientId,
           date,
           startTime,
-          durationMin,
+          durationMin: safeDuration,
           title: trimmedTitle === '' ? null : trimmedTitle,
           location: trimmedLocation === '' ? null : trimmedLocation,
           isOnline,
@@ -262,19 +267,72 @@ function SessionSheet({
           <div className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-ink-muted">Длительность</span>
             <div className="flex flex-wrap gap-1.5">
-              {DURATION_OPTIONS.map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setDurationMin(m)}
-                  className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
-                    durationMin === m ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
-                  }`}
-                >
-                  {formatDuration(m)}
-                </button>
-              ))}
+              {DURATION_OPTIONS.map((m) => {
+                const active = !customDuration && durationMin === m;
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => {
+                      setCustomDuration(false);
+                      setDurationMin(m);
+                    }}
+                    className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+                      active ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
+                    }`}
+                  >
+                    {formatDuration(m)}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setCustomDuration(true)}
+                className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+                  customDuration ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
+                }`}
+              >
+                Другое
+              </button>
             </div>
+            {customDuration && (
+              <div className="mt-1 flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min={0}
+                    max={12}
+                    inputMode="numeric"
+                    value={Math.floor(durationMin / 60)}
+                    onChange={(e) => {
+                      const h = Math.max(0, Math.min(12, Number(e.target.value) || 0));
+                      setDurationMin(h * 60 + (durationMin % 60));
+                    }}
+                    className="w-14 rounded-xl border border-line bg-card px-3 py-2 text-center text-[15px] tabular-nums text-ink outline-none focus:border-accent"
+                  />
+                  <span className="text-sm text-ink-muted">ч</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min={0}
+                    max={59}
+                    step={5}
+                    inputMode="numeric"
+                    value={durationMin % 60}
+                    onChange={(e) => {
+                      const m = Math.max(0, Math.min(59, Number(e.target.value) || 0));
+                      setDurationMin(Math.floor(durationMin / 60) * 60 + m);
+                    }}
+                    className="w-14 rounded-xl border border-line bg-card px-3 py-2 text-center text-[15px] tabular-nums text-ink outline-none focus:border-accent"
+                  />
+                  <span className="text-sm text-ink-muted">мин</span>
+                </div>
+                <span className="ml-auto text-[13px] font-semibold text-accent">
+                  {formatDuration(Math.max(5, durationMin))}
+                </span>
+              </div>
+            )}
           </div>
 
           <label htmlFor="session-location" className="flex flex-col gap-1.5">

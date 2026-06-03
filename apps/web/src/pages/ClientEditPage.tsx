@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Camera, ChevronRight, Trash2, X } from 'lucide-react';
+import { Camera, ChevronRight, QrCode, Trash2, X } from 'lucide-react';
 import type { Contact } from '@trener/shared';
 import {
   useClient,
@@ -12,6 +12,7 @@ import {
 } from '../api/clients';
 import { Avatar } from '../components/Avatar';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { QrScanner } from '../components/QrScanner';
 
 interface ClientEditPageProps {
   mode: 'create' | 'edit';
@@ -595,6 +596,7 @@ function ConnectDialog({
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState(value);
+  const [scanning, setScanning] = useState(false);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -635,6 +637,24 @@ function ConnectDialog({
             className="rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
           />
         </label>
+
+        <button
+          type="button"
+          onClick={() => setScanning(true)}
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line py-2.5 text-[13px] font-semibold text-ink-muted active:border-accent"
+        >
+          <QrCode size={16} /> Сканировать QR
+        </button>
+
+        {scanning && (
+          <QrScanner
+            onResult={(text) => {
+              setDraft(text);
+              setScanning(false);
+            }}
+            onClose={() => setScanning(false)}
+          />
+        )}
         <div className="mt-5 flex items-center gap-2">
           <button
             type="button"

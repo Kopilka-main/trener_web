@@ -51,6 +51,7 @@ function expenseToResponse(r: ExpenseRow): ExpenseResponse {
     gymId: r.gymId,
     clientId: r.clientId,
     note: r.note,
+    tags: r.tags,
     createdAt: r.createdAt.toISOString(),
   };
 }
@@ -63,6 +64,9 @@ function incomeToResponse(r: IncomeRow): IncomeResponse {
     date: r.date,
     clientId: r.clientId,
     note: r.note,
+    tags: r.tags,
+    title: r.title,
+    subtitle: r.subtitle,
     createdAt: r.createdAt.toISOString(),
   };
 }
@@ -127,6 +131,7 @@ export function makeAccountingService(repo: AccountingRepo, deps: AccountingDeps
       if (input.gymId !== undefined) data.gymId = input.gymId ?? null;
       if (input.clientId !== undefined) data.clientId = input.clientId ?? null;
       if (input.note !== undefined) data.note = input.note ?? null;
+      if (input.tags !== undefined) data.tags = input.tags;
       return expenseToResponse(await repo.createExpense(trainerId, data));
     },
 
@@ -155,6 +160,7 @@ export function makeAccountingService(repo: AccountingRepo, deps: AccountingDeps
       if (input.gymId !== undefined) patch.gymId = input.gymId ?? null;
       if (input.clientId !== undefined) patch.clientId = input.clientId ?? null;
       if (input.note !== undefined) patch.note = input.note ?? null;
+      if (input.tags !== undefined) patch.tags = input.tags;
       const row = await repo.updateExpense(trainerId, id, patch);
       if (!row) throw notFound('Расход не найден');
       return expenseToResponse(row);
@@ -178,6 +184,7 @@ export function makeAccountingService(repo: AccountingRepo, deps: AccountingDeps
       };
       if (input.clientId !== undefined) data.clientId = input.clientId ?? null;
       if (input.note !== undefined) data.note = input.note ?? null;
+      if (input.tags !== undefined) data.tags = input.tags;
       return incomeToResponse(await repo.createIncome(trainerId, data));
     },
 
@@ -206,6 +213,7 @@ export function makeAccountingService(repo: AccountingRepo, deps: AccountingDeps
       if (input.date !== undefined) patch.date = input.date;
       if (input.clientId !== undefined) patch.clientId = input.clientId ?? null;
       if (input.note !== undefined) patch.note = input.note ?? null;
+      if (input.tags !== undefined) patch.tags = input.tags;
       const row = await repo.updateIncome(trainerId, id, patch);
       if (!row) throw notFound('Доход не найден');
       return incomeToResponse(row);

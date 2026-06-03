@@ -96,7 +96,7 @@ export function SessionsCalendar({
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col pb-16">
       {/* Шапка периода: ‹ / подпись / › + «Сегодня» */}
       <div className="flex items-center gap-1 px-4 pb-2">
         <button
@@ -148,8 +148,8 @@ export function SessionsCalendar({
         />
       )}
 
-      {/* Нижний переключатель вида (по центру) */}
-      <div className="pointer-events-none mt-auto flex justify-center px-5 pb-1 pt-2">
+      {/* Нижний переключатель вида: зафиксирован по центру (как FAB «+») */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-4 z-20 flex justify-center px-5">
         <ViewSwitcher value={view} onChange={setView} />
       </div>
     </div>

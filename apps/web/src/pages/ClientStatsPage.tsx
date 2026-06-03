@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   ArrowDown,
   ArrowUp,
   BarChart3,
+  ChevronRight,
   Dumbbell,
   ImagePlus,
   Pencil,
@@ -34,8 +35,11 @@ import {
   useUploadProgressPhoto,
 } from '../api/progress-photos';
 import {
+  aggregateExerciseHistory,
   aggregateExerciseOverview,
   workoutRowStats,
+  type ExerciseHistory,
+  type ExerciseHistoryPoint,
   type ExerciseOverview,
 } from '../lib/workout-stats';
 
@@ -178,6 +182,7 @@ function formatRuDate(iso: string): string {
 function ExercisesTab({ clientId }: { clientId: string }) {
   const workouts = useClientWorkouts(clientId);
   const items = useMemo(() => aggregateExerciseOverview(workouts.data ?? []), [workouts.data]);
+  const [selected, setSelected] = useState<{ id: string; name: string } | null>(null);
 
   if (workouts.isPending) {
     return <p className="text-sm text-ink-muted">Загрузка…</p>;
@@ -189,6 +194,14 @@ function ExercisesTab({ clientId }: { clientId: string }) {
       </p>
     );
   }
+
+  if (selected) {
+    const history = aggregateExerciseHistory(workouts.data ?? [], selected.id);
+    return (
+      <ExerciseDetail name={selected.name} history={history} onBack={() => setSelected(null)} />
+    );
+  }
+
   if (items.length === 0) {
     return (
       <EmptyState icon={<Dumbbell size={28} strokeWidth={1.6} className="text-ink-muted" />}>
@@ -200,56 +213,424 @@ function ExercisesTab({ clientId }: { clientId: string }) {
   return (
     <ul className="flex flex-col gap-2">
       {items.map((ex) => (
-        <ExerciseRow key={ex.exerciseId} ex={ex} />
+        <ExerciseRow
+          key={ex.exerciseId}
+          ex={ex}
+          onOpen={() => setSelected({ id: ex.exerciseId, name: ex.name })}
+        />
       ))}
     </ul>
   );
 }
 
-function ExerciseRow({ ex }: { ex: ExerciseOverview }) {
+function ExerciseRow({ ex, onOpen }: { ex: ExerciseOverview; onOpen: () => void }) {
   const TrendIcon = ex.lastIsRecord ? ArrowUp : ArrowDown;
   return (
-    <li className="tile-shadow flex items-center gap-3 rounded-2xl p-4">
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="truncate text-[15px] font-semibold text-ink">{ex.name}</span>
-        <span className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 font-[family-name:var(--font-mono)] text-[12px] text-ink-muted">
-          {ex.isTimeBased ? (
+    <li>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="tile-shadow flex w-full items-center gap-3 rounded-2xl p-4 text-left active:opacity-90"
+      >
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="truncate text-[15px] font-semibold text-ink">{ex.name}</span>
+          <span className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 font-[family-name:var(--font-mono)] text-[12px] text-ink-muted">
+            {ex.isTimeBased ? (
+              <>
+                {ex.maxTimeSec !== null && (
+                  <span>
+                    PR <b className="tabular-nums text-ink">{formatTime(ex.maxTimeSec)}</b>
+                  </span>
+                )}
+                {ex.totalTimeSec > 0 && (
+                  <span>
+                    время <b className="tabular-nums text-ink">{formatTime(ex.totalTimeSec)}</b>
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                {ex.maxWeightKg !== null && (
+                  <span>
+                    PR <b className="tabular-nums text-ink">{String(ex.maxWeightKg)}</b> кг
+                  </span>
+                )}
+                {ex.tonnageKg > 0 && (
+                  <span>
+                    тоннаж <b className="tabular-nums text-ink">{formatTonnage(ex.tonnageKg)}</b>
+                  </span>
+                )}
+              </>
+            )}
+            {ex.lastDate && <span>· {formatRelativeDate(ex.lastDate)}</span>}
+          </span>
+        </span>
+        <TrendIcon
+          size={18}
+          strokeWidth={2.4}
+          className={ex.lastIsRecord ? 'shrink-0 text-accent' : 'shrink-0 text-ink-mutedxl'}
+          aria-label={ex.lastIsRecord ? 'Рекорд в последней сессии' : 'Без рекорда'}
+        />
+        <ChevronRight size={18} className="shrink-0 text-ink-mutedxl" />
+      </button>
+    </li>
+  );
+}
+
+// ─── Прогресс по упражнению ───────────────────────────────────────────────────
+
+function formatSeconds(sec: number): string {
+  if (sec >= 3600) {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    return `${String(h)}ч ${String(m).padStart(2, '0')}м`;
+  }
+  if (sec >= 60) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${String(m)}:${String(s).padStart(2, '0')}`;
+  }
+  return `${String(sec)}с`;
+}
+
+/** ISO-дату → «1 мая 2026». */
+function formatFullDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${String(d.getDate())} ${RU_MONTHS[d.getMonth()]} ${String(d.getFullYear())}`;
+}
+
+function ExerciseDetail({
+  name,
+  history,
+  onBack,
+}: {
+  name: string;
+  history: ExerciseHistory | null;
+  onBack: () => void;
+}) {
+  const [recordsOnly, setRecordsOnly] = useState(true);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-[13px] font-semibold text-ink-muted active:text-ink"
+        >
+          ← Назад
+        </button>
+        <h2 className="min-w-0 flex-1 truncate text-[16px] font-bold text-ink">{name}</h2>
+      </div>
+
+      {!history || history.points.length === 0 ? (
+        <EmptyState icon={<Dumbbell size={28} strokeWidth={1.6} className="text-ink-muted" />}>
+          Клиент ещё не делал это упражнение в проведённых тренировках.
+        </EmptyState>
+      ) : (
+        <>
+          <label className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3">
+            <span className="text-[14px] font-semibold text-ink">Только рекорды</span>
+            <Toggle checked={recordsOnly} onChange={setRecordsOnly} />
+          </label>
+
+          {history.isTimeBased ? (
             <>
-              {ex.maxTimeSec !== null && (
-                <span>
-                  PR <b className="tabular-nums text-ink">{formatTime(ex.maxTimeSec)}</b>
-                </span>
-              )}
-              {ex.totalTimeSec > 0 && (
-                <span>
-                  время <b className="tabular-nums text-ink">{formatTime(ex.totalTimeSec)}</b>
-                </span>
-              )}
+              <ChartCard
+                title="Максимальное время"
+                suffix="с"
+                color="var(--color-accent)"
+                points={history.points.map((p) => ({ date: p.date, value: p.maxTimeSec ?? 0 }))}
+                recordsOnly={recordsOnly}
+                formatValue={formatSeconds}
+              />
+              <ChartCard
+                title="Суммарное время"
+                suffix="с"
+                color="var(--color-coral)"
+                points={history.points.map((p) => ({ date: p.date, value: p.totalTimeSec }))}
+                recordsOnly={recordsOnly}
+                formatValue={formatSeconds}
+              />
             </>
           ) : (
             <>
-              {ex.maxWeightKg !== null && (
-                <span>
-                  PR <b className="tabular-nums text-ink">{String(ex.maxWeightKg)}</b> кг
-                </span>
-              )}
-              {ex.tonnageKg > 0 && (
-                <span>
-                  тоннаж <b className="tabular-nums text-ink">{formatTonnage(ex.tonnageKg)}</b>
-                </span>
-              )}
+              <ChartCard
+                title="Тоннаж"
+                suffix="кг"
+                color="var(--color-accent)"
+                points={history.points.map((p) => ({ date: p.date, value: p.tonnage }))}
+                recordsOnly={recordsOnly}
+              />
+              <ChartCard
+                title="Максимальный вес"
+                suffix="кг"
+                color="var(--color-coral)"
+                points={history.points.map((p) => ({ date: p.date, value: p.maxWeightKg ?? 0 }))}
+                recordsOnly={recordsOnly}
+              />
             </>
           )}
-          {ex.lastDate && <span>· {formatRelativeDate(ex.lastDate)}</span>}
-        </span>
-      </span>
-      <TrendIcon
-        size={18}
-        strokeWidth={2.4}
-        className={ex.lastIsRecord ? 'shrink-0 text-accent' : 'shrink-0 text-ink-mutedxl'}
-        aria-label={ex.lastIsRecord ? 'Рекорд в последней сессии' : 'Без рекорда'}
+
+          <HistoryTable points={history.points} isTimeBased={history.isTimeBased} />
+        </>
+      )}
+    </div>
+  );
+}
+
+/** SVG-line-график с интерактивным курсором и дельтой к первой сессии. */
+function ChartCard({
+  title,
+  suffix,
+  color,
+  points,
+  recordsOnly,
+  formatValue,
+}: {
+  title: string;
+  suffix: string;
+  color: string;
+  points: { date: string | null; value: number }[];
+  recordsOnly: boolean;
+  formatValue?: (v: number) => string;
+}) {
+  const data = useMemo(() => {
+    const cleaned = points.filter(
+      (p): p is { date: string; value: number } => p.date !== null && p.value > 0,
+    );
+    if (!recordsOnly) return cleaned;
+    let maxSoFar = -Infinity;
+    return cleaned.filter((p) => {
+      if (p.value > maxSoFar) {
+        maxSoFar = p.value;
+        return true;
+      }
+      return false;
+    });
+  }, [points, recordsOnly]);
+
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const [activeIdx, setActiveIdx] = useState<number | null>(null);
+
+  if (data.length === 0) {
+    return (
+      <div className="rounded-2xl bg-card p-4">
+        <div className="text-[13px] font-semibold text-ink">{title}</div>
+        <div className="mt-2 text-[12px] text-ink-muted">Нет данных</div>
+      </div>
+    );
+  }
+
+  const W = 320;
+  const H = 140;
+  const PAD_X = 8;
+  const PAD_Y = 12;
+  const values = data.map((p) => p.value);
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const range = max - min;
+  const stepX = data.length > 1 ? (W - PAD_X * 2) / (data.length - 1) : 0;
+  const pts = data.map((p, i) => {
+    const x = PAD_X + i * stepX;
+    const y = range > 0 ? H - PAD_Y - ((p.value - min) / range) * (H - PAD_Y * 2) : H / 2;
+    return { x, y, value: p.value, date: p.date };
+  });
+  const path = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${String(p.x)},${String(p.y)}`).join(' ');
+  const lastPt = pts[pts.length - 1];
+  const firstPt = pts[0];
+  const last = data[data.length - 1];
+  const first = data[0];
+  if (!lastPt || !firstPt || !last || !first) return null;
+  const areaPath = `${path} L${String(lastPt.x)},${String(H - PAD_Y)} L${String(firstPt.x)},${String(H - PAD_Y)} Z`;
+  const delta = last.value - first.value;
+  const deltaPct = first.value > 0 ? Math.round((delta / first.value) * 100) : 0;
+  const active = activeIdx !== null ? pts[activeIdx] : null;
+
+  function handleMove(clientX: number) {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const viewX = ((clientX - rect.left) / rect.width) * W;
+    let bestI = 0;
+    let bestD = Infinity;
+    pts.forEach((p, i) => {
+      const d = Math.abs(p.x - viewX);
+      if (d < bestD) {
+        bestD = d;
+        bestI = i;
+      }
+    });
+    setActiveIdx(bestI);
+  }
+
+  const shownNumber = formatValue
+    ? formatValue(active ? active.value : last.value)
+    : String(active ? active.value : last.value);
+  const deltaLabel = formatValue
+    ? `${delta >= 0 ? '+' : '−'}${formatValue(Math.abs(delta))}`
+    : `${delta >= 0 ? '+' : ''}${String(delta)} ${suffix}`;
+
+  return (
+    <div className="rounded-2xl bg-card p-4">
+      <div className="flex items-baseline justify-between">
+        <div className="text-[13px] font-semibold text-ink">{title}</div>
+        <div className="flex items-baseline gap-2">
+          <span className="font-[family-name:var(--font-display)] text-[22px] leading-none tabular-nums text-ink">
+            {shownNumber}
+          </span>
+          {!formatValue && <span className="text-[11px] text-ink-muted">{suffix}</span>}
+        </div>
+      </div>
+      <div
+        className="mt-1 font-[family-name:var(--font-mono)] text-[11px]"
+        style={{ color: delta >= 0 ? 'var(--color-accent)' : 'var(--color-danger)' }}
+      >
+        {deltaLabel} ({deltaPct >= 0 ? '+' : ''}
+        {String(deltaPct)}%) с первой сессии
+      </div>
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${String(W)} ${String(H)}`}
+        className="mt-3 w-full touch-none"
+        style={{ height: 140 }}
+        onPointerDown={(e) => {
+          (e.target as Element).setPointerCapture?.(e.pointerId);
+          handleMove(e.clientX);
+        }}
+        onPointerMove={(e) => handleMove(e.clientX)}
+        onPointerLeave={() => setActiveIdx(null)}
+        onPointerUp={(e) => {
+          if (e.pointerType !== 'mouse') setActiveIdx(null);
+        }}
+      >
+        <path d={areaPath} fill={color} opacity={0.12} />
+        <path
+          d={path}
+          fill="none"
+          stroke={color}
+          strokeWidth={2}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+        {pts.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r={3} fill={color} />
+        ))}
+        {active && (
+          <>
+            <line
+              x1={active.x}
+              x2={active.x}
+              y1={0}
+              y2={H}
+              stroke="var(--color-line-strong)"
+              strokeWidth={1}
+              strokeDasharray="2 3"
+            />
+            <circle
+              cx={active.x}
+              cy={active.y}
+              r={6}
+              fill={color}
+              stroke="var(--color-bg)"
+              strokeWidth={2}
+            />
+          </>
+        )}
+      </svg>
+      <div className="mt-2 min-h-[18px] text-center font-[family-name:var(--font-mono)] text-[11px] text-ink-muted">
+        {active
+          ? `${formatFullDate(active.date)} · ${formatValue ? formatValue(active.value) : `${String(active.value)} ${suffix}`}`
+          : 'Тяни по графику'}
+      </div>
+    </div>
+  );
+}
+
+function HistoryTable({
+  points,
+  isTimeBased,
+}: {
+  points: ExerciseHistoryPoint[];
+  isTimeBased: boolean;
+}) {
+  const sorted = [...points].reverse(); // новые сверху
+  return (
+    <div className="flex flex-col gap-1.5">
+      <h3 className="px-1 font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.06em] text-ink-mutedxl">
+        История
+      </h3>
+      <div className="divide-y divide-line overflow-hidden rounded-2xl bg-card">
+        {sorted.map((p) => (
+          <div
+            key={p.workoutId}
+            className="flex items-baseline justify-between gap-3 px-4 py-3 text-[13px]"
+          >
+            <div className="text-ink-muted">{p.date ? formatFullDate(p.date) : '—'}</div>
+            <div className="flex items-baseline gap-3 font-[family-name:var(--font-mono)] text-[12px] tabular-nums">
+              <span className="text-ink-muted">{p.totalSets} ×</span>
+              {isTimeBased ? (
+                <>
+                  {p.maxTimeSec !== null && (
+                    <span className="text-ink-muted">
+                      PR <b className="text-ink">{formatSeconds(p.maxTimeSec)}</b>
+                    </span>
+                  )}
+                  <span className="text-ink-muted">
+                    {formatSeconds(p.totalTimeSec)} <span className="text-ink-mutedxl">всего</span>
+                  </span>
+                </>
+              ) : (
+                <>
+                  {p.maxWeightKg !== null && (
+                    <span className="text-ink-muted">
+                      <b className="text-ink">{p.maxWeightKg}</b> кг
+                    </span>
+                  )}
+                  <span className="text-ink-muted">
+                    {p.tonnage} <span className="text-ink-mutedxl">кг</span>
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="relative inline-flex shrink-0 cursor-pointer rounded-full transition-colors"
+      style={{
+        width: 44,
+        height: 24,
+        background: checked ? 'var(--color-accent)' : 'var(--color-chip)',
+        boxShadow: 'inset 0 1.5px 3px rgba(0,0,0,0.45), inset 0 -1px 0 rgba(255,255,255,0.06)',
+      }}
+    >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute rounded-full transition-transform"
+        style={{
+          top: 2,
+          left: 2,
+          width: 20,
+          height: 20,
+          background: 'linear-gradient(180deg, #ffffff 0%, #e6e6e6 100%)',
+          boxShadow:
+            '0 2px 4px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 1px rgba(0,0,0,0.15)',
+          transform: checked ? 'translateX(20px)' : 'translateX(0)',
+        }}
       />
-    </li>
+    </button>
   );
 }
 

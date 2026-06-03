@@ -65,13 +65,17 @@ export function useClientPackages(clientId: string) {
   });
 }
 
+// Пакеты учитываются в бухгалтерии как доход → инвалидируем и accounting-кэш.
+function invalidatePackageQueries(qc: ReturnType<typeof useQueryClient>, clientId: string): void {
+  void qc.invalidateQueries({ queryKey: clientPackagesQueryKey(clientId) });
+  void qc.invalidateQueries({ queryKey: ['accounting'] });
+}
+
 export function useCreatePackage(clientId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreatePackageRequest) => createClientPackage(clientId, input),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: clientPackagesQueryKey(clientId) });
-    },
+    onSuccess: () => invalidatePackageQueries(qc, clientId),
   });
 }
 
@@ -80,9 +84,7 @@ export function useUpdatePackage(clientId: string) {
   return useMutation({
     mutationFn: ({ pid, input }: { pid: string; input: UpdatePackageRequest }) =>
       updateClientPackage(clientId, pid, input),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: clientPackagesQueryKey(clientId) });
-    },
+    onSuccess: () => invalidatePackageQueries(qc, clientId),
   });
 }
 
@@ -90,8 +92,6 @@ export function useDeletePackage(clientId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (pid: string) => deleteClientPackage(clientId, pid),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: clientPackagesQueryKey(clientId) });
-    },
+    onSuccess: () => invalidatePackageQueries(qc, clientId),
   });
 }

@@ -12,6 +12,7 @@ import { useClientWorkouts, useCreateWorkout } from '../api/client-workouts';
 import { useTemplates } from '../api/workout-templates';
 import { useClient } from '../api/clients';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { HoldToConfirm } from '../components/HoldToConfirm';
 
 function isCurrent(w: WorkoutResponse): boolean {
   return w.status === 'active' || w.status === 'draft';
@@ -335,20 +336,19 @@ function HistoryRow({
             {meta}
           </div>
         </button>
-        <button
-          type="button"
-          onClick={onRepeat}
+        <HoldToConfirm
+          onConfirm={onRepeat}
+          durationMs={1500}
           disabled={repeatPending || workout.exercises.length === 0}
-          aria-label="Повторить тренировку"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-muted active:bg-card-elevated disabled:opacity-40"
+          label="Удерживайте, чтобы повторить тренировку"
         >
           <RotateCcw size={16} strokeWidth={1.9} />
-        </button>
+        </HoldToConfirm>
         <button
           type="button"
           onClick={onToggle}
           aria-label={expanded ? 'Свернуть' : 'Развернуть'}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-muted active:bg-card-elevated"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:bg-chip"
         >
           {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>

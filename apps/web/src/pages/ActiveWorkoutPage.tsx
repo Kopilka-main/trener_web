@@ -416,7 +416,7 @@ function ActiveView({
       <ScreenHeader title={workout.name} back={backTo} />
 
       <div className="flex flex-1 flex-col gap-3 px-5 pb-28 pt-2">
-        {/* Сводка; в центре — отдых (во время отдыха) либо завершение удержанием. */}
+        {/* Сводка: слева — прошедшее время; справа — отдых либо завершение удержанием. */}
         <div className="tile-shadow-primary flex items-center justify-between gap-3 rounded-2xl px-4 py-3">
           <span className="flex shrink-0 flex-col">
             <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.06em] opacity-70">
@@ -436,15 +436,6 @@ function ActiveView({
           ) : (
             <HoldComplete pending={complete.isPending} onComplete={finishWorkout} />
           )}
-
-          <span className="flex shrink-0 flex-col text-right">
-            <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.06em] opacity-70">
-              Подходов
-            </span>
-            <span className="text-xl font-bold tabular-nums leading-tight">
-              {counters.done} / {counters.total}
-            </span>
-          </span>
         </div>
 
         {/* Коллектор завершённых: показывается всегда; свёрнуто — последний, развёрнуто — все. */}
@@ -457,10 +448,18 @@ function ActiveView({
             <span className="font-[family-name:var(--font-mono)] text-[13px] font-semibold uppercase tracking-[0.06em] text-ink-muted">
               Завершено · {completed.length}
             </span>
-            <ChevronDown
-              size={18}
-              className={`text-ink-muted transition-transform ${doneExpanded ? 'rotate-180' : ''}`}
-            />
+            <span className="flex items-center gap-2.5">
+              <span className="font-[family-name:var(--font-mono)] text-[13px] font-semibold tabular-nums text-ink">
+                {counters.done} / {counters.total}
+                <span className="ml-1 text-[10px] font-medium uppercase tracking-[0.06em] text-ink-mutedxl">
+                  подходов
+                </span>
+              </span>
+              <ChevronDown
+                size={18}
+                className={`text-ink-muted transition-transform ${doneExpanded ? 'rotate-180' : ''}`}
+              />
+            </span>
           </button>
           {visibleCompleted.map((ex) => (
             <div key={ex.position} className="shelf rounded-2xl px-3 py-1 opacity-80">
@@ -974,8 +973,6 @@ function HoldComplete({
     setHolding(false);
   }
 
-  const C = 2 * Math.PI * 16;
-
   return (
     <button
       type="button"
@@ -986,43 +983,20 @@ function HoldComplete({
       onPointerLeave={cancel}
       onPointerCancel={cancel}
       onContextMenu={(e) => e.preventDefault()}
-      className={`relative flex touch-none select-none items-center gap-2 disabled:opacity-50 ${
+      style={{
+        // Заполнение рамки-прогресса по периметру за время удержания.
+        ['--hold-p' as string]: holding ? '100%' : '0%',
+        transition: holding
+          ? `--hold-p ${String(HOLD_COMPLETE_MS)}ms linear`
+          : '--hold-p 160ms linear',
+      }}
+      className={`hold-ring relative flex touch-none select-none items-center justify-center disabled:opacity-50 ${
         variant === 'block'
-          ? 'h-12 w-full justify-center rounded-2xl bg-accent text-accent-on'
+          ? 'h-12 w-full rounded-2xl bg-accent text-accent-on'
           : 'h-10 rounded-full bg-black/10 px-5 text-accent-on'
       }`}
     >
-      {/* Кольцо-прогресс: заполняется по часовой за HOLD_COMPLETE_MS. */}
-      <span aria-hidden className="relative flex h-5 w-5 shrink-0 items-center justify-center">
-        <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
-          <circle
-            cx="18"
-            cy="18"
-            r="16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="3"
-            opacity="0.25"
-          />
-          <circle
-            cx="18"
-            cy="18"
-            r="16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeDasharray={C}
-            strokeDashoffset={holding ? 0 : C}
-            style={{
-              transitionProperty: 'stroke-dashoffset',
-              transitionTimingFunction: 'linear',
-              transitionDuration: holding ? `${String(HOLD_COMPLETE_MS)}ms` : '160ms',
-            }}
-          />
-        </svg>
-      </span>
-      <span className="text-[14px] font-normal">Завершить</span>
+      <span className="text-[14px] font-medium">Завершить</span>
     </button>
   );
 }

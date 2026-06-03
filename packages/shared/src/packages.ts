@@ -15,6 +15,7 @@ export const createPackageRequestSchema = z.object({
   workoutType: workoutTypeField,
   startsAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
   note: noteField,
+  tags: z.array(z.string().trim().min(1).max(40)).max(30).optional(),
 });
 export type CreatePackageRequest = z.infer<typeof createPackageRequestSchema>;
 
@@ -39,6 +40,7 @@ export const packageResponseSchema = z.object({
   startsAt: z.string(),
   status: packageStatusSchema,
   note: z.string().nullable(),
+  tags: z.array(z.string()),
   createdAt: z.string(),
 });
 export type PackageResponse = z.infer<typeof packageResponseSchema>;
