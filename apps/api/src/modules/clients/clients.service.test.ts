@@ -67,20 +67,26 @@ function fakeStorage(over: Partial<Storage> = {}): Storage {
   };
 }
 
-const deps = { newId: () => 'newid' };
+function makeDeps(
+  accountExists: (id: string) => Promise<boolean> = vi.fn(() => Promise.resolve(true)),
+) {
+  return { newId: () => 'newid', accountExists };
+}
+const deps = makeDeps();
 
 function makeSvc(
   over: {
     repo?: Partial<ClientsRepo>;
     filesRepo?: Partial<FilesRepo>;
     storage?: Partial<Storage>;
+    accountExists?: (id: string) => Promise<boolean>;
   } = {},
 ) {
   return makeClientsService(
     fakeRepo(over.repo),
     fakeFilesRepo(over.filesRepo),
     fakeStorage(over.storage),
-    deps,
+    over.accountExists ? makeDeps(over.accountExists) : deps,
   );
 }
 
@@ -282,5 +288,23 @@ describe('clients.service', () => {
   it('removeAvatar бросает 404, если связи нет', async () => {
     const svc = makeSvc({ repo: { setAvatar: vi.fn(() => Promise.resolve(undefined)) } });
     await expect(svc.removeAvatar('A', 'missing')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('update с несуществующим accountId → 422 CLIENT_ACCOUNT_NOT_FOUND', async () => {
+    const accountExists = vi.fn(() => Promise.resolve(false));
+    const svc = makeSvc({ accountExists });
+    await expect(svc.update('A', 'c1', { accountId: 'ghost' })).rejects.toMatchObject({
+      status: 422,
+      code: 'CLIENT_ACCOUNT_NOT_FOUND',
+    });
+    expect(accountExists).toHaveBeenCalledWith('ghost');
+  });
+
+  it('update с accountId=null (отвязка) не проверяет существование', async () => {
+    const accountExists = vi.fn(() => Promise.resolve(false));
+    const update = vi.fn(() => Promise.resolve(row({ accountId: null })));
+    const svc = makeSvc({ repo: { update }, accountExists });
+    await svc.update('A', 'c1', { accountId: null });
+    expect(accountExists).not.toHaveBeenCalled();
   });
 });

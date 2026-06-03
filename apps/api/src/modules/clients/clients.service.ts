@@ -4,7 +4,7 @@ import type { Storage } from '../../files/storage.js';
 import type { ClientResponse, CreateClientRequest, UpdateClientRequest } from '@trener/shared';
 import { AppError, notFound } from '../../errors.js';
 
-export type ClientsDeps = { newId: () => string };
+export type ClientsDeps = { newId: () => string; accountExists: (id: string) => Promise<boolean> };
 
 // Расширение файла выводим ИЗ MIME по whitelist (НЕ из имени файла клиента).
 const MIME_EXT: Record<string, string> = {
@@ -75,6 +75,15 @@ export function makeClientsService(
       clientId: string,
       patch: UpdateClientRequest,
     ): Promise<ClientResponse> {
+      // Привязка клиентского аккаунта: непустой accountId должен существовать.
+      // Пустая строка/null = отвязка, существование не проверяем.
+      if (patch.accountId != null && patch.accountId !== '') {
+        const exists = await deps.accountExists(patch.accountId);
+        if (!exists) {
+          throw new AppError(422, 'CLIENT_ACCOUNT_NOT_FOUND', 'Клиентский аккаунт не найден');
+        }
+      }
+
       // exactOptionalPropertyTypes: задаём только определённые поля.
       // phone/notes: null трактуем как «не трогать» (YAGNI — очистка через null позже).
       const repoPatch: UpdateClientInput = {};

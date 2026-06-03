@@ -6,6 +6,7 @@ import { makeClientsRepo } from './clients.repo.js';
 import { makeClientsService } from './clients.service.js';
 import { makeFilesRepo } from '../files/files.repo.js';
 import { makeRequireClientAccess } from '../../plugins/require-client-access.js';
+import { makeClientAuthRepo } from '../client-auth/client-auth.repo.js';
 import { clientsRoutes } from './clients.routes.js';
 
 // Регистрация доменного модуля clients в composition root: собирает repo+service+guard
@@ -16,7 +17,11 @@ export function registerClientsModule(
 ): void {
   const repo = makeClientsRepo(deps.db);
   const filesRepo = makeFilesRepo(deps.db);
-  const svc = makeClientsService(repo, filesRepo, deps.storage, { newId: deps.clock.newId });
+  const clientAuthRepo = makeClientAuthRepo(deps.db);
+  const svc = makeClientsService(repo, filesRepo, deps.storage, {
+    newId: deps.clock.newId,
+    accountExists: (id) => clientAuthRepo.accountExists(id),
+  });
   const requireClientAccess = makeRequireClientAccess(repo);
   clientsRoutes(app, svc, requireClientAccess);
 }
