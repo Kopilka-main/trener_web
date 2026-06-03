@@ -1,0 +1,36 @@
+/* GYM Acid Flow — токены темы, общие для тренерского и клиентского фронтов. */
+@theme {
+  /* layout */
+  --color-canvas: #000000; /* «обои» вокруг моб-каркаса */
+  --color-bg: #0b0c10; /* фон приложения */
+  --color-card: #15171d; /* panel — основные карточки */
+  --color-card-elevated: #1d2029; /* panel2 — приподнятые блоки/иконки */
+  --color-chip: #1f2128; /* мелкие плашки/чипы */
+  --color-line: rgba(255, 255, 255, 0.1);
+  --color-line-strong: rgba(255, 255, 255, 0.2);
+
+  /* текст: ink → text2 → text3 */
+  --color-ink: #eeeee8; /* основной (НЕ чисто белый — кремовый по спеке) */
+  --color-ink-muted: #9a9da6; /* вторичный */
+  --color-ink-mutedxl: #5e626b; /* третичный (мелкие sub, captions) */
+
+  /* акценты */
+  --color-accent: #d4ff3d; /* лайм */
+  --color-accent-on: #0b0c10; /* текст на лайме (всегда чёрный) */
+  --color-accent-text: #d4ff3d; /* акцент в тексте — на тёмном лайм светится */
+  --color-accent-2: #5c7a0e;
+
+  /* семантика */
+  --color-success: #5c7a0e;
+  --color-success-soft: #1e2818;
+  --color-danger: #e04a2e;
+  --color-danger-soft: #3a1c15;
+  --color-coral: #ff6e4e;
+  --color-amber: #e8b255;
+
+  --font-sans:
+    'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui,
+    sans-serif;
+  --font-display: 'Bowlby One', 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+}
