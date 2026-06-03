@@ -223,15 +223,19 @@ export function ClientsPage() {
         <button
           type="button"
           onClick={() => setSort((s) => (s === 'alpha' ? 'session' : 'alpha'))}
-          aria-label={sort === 'alpha' ? 'Сортировка: по алфавиту' : 'Сортировка: по занятию'}
+          aria-label={
+            sort === 'alpha'
+              ? 'Переключить на сортировку по занятию'
+              : 'Переключить на сортировку по алфавиту'
+          }
           className="pointer-events-auto flex h-11 items-center gap-2 rounded-full bg-card px-4 text-[13px] font-semibold text-ink shadow-[0_0_0_1px_var(--color-line)] active:scale-95"
         >
           {sort === 'alpha' ? (
-            <ArrowDownAZ size={18} strokeWidth={1.9} />
-          ) : (
             <CalendarClock size={18} strokeWidth={1.9} />
+          ) : (
+            <ArrowDownAZ size={18} strokeWidth={1.9} />
           )}
-          {sort === 'alpha' ? 'По алфавиту' : 'По занятию'}
+          {sort === 'alpha' ? 'По занятию' : 'По алфавиту'}
         </button>
 
         <Link
