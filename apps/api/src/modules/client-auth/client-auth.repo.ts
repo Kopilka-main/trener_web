@@ -1,0 +1,64 @@
+import { and, asc, eq } from 'drizzle-orm';
+import type { Db } from '../../db/client.js';
+import { clientAccounts, clientSessionsAuth, clients, trainerClients } from '../../db/schema.js';
+
+export type NewClientAccount = {
+  id: string;
+  email: string;
+  passwordHash: string;
+  firstName: string;
+  lastName: string;
+};
+
+export function makeClientAuthRepo(db: Db) {
+  return {
+    async createAccount(a: NewClientAccount) {
+      const [row] = await db.insert(clientAccounts).values(a).returning();
+      return row;
+    },
+    async findAccountByEmail(email: string) {
+      const [row] = await db.select().from(clientAccounts).where(eq(clientAccounts.email, email));
+      return row ?? null;
+    },
+    async findAccountById(id: string) {
+      const [row] = await db.select().from(clientAccounts).where(eq(clientAccounts.id, id));
+      return row ?? null;
+    },
+    async createSession(s: { id: string; clientAccountId: string; expiresAt: Date }) {
+      await db.insert(clientSessionsAuth).values(s);
+    },
+    async findSession(id: string) {
+      const [row] = await db.select().from(clientSessionsAuth).where(eq(clientSessionsAuth.id, id));
+      return row ?? null;
+    },
+    async deleteSession(id: string) {
+      await db.delete(clientSessionsAuth).where(eq(clientSessionsAuth.id, id));
+    },
+
+    // Резолвер скоупа: по accountId находит запись клиента и активную связь с тренером.
+    // v1 — один тренер: берём первую активную связь детерминированно (createdAt, затем trainerId).
+    async findScopeByAccountId(
+      clientAccountId: string,
+    ): Promise<{ trainerId: string; clientId: string } | null> {
+      const [row] = await db
+        .select({ trainerId: trainerClients.trainerId, clientId: trainerClients.clientId })
+        .from(clients)
+        .innerJoin(trainerClients, eq(trainerClients.clientId, clients.id))
+        .where(and(eq(clients.accountId, clientAccountId), eq(trainerClients.status, 'active')))
+        .orderBy(asc(trainerClients.createdAt), asc(trainerClients.trainerId))
+        .limit(1);
+      return row ?? null;
+    },
+
+    // Существует ли клиентский аккаунт с таким id (для валидации привязки тренером).
+    async accountExists(id: string): Promise<boolean> {
+      const [row] = await db
+        .select({ id: clientAccounts.id })
+        .from(clientAccounts)
+        .where(eq(clientAccounts.id, id));
+      return !!row;
+    },
+  };
+}
+
+export type ClientAuthRepo = ReturnType<typeof makeClientAuthRepo>;
