@@ -80,7 +80,10 @@ interface Draft {
   category: string;
   reps: string;
   weightKg: string;
+  timeSec: string;
   restSec: string;
+  /** Упражнение «на время» (есть время, нет повторов) — показываем поле «Сек». */
+  timeBased: boolean;
 }
 
 function parseOptNum(value: string): number | null {
@@ -98,7 +101,9 @@ function draftFromExercise(ex: ExerciseResponse): Draft {
     category: ex.category,
     reps: ex.defaultReps?.toString() ?? '',
     weightKg: ex.defaultWeightKg?.toString() ?? '',
+    timeSec: ex.defaultTimeSec?.toString() ?? '',
     restSec: ex.restSec.toString(),
+    timeBased: ex.defaultTimeSec !== null && ex.defaultReps === null,
   };
 }
 
@@ -154,7 +159,9 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
             category: catalog.data?.find((e) => e.id === p.exerciseId)?.category ?? '',
             reps: p.reps?.toString() ?? '',
             weightKg: p.weightKg?.toString() ?? '',
+            timeSec: p.timeSec?.toString() ?? '',
             restSec: p.restSec.toString(),
+            timeBased: p.timeSec !== null && p.reps === null,
           })),
         ),
       );
@@ -223,9 +230,9 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
     const exercises: TemplateExercise[] = positions.map((p) => ({
       exerciseId: p.exerciseId,
       sets: 1,
-      reps: parseOptNum(p.reps),
-      weightKg: parseOptNum(p.weightKg),
-      timeSec: null,
+      reps: p.timeBased ? null : parseOptNum(p.reps),
+      weightKg: p.timeBased ? null : parseOptNum(p.weightKg),
+      timeSec: p.timeBased ? parseOptNum(p.timeSec) : null,
       restSec: parseOptNum(p.restSec) ?? 90,
     }));
     const tag = categoryTag?.trim();
@@ -521,18 +528,28 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
-                  <SetField
-                    label="Повт."
-                    value={p.reps}
-                    onChange={(v) => updatePosition(p.id, { reps: v })}
-                  />
-                  <SetField
-                    label="Кг"
-                    value={p.weightKg}
-                    onChange={(v) => updatePosition(p.id, { weightKg: v })}
-                    step="0.5"
-                  />
+                <div className={`grid gap-2 ${p.timeBased ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                  {p.timeBased ? (
+                    <SetField
+                      label="Сек"
+                      value={p.timeSec}
+                      onChange={(v) => updatePosition(p.id, { timeSec: v })}
+                    />
+                  ) : (
+                    <>
+                      <SetField
+                        label="Повт."
+                        value={p.reps}
+                        onChange={(v) => updatePosition(p.id, { reps: v })}
+                      />
+                      <SetField
+                        label="Кг"
+                        value={p.weightKg}
+                        onChange={(v) => updatePosition(p.id, { weightKg: v })}
+                        step="0.5"
+                      />
+                    </>
+                  )}
                   <SetField
                     label="Отдых"
                     value={p.restSec}
