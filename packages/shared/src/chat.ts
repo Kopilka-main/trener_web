@@ -34,3 +34,9 @@ export const messageListResponseSchema = z.object({
   messages: z.array(messageResponseSchema),
 });
 export type MessageListResponse = z.infer<typeof messageListResponseSchema>;
+
+export const clientChatMessagesResponseSchema = z.object({
+  messages: z.array(messageResponseSchema),
+  trainerLastReadAt: z.string().nullable(),
+});
+export type ClientChatMessagesResponse = z.infer<typeof clientChatMessagesResponseSchema>;

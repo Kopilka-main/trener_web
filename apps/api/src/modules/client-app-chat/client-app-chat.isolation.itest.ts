@@ -80,6 +80,7 @@ describe.skipIf(!url)('client-app-chat (isolation)', () => {
       cookies: { client_sid: cSid },
     });
     expect(list.statusCode).toBe(200);
+    expect(list.json<{ trainerLastReadAt: string | null }>().trainerLastReadAt).toBeNull();
     const msgs = list.json<{ messages: { senderRole: string; body: string }[] }>().messages;
     expect(msgs).toHaveLength(1);
     expect(msgs[0]!.senderRole).toBe('trainer');
@@ -120,6 +121,18 @@ describe.skipIf(!url)('client-app-chat (isolation)', () => {
       cookies: { client_sid: cSid },
     });
     expect(unread2.json<{ count: number }>().count).toBe(0);
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/clients/${clientId}/messages/read`,
+      cookies: { sid: tSid },
+    });
+    const list2 = await app.inject({
+      method: 'GET',
+      url: '/api/client/chat/messages',
+      cookies: { client_sid: cSid },
+    });
+    expect(list2.json<{ trainerLastReadAt: string | null }>().trainerLastReadAt).not.toBeNull();
   });
 
   it('без сессии → 401', async () => {

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import {
   sendMessageRequestSchema,
   messageResponseSchema,
-  messageListResponseSchema,
+  clientChatMessagesResponseSchema,
 } from '@trener/shared';
 import type { ChatService } from '../chat/chat.service.js';
 import { requireClient } from '../../plugins/client-context.js';
@@ -27,12 +27,16 @@ export function clientAppChatRoutes(
     '/api/client/chat/messages',
     {
       preHandler: requireClient,
-      schema: { querystring: messagesQuery, response: { 200: messageListResponseSchema } },
+      schema: { querystring: messagesQuery, response: { 200: clientChatMessagesResponseSchema } },
     },
     async (req) => {
       const { trainerId, clientId } = await scope(req);
       const options = req.query.sinceId !== undefined ? { sinceId: req.query.sinceId } : {};
-      return { messages: await svc.listMessages(trainerId, clientId, options) };
+      const [messages, trainerLastReadAt] = await Promise.all([
+        svc.listMessages(trainerId, clientId, options),
+        svc.trainerReadAt(trainerId, clientId),
+      ]);
+      return { messages, trainerLastReadAt };
     },
   );
 
