@@ -13,6 +13,19 @@ function fakeRepo(overrides: Partial<Record<string, unknown>> = {}) {
     deleteSession: vi.fn(() => Promise.resolve()),
     findScopeByAccountId: vi.fn(() => Promise.resolve(null)),
     accountExists: vi.fn(() => Promise.resolve(false)),
+    updateAccount: vi.fn((id: string, patch: Record<string, unknown>) =>
+      Promise.resolve({
+        id,
+        email: 'a@b.co',
+        firstName: 'И',
+        lastName: 'К',
+        avatarFileId: null,
+        birthDate: null,
+        contacts: [],
+        bio: null,
+        ...patch,
+      }),
+    ),
     ...overrides,
   } as never;
 }
@@ -80,5 +93,27 @@ describe('client-auth.service', () => {
     const svc = makeClientAuthService(repo, { newId: () => 'id', now: () => new Date(0) });
     const res = await svc.me('ca1');
     expect(res.link).toEqual({ trainerId: 't1', clientId: 'cl1' });
+  });
+
+  it('updateMe передаёт только определённые поля и возвращает профиль', async () => {
+    const updateAccount = vi.fn((id: string, patch: Record<string, unknown>) =>
+      Promise.resolve({
+        id,
+        email: 'a@b.co',
+        firstName: 'И',
+        lastName: 'К',
+        avatarFileId: null,
+        birthDate: null,
+        contacts: [],
+        bio: null,
+        ...patch,
+      }),
+    );
+    const repo = fakeRepo({ updateAccount });
+    const svc = makeClientAuthService(repo, { newId: () => 'id', now: () => new Date(0) });
+    const res = await svc.updateMe('ca1', { firstName: 'Новое', bio: 'цель' });
+    expect(updateAccount).toHaveBeenCalledWith('ca1', { firstName: 'Новое', bio: 'цель' });
+    expect(res.firstName).toBe('Новое');
+    expect(res.bio).toBe('цель');
   });
 });

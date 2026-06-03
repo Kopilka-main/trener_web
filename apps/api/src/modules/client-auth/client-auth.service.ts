@@ -5,6 +5,7 @@ import type {
   ClientAccountResponse,
   ClientLink,
   ClientMeResponse,
+  UpdateClientAccountRequest,
 } from '@trener/shared';
 import { hashPassword, verifyPassword } from '../../auth/password.js';
 import { AppError, unauthorized } from '../../errors.js';
@@ -20,6 +21,9 @@ function toAccountResponse(a: {
   firstName: string;
   lastName: string;
   avatarFileId: string | null;
+  birthDate: string | null;
+  contacts: { type: string; value: string }[];
+  bio: string | null;
 }): ClientAccountResponse {
   return {
     id: a.id,
@@ -27,6 +31,9 @@ function toAccountResponse(a: {
     firstName: a.firstName,
     lastName: a.lastName,
     avatarFileId: a.avatarFileId,
+    birthDate: a.birthDate,
+    contacts: a.contacts ?? [],
+    bio: a.bio,
   };
 }
 
@@ -82,6 +89,27 @@ export function makeClientAuthService(repo: ClientAuthRepo, deps: ClientAuthDeps
       if (!account) throw unauthorized('Сессия недействительна');
       const link = await repo.findScopeByAccountId(clientAccountId);
       return { account: toAccountResponse(account), link };
+    },
+
+    async updateMe(
+      clientAccountId: string,
+      input: UpdateClientAccountRequest,
+    ): Promise<ClientAccountResponse> {
+      const patch: {
+        firstName?: string;
+        lastName?: string;
+        birthDate?: string | null;
+        contacts?: { type: string; value: string }[];
+        bio?: string | null;
+      } = {};
+      if (input.firstName !== undefined) patch.firstName = input.firstName;
+      if (input.lastName !== undefined) patch.lastName = input.lastName;
+      if (input.birthDate !== undefined) patch.birthDate = input.birthDate ?? null;
+      if (input.contacts !== undefined) patch.contacts = input.contacts;
+      if (input.bio !== undefined) patch.bio = input.bio ?? null;
+      const account = await repo.updateAccount(clientAccountId, patch);
+      if (!account) throw unauthorized('Сессия недействительна');
+      return toAccountResponse(account);
     },
   };
 }
