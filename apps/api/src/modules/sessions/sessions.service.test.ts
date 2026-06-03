@@ -16,6 +16,7 @@ function row(over: Partial<SessionRow> = {}): SessionRow {
     status: 'planned',
     isOnline: 0,
     note: null,
+    clientConfirmation: 'pending',
     createdAt: new Date(0),
     ...over,
   };
@@ -29,6 +30,8 @@ function fakeRepo(over: Partial<SessionsRepo> = {}): SessionsRepo {
     getForTrainer: vi.fn(() => Promise.resolve(null)),
     update: vi.fn(() => Promise.resolve(null)),
     delete: vi.fn(() => Promise.resolve(false)),
+    listForClient: vi.fn(() => Promise.resolve([])),
+    setClientConfirmation: vi.fn(() => Promise.resolve(null)),
     ...over,
   };
 }
@@ -113,5 +116,31 @@ describe('sessions.service', () => {
   it('remove бросает 404, если delete=false', async () => {
     const svc = makeSessionsService(fakeRepo(), { newId: () => 'x' });
     await expect(svc.remove('A', 'missing')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('listForClient прокидывает trainerId, clientId и диапазон', async () => {
+    const listForClient = vi.fn(() => Promise.resolve([row({ id: 's1' }), row({ id: 's2' })]));
+    const svc = makeSessionsService(fakeRepo({ listForClient }), { newId: () => 'x' });
+    const res = await svc.listForClient('A', 'c1', { from: '2026-06-01', to: '2026-06-30' });
+    expect(res.map((s) => s.id)).toEqual(['s1', 's2']);
+    expect(listForClient).toHaveBeenCalledWith('A', 'c1', { from: '2026-06-01', to: '2026-06-30' });
+  });
+
+  it('setClientConfirmation резолвит обновлённое занятие', async () => {
+    const setClientConfirmation = vi.fn(() =>
+      Promise.resolve(row({ clientConfirmation: 'confirmed' })),
+    );
+    const svc = makeSessionsService(fakeRepo({ setClientConfirmation }), { newId: () => 'x' });
+    const res = await svc.setClientConfirmation('A', 'c1', 's1', 'confirmed');
+    expect(res.clientConfirmation).toBe('confirmed');
+    expect(setClientConfirmation).toHaveBeenCalledWith('A', 'c1', 's1', 'confirmed');
+  });
+
+  it('setClientConfirmation → notFound, если repo вернул null', async () => {
+    const setClientConfirmation = vi.fn(() => Promise.resolve(null));
+    const svc = makeSessionsService(fakeRepo({ setClientConfirmation }), { newId: () => 'x' });
+    await expect(svc.setClientConfirmation('A', 'c1', 'nope', 'declined')).rejects.toMatchObject({
+      status: 404,
+    });
   });
 });
