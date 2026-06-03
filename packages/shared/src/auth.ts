@@ -33,6 +33,16 @@ export const trainerResponseSchema = z.object({
 });
 export type TrainerResponse = z.infer<typeof trainerResponseSchema>;
 
+export const trainerPublicResponseSchema = z.object({
+  id: z.string(),
+  firstName: z.string(),
+  lastName: z.string(),
+  title: z.string().nullable(),
+  bio: z.string().nullable(),
+  contacts: z.array(contactSchema),
+});
+export type TrainerPublicResponse = z.infer<typeof trainerPublicResponseSchema>;
+
 export const updateTrainerRequestSchema = z.object({
   firstName: z.string().trim().min(1).max(100).optional(),
   lastName: z.string().trim().min(1).max(100).optional(),
