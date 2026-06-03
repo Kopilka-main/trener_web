@@ -5,12 +5,12 @@ import { ConnectBanner } from './components/ConnectBanner';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { ConnectPage } from './pages/ConnectPage';
-import { StubPage } from './pages/StubPage';
 import { WorkoutsListPage } from './pages/WorkoutsListPage';
 import { WorkoutDetailPage } from './pages/WorkoutDetailPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { ChatPage } from './pages/ChatPage';
 import { CalendarPage } from './pages/CalendarPage';
+import { StatsPage } from './pages/StatsPage';
 
 export function App() {
   const me = useClientMe();
@@ -46,7 +46,7 @@ export function App() {
         <Route path="/workouts/:wid" element={<WorkoutDetailPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/chat" element={<ChatPage />} />
-        <Route path="/progress" element={<StubPage title="Прогресс" />} />
+        <Route path="/progress" element={<StatsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/connect" element={<ConnectPage code={me.data.account.id} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
