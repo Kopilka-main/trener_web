@@ -20,16 +20,19 @@ describe.skipIf(!url)('chat.repo (integration)', () => {
       { id: 'A', email: 'a@b.co', passwordHash: 'h', firstName: 'A', lastName: 'A' },
       { id: 'B', email: 'b@b.co', passwordHash: 'h', firstName: 'B', lastName: 'B' },
       { id: 'chatT1', email: 'chatT1@b.co', passwordHash: 'h', firstName: 'T', lastName: '1' },
+      { id: 'chatRT', email: 'chatRT@b.co', passwordHash: 'h', firstName: 'R', lastName: 'T' },
     ]);
     await db.insert(clients).values([
       { id: 'c1', firstName: 'Кл', lastName: 'А' },
       { id: 'c2', firstName: 'Кл', lastName: 'Б' },
       { id: 'chatC1', firstName: 'Кл', lastName: 'С' },
+      { id: 'chatRC', firstName: 'Кл', lastName: 'R' },
     ]);
     await db.insert(trainerClients).values([
       { trainerId: 'A', clientId: 'c1', status: 'active' },
       { trainerId: 'B', clientId: 'c2', status: 'active' },
       { trainerId: 'chatT1', clientId: 'chatC1', status: 'active' },
+      { trainerId: 'chatRT', clientId: 'chatRC', status: 'active' },
     ]);
   });
   afterAll(async () => {
@@ -126,5 +129,17 @@ describe.skipIf(!url)('chat.repo (integration)', () => {
 
     await repo.addMessage(t, c, 'm-tr2', 'ещё', new Date(now.getTime() + 3000), 'trainer');
     expect(await repo.clientUnreadCount(t, c)).toBe(1);
+  });
+
+  it('trainerReadAt: null без диалога, дата после markRead тренером', async () => {
+    expect(await repo.trainerReadAt('tNo', 'cNo')).toBeNull();
+    const t = 'chatRT';
+    const c = 'chatRC';
+    const now = new Date();
+    await repo.addMessage(t, c, 'm-rt', 'hi', now, 'client');
+    expect(await repo.trainerReadAt(t, c)).toBeNull();
+    await repo.markRead(t, c, new Date(now.getTime() + 1000));
+    const at = await repo.trainerReadAt(t, c);
+    expect(at).toBeInstanceOf(Date);
   });
 });

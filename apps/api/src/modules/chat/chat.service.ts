@@ -65,6 +65,11 @@ export function makeChatService(repo: ChatRepo, deps: ChatDeps) {
     clientUnread(trainerId: string, clientId: string): Promise<number> {
       return repo.clientUnreadCount(trainerId, clientId);
     },
+
+    async trainerReadAt(trainerId: string, clientId: string): Promise<string | null> {
+      const at = await repo.trainerReadAt(trainerId, clientId);
+      return at ? at.toISOString() : null;
+    },
   };
 }
 
