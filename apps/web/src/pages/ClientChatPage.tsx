@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Send } from 'lucide-react';
+import { Send, Check, CheckCheck } from 'lucide-react';
 import type { MessageResponse } from '@trener/shared';
-import { useChatMessages, useSendMessage } from '../api/chat';
+import { useChatMessages, useMarkConversationRead, useSendMessage } from '../api/chat';
 import { useClient } from '../api/clients';
 import { ScreenHeader } from '../components/ScreenHeader';
 
@@ -17,17 +17,26 @@ export function ClientChatPage() {
   const client = useClient(id);
   const messages = useChatMessages(id);
   const send = useSendMessage(id);
+  const markRead = useMarkConversationRead(id);
 
   const [draft, setDraft] = useState('');
   const listEndRef = useRef<HTMLDivElement>(null);
 
-  const list = messages.data ?? [];
+  const list = messages.data?.messages ?? [];
+  const clientReadAt = messages.data?.clientLastReadAt ?? null;
   const title = client.data ? `${client.data.firstName} ${client.data.lastName}`.trim() : 'Чат';
 
   // Автоскролл вниз при появлении новых сообщений.
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ block: 'end' });
   }, [list.length]);
+
+  // Отметить диалог прочитанным при открытии (сбрасывает непрочитанные тренера,
+  // и у клиента появляется «прочитано» на его сообщениях).
+  const markReadMutate = markRead.mutate;
+  useEffect(() => {
+    if (id.length > 0) markReadMutate();
+  }, [id, markReadMutate]);
 
   function submit() {
     const body = draft.trim();
@@ -70,7 +79,7 @@ export function ClientChatPage() {
         )}
 
         {list.map((m) => (
-          <Bubble key={m.id} message={m} />
+          <Bubble key={m.id} message={m} clientReadAt={clientReadAt} />
         ))}
         <div ref={listEndRef} />
       </div>
@@ -105,9 +114,18 @@ export function ClientChatPage() {
   );
 }
 
-function Bubble({ message }: { message: MessageResponse }) {
+function Bubble({
+  message,
+  clientReadAt,
+}: {
+  message: MessageResponse;
+  clientReadAt: string | null;
+}) {
   const mine = message.senderRole === 'trainer';
   const time = formatTime(message.createdAt);
+  // Статус только на своих (тренерских) сообщениях: прочитано клиентом, если
+  // клиент читал диалог не раньше времени сообщения.
+  const read = clientReadAt !== null && message.createdAt <= clientReadAt;
   return (
     <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
       <div
@@ -118,11 +136,12 @@ function Bubble({ message }: { message: MessageResponse }) {
         <div className="whitespace-pre-wrap break-words">{message.body}</div>
         {time && (
           <div
-            className={`mt-0.5 text-right text-[10px] ${
+            className={`mt-0.5 flex items-center justify-end gap-1 text-[10px] ${
               mine ? 'text-accent-on/60' : 'text-ink-muted'
             }`}
           >
             {time}
+            {mine && (read ? <CheckCheck size={12} /> : <Check size={12} />)}
           </div>
         )}
       </div>

@@ -2,11 +2,12 @@ import { z } from 'zod';
 import {
   sendMessageRequestSchema,
   messageResponseSchema,
-  messageListResponseSchema,
+  trainerChatMessagesResponseSchema,
   conversationListResponseSchema,
   type MessageResponse,
   type SendMessageRequest,
   type ConversationResponse,
+  type TrainerChatMessagesResponse,
 } from '@trener/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from './client';
@@ -19,10 +20,18 @@ const MESSAGES_REFETCH_MS = 4000;
 export const clientMessagesQueryKey = (clientId: string) =>
   ['clients', clientId, 'messages'] as const;
 
-export function listClientMessages(clientId: string): Promise<MessageResponse[]> {
+export function listClientMessages(clientId: string): Promise<TrainerChatMessagesResponse> {
   return apiFetch(`/clients/${clientId}/messages`, {
-    schema: messageListResponseSchema,
-  }).then((r) => r.messages);
+    schema: trainerChatMessagesResponseSchema,
+  });
+}
+
+/** Отметить диалог прочитанным тренером (POST .../messages/read). */
+export function markConversationRead(clientId: string): Promise<void> {
+  return apiFetch(`/clients/${clientId}/messages/read`, {
+    method: 'POST',
+    schema: z.object({ ok: z.literal(true) }),
+  }).then(() => undefined);
 }
 
 export function sendClientMessage(
@@ -71,5 +80,16 @@ export function useConversations() {
     queryKey: conversationsQueryKey,
     queryFn: listConversations,
     refetchInterval: 8000,
+  });
+}
+
+/** Отметка диалога прочитанным тренером (при открытии чата) + обновление списка диалогов. */
+export function useMarkConversationRead(clientId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => markConversationRead(clientId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: conversationsQueryKey });
+    },
   });
 }

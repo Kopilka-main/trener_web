@@ -4,7 +4,7 @@ import { z } from 'zod';
 import {
   sendMessageRequestSchema,
   messageResponseSchema,
-  messageListResponseSchema,
+  trainerChatMessagesResponseSchema,
   conversationListResponseSchema,
 } from '@trener/shared';
 import type { ChatService } from './chat.service.js';
@@ -52,14 +52,19 @@ export function chatRoutes(
       schema: {
         params: clientParams,
         querystring: listMessagesQuery,
-        response: { 200: messageListResponseSchema },
+        response: { 200: trainerChatMessagesResponseSchema },
       },
     },
     async (req) => {
       // exactOptionalPropertyTypes: передаём sinceId только когда задан.
       const options: { sinceId?: string } = {};
       if (req.query.sinceId !== undefined) options.sinceId = req.query.sinceId;
-      return { messages: await svc.listMessages(trainerId(req), req.params.id, options) };
+      const t = trainerId(req);
+      const [messages, clientLastReadAt] = await Promise.all([
+        svc.listMessages(t, req.params.id, options),
+        svc.clientReadAt(t, req.params.id),
+      ]);
+      return { messages, clientLastReadAt };
     },
   );
 

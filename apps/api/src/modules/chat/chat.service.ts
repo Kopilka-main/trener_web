@@ -70,6 +70,11 @@ export function makeChatService(repo: ChatRepo, deps: ChatDeps) {
       const at = await repo.trainerReadAt(trainerId, clientId);
       return at ? at.toISOString() : null;
     },
+
+    async clientReadAt(trainerId: string, clientId: string): Promise<string | null> {
+      const at = await repo.clientReadAt(trainerId, clientId);
+      return at ? at.toISOString() : null;
+    },
   };
 }
 

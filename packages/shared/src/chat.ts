@@ -40,3 +40,10 @@ export const clientChatMessagesResponseSchema = z.object({
   trainerLastReadAt: z.string().nullable(),
 });
 export type ClientChatMessagesResponse = z.infer<typeof clientChatMessagesResponseSchema>;
+
+// Лента у тренера: сообщения + момент прочтения КЛИЕНТОМ (статус «прочитано» у тренера).
+export const trainerChatMessagesResponseSchema = z.object({
+  messages: z.array(messageResponseSchema),
+  clientLastReadAt: z.string().nullable(),
+});
+export type TrainerChatMessagesResponse = z.infer<typeof trainerChatMessagesResponseSchema>;

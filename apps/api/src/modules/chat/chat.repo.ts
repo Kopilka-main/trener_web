@@ -194,6 +194,12 @@ export function makeChatRepo(db: Db) {
       return conversation?.trainerLastReadAt ?? null;
     },
 
+    // Когда клиент последний раз читал диалог (для статуса «прочитано» у тренера).
+    async clientReadAt(trainerId: string, clientId: string): Promise<Date | null> {
+      const conversation = await findConversation(trainerId, clientId);
+      return conversation?.clientLastReadAt ?? null;
+    },
+
     // Непрочитанные клиентом = сообщения тренера после clientLastReadAt (или все, если не читал).
     async clientUnreadCount(trainerId: string, clientId: string): Promise<number> {
       const conversation = await findConversation(trainerId, clientId);

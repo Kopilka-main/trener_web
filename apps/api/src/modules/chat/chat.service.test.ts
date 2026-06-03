@@ -36,6 +36,7 @@ function fakeRepo(over: Partial<ChatRepo> = {}): ChatRepo {
     markReadByClient: vi.fn(() => Promise.resolve()),
     clientUnreadCount: vi.fn(() => Promise.resolve(0)),
     trainerReadAt: vi.fn(() => Promise.resolve(null)),
+    clientReadAt: vi.fn(() => Promise.resolve(null)),
     ...over,
   };
 }
