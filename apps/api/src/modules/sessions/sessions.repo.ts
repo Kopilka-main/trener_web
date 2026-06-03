@@ -16,6 +16,7 @@ export type SessionRow = {
   status: SessionStatus;
   isOnline: number; // int 0/1 на границе БД
   note: string | null;
+  clientConfirmation: 'pending' | 'confirmed' | 'declined';
   createdAt: Date;
 };
 
@@ -59,6 +60,7 @@ const cols = {
   status: sessions.status,
   isOnline: sessions.isOnline,
   note: sessions.note,
+  clientConfirmation: sessions.clientConfirmation,
   createdAt: sessions.createdAt,
 };
 
@@ -76,6 +78,7 @@ export function toResponse(r: SessionRow): SessionResponse {
     status: r.status,
     isOnline: r.isOnline !== 0,
     note: r.note,
+    clientConfirmation: r.clientConfirmation,
   };
 }
 
@@ -136,6 +139,45 @@ export function makeSessionsRepo(db: Db) {
         .from(sessions)
         .where(and(...conds))
         .orderBy(asc(sessions.date), asc(sessions.startTime));
+    },
+
+    // Занятия конкретного клиента у тренера, опц. фильтр по диапазону дат.
+    // Онлайн НЕ скрывается — клиент посещает онлайн-занятия.
+    async listForClient(
+      trainerId: string,
+      clientId: string,
+      range: ListRange = {},
+    ): Promise<SessionRow[]> {
+      const conds = [eq(sessions.trainerId, trainerId), eq(sessions.clientId, clientId)];
+      if (range.from !== undefined) conds.push(gte(sessions.date, range.from));
+      if (range.to !== undefined) conds.push(lte(sessions.date, range.to));
+      return db
+        .select(cols)
+        .from(sessions)
+        .where(and(...conds))
+        .orderBy(asc(sessions.date), asc(sessions.startTime));
+    },
+
+    // Подтверждение/отклонение клиентом своего занятия. Скоуп по trainerId+clientId,
+    // чтобы клиент не мог тронуть чужое. null — не найдено/не принадлежит клиенту.
+    async setClientConfirmation(
+      trainerId: string,
+      clientId: string,
+      id: string,
+      status: 'confirmed' | 'declined',
+    ): Promise<SessionRow | null> {
+      const [row] = await db
+        .update(sessions)
+        .set({ clientConfirmation: status })
+        .where(
+          and(
+            eq(sessions.id, id),
+            eq(sessions.trainerId, trainerId),
+            eq(sessions.clientId, clientId),
+          ),
+        )
+        .returning(cols);
+      return row ?? null;
     },
 
     // Апдейт только своего занятия; вернуть строку или null. Связь clientId проверяет service.

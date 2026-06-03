@@ -68,6 +68,26 @@ export function makeSessionsService(repo: SessionsRepo, deps: SessionsDeps) {
       const ok = await repo.delete(trainerId, id);
       if (!ok) throw notFound('Занятие не найдено');
     },
+
+    async listForClient(
+      trainerId: string,
+      clientId: string,
+      range: ListRange = {},
+    ): Promise<SessionResponse[]> {
+      const rows = await repo.listForClient(trainerId, clientId, range);
+      return rows.map(toResponse);
+    },
+
+    async setClientConfirmation(
+      trainerId: string,
+      clientId: string,
+      id: string,
+      status: 'confirmed' | 'declined',
+    ): Promise<SessionResponse> {
+      const row = await repo.setClientConfirmation(trainerId, clientId, id, status);
+      if (!row) throw notFound('Занятие не найдено');
+      return toResponse(row);
+    },
   };
 }
 

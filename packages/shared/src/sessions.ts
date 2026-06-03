@@ -5,6 +5,9 @@ const text200 = z.string().trim().max(200).nullish();
 export const sessionStatusSchema = z.enum(['planned', 'completed', 'cancelled']);
 export type SessionStatus = z.infer<typeof sessionStatusSchema>;
 
+export const clientConfirmationSchema = z.enum(['pending', 'confirmed', 'declined']);
+export type ClientConfirmation = z.infer<typeof clientConfirmationSchema>;
+
 // --- Создание занятия ---
 
 export const createSessionRequestSchema = z.object({
@@ -29,6 +32,12 @@ export const updateSessionRequestSchema = createSessionRequestSchema.partial().e
 });
 export type UpdateSessionRequest = z.infer<typeof updateSessionRequestSchema>;
 
+// --- Подтверждение/отклонение занятия клиентом ---
+export const clientSessionConfirmRequestSchema = z.object({
+  status: z.enum(['confirmed', 'declined']),
+});
+export type ClientSessionConfirmRequest = z.infer<typeof clientSessionConfirmRequestSchema>;
+
 // --- Ответы ---
 
 export const sessionResponseSchema = z.object({
@@ -43,6 +52,7 @@ export const sessionResponseSchema = z.object({
   status: sessionStatusSchema,
   isOnline: z.boolean(),
   note: z.string().nullable(),
+  clientConfirmation: clientConfirmationSchema,
 });
 export type SessionResponse = z.infer<typeof sessionResponseSchema>;
 

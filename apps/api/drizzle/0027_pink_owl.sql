@@ -1,0 +1,2 @@
+ALTER TABLE "sessions" ADD COLUMN "client_confirmation" text DEFAULT 'pending' NOT NULL;--> statement-breakpoint
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_client_confirmation_chk" CHECK ("sessions"."client_confirmation" IN ('pending', 'confirmed', 'declined'));

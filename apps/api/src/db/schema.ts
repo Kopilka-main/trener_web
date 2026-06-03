@@ -268,11 +268,19 @@ export const sessions = pgTable(
       .default('planned'),
     isOnline: integer('is_online').notNull().default(0),
     note: text('note'),
+    clientConfirmation: text('client_confirmation')
+      .$type<'pending' | 'confirmed' | 'declined'>()
+      .notNull()
+      .default('pending'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index('idx_sessions_trainer_date').on(t.trainerId, t.date),
     check('sessions_status_chk', sql`${t.status} IN ('planned', 'completed', 'cancelled')`),
+    check(
+      'sessions_client_confirmation_chk',
+      sql`${t.clientConfirmation} IN ('pending', 'confirmed', 'declined')`,
+    ),
   ],
 );
 

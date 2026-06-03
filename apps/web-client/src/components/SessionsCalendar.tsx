@@ -25,7 +25,7 @@ export type CalendarView = 'day' | 'week' | 'month';
 /** Высота одного часа в day/week-сетке (px). */
 const DAY_HOUR_H = 56;
 const WEEK_HOUR_H = 48;
-/** Автоскролл при монтаже к 7:00 — типичное начало рабочего дня тренера. */
+/** Автоскролл при монтаже к 7:00 — типичное начало рабочего дня. */
 const SCROLL_HOUR = 7;
 
 /** Метка блока занятия по умолчанию. */
@@ -37,9 +37,9 @@ export type SessionsCalendarProps = {
   sessions: SessionResponse[];
   /** Стартовый вид (по умолчанию — месяц). */
   defaultView?: CalendarView;
-  /** Тап по пустому слоту (создание занятия). */
-  onSlotClick: (date: Date, hour: number) => void;
-  /** Тап по существующему занятию (редактирование). */
+  /** Тап по пустому слоту (создание). У клиента не используется. */
+  onSlotClick?: (date: Date, hour: number) => void;
+  /** Тап по существующему занятию. */
   onSessionClick: (session: SessionResponse) => void;
   /** Метка-заголовок блока занятия (по умолчанию — title ?? 'Занятие'). */
   renderLabel?: (s: SessionResponse) => string;
@@ -49,9 +49,9 @@ export type SessionsCalendarProps = {
 };
 
 /**
- * Переиспользуемый календарь занятий: виды день/неделя/месяц, навигация периода,
- * часовая сетка с автоскроллом к 7:00, нижний переключатель вида.
- * Вид и якорь периода — внутреннее состояние (якорь можно поднять через anchor/onAnchorChange).
+ * Переиспользуемый календарь занятий (клиентская версия): виды день/неделя/месяц,
+ * навигация периода, часовая сетка с автоскроллом к 7:00, нижний переключатель вида.
+ * Клиент подтверждает занятия; создание занятий не поддерживается.
  */
 export function SessionsCalendar({
   sessions,
@@ -134,7 +134,8 @@ export function SessionsCalendar({
           sessions={sessions}
           onPick={onSessionClick}
           onPickDay={pickDay}
-          onSlot={onSlotClick}
+          onSlot={onSlotClick ?? (() => {})}
+          slotsEnabled={onSlotClick !== undefined}
           renderLabel={renderLabel}
         />
       )}
@@ -143,7 +144,8 @@ export function SessionsCalendar({
           date={anchor}
           sessions={sessions}
           onPick={onSessionClick}
-          onSlot={(hour) => onSlotClick(anchor, hour)}
+          onSlot={(hour) => onSlotClick?.(anchor, hour)}
+          slotsEnabled={onSlotClick !== undefined}
           renderLabel={renderLabel}
         />
       )}
@@ -199,7 +201,7 @@ function tileClasses(status: SessionStatus): string {
   return 'bg-card-elevated text-ink-muted line-through opacity-50';
 }
 
-/** Индикатор ответа клиента: ✓ подтвердил, ✕ отклонил, ничего — ждёт ответа. */
+/** Индикатор подтверждения клиента на блоке занятия. */
 function ConfirmMark({ value }: { value: SessionResponse['clientConfirmation'] }) {
   if (value === 'confirmed') return <Check size={12} strokeWidth={2.4} className="shrink-0" />;
   if (value === 'declined')
@@ -324,12 +326,14 @@ function DayView({
   sessions,
   onPick,
   onSlot,
+  slotsEnabled,
   renderLabel,
 }: {
   date: Date;
   sessions: SessionResponse[];
   onPick: (s: SessionResponse) => void;
   onSlot: (hour: number) => void;
+  slotsEnabled: boolean;
   renderLabel: (s: SessionResponse) => string;
 }) {
   const hours = Array.from({ length: CAL_HOURS }, (_, i) => CAL_START_HOUR + i);
@@ -353,16 +357,25 @@ function DayView({
           ))}
         </div>
         <div className="relative flex-1 border-l border-line" style={{ height: gridH }}>
-          {hours.map((h, i) => (
-            <button
-              key={`slot-${String(h)}`}
-              type="button"
-              onClick={() => onSlot(h)}
-              className="absolute inset-x-0 border-t border-line active:bg-card-elevated/40"
-              style={{ top: i * DAY_HOUR_H, height: DAY_HOUR_H }}
-              aria-label={`Добавить занятие на ${String(h).padStart(2, '0')}:00`}
-            />
-          ))}
+          {slotsEnabled &&
+            hours.map((h, i) => (
+              <button
+                key={`slot-${String(h)}`}
+                type="button"
+                onClick={() => onSlot(h)}
+                className="absolute inset-x-0 border-t border-line active:bg-card-elevated/40"
+                style={{ top: i * DAY_HOUR_H, height: DAY_HOUR_H }}
+                aria-label={`Добавить занятие на ${String(h).padStart(2, '0')}:00`}
+              />
+            ))}
+          {!slotsEnabled &&
+            hours.map((h, i) => (
+              <div
+                key={`line-${String(h)}`}
+                className="absolute inset-x-0 border-t border-line"
+                style={{ top: i * DAY_HOUR_H, height: DAY_HOUR_H }}
+              />
+            ))}
           {sameDay(date, now) && <NowLine top={nowTop} hourHeight={DAY_HOUR_H} />}
           {items.map((s) => {
             const startMin = timeToMin(s.startTime);
@@ -403,6 +416,7 @@ function WeekView({
   onPick,
   onPickDay,
   onSlot,
+  slotsEnabled,
   renderLabel,
 }: {
   anchor: Date;
@@ -410,6 +424,7 @@ function WeekView({
   onPick: (s: SessionResponse) => void;
   onPickDay: (d: Date) => void;
   onSlot: (date: Date, hour: number) => void;
+  slotsEnabled: boolean;
   renderLabel: (s: SessionResponse) => string;
 }) {
   const dates = weekDates(anchor);
@@ -479,16 +494,25 @@ function WeekView({
                   className="relative border-l border-line"
                   style={{ height: gridH }}
                 >
-                  {hours.map((h, i) => (
-                    <button
-                      key={`slot-${String(h)}`}
-                      type="button"
-                      onClick={() => onSlot(d, h)}
-                      className="absolute inset-x-0 border-t border-line active:bg-card-elevated/40"
-                      style={{ top: i * WEEK_HOUR_H, height: WEEK_HOUR_H }}
-                      aria-label={`Добавить занятие ${DAY_SHORT[weekdayMon(d)]} ${String(d.getDate())} в ${String(h).padStart(2, '0')}:00`}
-                    />
-                  ))}
+                  {slotsEnabled &&
+                    hours.map((h, i) => (
+                      <button
+                        key={`slot-${String(h)}`}
+                        type="button"
+                        onClick={() => onSlot(d, h)}
+                        className="absolute inset-x-0 border-t border-line active:bg-card-elevated/40"
+                        style={{ top: i * WEEK_HOUR_H, height: WEEK_HOUR_H }}
+                        aria-label={`Добавить занятие ${DAY_SHORT[weekdayMon(d)]} ${String(d.getDate())} в ${String(h).padStart(2, '0')}:00`}
+                      />
+                    ))}
+                  {!slotsEnabled &&
+                    hours.map((h, i) => (
+                      <div
+                        key={`line-${String(h)}`}
+                        className="absolute inset-x-0 border-t border-line"
+                        style={{ top: i * WEEK_HOUR_H, height: WEEK_HOUR_H }}
+                      />
+                    ))}
                   {items.map((s) => {
                     const startMin = timeToMin(s.startTime);
                     const top = ((startMin - CAL_START_HOUR * 60) / 60) * WEEK_HOUR_H;
