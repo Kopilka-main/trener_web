@@ -24,6 +24,7 @@ function expenseRow(over: Partial<ExpenseRow> = {}): ExpenseRow {
     gymId: null,
     clientId: null,
     note: null,
+    tags: [],
     createdAt: new Date(0),
     ...over,
   };
@@ -38,6 +39,9 @@ function incomeRow(over: Partial<IncomeRow> = {}): IncomeRow {
     date: '2026-06-01',
     clientId: null,
     note: null,
+    tags: [],
+    title: null,
+    subtitle: null,
     createdAt: new Date(0),
     ...over,
   };

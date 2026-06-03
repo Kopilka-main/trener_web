@@ -15,6 +15,7 @@ function row(over: Partial<PackageRow> = {}): PackageRow {
     startsAt: '2026-06-01',
     status: 'active',
     note: null,
+    tags: [],
     createdAt: new Date(0),
     ...over,
   };
