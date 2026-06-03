@@ -6,6 +6,7 @@ import {
   clientLoginRequestSchema,
   clientAccountResponseSchema,
   clientMeResponseSchema,
+  updateClientAccountRequestSchema,
 } from '@trener/shared';
 import type { ClientAuthService, ClientSession } from './client-auth.service.js';
 import { CLIENT_SESSION_COOKIE } from '../../plugins/client-context.js';
@@ -69,6 +70,20 @@ export function clientAuthRoutes(
     async (req) => {
       if (!req.clientAccountId) throw unauthorized('Требуется вход');
       return svc.me(req.clientAccountId);
+    },
+  );
+
+  typed.patch(
+    '/api/client/auth/me',
+    {
+      schema: {
+        body: updateClientAccountRequestSchema,
+        response: { 200: z.object({ account: clientAccountResponseSchema }) },
+      },
+    },
+    async (req) => {
+      if (!req.clientAccountId) throw unauthorized('Требуется вход');
+      return { account: await svc.updateMe(req.clientAccountId, req.body) };
     },
   );
 }

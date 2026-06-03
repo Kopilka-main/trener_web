@@ -59,6 +59,40 @@ describe.skipIf(!url)('client-auth (isolation)', () => {
     expect(res.statusCode).toBe(409);
   });
 
+  it('PATCH /me обновляет профиль; без сессии → 401', async () => {
+    const reg = await app.inject({
+      method: 'POST',
+      url: '/api/client/auth/register',
+      payload: { email: 'prof@b.co', password: 'longenough1', firstName: 'И', lastName: 'К' },
+    });
+    const sid = clientSidFrom(reg);
+    const patch = await app.inject({
+      method: 'PATCH',
+      url: '/api/client/auth/me',
+      cookies: { client_sid: sid },
+      payload: { firstName: 'Пётр', birthDate: '1992-03-10', bio: 'Набрать массу' },
+    });
+    expect(patch.statusCode).toBe(200);
+    const me = await app.inject({
+      method: 'GET',
+      url: '/api/client/auth/me',
+      cookies: { client_sid: sid },
+    });
+    const body = me.json<{
+      account: { firstName: string; birthDate: string | null; bio: string | null };
+    }>();
+    expect(body.account.firstName).toBe('Пётр');
+    expect(body.account.birthDate).toBe('1992-03-10');
+    expect(body.account.bio).toBe('Набрать массу');
+
+    const noAuth = await app.inject({
+      method: 'PATCH',
+      url: '/api/client/auth/me',
+      payload: { firstName: 'X' },
+    });
+    expect(noAuth.statusCode).toBe(401);
+  });
+
   it('сессия клиента A не даёт доступ под другим токеном', async () => {
     const reg = await app.inject({
       method: 'POST',
