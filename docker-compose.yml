@@ -34,6 +34,12 @@ services:
     ports: ['8080:80']
     depends_on: [api]
 
+  web-client:
+    image: ${WEB_CLIENT_IMAGE:-trener-web-client:local}
+    build: { context: ., dockerfile: apps/web-client/Dockerfile }
+    ports: ['8081:80']
+    depends_on: [api]
+
   backup:
     image: postgres:16
     restart: unless-stopped
