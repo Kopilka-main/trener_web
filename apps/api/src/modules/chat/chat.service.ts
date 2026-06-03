@@ -42,7 +42,14 @@ export function makeChatService(repo: ChatRepo, deps: ChatDeps) {
       clientId: string,
       input: SendMessageRequest,
     ): Promise<MessageResponse> {
-      const row = await repo.addMessage(trainerId, clientId, deps.newId(), input.body, deps.now());
+      const row = await repo.addMessage(
+        trainerId,
+        clientId,
+        deps.newId(),
+        input.body,
+        deps.now(),
+        'trainer',
+      );
       return toMessageResponse(row);
     },
 

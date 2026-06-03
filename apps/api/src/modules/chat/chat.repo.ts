@@ -8,6 +8,7 @@ export type ConversationRow = {
   clientId: string;
   lastMessageAt: Date | null;
   trainerLastReadAt: Date | null;
+  clientLastReadAt: Date | null;
   createdAt: Date;
 };
 
@@ -29,6 +30,7 @@ const conversationColumns = {
   clientId: conversations.clientId,
   lastMessageAt: conversations.lastMessageAt,
   trainerLastReadAt: conversations.trainerLastReadAt,
+  clientLastReadAt: conversations.clientLastReadAt,
   createdAt: conversations.createdAt,
 };
 
@@ -135,13 +137,14 @@ export function makeChatRepo(db: Db) {
         .orderBy(asc(messages.createdAt), asc(messages.id));
     },
 
-    // Создать диалог при отсутствии, вставить сообщение тренера, обновить lastMessageAt.
+    // Создать диалог при отсутствии, вставить сообщение, обновить lastMessageAt.
     async addMessage(
       trainerId: string,
       clientId: string,
       messageId: string,
       body: string,
       now: Date,
+      senderRole: 'trainer' | 'client' = 'trainer',
     ): Promise<MessageRow> {
       const conversation = await getOrCreateConversation(trainerId, clientId, now);
       // insert сообщения + обновление lastMessageAt атомарны: иначе при сбое между ними
@@ -152,7 +155,7 @@ export function makeChatRepo(db: Db) {
           .values({
             id: messageId,
             conversationId: conversation.id,
-            senderRole: 'trainer',
+            senderRole,
             body,
             createdAt: now,
           })
@@ -174,6 +177,33 @@ export function makeChatRepo(db: Db) {
         .update(conversations)
         .set({ trainerLastReadAt: now })
         .where(eq(conversations.id, conversation.id));
+    },
+
+    // Отметить диалог прочитанным КЛИЕНТОМ.
+    async markReadByClient(trainerId: string, clientId: string, now: Date): Promise<void> {
+      const conversation = await getOrCreateConversation(trainerId, clientId, now);
+      await db
+        .update(conversations)
+        .set({ clientLastReadAt: now })
+        .where(eq(conversations.id, conversation.id));
+    },
+
+    // Непрочитанные клиентом = сообщения тренера после clientLastReadAt (или все, если не читал).
+    async clientUnreadCount(trainerId: string, clientId: string): Promise<number> {
+      const conversation = await findConversation(trainerId, clientId);
+      if (!conversation) return 0;
+      const filters = [
+        eq(messages.conversationId, conversation.id),
+        eq(messages.senderRole, 'trainer'),
+      ];
+      if (conversation.clientLastReadAt !== null) {
+        filters.push(gt(messages.createdAt, conversation.clientLastReadAt));
+      }
+      const rows = await db
+        .select({ id: messages.id })
+        .from(messages)
+        .where(and(...filters));
+      return rows.length;
     },
   };
 }

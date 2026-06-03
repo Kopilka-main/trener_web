@@ -9,6 +9,7 @@ function convRow(over: Partial<ConversationRow> = {}): ConversationRow {
     clientId: 'c1',
     lastMessageAt: null,
     trainerLastReadAt: null,
+    clientLastReadAt: null,
     createdAt: new Date(0),
     ...over,
   };
@@ -32,6 +33,8 @@ function fakeRepo(over: Partial<ChatRepo> = {}): ChatRepo {
     listMessages: vi.fn(() => Promise.resolve([])),
     addMessage: vi.fn(() => Promise.resolve(msgRow())),
     markRead: vi.fn(() => Promise.resolve()),
+    markReadByClient: vi.fn(() => Promise.resolve()),
+    clientUnreadCount: vi.fn(() => Promise.resolve(0)),
     ...over,
   };
 }
@@ -69,7 +72,7 @@ describe('chat.service', () => {
     expect(res.body).toBe('хай');
     expect(res.senderRole).toBe('trainer');
     expect(res.createdAt).toBe(new Date(0).toISOString());
-    expect(addMessage).toHaveBeenCalledWith('A', 'c1', 'newid', 'хай', new Date(0));
+    expect(addMessage).toHaveBeenCalledWith('A', 'c1', 'newid', 'хай', new Date(0), 'trainer');
   });
 
   it('markRead прокидывает scope и now', async () => {
