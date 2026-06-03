@@ -72,7 +72,7 @@ describe.skipIf(!url)('client-app-workouts (isolation)', () => {
       method: 'POST',
       url: '/api/exercises',
       headers: { cookie: cookieT },
-      payload: { name: 'Жим', muscleGroups: ['Грудь'] },
+      payload: { name: 'Жим', category: 'Грудь' },
     });
     const exerciseId = ex.json<{ exercise: { id: string } }>().exercise.id;
 
