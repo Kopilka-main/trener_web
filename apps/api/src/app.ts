@@ -15,6 +15,7 @@ import { healthRoutes } from './modules/health/health.routes.js';
 import { makeAuthRepo } from './modules/auth/auth.repo.js';
 import { makeAuthService } from './modules/auth/auth.service.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
+import { registerClientAuthModule } from './modules/client-auth/client-auth.module.js';
 import { registerClientsModule } from './modules/clients/clients.module.js';
 import { registerExercisesModule } from './modules/exercises/exercises.module.js';
 import { registerTemplatesModule } from './modules/workout-templates/templates.module.js';
@@ -60,6 +61,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     await authScope.register(rateLimit, { max: 20, timeWindow: '1 minute' });
     authRoutes(authScope, svc, deps.isProd);
   });
+
+  await registerClientAuthModule(app, { db: deps.db, clock, isProd: deps.isProd });
 
   registerClientsModule(app, { db: deps.db, storage, clock });
   registerExercisesModule(app, { db: deps.db, clock });
