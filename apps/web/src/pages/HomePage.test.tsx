@@ -49,6 +49,7 @@ function session(over: Partial<SessionResponse>): SessionResponse {
     status: 'planned',
     isOnline: false,
     note: null,
+    clientConfirmation: 'pending',
     ...over,
   };
 }
