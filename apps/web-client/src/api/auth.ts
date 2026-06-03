@@ -25,6 +25,9 @@ export function useClientMe() {
         throw err;
       }
     },
+    // Залогинен, но тренер ещё не подключил (link === null) → поллим, чтобы
+    // экран «Подключение» сам сменился на приложение сразу после привязки.
+    refetchInterval: (query) => (query.state.data?.link === null ? 4000 : false),
   });
 }
 
