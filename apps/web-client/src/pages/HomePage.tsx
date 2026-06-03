@@ -170,7 +170,7 @@ export function HomePage() {
       title: 'Тренер',
       sub: trainerName ?? 'не подключён',
       metrics: [],
-      kicker: linked ? undefined : 'ПОДКЛЮЧИТЬ',
+      ...(linked ? {} : { kicker: 'ПОДКЛЮЧИТЬ' }),
       Icon: UserCog,
       onClick: () => void navigate(linked ? '/profile' : '/connect'),
     },
