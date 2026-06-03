@@ -44,6 +44,13 @@ export function makeClientsService(
 ) {
   return {
     async create(trainerId: string, input: CreateClientRequest): Promise<ClientResponse> {
+      // Привязка при создании: непустой accountId должен существовать (как в update).
+      if (input.accountId != null && input.accountId !== '') {
+        const exists = await deps.accountExists(input.accountId);
+        if (!exists) {
+          throw new AppError(422, 'CLIENT_ACCOUNT_NOT_FOUND', 'Клиентский аккаунт не найден');
+        }
+      }
       const row = await repo.create({
         clientId: deps.newId(),
         trainerId,

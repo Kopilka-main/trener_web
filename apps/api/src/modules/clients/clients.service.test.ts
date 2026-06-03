@@ -307,4 +307,23 @@ describe('clients.service', () => {
     await svc.update('A', 'c1', { accountId: null });
     expect(accountExists).not.toHaveBeenCalled();
   });
+
+  it('create с несуществующим accountId → 422 CLIENT_ACCOUNT_NOT_FOUND', async () => {
+    const accountExists = vi.fn(() => Promise.resolve(false));
+    const create = vi.fn(() => Promise.resolve(row()));
+    const svc = makeSvc({ repo: { create }, accountExists });
+    await expect(
+      svc.create('A', {
+        firstName: 'Кли',
+        lastName: 'Ент',
+        phone: null,
+        notes: null,
+        accountId: 'ghost',
+        contacts: [],
+        tags: [],
+      }),
+    ).rejects.toMatchObject({ status: 422, code: 'CLIENT_ACCOUNT_NOT_FOUND' });
+    expect(accountExists).toHaveBeenCalledWith('ghost');
+    expect(create).not.toHaveBeenCalled();
+  });
 });
