@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useClientMe } from './api/auth';
 import { BottomNav } from './components/BottomNav';
+import { ConnectBanner } from './components/ConnectBanner';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { ConnectPage } from './pages/ConnectPage';
@@ -30,14 +31,13 @@ export function App() {
     );
   }
 
-  // Залогинен, но не привязан тренером → экран кода.
-  if (me.data.link === null) {
-    return <ConnectPage code={me.data.account.id} />;
-  }
-
-  // Привязан → основное приложение с нижней навигацией и заглушками секций.
+  // Залогинен → приложение всегда (тренер опционален). Пока не привязан — баннер
+  // «Подключить тренера»; экран кода доступен по /connect, секции с тренерскими
+  // данными мягко показывают приглашение подключиться.
+  const linked = me.data.link !== null;
   return (
     <div className="mx-auto flex min-h-screen max-w-[430px] flex-col bg-bg">
+      {!linked && <ConnectBanner />}
       <Routes>
         <Route path="/" element={<WorkoutsListPage />} />
         <Route path="/workouts/:wid" element={<WorkoutDetailPage />} />
@@ -45,6 +45,7 @@ export function App() {
         <Route path="/chat" element={<StubPage title="Чат" />} />
         <Route path="/progress" element={<StubPage title="Прогресс" />} />
         <Route path="/profile" element={<StubPage title="Профиль" />} />
+        <Route path="/connect" element={<ConnectPage code={me.data.account.id} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <BottomNav />

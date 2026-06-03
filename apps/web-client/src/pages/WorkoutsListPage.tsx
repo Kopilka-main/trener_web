@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { WorkoutResponse } from '@trener/shared';
+import { useClientMe } from '../api/auth';
 import { useClientWorkouts } from '../api/workouts';
 import { formatDateGroup, formatTime } from '../lib/workoutDates';
 
@@ -16,7 +17,9 @@ function groupByDate(workouts: WorkoutResponse[]): { label: string; items: Worko
 }
 
 export function WorkoutsListPage() {
+  const me = useClientMe();
   const q = useClientWorkouts();
+  const linked = me.data?.link != null;
 
   return (
     <div className="flex flex-1 flex-col gap-4 px-4 pb-6 pt-5">
@@ -27,7 +30,11 @@ export function WorkoutsListPage() {
         <p className="text-sm text-ink-muted">Не удалось загрузить. Потяните обновить.</p>
       )}
       {q.data && q.data.length === 0 && (
-        <p className="text-sm text-ink-muted">Пока нет завершённых тренировок.</p>
+        <p className="text-sm text-ink-muted">
+          {linked
+            ? 'Пока нет завершённых тренировок.'
+            : 'Вы пока не подключены к тренеру. Подключите его, чтобы здесь появились назначенные тренировки.'}
+        </p>
       )}
 
       {q.data &&

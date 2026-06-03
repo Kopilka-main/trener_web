@@ -4,8 +4,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { App } from './App';
 import * as auth from './api/auth';
+import * as workouts from './api/workouts';
 
 vi.mock('./api/auth');
+vi.mock('./api/workouts');
 
 function renderApp() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -31,6 +33,12 @@ describe('App gate', () => {
       isError: false,
       isPending: false,
     } as never);
+    // Список тренировок на главном экране — пустой, без сети.
+    vi.mocked(workouts.useClientWorkouts).mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [],
+    } as never);
   });
 
   it('не залогинен → экран входа', () => {
@@ -39,7 +47,7 @@ describe('App gate', () => {
     expect(screen.getByRole('heading', { name: 'Вход' })).toBeInTheDocument();
   });
 
-  it('залогинен без привязки → экран подключения с кодом', () => {
+  it('залогинен без привязки → приложение с баннером «Подключить тренера»', () => {
     vi.mocked(auth.useClientMe).mockReturnValue({
       isLoading: false,
       data: {
@@ -54,11 +62,12 @@ describe('App gate', () => {
       },
     } as never);
     renderApp();
-    expect(screen.getByText('Подключение')).toBeInTheDocument();
-    expect(screen.getByText('CODE-123')).toBeInTheDocument();
+    // В приложение пустили (есть нижняя навигация) и показан баннер подключения.
+    expect(screen.getByRole('navigation')).toBeInTheDocument();
+    expect(screen.getByText('Подключить тренера')).toBeInTheDocument();
   });
 
-  it('привязан → нижняя навигация', () => {
+  it('привязан → нижняя навигация, баннера нет', () => {
     vi.mocked(auth.useClientMe).mockReturnValue({
       isLoading: false,
       data: {
@@ -69,6 +78,6 @@ describe('App gate', () => {
     renderApp();
     expect(screen.getByRole('navigation')).toBeInTheDocument();
     expect(screen.getByRole('navigation')).toHaveTextContent('Тренировки');
-    expect(screen.getByRole('navigation')).toHaveTextContent('Профиль');
+    expect(screen.queryByText('Подключить тренера')).not.toBeInTheDocument();
   });
 });
