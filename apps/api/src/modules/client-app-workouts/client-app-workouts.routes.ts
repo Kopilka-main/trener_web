@@ -1,12 +1,11 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { workoutResponseSchema, workoutListResponseSchema, type ClientLink } from '@trener/shared';
+import { workoutResponseSchema, workoutListResponseSchema } from '@trener/shared';
 import type { ClientWorkoutsService } from '../client-workouts/client-workouts.service.js';
 import { requireClient } from '../../plugins/client-context.js';
-import { AppError, notFound, unauthorized } from '../../errors.js';
-
-type ResolveScope = (clientAccountId: string) => Promise<ClientLink>;
+import { notFound } from '../../errors.js';
+import { makeClientScope, type ResolveScope } from '../../core/client-scope.js';
 
 const widParams = z.object({ wid: z.string() });
 const workoutWrap = z.object({ workout: workoutResponseSchema });
@@ -17,13 +16,7 @@ export function clientAppWorkoutsRoutes(
   resolveScope: ResolveScope,
 ): void {
   const typed = app.withTypeProvider<ZodTypeProvider>();
-
-  async function scope(req: FastifyRequest): Promise<{ trainerId: string; clientId: string }> {
-    if (!req.clientAccountId) throw unauthorized('Требуется вход');
-    const link = await resolveScope(req.clientAccountId);
-    if (!link) throw new AppError(409, 'NOT_LINKED', 'Аккаунт не подключён к тренеру');
-    return link;
-  }
+  const scope = makeClientScope(resolveScope);
 
   typed.get(
     '/api/client/workouts',

@@ -1,17 +1,14 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
   sendMessageRequestSchema,
   messageResponseSchema,
   messageListResponseSchema,
-  type ClientLink,
 } from '@trener/shared';
 import type { ChatService } from '../chat/chat.service.js';
 import { requireClient } from '../../plugins/client-context.js';
-import { AppError, unauthorized } from '../../errors.js';
-
-type ResolveScope = (clientAccountId: string) => Promise<ClientLink>;
+import { makeClientScope, type ResolveScope } from '../../core/client-scope.js';
 
 const messageWrap = z.object({ message: messageResponseSchema });
 const unreadResponse = z.object({ count: z.number() });
@@ -24,13 +21,7 @@ export function clientAppChatRoutes(
   resolveScope: ResolveScope,
 ): void {
   const typed = app.withTypeProvider<ZodTypeProvider>();
-
-  async function scope(req: FastifyRequest): Promise<{ trainerId: string; clientId: string }> {
-    if (!req.clientAccountId) throw unauthorized('Требуется вход');
-    const link = await resolveScope(req.clientAccountId);
-    if (!link) throw new AppError(409, 'NOT_LINKED', 'Аккаунт не подключён к тренеру');
-    return link;
-  }
+  const scope = makeClientScope(resolveScope);
 
   typed.get(
     '/api/client/chat/messages',
