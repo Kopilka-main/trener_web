@@ -8,6 +8,7 @@ import { ConnectPage } from './pages/ConnectPage';
 import { StubPage } from './pages/StubPage';
 import { WorkoutsListPage } from './pages/WorkoutsListPage';
 import { WorkoutDetailPage } from './pages/WorkoutDetailPage';
+import { ProfilePage } from './pages/ProfilePage';
 
 export function App() {
   const me = useClientMe();
@@ -44,7 +45,7 @@ export function App() {
         <Route path="/calendar" element={<StubPage title="Календарь" />} />
         <Route path="/chat" element={<StubPage title="Чат" />} />
         <Route path="/progress" element={<StubPage title="Прогресс" />} />
-        <Route path="/profile" element={<StubPage title="Профиль" />} />
+        <Route path="/profile" element={<ProfilePage />} />
         <Route path="/connect" element={<ConnectPage code={me.data.account.id} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
