@@ -3,6 +3,7 @@ import { Plus, Trash2, Wifi, X } from 'lucide-react';
 import type { ClientResponse, SessionResponse, SessionStatus } from '@trener/shared';
 import { useCreateSession, useDeleteSession, useSessions, useUpdateSession } from '../api/sessions';
 import { useClients } from '../api/clients';
+import { useGyms } from '../api/gyms';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SessionsCalendar } from '../components/SessionsCalendar';
 import { monthGrid, toISODate } from '../lib/calendar';
@@ -143,6 +144,8 @@ function TrainerSessionSheet({
   // Активные клиенты для выбора при создании.
   const activeClients = clients.filter((c) => c.status === 'active');
   const firstActiveId = activeClients[0]?.id ?? '';
+  const gyms = useGyms();
+  const gymList = gyms.data ?? [];
 
   const [clientId, setClientId] = useState(session?.clientId ?? firstActiveId);
   const [date, setDate] = useState(session?.date ?? defaultDate);
@@ -150,6 +153,9 @@ function TrainerSessionSheet({
   const [title, setTitle] = useState(session?.title ?? '');
   const [location, setLocation] = useState(session?.location ?? '');
   const [durationMin, setDurationMin] = useState(session?.durationMin ?? 60);
+  const [customDuration, setCustomDuration] = useState(
+    !DURATION_OPTIONS.includes((session?.durationMin ?? 60) as (typeof DURATION_OPTIONS)[number]),
+  );
   const [isOnline, setIsOnline] = useState(session?.isOnline ?? false);
   const [status, setStatus] = useState<SessionStatus>(session?.status ?? 'planned');
   const [showErrors, setShowErrors] = useState(false);
@@ -327,53 +333,114 @@ function TrainerSessionSheet({
           <div className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-ink-muted">Длительность</span>
             <div className="flex flex-wrap gap-1.5">
-              {DURATION_OPTIONS.map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setDurationMin(m)}
-                  className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
-                    durationMin === m ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
-                  }`}
-                >
-                  {formatDuration(m)}
-                </button>
-              ))}
+              {DURATION_OPTIONS.map((m) => {
+                const active = !customDuration && durationMin === m;
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => {
+                      setCustomDuration(false);
+                      setDurationMin(m);
+                    }}
+                    className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+                      active ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
+                    }`}
+                  >
+                    {formatDuration(m)}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setCustomDuration(true)}
+                className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+                  customDuration ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
+                }`}
+              >
+                Другое
+              </button>
             </div>
+            {customDuration && (
+              <div className="mt-1 flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min={0}
+                    max={12}
+                    inputMode="numeric"
+                    value={Math.floor(durationMin / 60)}
+                    onChange={(e) => {
+                      const h = Math.max(0, Math.min(12, Number(e.target.value) || 0));
+                      setDurationMin(h * 60 + (durationMin % 60));
+                    }}
+                    className="w-14 rounded-xl border border-line bg-card px-3 py-2 text-center text-[15px] tabular-nums text-ink outline-none focus:border-accent"
+                  />
+                  <span className="text-sm text-ink-muted">ч</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min={0}
+                    max={59}
+                    step={5}
+                    inputMode="numeric"
+                    value={durationMin % 60}
+                    onChange={(e) => {
+                      const m = Math.max(0, Math.min(59, Number(e.target.value) || 0));
+                      setDurationMin(Math.floor(durationMin / 60) * 60 + m);
+                    }}
+                    className="w-14 rounded-xl border border-line bg-card px-3 py-2 text-center text-[15px] tabular-nums text-ink outline-none focus:border-accent"
+                  />
+                  <span className="text-sm text-ink-muted">мин</span>
+                </div>
+                <span className="ml-auto text-[13px] font-semibold text-accent">
+                  {formatDuration(Math.max(5, durationMin))}
+                </span>
+              </div>
+            )}
           </div>
 
-          <label htmlFor="session-location" className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-ink-muted">Место</span>
-            <input
-              id="session-location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              maxLength={200}
-              placeholder="Зал, адрес или ссылка"
-              className={inputClass}
-            />
-          </label>
-
-          <button
-            type="button"
-            onClick={() => setIsOnline((v) => !v)}
-            className="flex items-center justify-between rounded-xl border border-line bg-chip px-3 py-2.5 text-left"
-          >
-            <span className="flex items-center gap-2 text-base text-ink">
-              <Wifi size={18} strokeWidth={1.8} className="text-ink-muted" /> Онлайн-занятие
-            </span>
-            <span
-              className={`flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${
-                isOnline ? 'bg-accent' : 'bg-card-elevated'
-              }`}
-            >
-              <span
-                className={`h-5 w-5 rounded-full bg-bg transition-transform ${
-                  isOnline ? 'translate-x-4' : ''
+            <div className="flex flex-wrap gap-1.5">
+              {gymList.map((g) => {
+                const active = !isOnline && location === g.name;
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => {
+                      setIsOnline(false);
+                      setLocation(g.name);
+                    }}
+                    className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+                      active ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
+                    }`}
+                  >
+                    {g.name}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOnline(true);
+                  setLocation('');
+                }}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+                  isOnline ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
                 }`}
-              />
-            </span>
-          </button>
+              >
+                <Wifi size={14} strokeWidth={2} /> Онлайн-занятие
+              </button>
+            </div>
+            {gymList.length === 0 && (
+              <span className="text-[12px] text-ink-mutedxl">
+                Залы можно добавить в профиле тренера.
+              </span>
+            )}
+          </div>
 
           {isEdit && (
             <div className="flex flex-col gap-1.5">
