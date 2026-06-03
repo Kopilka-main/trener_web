@@ -1,19 +1,56 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, Plus, Search } from 'lucide-react';
+import { ArrowDownAZ, CalendarClock, ChevronRight, Plus, Search } from 'lucide-react';
 import type { ClientResponse } from '@trener/shared';
 import { useClients } from '../api/clients';
+import { useSessions } from '../api/sessions';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Avatar } from '../components/Avatar';
 
 type StatusFilter = 'active' | 'archived';
+type SortMode = 'alpha' | 'session';
+
+const MONTHS_SHORT = [
+  'янв',
+  'фев',
+  'мар',
+  'апр',
+  'мая',
+  'июн',
+  'июл',
+  'авг',
+  'сен',
+  'окт',
+  'ноя',
+  'дек',
+];
+
+function formatNearest(date: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(date);
+  if (!m) return date;
+  return `${Number(m[3])} ${MONTHS_SHORT[Number(m[2]) - 1] ?? ''}`;
+}
 
 export function ClientsPage() {
   const clients = useClients();
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const sessions = useSessions(todayStr);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<StatusFilter>('active');
+  const [sort, setSort] = useState<SortMode>('alpha');
 
   const list = clients.data ?? [];
+
+  // Ближайшее предстоящее занятие по клиенту (status planned, дата ≥ сегодня).
+  const nearestByClient = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of sessions.data ?? []) {
+      if (s.status !== 'planned' || s.date < todayStr) continue;
+      const cur = map.get(s.clientId);
+      if (!cur || s.date < cur) map.set(s.clientId, s.date);
+    }
+    return map;
+  }, [sessions.data, todayStr]);
   const archivedCount = useMemo(() => list.filter((c) => c.status === 'archived').length, [list]);
 
   const filtered = useMemo(() => {
@@ -42,6 +79,19 @@ export function ClientsPage() {
     }
     return [...map.entries()];
   }, [filtered]);
+
+  // Сортировка по ближайшему занятию: сперва клиенты с предстоящим занятием
+  // (по возрастанию даты), затем без занятия — по имени.
+  const bySession = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const da = nearestByClient.get(a.id);
+      const db = nearestByClient.get(b.id);
+      if (da && db) return da.localeCompare(db);
+      if (da) return -1;
+      if (db) return 1;
+      return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`, 'ru');
+    });
+  }, [filtered, nearestByClient]);
 
   return (
     <div className="flex min-h-full flex-col">
@@ -78,29 +128,52 @@ export function ClientsPage() {
           </p>
         )}
 
-        {groups.map(([letter, items]) => (
-          <div key={letter} className="flex flex-col gap-2">
-            <div className="px-1 pt-1 font-mono text-[12px] uppercase tracking-wide text-ink-muted">
-              {letter}
+        {sort === 'alpha' &&
+          groups.map(([letter, items]) => (
+            <div key={letter} className="flex flex-col gap-2">
+              <div className="px-1 pt-1 font-mono text-[12px] uppercase tracking-wide text-ink-muted">
+                {letter}
+              </div>
+              <ul className="flex flex-col gap-2">
+                {items.map((c) => (
+                  <ClientRow key={c.id} client={c} nearest={nearestByClient.get(c.id) ?? null} />
+                ))}
+              </ul>
             </div>
-            <ul className="flex flex-col gap-2">
-              {items.map((c) => (
-                <ClientRow key={c.id} client={c} />
-              ))}
-            </ul>
-          </div>
-        ))}
+          ))}
+
+        {sort === 'session' && filtered.length > 0 && (
+          <ul className="flex flex-col gap-2">
+            {bySession.map((c) => (
+              <ClientRow key={c.id} client={c} nearest={nearestByClient.get(c.id) ?? null} />
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Нижняя панель: фильтр статуса (слева) + FAB добавления (справа). */}
       <div className="pointer-events-none sticky bottom-4 z-10 mt-auto flex items-end justify-between gap-3 px-5">
-        <div className="pointer-events-auto flex gap-1.5 rounded-full bg-card p-1 shadow-[0_0_0_1px_var(--color-line)]">
-          <FilterTab active={filter === 'active'} onClick={() => setFilter('active')}>
-            Активные
-          </FilterTab>
-          <FilterTab active={filter === 'archived'} onClick={() => setFilter('archived')}>
-            Архив{archivedCount > 0 ? ` · ${archivedCount}` : ''}
-          </FilterTab>
+        <div className="pointer-events-auto flex items-center gap-2">
+          <div className="flex gap-1.5 rounded-full bg-card p-1 shadow-[0_0_0_1px_var(--color-line)]">
+            <FilterTab active={filter === 'active'} onClick={() => setFilter('active')}>
+              Активные
+            </FilterTab>
+            <FilterTab active={filter === 'archived'} onClick={() => setFilter('archived')}>
+              Архив{archivedCount > 0 ? ` · ${archivedCount}` : ''}
+            </FilterTab>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSort((s) => (s === 'alpha' ? 'session' : 'alpha'))}
+            aria-label={sort === 'alpha' ? 'Сортировка: по алфавиту' : 'Сортировка: по занятию'}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-card text-ink shadow-[0_0_0_1px_var(--color-line)] active:scale-95"
+          >
+            {sort === 'alpha' ? (
+              <ArrowDownAZ size={20} strokeWidth={1.9} />
+            ) : (
+              <CalendarClock size={20} strokeWidth={1.9} />
+            )}
+          </button>
         </div>
 
         <Link
@@ -115,7 +188,7 @@ export function ClientsPage() {
   );
 }
 
-function ClientRow({ client }: { client: ClientResponse }) {
+function ClientRow({ client, nearest }: { client: ClientResponse; nearest?: string | null }) {
   const archived = client.status === 'archived';
   return (
     <li>
@@ -136,13 +209,20 @@ function ClientRow({ client }: { client: ClientResponse }) {
           <span className="truncate text-[15px] font-semibold text-ink">
             {client.firstName} {client.lastName}
           </span>
-          <span
-            className={`truncate font-[family-name:var(--font-mono)] text-[12px] ${
-              client.phone ? 'text-ink-muted' : 'text-ink-mutedxl'
-            }`}
-          >
-            {client.phone ?? 'без телефона'}
-          </span>
+          {nearest ? (
+            <span className="flex items-center gap-1 font-[family-name:var(--font-mono)] text-[12px] text-accent">
+              <CalendarClock size={12} strokeWidth={2} />
+              {formatNearest(nearest)}
+            </span>
+          ) : (
+            <span
+              className={`truncate font-[family-name:var(--font-mono)] text-[12px] ${
+                client.phone ? 'text-ink-muted' : 'text-ink-mutedxl'
+              }`}
+            >
+              {client.phone ?? 'без телефона'}
+            </span>
+          )}
         </span>
         <ChevronRight size={16} className="tile-chevron shrink-0" />
       </Link>

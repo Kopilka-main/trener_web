@@ -4,12 +4,17 @@ import { MemoryRouter } from 'react-router-dom';
 import type { ClientResponse } from '@trener/shared';
 import { ClientsPage } from './ClientsPage';
 import { useClients } from '../api/clients';
+import { useSessions } from '../api/sessions';
 
 vi.mock('../api/clients', () => ({
   useClients: vi.fn(),
 }));
+vi.mock('../api/sessions', () => ({
+  useSessions: vi.fn(),
+}));
 
 const mockedUseClients = vi.mocked(useClients);
+const mockedUseSessions = vi.mocked(useSessions);
 
 function client(over: Partial<ClientResponse>): ClientResponse {
   return {
@@ -39,6 +44,10 @@ function renderPage() {
 
 beforeEach(() => {
   mockedUseClients.mockReset();
+  mockedUseSessions.mockReset();
+  mockedUseSessions.mockReturnValue({
+    data: [],
+  } as unknown as ReturnType<typeof useSessions>);
 });
 
 describe('ClientsPage', () => {
