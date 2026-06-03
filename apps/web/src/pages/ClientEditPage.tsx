@@ -10,6 +10,7 @@ import {
   useUpdateClient,
   useUploadClientAvatar,
 } from '../api/clients';
+import { ApiError } from '../api/client';
 import { Avatar } from '../components/Avatar';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { QrScanner } from '../components/QrScanner';
@@ -281,7 +282,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
               </span>
               <span className="flex min-w-0 flex-col">
                 <span className="text-[14px] font-semibold text-ink">
-                  {accountId.trim() !== '' ? 'Клиент подключён' : 'Подключить клиента'}
+                  {accountId.trim() !== '' ? 'Код привязки указан' : 'Подключить клиента'}
                 </span>
                 <span className="truncate text-[12px] text-ink-muted">
                   {accountId.trim() !== ''
@@ -470,7 +471,10 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
 
         {mutation.isError && (
           <p className="text-sm text-ink-muted" role="alert">
-            Не удалось сохранить. Проверьте поля и попробуйте снова.
+            {mutation.error instanceof ApiError &&
+            mutation.error.code === 'CLIENT_ACCOUNT_NOT_FOUND'
+              ? 'Неверный код подключения: клиентский аккаунт не найден. Проверьте код или отсканируйте QR.'
+              : 'Не удалось сохранить. Проверьте поля и попробуйте снова.'}
           </p>
         )}
 
