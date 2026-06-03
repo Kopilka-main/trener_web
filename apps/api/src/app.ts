@@ -17,6 +17,7 @@ import { makeAuthService } from './modules/auth/auth.service.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { registerClientAuthModule } from './modules/client-auth/client-auth.module.js';
 import { registerClientAppWorkoutsModule } from './modules/client-app-workouts/client-app-workouts.module.js';
+import { registerClientAppChatModule } from './modules/client-app-chat/client-app-chat.module.js';
 import { registerClientsModule } from './modules/clients/clients.module.js';
 import { registerExercisesModule } from './modules/exercises/exercises.module.js';
 import { registerTemplatesModule } from './modules/workout-templates/templates.module.js';
@@ -69,6 +70,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     isProd: deps.isProd,
   });
   registerClientAppWorkoutsModule(app, {
+    db: deps.db,
+    clock,
+    resolveScope: (id) => clientAuthSvc.resolveScope(id),
+  });
+  registerClientAppChatModule(app, {
     db: deps.db,
     clock,
     resolveScope: (id) => clientAuthSvc.resolveScope(id),
