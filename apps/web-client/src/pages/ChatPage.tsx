@@ -1,18 +1,23 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { Check, CheckCheck } from 'lucide-react';
 import { useClientMe } from '../api/auth';
 import { useClientMessages, useMarkChatRead, useSendClientMessage } from '../api/chat';
+import { useClientTrainer } from '../api/trainer';
 
 export function ChatPage() {
   const me = useClientMe();
   const linked = me.data?.link != null;
+  const trainer = useClientTrainer();
   const messages = useClientMessages();
   const send = useSendClientMessage();
   const markRead = useMarkChatRead();
   const [text, setText] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
 
-  const count = messages.data?.length ?? 0;
+  const items = messages.data?.messages ?? [];
+  const readAt = messages.data?.trainerLastReadAt ?? null;
+  const count = items.length;
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
   }, [count]);
@@ -40,25 +45,35 @@ export function ChatPage() {
     );
   }
 
+  const title = trainer.data ? `${trainer.data.firstName} ${trainer.data.lastName}` : 'Чат';
+
   return (
     <div className="flex flex-1 flex-col">
-      <h1 className="px-4 pt-5 font-[family-name:var(--font-display)] text-[28px] text-ink">Чат</h1>
+      <h1 className="px-4 pt-5 font-[family-name:var(--font-display)] text-[24px] text-ink">
+        {title}
+      </h1>
       <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-4 py-4">
-        {messages.data && messages.data.length === 0 && (
-          <p className="m-auto text-sm text-ink-muted">Сообщений пока нет.</p>
-        )}
-        {messages.data?.map((m) => (
-          <div
-            key={m.id}
-            className={`max-w-[80%] rounded-2xl px-3 py-2 text-[14px] ${
-              m.senderRole === 'client'
-                ? 'self-end bg-accent text-accent-on'
-                : 'self-start bg-card text-ink'
-            }`}
-          >
-            {m.body}
-          </div>
-        ))}
+        {count === 0 && <p className="m-auto text-sm text-ink-muted">Сообщений пока нет.</p>}
+        {items.map((m) => {
+          const isClient = m.senderRole === 'client';
+          const read = readAt !== null && m.createdAt <= readAt;
+          return (
+            <div
+              key={m.id}
+              className={`flex max-w-[80%] items-end gap-1 rounded-2xl px-3 py-2 text-[14px] ${
+                isClient ? 'self-end bg-accent text-accent-on' : 'self-start bg-card text-ink'
+              }`}
+            >
+              <span>{m.body}</span>
+              {isClient &&
+                (read ? (
+                  <CheckCheck size={14} className="shrink-0 opacity-80" />
+                ) : (
+                  <Check size={14} className="shrink-0 opacity-60" />
+                ))}
+            </div>
+          );
+        })}
         <div ref={endRef} />
       </div>
       <form onSubmit={handleSubmit} className="flex items-center gap-2 border-t border-line p-3">

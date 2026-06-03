@@ -1,5 +1,5 @@
 import {
-  messageListResponseSchema,
+  clientChatMessagesResponseSchema,
   messageResponseSchema,
   type MessageResponse,
   type SendMessageRequest,
@@ -16,14 +16,17 @@ export const clientChatUnreadQueryKey = ['client', 'chat', 'unread'] as const;
 
 /** Лента сообщений (поллинг). 409 (нет тренера) → пустой список. */
 export function useClientMessages() {
-  return useQuery<MessageResponse[]>({
+  return useQuery<{ messages: MessageResponse[]; trainerLastReadAt: string | null }>({
     queryKey: clientMessagesQueryKey,
     queryFn: async () => {
       try {
-        const r = await apiFetch('/client/chat/messages', { schema: messageListResponseSchema });
-        return r.messages;
+        return await apiFetch('/client/chat/messages', {
+          schema: clientChatMessagesResponseSchema,
+        });
       } catch (err) {
-        if (err instanceof ApiError && err.status === 409) return [];
+        if (err instanceof ApiError && err.status === 409) {
+          return { messages: [], trainerLastReadAt: null };
+        }
         throw err;
       }
     },

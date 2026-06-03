@@ -4,9 +4,11 @@ import { MemoryRouter } from 'react-router-dom';
 import { ChatPage } from './ChatPage';
 import * as auth from '../api/auth';
 import * as chat from '../api/chat';
+import * as trainerApi from '../api/trainer';
 
 vi.mock('../api/auth');
 vi.mock('../api/chat');
+vi.mock('../api/trainer');
 
 function mockMe(linked: boolean) {
   vi.mocked(auth.useClientMe).mockReturnValue({
@@ -44,7 +46,10 @@ describe('ChatPage', () => {
       mutate: sendMutate,
       isPending: false,
     } as never);
-    vi.mocked(chat.useClientMessages).mockReturnValue({ data: [] } as never);
+    vi.mocked(chat.useClientMessages).mockReturnValue({
+      data: { messages: [], trainerLastReadAt: null },
+    } as never);
+    vi.mocked(trainerApi.useClientTrainer).mockReturnValue({ data: null } as never);
   });
 
   it('не привязан → приглашение подключить тренера', () => {
@@ -53,17 +58,41 @@ describe('ChatPage', () => {
     expect(screen.getByText('Подключите тренера, чтобы написать ему.')).toBeInTheDocument();
   });
 
-  it('привязан, показывает пузыри по ролям', () => {
+  it('шапка показывает имя тренера', () => {
     mockMe(true);
-    vi.mocked(chat.useClientMessages).mockReturnValue({
-      data: [
-        { id: 'm1', senderRole: 'trainer', body: 'Привет', createdAt: '2026-06-03T08:00:00Z' },
-        { id: 'm2', senderRole: 'client', body: 'Здравствуйте', createdAt: '2026-06-03T08:01:00Z' },
-      ],
+    vi.mocked(trainerApi.useClientTrainer).mockReturnValue({
+      data: {
+        id: 't1',
+        firstName: 'Иван',
+        lastName: 'Тренеров',
+        title: null,
+        bio: null,
+        contacts: [],
+      },
     } as never);
     renderPage();
-    expect(screen.getByText('Привет')).toBeInTheDocument();
-    expect(screen.getByText('Здравствуйте')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Иван Тренеров' })).toBeInTheDocument();
+  });
+
+  it('своё сообщение отрисовано (прочитанное и новое)', () => {
+    mockMe(true);
+    vi.mocked(chat.useClientMessages).mockReturnValue({
+      data: {
+        messages: [
+          {
+            id: 'm1',
+            senderRole: 'client',
+            body: 'прочитанное',
+            createdAt: '2026-06-03T08:00:00Z',
+          },
+          { id: 'm2', senderRole: 'client', body: 'новое', createdAt: '2026-06-03T09:00:00Z' },
+        ],
+        trainerLastReadAt: '2026-06-03T08:30:00Z',
+      },
+    } as never);
+    renderPage();
+    expect(screen.getByText('прочитанное')).toBeInTheDocument();
+    expect(screen.getByText('новое')).toBeInTheDocument();
   });
 
   it('отправка вызывает мутацию с body', () => {
