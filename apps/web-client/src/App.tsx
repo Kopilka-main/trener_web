@@ -10,6 +10,7 @@ import { WorkoutsListPage } from './pages/WorkoutsListPage';
 import { WorkoutDetailPage } from './pages/WorkoutDetailPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { ChatPage } from './pages/ChatPage';
+import { CalendarPage } from './pages/CalendarPage';
 
 export function App() {
   const me = useClientMe();
@@ -43,7 +44,7 @@ export function App() {
       <Routes>
         <Route path="/" element={<WorkoutsListPage />} />
         <Route path="/workouts/:wid" element={<WorkoutDetailPage />} />
-        <Route path="/calendar" element={<StubPage title="Календарь" />} />
+        <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/progress" element={<StubPage title="Прогресс" />} />
         <Route path="/profile" element={<ProfilePage />} />
