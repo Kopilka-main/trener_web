@@ -57,7 +57,9 @@ export const clients = pgTable('clients', {
   firstName: text('first_name').notNull(),
   lastName: text('last_name').notNull(),
   phone: text('phone'),
-  // Личный код клиента из клиентского приложения (для будущей связи). NULL = не подключён.
+  // ID привязанного клиентского аккаунта (client_accounts.id). NULL = не подключён.
+  // FK на уровне БД намеренно НЕ ставим: привязку/отвязку контролирует тренер, а
+  // существование аккаунта валидируется в сервисе clients при привязке (см. Task 8).
   accountId: text('account_id'),
   // Дата рождения клиента, строка YYYY-MM-DD. NULL = не указана.
   birthDate: text('birth_date'),
