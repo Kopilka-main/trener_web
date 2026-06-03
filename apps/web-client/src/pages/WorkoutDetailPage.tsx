@@ -30,7 +30,10 @@ export function WorkoutDetailPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-4 px-4 pb-6 pt-4">
-      <Link to="/" className="flex items-center gap-1 text-[14px] font-medium text-ink-muted">
+      <Link
+        to="/workouts"
+        className="flex items-center gap-1 text-[14px] font-medium text-ink-muted"
+      >
         <ChevronLeft size={18} /> Тренировки
       </Link>
 
@@ -38,7 +41,7 @@ export function WorkoutDetailPage() {
       {q.isError && (
         <div className="flex flex-col gap-3">
           <p className="text-sm text-ink-muted">Тренировка не найдена.</p>
-          <Link to="/" className="text-sm font-medium text-accent">
+          <Link to="/workouts" className="text-sm font-medium text-accent">
             К списку
           </Link>
         </div>

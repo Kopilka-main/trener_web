@@ -6,10 +6,16 @@ import { App } from './App';
 import * as auth from './api/auth';
 import * as workouts from './api/workouts';
 import * as chat from './api/chat';
+import * as trainer from './api/trainer';
+import * as calendar from './api/calendar';
+import * as measurements from './api/measurements';
 
 vi.mock('./api/auth');
 vi.mock('./api/workouts');
 vi.mock('./api/chat');
+vi.mock('./api/trainer');
+vi.mock('./api/calendar');
+vi.mock('./api/measurements');
 
 function renderApp() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -35,13 +41,15 @@ describe('App gate', () => {
       isError: false,
       isPending: false,
     } as never);
-    // Список тренировок на главном экране — пустой, без сети.
     vi.mocked(workouts.useClientWorkouts).mockReturnValue({
       isLoading: false,
       isError: false,
       data: [],
     } as never);
     vi.mocked(chat.useClientChatUnread).mockReturnValue({ data: 0 } as never);
+    vi.mocked(trainer.useClientTrainer).mockReturnValue({ data: null } as never);
+    vi.mocked(calendar.useClientSessions).mockReturnValue({ data: [] } as never);
+    vi.mocked(measurements.useClientMeasurements).mockReturnValue({ data: [] } as never);
   });
 
   it('не залогинен → экран входа', () => {
@@ -80,7 +88,7 @@ describe('App gate', () => {
     } as never);
     renderApp();
     expect(screen.getByRole('navigation')).toBeInTheDocument();
-    expect(screen.getByRole('navigation')).toHaveTextContent('Тренировки');
+    expect(screen.getByRole('navigation')).toHaveTextContent('Главная');
     expect(screen.queryByText('Подключить тренера')).not.toBeInTheDocument();
   });
 });
