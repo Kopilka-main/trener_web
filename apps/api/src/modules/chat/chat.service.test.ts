@@ -81,4 +81,24 @@ describe('chat.service', () => {
     await expect(svc.markRead('A', 'c1')).resolves.toBeUndefined();
     expect(markRead).toHaveBeenCalledWith('A', 'c1', new Date(0));
   });
+
+  it('sendMessage по умолчанию trainer, с client — client', async () => {
+    const addMessage = vi.fn((_t, _c, _id, body: string, _now, role?: 'trainer' | 'client') =>
+      Promise.resolve({
+        id: 'm1',
+        conversationId: 'cv',
+        senderRole: role ?? 'trainer',
+        body,
+        createdAt: new Date(0),
+      } satisfies import('./chat.repo.js').MessageRow),
+    );
+    const svc = makeChatService(fakeRepo({ addMessage }), {
+      newId: () => 'm1',
+      now: () => new Date(0),
+    });
+    const a = await svc.sendMessage('t', 'c', { body: 'hi' });
+    expect(a.senderRole).toBe('trainer');
+    const b = await svc.sendMessage('t', 'c', { body: 'yo' }, 'client');
+    expect(b.senderRole).toBe('client');
+  });
 });

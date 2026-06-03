@@ -41,6 +41,7 @@ export function makeChatService(repo: ChatRepo, deps: ChatDeps) {
       trainerId: string,
       clientId: string,
       input: SendMessageRequest,
+      senderRole: 'trainer' | 'client' = 'trainer',
     ): Promise<MessageResponse> {
       const row = await repo.addMessage(
         trainerId,
@@ -48,13 +49,21 @@ export function makeChatService(repo: ChatRepo, deps: ChatDeps) {
         deps.newId(),
         input.body,
         deps.now(),
-        'trainer',
+        senderRole,
       );
       return toMessageResponse(row);
     },
 
     async markRead(trainerId: string, clientId: string): Promise<void> {
       await repo.markRead(trainerId, clientId, deps.now());
+    },
+
+    async markReadByClient(trainerId: string, clientId: string): Promise<void> {
+      await repo.markReadByClient(trainerId, clientId, deps.now());
+    },
+
+    clientUnread(trainerId: string, clientId: string): Promise<number> {
+      return repo.clientUnreadCount(trainerId, clientId);
     },
   };
 }
