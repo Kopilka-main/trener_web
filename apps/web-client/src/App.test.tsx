@@ -5,9 +5,11 @@ import { MemoryRouter } from 'react-router-dom';
 import { App } from './App';
 import * as auth from './api/auth';
 import * as workouts from './api/workouts';
+import * as chat from './api/chat';
 
 vi.mock('./api/auth');
 vi.mock('./api/workouts');
+vi.mock('./api/chat');
 
 function renderApp() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -39,6 +41,7 @@ describe('App gate', () => {
       isError: false,
       data: [],
     } as never);
+    vi.mocked(chat.useClientChatUnread).mockReturnValue({ data: 0 } as never);
   });
 
   it('не залогинен → экран входа', () => {

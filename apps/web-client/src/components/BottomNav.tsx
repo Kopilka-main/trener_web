@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { Dumbbell, Calendar, MessageCircle, TrendingUp, User } from 'lucide-react';
+import { useClientChatUnread } from '../api/chat';
 
 const ITEMS = [
   { to: '/', label: 'Тренировки', Icon: Dumbbell, end: true },
@@ -10,6 +11,8 @@ const ITEMS = [
 ];
 
 export function BottomNav() {
+  const unread = useClientChatUnread();
+  const chatUnread = unread.data ?? 0;
   return (
     <nav className="sticky bottom-0 z-10 flex border-t border-line bg-bg/95 backdrop-blur">
       {ITEMS.map(({ to, label, Icon, end }) => (
@@ -18,12 +21,19 @@ export function BottomNav() {
           to={to}
           end={end}
           className={({ isActive }) =>
-            `flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] ${
+            `relative flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] ${
               isActive ? 'text-accent' : 'text-ink-muted'
             }`
           }
         >
-          <Icon size={22} />
+          <span className="relative">
+            <Icon size={22} />
+            {to === '/chat' && chatUnread > 0 && (
+              <span className="absolute -right-2 -top-1 min-w-[16px] rounded-full bg-danger px-1 text-center text-[10px] font-bold leading-4 text-white">
+                {chatUnread > 9 ? '9+' : chatUnread}
+              </span>
+            )}
+          </span>
           {label}
         </NavLink>
       ))}
