@@ -5,6 +5,7 @@ import { ConnectBanner } from './components/ConnectBanner';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { ConnectPage } from './pages/ConnectPage';
+import { HomePage } from './pages/HomePage';
 import { WorkoutsListPage } from './pages/WorkoutsListPage';
 import { WorkoutDetailPage } from './pages/WorkoutDetailPage';
 import { ProfilePage } from './pages/ProfilePage';
@@ -42,7 +43,8 @@ export function App() {
     <div className="mx-auto flex min-h-screen max-w-[430px] flex-col bg-bg">
       {!linked && <ConnectBanner />}
       <Routes>
-        <Route path="/" element={<WorkoutsListPage />} />
+        <Route path="/" element={<HomePage />} />
+        <Route path="/workouts" element={<WorkoutsListPage />} />
         <Route path="/workouts/:wid" element={<WorkoutDetailPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/chat" element={<ChatPage />} />

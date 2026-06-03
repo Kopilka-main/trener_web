@@ -1,9 +1,9 @@
 import { NavLink } from 'react-router-dom';
-import { Dumbbell, Calendar, MessageCircle, TrendingUp, User } from 'lucide-react';
+import { Home, Calendar, MessageCircle, TrendingUp, User } from 'lucide-react';
 import { useClientChatUnread } from '../api/chat';
 
 const ITEMS = [
-  { to: '/', label: 'Тренировки', Icon: Dumbbell, end: true },
+  { to: '/', label: 'Главная', Icon: Home, end: true },
   { to: '/calendar', label: 'Календарь', Icon: Calendar, end: false },
   { to: '/chat', label: 'Чат', Icon: MessageCircle, end: false },
   { to: '/progress', label: 'Прогресс', Icon: TrendingUp, end: false },
