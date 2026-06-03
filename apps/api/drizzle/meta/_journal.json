@@ -190,6 +190,13 @@
       "when": 1780494550481,
       "tag": "0026_aspiring_master_chief",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1780508167274,
+      "tag": "0027_pink_owl",
+      "breakpoints": true
     }
   ]
 }
