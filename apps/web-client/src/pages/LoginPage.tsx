@@ -48,8 +48,11 @@ export function LoginPage() {
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-ink-muted">Email</span>
           <input
+            id="login-email"
             type="email"
             autoComplete="email"
+            aria-invalid={showErrors && errors.email ? true : undefined}
+            aria-describedby={showErrors && errors.email ? 'login-email-error' : undefined}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className={`rounded-xl border bg-chip px-3 py-2.5 text-base text-ink outline-none focus:border-accent ${
@@ -57,14 +60,19 @@ export function LoginPage() {
             }`}
           />
           {showErrors && errors.email && (
-            <span className="text-[12px] text-danger">{errors.email}</span>
+            <span id="login-email-error" className="text-[12px] text-danger">
+              {errors.email}
+            </span>
           )}
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-ink-muted">Пароль</span>
           <input
+            id="login-password"
             type="password"
             autoComplete="current-password"
+            aria-invalid={showErrors && errors.password ? true : undefined}
+            aria-describedby={showErrors && errors.password ? 'login-password-error' : undefined}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className={`rounded-xl border bg-chip px-3 py-2.5 text-base text-ink outline-none focus:border-accent ${
@@ -72,7 +80,9 @@ export function LoginPage() {
             }`}
           />
           {showErrors && errors.password && (
-            <span className="text-[12px] text-danger">{errors.password}</span>
+            <span id="login-password-error" className="text-[12px] text-danger">
+              {errors.password}
+            </span>
           )}
         </label>
         {serverError && (

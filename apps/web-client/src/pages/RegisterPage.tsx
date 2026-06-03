@@ -43,20 +43,29 @@ export function RegisterPage() {
     error: string,
     type = 'text',
     autoComplete = 'off',
+    id = autoComplete,
   ) {
+    const errorId = `${id}-error`;
     return (
       <label className="flex flex-col gap-1.5">
         <span className="text-sm font-medium text-ink-muted">{label}</span>
         <input
+          id={id}
           type={type}
           autoComplete={autoComplete}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
           value={value}
           onChange={(e) => set(e.target.value)}
           className={`rounded-xl border bg-chip px-3 py-2.5 text-base text-ink outline-none focus:border-accent ${
             error ? 'border-danger' : 'border-line'
           }`}
         />
-        {error && <span className="text-[12px] text-danger">{error}</span>}
+        {error && (
+          <span id={errorId} className="text-[12px] text-danger">
+            {error}
+          </span>
+        )}
       </label>
     );
   }
@@ -97,7 +106,17 @@ export function RegisterPage() {
           'text',
           'family-name',
         )}
-        {field('Email', email, setEmail, emailError, 'email', 'email')}
+        {field(
+          'Email',
+          email,
+          (v) => {
+            setEmail(v);
+            if (reg.isError) reg.reset();
+          },
+          emailError,
+          'email',
+          'email',
+        )}
         {field(
           'Пароль',
           password,

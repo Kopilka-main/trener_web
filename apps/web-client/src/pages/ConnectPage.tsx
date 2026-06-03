@@ -20,7 +20,8 @@ export function ConnectPage({ code }: { code: string }) {
       <button
         type="button"
         onClick={() => logout.mutate()}
-        className="text-sm font-medium text-ink-muted"
+        disabled={logout.isPending}
+        className="text-sm font-medium text-ink-muted disabled:opacity-60"
       >
         Выйти
       </button>
