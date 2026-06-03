@@ -5,6 +5,8 @@ import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { ConnectPage } from './pages/ConnectPage';
 import { StubPage } from './pages/StubPage';
+import { WorkoutsListPage } from './pages/WorkoutsListPage';
+import { WorkoutDetailPage } from './pages/WorkoutDetailPage';
 
 export function App() {
   const me = useClientMe();
@@ -37,7 +39,8 @@ export function App() {
   return (
     <div className="mx-auto flex min-h-screen max-w-[430px] flex-col bg-bg">
       <Routes>
-        <Route path="/" element={<StubPage title="Тренировки" />} />
+        <Route path="/" element={<WorkoutsListPage />} />
+        <Route path="/workouts/:wid" element={<WorkoutDetailPage />} />
         <Route path="/calendar" element={<StubPage title="Календарь" />} />
         <Route path="/chat" element={<StubPage title="Чат" />} />
         <Route path="/progress" element={<StubPage title="Прогресс" />} />
