@@ -1,19 +1,47 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLogin } from '../api/auth';
+import { ApiError } from '../api/client';
 import { Button } from '../components/Button';
 import { Field } from '../components/Field';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 
 export function LoginPage() {
   const navigate = useNavigate();
   const loginMutation = useLogin();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showErrors, setShowErrors] = useState(false);
+
+  const errors = {
+    email:
+      email.trim() === ''
+        ? 'Укажите email'
+        : EMAIL_RE.test(email.trim())
+          ? ''
+          : 'Некорректный email',
+    password: password === '' ? 'Укажите пароль' : '',
+  };
+  const hasErrors = errors.email !== '' || errors.password !== '';
+
+  // Серверная ошибка: неверные данные → понятный текст; иначе сообщение сервера.
+  const serverError = loginMutation.isError
+    ? loginMutation.error instanceof ApiError && loginMutation.error.status === 401
+      ? 'Неверный email или пароль'
+      : loginMutation.error instanceof ApiError
+        ? loginMutation.error.message
+        : 'Не удалось войти. Попробуйте позже.'
+    : '';
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (hasErrors) {
+      setShowErrors(true);
+      return;
+    }
     loginMutation.mutate(
-      { email, password },
+      { email: email.trim(), password },
       {
         onSuccess: () => {
           void navigate('/');
@@ -27,7 +55,7 @@ export function LoginPage() {
       <h1 className="font-[family-name:var(--font-display)] text-[40px] leading-none tracking-[-0.02em] text-accent">
         Вход
       </h1>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-4">
         <Field
           label="Email"
           name="email"
@@ -35,7 +63,7 @@ export function LoginPage() {
           autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          required
+          error={showErrors ? errors.email : ''}
         />
         <Field
           label="Пароль"
@@ -44,11 +72,11 @@ export function LoginPage() {
           autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          required
+          error={showErrors ? errors.password : ''}
         />
-        {loginMutation.isError && (
-          <p className="text-sm text-ink-muted" role="alert">
-            Не удалось войти. Проверьте email и пароль.
+        {serverError && (
+          <p className="text-sm text-danger" role="alert">
+            {serverError}
           </p>
         )}
         <Button type="submit" disabled={loginMutation.isPending}>
