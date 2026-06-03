@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Plus, X } from 'lucide-react';
 import type { ClientAccountResponse } from '@trener/shared';
 import { useClientMe, useClientLogout, useUpdateClientProfile } from '../api/auth';
+import { useClientTrainer } from '../api/trainer';
 
 const CONTACT_TYPES = ['Телефон', 'WhatsApp', 'Telegram', 'MAX', 'Instagram', 'Прочее'] as const;
 type Contact = { type: string; value: string };
@@ -41,6 +42,7 @@ function ProfileForm({
   linked: boolean;
   update: ReturnType<typeof useUpdateClientProfile>;
 }) {
+  const trainer = useClientTrainer();
   const [firstName, setFirstName] = useState(account.firstName);
   const [lastName, setLastName] = useState(account.lastName);
   const [birthDate, setBirthDate] = useState(account.birthDate ?? '');
@@ -76,9 +78,35 @@ function ProfileForm({
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       {linked ? (
-        <p className="rounded-xl bg-card px-4 py-3 text-[13px] text-ink-muted">
-          Вы подключены к тренеру.
-        </p>
+        <section className="flex flex-col gap-1 rounded-xl bg-card px-4 py-3">
+          <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-mutedxl">
+            Ваш тренер
+          </span>
+          {trainer.data ? (
+            <>
+              <span className="text-[15px] font-semibold text-ink">
+                {trainer.data.firstName} {trainer.data.lastName}
+              </span>
+              {trainer.data.title && (
+                <span className="text-[13px] text-ink-muted">{trainer.data.title}</span>
+              )}
+              {trainer.data.bio && (
+                <span className="mt-1 text-[13px] text-ink-muted">{trainer.data.bio}</span>
+              )}
+              {trainer.data.contacts.length > 0 && (
+                <ul className="mt-1 flex flex-col gap-0.5">
+                  {trainer.data.contacts.map((c, i) => (
+                    <li key={i} className="text-[13px] text-ink-muted">
+                      {c.type}: {c.value}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          ) : (
+            <span className="text-[13px] text-ink-muted">Загрузка…</span>
+          )}
+        </section>
       ) : (
         <Link
           to="/connect"

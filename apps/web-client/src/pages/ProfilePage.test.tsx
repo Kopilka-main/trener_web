@@ -3,8 +3,10 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ProfilePage } from './ProfilePage';
 import * as auth from '../api/auth';
+import * as trainerApi from '../api/trainer';
 
 vi.mock('../api/auth');
+vi.mock('../api/trainer');
 
 const account = {
   id: 'ca1',
@@ -35,6 +37,7 @@ describe('ProfilePage', () => {
       isPending: false,
       isError: false,
     } as never);
+    vi.mocked(trainerApi.useClientTrainer).mockReturnValue({ data: null } as never);
   });
 
   it('показывает значения профиля и кнопку «Выйти»', () => {
@@ -42,10 +45,21 @@ describe('ProfilePage', () => {
       isLoading: false,
       data: { account, link: { trainerId: 't1', clientId: 'cl1' } },
     } as never);
+    vi.mocked(trainerApi.useClientTrainer).mockReturnValue({
+      data: {
+        id: 't1',
+        firstName: 'Иван',
+        lastName: 'Тренеров',
+        title: 'Силовой',
+        bio: null,
+        contacts: [],
+      },
+    } as never);
     renderPage();
     expect(screen.getByDisplayValue('Иван')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Цель — присед 100')).toBeInTheDocument();
-    expect(screen.getByText('Вы подключены к тренеру.')).toBeInTheDocument();
+    expect(screen.getByText('Ваш тренер')).toBeInTheDocument();
+    expect(screen.getByText('Иван Тренеров')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Выйти' })).toBeInTheDocument();
   });
 
