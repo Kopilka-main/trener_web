@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Wifi } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Wifi, X } from 'lucide-react';
 import type { SessionResponse, SessionStatus } from '@trener/shared';
 import {
   CAL_HOURS,
@@ -199,6 +199,14 @@ function tileClasses(status: SessionStatus): string {
   return 'bg-card-elevated text-ink-muted line-through opacity-50';
 }
 
+/** Индикатор ответа клиента: ✓ подтвердил, ✕ отклонил, ничего — ждёт ответа. */
+function ConfirmMark({ value }: { value: SessionResponse['clientConfirmation'] }) {
+  if (value === 'confirmed') return <Check size={12} strokeWidth={2.4} className="shrink-0" />;
+  if (value === 'declined')
+    return <X size={12} strokeWidth={2.4} className="shrink-0 opacity-70" />;
+  return null;
+}
+
 /** Сессии конкретного дня, отсортированы по времени. */
 function sessionsOf(sessions: SessionResponse[], d: Date): SessionResponse[] {
   const iso = toISODate(d);
@@ -373,6 +381,7 @@ function DayView({
                   <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">
                     {renderLabel(s)}
                   </span>
+                  <ConfirmMark value={s.clientConfirmation} />
                 </div>
                 <div className="truncate font-[family-name:var(--font-mono)] text-[11px] opacity-80">
                   {[`${s.startTime}–${endTime(s.startTime, s.durationMin)}`, s.location]
@@ -504,6 +513,7 @@ function WeekView({
                             {label}
                           </span>
                         )}
+                        <ConfirmMark value={s.clientConfirmation} />
                       </button>
                     );
                   })}
