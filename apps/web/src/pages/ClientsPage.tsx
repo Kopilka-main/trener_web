@@ -7,7 +7,6 @@ import { useSessions } from '../api/sessions';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Avatar } from '../components/Avatar';
 
-type StatusFilter = 'active' | 'archived';
 type SortMode = 'alpha' | 'session';
 
 const MONTHS_SHORT = [
@@ -25,38 +24,67 @@ const MONTHS_SHORT = [
   'дек',
 ];
 
+const MONTHS_GEN = [
+  'января',
+  'февраля',
+  'марта',
+  'апреля',
+  'мая',
+  'июня',
+  'июля',
+  'августа',
+  'сентября',
+  'октября',
+  'ноября',
+  'декабря',
+];
+
 function formatNearest(date: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(date);
   if (!m) return date;
   return `${Number(m[3])} ${MONTHS_SHORT[Number(m[2]) - 1] ?? ''}`;
 }
 
+/** Заголовок группы по дате: Сегодня / Завтра / «3 июня». */
+function formatGroupDate(date: string, todayIso: string, tomorrowIso: string): string {
+  if (date === todayIso) return 'Сегодня';
+  if (date === tomorrowIso) return 'Завтра';
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(date);
+  if (!m) return date;
+  return `${Number(m[3])} ${MONTHS_GEN[Number(m[2]) - 1] ?? ''}`;
+}
+
+interface Nearest {
+  date: string;
+  time: string;
+}
+
 export function ClientsPage() {
   const clients = useClients();
   const todayStr = new Date().toISOString().slice(0, 10);
+  const tomorrowStr = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
   const sessions = useSessions(todayStr);
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<StatusFilter>('active');
   const [sort, setSort] = useState<SortMode>('alpha');
 
   const list = clients.data ?? [];
 
-  // Ближайшее предстоящее занятие по клиенту (status planned, дата ≥ сегодня).
+  // Ближайшее предстоящее занятие по клиенту (status planned, дата ≥ сегодня) — дата+время.
   const nearestByClient = useMemo(() => {
-    const map = new Map<string, string>();
+    const map = new Map<string, Nearest>();
     for (const s of sessions.data ?? []) {
       if (s.status !== 'planned' || s.date < todayStr) continue;
       const cur = map.get(s.clientId);
-      if (!cur || s.date < cur) map.set(s.clientId, s.date);
+      if (!cur || s.date < cur.date || (s.date === cur.date && s.startTime < cur.time)) {
+        map.set(s.clientId, { date: s.date, time: s.startTime });
+      }
     }
     return map;
   }, [sessions.data, todayStr]);
-  const archivedCount = useMemo(() => list.filter((c) => c.status === 'archived').length, [list]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return list
-      .filter((c) => c.status === filter)
       .filter((c) => {
         if (q.length === 0) return true;
         const hay =
@@ -66,9 +94,9 @@ export function ClientsPage() {
       .sort((a, b) =>
         `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`, 'ru'),
       );
-  }, [list, filter, query]);
+  }, [list, query]);
 
-  // Группировка по первой букве имени (для алфавитных секций).
+  // Алфавитные секции по первой букве имени.
   const groups = useMemo(() => {
     const map = new Map<string, ClientResponse[]>();
     for (const c of filtered) {
@@ -80,17 +108,32 @@ export function ClientsPage() {
     return [...map.entries()];
   }, [filtered]);
 
-  // Сортировка по ближайшему занятию: сперва клиенты с предстоящим занятием
-  // (по возрастанию даты), затем без занятия — по имени.
-  const bySession = useMemo(() => {
-    return [...filtered].sort((a, b) => {
+  // Группировка по дате ближайшего занятия (по возрастанию); без занятий — отдельно.
+  const sessionGroups = useMemo(() => {
+    const sorted = [...filtered].sort((a, b) => {
       const da = nearestByClient.get(a.id);
       const db = nearestByClient.get(b.id);
-      if (da && db) return da.localeCompare(db);
+      if (da && db)
+        return da.date !== db.date
+          ? da.date.localeCompare(db.date)
+          : da.time.localeCompare(db.time);
       if (da) return -1;
       if (db) return 1;
       return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`, 'ru');
     });
+    const map = new Map<string, ClientResponse[]>();
+    const noSession: ClientResponse[] = [];
+    for (const c of sorted) {
+      const n = nearestByClient.get(c.id);
+      if (!n) {
+        noSession.push(c);
+        continue;
+      }
+      const arr = map.get(n.date);
+      if (arr) arr.push(c);
+      else map.set(n.date, [c]);
+    }
+    return { dated: [...map.entries()], noSession };
   }, [filtered, nearestByClient]);
 
   return (
@@ -122,9 +165,7 @@ export function ClientsPage() {
           <p className="text-sm text-ink-muted">
             {query.trim().length > 0
               ? 'Никого не нашлось.'
-              : filter === 'active'
-                ? 'Пока нет клиентов. Добавьте первого.'
-                : 'В архиве пусто.'}
+              : 'Пока нет клиентов. Добавьте первого.'}
           </p>
         )}
 
@@ -142,39 +183,56 @@ export function ClientsPage() {
             </div>
           ))}
 
-        {sort === 'session' && filtered.length > 0 && (
-          <ul className="flex flex-col gap-2">
-            {bySession.map((c) => (
-              <ClientRow key={c.id} client={c} nearest={nearestByClient.get(c.id) ?? null} />
+        {sort === 'session' && (
+          <>
+            {sessionGroups.dated.map(([date, items]) => (
+              <div key={date} className="flex flex-col gap-2">
+                <div className="px-1 pt-1 font-mono text-[12px] uppercase tracking-wide text-ink-muted">
+                  {formatGroupDate(date, todayStr, tomorrowStr)}
+                </div>
+                <ul className="flex flex-col gap-2">
+                  {items.map((c) => (
+                    <ClientRow
+                      key={c.id}
+                      client={c}
+                      nearest={nearestByClient.get(c.id) ?? null}
+                      showTime
+                    />
+                  ))}
+                </ul>
+              </div>
             ))}
-          </ul>
+            {sessionGroups.noSession.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <div className="px-1 pt-1 font-mono text-[12px] uppercase tracking-wide text-ink-mutedxl">
+                  Без занятий
+                </div>
+                <ul className="flex flex-col gap-2">
+                  {sessionGroups.noSession.map((c) => (
+                    <ClientRow key={c.id} client={c} nearest={null} />
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
         )}
       </div>
 
-      {/* Нижняя панель: фильтр статуса (слева) + FAB добавления (справа). */}
+      {/* Нижняя панель: сортировка (слева) + FAB добавления (справа). */}
       <div className="pointer-events-none sticky bottom-4 z-10 mt-auto flex items-end justify-between gap-3 px-5">
-        <div className="pointer-events-auto flex items-center gap-2">
-          <div className="flex gap-1.5 rounded-full bg-card p-1 shadow-[0_0_0_1px_var(--color-line)]">
-            <FilterTab active={filter === 'active'} onClick={() => setFilter('active')}>
-              Активные
-            </FilterTab>
-            <FilterTab active={filter === 'archived'} onClick={() => setFilter('archived')}>
-              Архив{archivedCount > 0 ? ` · ${archivedCount}` : ''}
-            </FilterTab>
-          </div>
-          <button
-            type="button"
-            onClick={() => setSort((s) => (s === 'alpha' ? 'session' : 'alpha'))}
-            aria-label={sort === 'alpha' ? 'Сортировка: по алфавиту' : 'Сортировка: по занятию'}
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-card text-ink shadow-[0_0_0_1px_var(--color-line)] active:scale-95"
-          >
-            {sort === 'alpha' ? (
-              <ArrowDownAZ size={20} strokeWidth={1.9} />
-            ) : (
-              <CalendarClock size={20} strokeWidth={1.9} />
-            )}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setSort((s) => (s === 'alpha' ? 'session' : 'alpha'))}
+          aria-label={sort === 'alpha' ? 'Сортировка: по алфавиту' : 'Сортировка: по занятию'}
+          className="pointer-events-auto flex h-11 items-center gap-2 rounded-full bg-card px-4 text-[13px] font-semibold text-ink shadow-[0_0_0_1px_var(--color-line)] active:scale-95"
+        >
+          {sort === 'alpha' ? (
+            <ArrowDownAZ size={18} strokeWidth={1.9} />
+          ) : (
+            <CalendarClock size={18} strokeWidth={1.9} />
+          )}
+          {sort === 'alpha' ? 'По алфавиту' : 'По занятию'}
+        </button>
 
         <Link
           to="/clients/new"
@@ -188,7 +246,15 @@ export function ClientsPage() {
   );
 }
 
-function ClientRow({ client, nearest }: { client: ClientResponse; nearest?: string | null }) {
+function ClientRow({
+  client,
+  nearest,
+  showTime = false,
+}: {
+  client: ClientResponse;
+  nearest?: Nearest | null;
+  showTime?: boolean;
+}) {
   const archived = client.status === 'archived';
   return (
     <li>
@@ -212,7 +278,7 @@ function ClientRow({ client, nearest }: { client: ClientResponse; nearest?: stri
           {nearest ? (
             <span className="flex items-center gap-1 font-[family-name:var(--font-mono)] text-[12px] text-accent">
               <CalendarClock size={12} strokeWidth={2} />
-              {formatNearest(nearest)}
+              {showTime ? nearest.time : formatNearest(nearest.date)}
             </span>
           ) : (
             <span
@@ -227,27 +293,5 @@ function ClientRow({ client, nearest }: { client: ClientResponse; nearest?: stri
         <ChevronRight size={16} className="tile-chevron shrink-0" />
       </Link>
     </li>
-  );
-}
-
-function FilterTab({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full px-4 py-2 text-[13px] font-semibold transition-colors ${
-        active ? 'bg-accent text-accent-on' : 'text-ink-muted active:bg-card-elevated'
-      }`}
-    >
-      {children}
-    </button>
   );
 }
