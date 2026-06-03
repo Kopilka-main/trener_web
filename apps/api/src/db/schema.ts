@@ -438,6 +438,7 @@ export const conversations = pgTable(
       .references(() => clients.id, { onDelete: 'cascade' }),
     lastMessageAt: timestamp('last_message_at', { withTimezone: true }),
     trainerLastReadAt: timestamp('trainer_last_read_at', { withTimezone: true }),
+    clientLastReadAt: timestamp('client_last_read_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('conversations_trainer_client_uq').on(t.trainerId, t.clientId)],

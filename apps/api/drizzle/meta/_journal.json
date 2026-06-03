@@ -183,6 +183,13 @@
       "when": 1780490173885,
       "tag": "0025_superb_glorian",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1780494550481,
+      "tag": "0026_aspiring_master_chief",
+      "breakpoints": true
     }
   ]
 }
