@@ -33,6 +33,17 @@ function defaultLabel(s: SessionResponse): string {
   return s.title ?? 'Занятие';
 }
 
+/** Инициалы из метки (имя клиента) — до 2 заглавных букв: «Иван Иванов» → «ИИ».
+ *  Пустая метка (клиент не определён) → пустая строка (на плитке только бейдж). */
+function initialsOf(label: string): string {
+  const parts = label.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '';
+  return parts
+    .slice(0, 2)
+    .map((p) => p.charAt(0).toUpperCase())
+    .join('');
+}
+
 export type SessionsCalendarProps = {
   sessions: SessionResponse[];
   /** Стартовый вид (по умолчанию — месяц). */
@@ -43,6 +54,8 @@ export type SessionsCalendarProps = {
   onSessionClick: (session: SessionResponse) => void;
   /** Метка-заголовок блока занятия (по умолчанию — title ?? 'Занятие'). */
   renderLabel?: (s: SessionResponse) => string;
+  /** Источник инициалов клиента для недельного вида (по умолчанию — из renderLabel). */
+  renderInitials?: (s: SessionResponse) => string;
   /** Управляемый якорь периода (опц.). Если передан onAnchorChange — компонент управляемый. */
   anchor?: Date;
   onAnchorChange?: (d: Date) => void;
@@ -59,6 +72,7 @@ export function SessionsCalendar({
   onSlotClick,
   onSessionClick,
   renderLabel = defaultLabel,
+  renderInitials,
   anchor: anchorProp,
   onAnchorChange,
 }: SessionsCalendarProps) {
@@ -136,6 +150,7 @@ export function SessionsCalendar({
           onPickDay={pickDay}
           onSlot={onSlotClick}
           renderLabel={renderLabel}
+          renderInitials={renderInitials}
         />
       )}
       {view === 'day' && (
@@ -264,13 +279,14 @@ function MonthView({
   const month = anchor.getMonth();
   const now = new Date();
 
-  // Счётчики по дате: planned vs остальные (completed/cancelled).
+  // Счётчики по дате и подтверждению клиента: pending / confirmed / declined.
   const counts = useMemo(() => {
-    const map = new Map<string, { planned: number; other: number }>();
+    const map = new Map<string, { pending: number; confirmed: number; declined: number }>();
     for (const s of sessions) {
-      const c = map.get(s.date) ?? { planned: 0, other: 0 };
-      if (s.status === 'planned') c.planned += 1;
-      else c.other += 1;
+      const c = map.get(s.date) ?? { pending: 0, confirmed: 0, declined: 0 };
+      if (s.clientConfirmation === 'confirmed') c.confirmed += 1;
+      else if (s.clientConfirmation === 'declined') c.declined += 1;
+      else c.pending += 1;
       map.set(s.date, c);
     }
     return map;
@@ -291,29 +307,34 @@ function MonthView({
           const c = counts.get(iso);
           const inMonth = d.getMonth() === month;
           const today = sameDay(d, now);
+          const hasSessions = c ? c.pending + c.confirmed + c.declined > 0 : false;
           return (
             <button
               key={iso}
               type="button"
               onClick={() => onPickDay(d)}
-              className={`flex aspect-square flex-col items-center justify-center gap-1 rounded-xl bg-card active:bg-card-elevated ${
+              className={`relative flex aspect-square flex-col items-center justify-center gap-1 overflow-hidden rounded-xl bg-card active:bg-card-elevated ${
                 today ? 'ring-2 ring-accent' : ''
               } ${inMonth ? '' : 'opacity-40'}`}
             >
+              {/* Есть занятия в этот день → четвертькруга акцентом в правом верхнем углу. */}
+              {hasSessions && (
+                <span
+                  aria-hidden
+                  className="absolute right-0 top-0 h-3 w-3 rounded-bl-full bg-accent"
+                />
+              )}
               <span className="font-[family-name:var(--font-mono)] text-[13px] font-semibold tabular-nums text-ink">
                 {d.getDate()}
               </span>
-              {c && (c.planned > 0 || c.other > 0) ? (
-                <span className="flex items-center gap-0.5">
-                  {c.planned > 0 && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />
-                  )}
-                  {c.other > 0 && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-ink-mutedxl" aria-hidden />
-                  )}
+              {c && c.pending + c.confirmed + c.declined > 0 ? (
+                <span className="flex items-center gap-1 font-[family-name:var(--font-mono)] text-[10px] font-bold leading-none tabular-nums">
+                  {c.pending > 0 && <span className="text-ink-mutedxl">{c.pending}</span>}
+                  {c.confirmed > 0 && <span className="text-accent">{c.confirmed}</span>}
+                  {c.declined > 0 && <span className="text-danger">{c.declined}</span>}
                 </span>
               ) : (
-                <span className="h-1.5" aria-hidden />
+                <span className="h-2.5" aria-hidden />
               )}
             </button>
           );
@@ -419,20 +440,17 @@ function DayView({
                   </span>
                   <StateBadge session={s} />
                 </div>
+                {/* Описание статуса — сразу под названием. */}
+                {height >= 50 && (
+                  <div className="truncate text-[10px] font-semibold opacity-90">
+                    {stateInfo(s).label}
+                  </div>
+                )}
                 <div className="truncate font-[family-name:var(--font-mono)] text-[11px] opacity-80">
                   {[`${s.startTime}–${endTime(s.startTime, s.durationMin)}`, s.location]
                     .filter(Boolean)
                     .join(' · ')}
                 </div>
-                {height >= 50 && (
-                  <div className="mt-0.5 flex items-center justify-end gap-1 text-[10px] font-semibold opacity-90">
-                    {(() => {
-                      const { Icon } = stateInfo(s);
-                      return <Icon size={11} strokeWidth={2.4} className="shrink-0" />;
-                    })()}
-                    <span className="truncate">{stateInfo(s).label}</span>
-                  </div>
-                )}
               </button>
             );
           })}
@@ -449,6 +467,7 @@ function WeekView({
   onPickDay,
   onSlot,
   renderLabel,
+  renderInitials,
 }: {
   anchor: Date;
   sessions: SessionResponse[];
@@ -456,6 +475,7 @@ function WeekView({
   onPickDay: (d: Date) => void;
   onSlot: (date: Date, hour: number) => void;
   renderLabel: (s: SessionResponse) => string;
+  renderInitials?: ((s: SessionResponse) => string) | undefined;
 }) {
   const dates = weekDates(anchor);
   const hours = Array.from({ length: CAL_HOURS }, (_, i) => CAL_START_HOUR + i);
@@ -538,27 +558,28 @@ function WeekView({
                     const startMin = timeToMin(s.startTime);
                     const top = ((startMin - CAL_START_HOUR * 60) / 60) * WEEK_HOUR_H;
                     const height = Math.max((s.durationMin / 60) * WEEK_HOUR_H - 1, 14);
-                    const label = renderLabel(s);
+                    const label = renderInitials ? renderInitials(s) : renderLabel(s);
+                    const state = stateInfo(s);
                     return (
                       <button
                         key={s.id}
                         type="button"
                         onClick={() => onPick(s)}
-                        className={`absolute inset-x-[1px] z-10 flex items-center justify-center overflow-hidden rounded-md px-0.5 ${tileClasses(s.status)}`}
+                        className={`absolute inset-x-[1px] z-10 flex items-center justify-center overflow-hidden rounded-md ${tileClasses(s.status)}`}
                         style={{ top, height }}
                       >
-                        {s.isOnline ? (
-                          <Wifi
-                            size={height < 20 ? 10 : 12}
-                            strokeWidth={2.2}
-                            className="shrink-0"
-                          />
-                        ) : (
-                          <span className="truncate text-[10px] font-semibold leading-none">
-                            {label}
-                          </span>
-                        )}
-                        <StateBadge session={s} compact />
+                        <span className="font-extrabold uppercase leading-none tracking-tight text-[clamp(24px,6.8vw,40px)]">
+                          {initialsOf(label)}
+                        </span>
+                        {/* Бейдж статуса: иконка на белой заливке-четвертькруга в углу. */}
+                        <span
+                          aria-label={state.label}
+                          title={state.label}
+                          className="absolute bottom-0 right-0 flex h-[18px] w-[18px] items-end justify-end rounded-tl-full bg-white pb-px pr-px"
+                          style={{ color: state.color }}
+                        >
+                          <state.Icon size={11} strokeWidth={2.8} />
+                        </span>
                       </button>
                     );
                   })}

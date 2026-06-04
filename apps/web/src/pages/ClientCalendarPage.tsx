@@ -48,6 +48,10 @@ export function ClientCalendarPage() {
   const title = client.data
     ? `Календарь · ${client.data.firstName} ${client.data.lastName}`
     : 'Календарь';
+  // Метка занятия = имя клиента (для инициалов в недельном виде).
+  const clientName = client.data
+    ? `${client.data.firstName} ${client.data.lastName}`.trim()
+    : 'Занятие';
 
   const openSlot = (date: Date, hour: number) => {
     setCreateAt({ date: toISODate(date), startTime: `${String(hour).padStart(2, '0')}:00` });
@@ -75,6 +79,7 @@ export function ClientCalendarPage() {
           onAnchorChange={setAnchor}
           onSlotClick={openSlot}
           onSessionClick={setEditing}
+          renderInitials={() => clientName}
         />
       )}
 

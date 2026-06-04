@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { Plus, Trash2, Wifi, X } from 'lucide-react';
+import { Check, Plus, Search, Trash2, X } from 'lucide-react';
 import type { ClientResponse, SessionResponse, SessionStatus } from '@trener/shared';
 import { useCreateSession, useDeleteSession, useSessions, useUpdateSession } from '../api/sessions';
 import { useClients } from '../api/clients';
@@ -25,6 +25,52 @@ function formatDuration(min: number): string {
 
 function clientName(c: ClientResponse): string {
   return `${c.firstName} ${c.lastName}`;
+}
+
+// «Запомнить»: при включённом тумблере последние клиент/длительность/место/online
+// тренера сохраняются и подтягиваются в новые занятия; при выключенном — поля пустые.
+const LAST_PREFS_KEY = 'calendar_last_session_prefs';
+type LastPrefs = {
+  remember: boolean;
+  clientId: string;
+  durationMin: number;
+  location: string;
+  isOnline: boolean;
+};
+
+const EMPTY_PREFS: LastPrefs = {
+  remember: false,
+  clientId: '',
+  durationMin: 60,
+  location: '',
+  isOnline: false,
+};
+
+function loadLastPrefs(): LastPrefs {
+  try {
+    const raw = localStorage.getItem(LAST_PREFS_KEY);
+    if (raw) {
+      const p = JSON.parse(raw) as Partial<LastPrefs>;
+      return {
+        remember: p.remember === true,
+        clientId: typeof p.clientId === 'string' ? p.clientId : '',
+        durationMin: typeof p.durationMin === 'number' && p.durationMin > 0 ? p.durationMin : 60,
+        location: typeof p.location === 'string' ? p.location : '',
+        isOnline: p.isOnline === true,
+      };
+    }
+  } catch {
+    /* битый JSON / приватный режим */
+  }
+  return { ...EMPTY_PREFS };
+}
+
+function saveLastPrefs(p: LastPrefs): void {
+  try {
+    localStorage.setItem(LAST_PREFS_KEY, JSON.stringify(p));
+  } catch {
+    /* приватный режим */
+  }
 }
 
 /** Тап по пустому слоту: предзаполненные дата+время для новой сессии. */
@@ -98,6 +144,7 @@ export function CalendarPage() {
           onSlotClick={openSlot}
           onSessionClick={setEditing}
           renderLabel={renderLabel}
+          renderInitials={(s) => nameById.get(s.clientId) ?? ''}
         />
       )}
 
@@ -143,22 +190,40 @@ function TrainerSessionSheet({
   const isEdit = session !== null;
   // Активные клиенты для выбора при создании.
   const activeClients = clients.filter((c) => c.status === 'active');
-  const firstActiveId = activeClients[0]?.id ?? '';
   const gyms = useGyms();
   const gymList = gyms.data ?? [];
 
-  const [clientId, setClientId] = useState(session?.clientId ?? firstActiveId);
+  // Подтягиваем сохранённые предпочтения только для НОВОГО занятия и только при remember.
+  const prefs = useMemo(() => loadLastPrefs(), []);
+  const usePrefs = !isEdit && prefs.remember;
+  // Запомненный клиент берём, только если он ещё активен.
+  const prefClientId =
+    usePrefs && activeClients.some((c) => c.id === prefs.clientId) ? prefs.clientId : '';
+  const initDuration = session?.durationMin ?? (usePrefs ? prefs.durationMin : 60);
+
+  const [remember, setRemember] = useState(prefs.remember);
+  const [clientId, setClientId] = useState(session?.clientId ?? prefClientId);
   const [date, setDate] = useState(session?.date ?? defaultDate);
   const [startTime, setStartTime] = useState(session?.startTime ?? defaultStartTime ?? '12:00');
   const [title, setTitle] = useState(session?.title ?? '');
-  const [location, setLocation] = useState(session?.location ?? '');
-  const [durationMin, setDurationMin] = useState(session?.durationMin ?? 60);
+  const [location, setLocation] = useState(session?.location ?? (usePrefs ? prefs.location : ''));
+  const [durationMin, setDurationMin] = useState(initDuration);
   const [customDuration, setCustomDuration] = useState(
-    !DURATION_OPTIONS.includes((session?.durationMin ?? 60) as (typeof DURATION_OPTIONS)[number]),
+    !DURATION_OPTIONS.includes(initDuration as (typeof DURATION_OPTIONS)[number]),
   );
-  const [isOnline, setIsOnline] = useState(session?.isOnline ?? false);
+  const [isOnline, setIsOnline] = useState(
+    session?.isOnline ?? (usePrefs ? prefs.isOnline : false),
+  );
   const [status, setStatus] = useState<SessionStatus>(session?.status ?? 'planned');
   const [showErrors, setShowErrors] = useState(false);
+
+  // Переключение тумблера «запомнить»: сразу сохраняем флаг, чтобы следующее
+  // открытие учитывало выбор (значения полей пишем при сохранении занятия).
+  function toggleRemember() {
+    const next = !remember;
+    setRemember(next);
+    saveLastPrefs({ ...loadLastPrefs(), remember: next });
+  }
 
   // clientId для инвалидации кэша: при редактировании — клиент занятия,
   // при создании — выбранный (запасной вариант — первый активный).
@@ -200,6 +265,12 @@ function TrainerSessionSheet({
         { onSuccess: onClose },
       );
     } else {
+      // Запоминаем введённое для следующих занятий (если включён тумблер).
+      saveLastPrefs(
+        remember
+          ? { remember: true, clientId, durationMin, location: trimmedLocation, isOnline }
+          : { ...EMPTY_PREFS },
+      );
       createMutation.mutate(
         {
           clientId,
@@ -236,16 +307,30 @@ function TrainerSessionSheet({
         className="absolute inset-0 bg-black/60"
       />
       <div className="relative z-10 flex max-h-[88vh] flex-col rounded-t-3xl bg-bg pb-[max(1rem,env(safe-area-inset-bottom))]">
-        <div className="flex items-center justify-between px-5 pb-2 pt-4">
+        <div className="flex items-center justify-between gap-2 px-5 pb-2 pt-4">
           <h2 className="text-[16px] font-bold text-ink">{isEdit ? 'Занятие' : 'Новое занятие'}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Закрыть"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-ink active:bg-card-elevated"
-          >
-            <X size={20} strokeWidth={1.8} />
-          </button>
+          <div className="flex items-center gap-2">
+            {!isEdit && (
+              <button
+                type="button"
+                onClick={toggleRemember}
+                aria-pressed={remember}
+                className={`rounded-full px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                  remember ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
+                }`}
+              >
+                Запомнить
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Закрыть"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-ink active:bg-card-elevated"
+            >
+              <X size={20} strokeWidth={1.8} />
+            </button>
+          </div>
         </div>
 
         <form
@@ -259,28 +344,18 @@ function TrainerSessionSheet({
               <span className="text-base font-semibold text-ink">{editClientLabel}</span>
             </div>
           ) : (
-            <label htmlFor="session-client" className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-ink-muted">Клиент</span>
-              <select
-                id="session-client"
+              <ClientSearchSelect
+                clients={activeClients}
                 value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-                aria-invalid={showErrors && clientError !== ''}
-                className={`${inputClass} [color-scheme:dark] ${
-                  showErrors && clientError ? 'border-danger' : ''
-                }`}
-              >
-                {activeClients.length === 0 && <option value="">Нет активных клиентов</option>}
-                {activeClients.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {clientName(c)}
-                  </option>
-                ))}
-              </select>
+                onChange={setClientId}
+                invalid={showErrors && clientError !== ''}
+              />
               {showErrors && clientError && (
                 <span className="text-[12px] text-danger">{clientError}</span>
               )}
-            </label>
+            </div>
           )}
 
           <div className="grid grid-cols-2 gap-3">
@@ -428,11 +503,11 @@ function TrainerSessionSheet({
                   setIsOnline(true);
                   setLocation('');
                 }}
-                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+                className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
                   isOnline ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
                 }`}
               >
-                <Wifi size={14} strokeWidth={2} /> Онлайн-занятие
+                Online
               </button>
             </div>
             {gymList.length === 0 && (
@@ -488,6 +563,105 @@ function TrainerSessionSheet({
           )}
         </form>
       </div>
+    </div>
+  );
+}
+
+/** Поиск-выбор клиента по имени, контактам или тегам (вместо нативного select). */
+function ClientSearchSelect({
+  clients,
+  value,
+  onChange,
+  invalid,
+}: {
+  clients: ClientResponse[];
+  value: string;
+  onChange: (id: string) => void;
+  invalid: boolean;
+}) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const selected = clients.find((c) => c.id === value) ?? null;
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (q === '') return clients;
+    return clients.filter((c) => {
+      if (`${c.firstName} ${c.lastName}`.toLowerCase().includes(q)) return true;
+      if (
+        c.contacts.some(
+          (ct) => ct.value.toLowerCase().includes(q) || ct.type.toLowerCase().includes(q),
+        )
+      )
+        return true;
+      return c.tags.some((t) => t.toLowerCase().includes(q));
+    });
+  }, [clients, query]);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div
+        className={`flex items-center gap-2 rounded-xl border bg-chip px-3 py-2.5 ${
+          invalid ? 'border-danger' : 'border-line'
+        }`}
+      >
+        <Search size={16} className="shrink-0 text-ink-mutedxl" />
+        <input
+          value={open ? query : selected ? `${selected.firstName} ${selected.lastName}` : ''}
+          onFocus={() => {
+            setOpen(true);
+            setQuery('');
+          }}
+          onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          placeholder="Поиск клиента по имени или контакту"
+          className="min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-ink-mutedxl"
+        />
+        {selected && !open && <Check size={16} className="shrink-0 text-accent" />}
+      </div>
+
+      {open && (
+        <ul className="max-h-52 overflow-y-auto rounded-xl border border-line bg-card">
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2.5 text-[13px] text-ink-muted">Никого не найдено</li>
+          ) : (
+            filtered.map((c) => (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    onChange(c.id);
+                    setQuery('');
+                    setOpen(false);
+                  }}
+                  className={`flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left active:bg-card-elevated ${
+                    c.id === value ? 'bg-card-elevated' : ''
+                  }`}
+                >
+                  <span className="text-[14px] font-semibold text-ink">
+                    {c.firstName} {c.lastName}
+                  </span>
+                  {(() => {
+                    // Первый контакт, кроме e-mail (по типу или наличию «@»).
+                    const ct = c.contacts.find(
+                      (x) => x.type.toLowerCase() !== 'email' && !x.value.includes('@'),
+                    );
+                    return ct ? (
+                      <span className="truncate text-[12px] text-ink-muted">
+                        {ct.type}: {ct.value}
+                      </span>
+                    ) : null;
+                  })()}
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
+      )}
     </div>
   );
 }
