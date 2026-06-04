@@ -124,8 +124,20 @@ export function WorkoutsListPage() {
     })),
   ];
 
-  // Из шаблона/тренировки: создаём новый ЧЕРНОВИК по плану и открываем форму плана.
+  // Из шаблона/тренировки: открываем форму плана. Чтобы не плодить черновики при
+  // повторном открытии одного шаблона — переиспользуем уже существующий черновик
+  // с тем же именем и числом упражнений; иначе создаём новый.
   function fromPick(item: TemplatePick) {
+    const existing = own.find(
+      (w) =>
+        w.status === 'draft' &&
+        w.name === item.body.name &&
+        w.exercises.length === item.body.exercises.length,
+    );
+    if (existing) {
+      open(existing);
+      return;
+    }
     create.mutate(item.body, { onSuccess: (workout) => open(workout) });
   }
 
