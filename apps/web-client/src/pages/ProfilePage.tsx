@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Trash2, X } from 'lucide-react';
+import { ChevronRight, Plus, Trash2, X } from 'lucide-react';
 import type { ClientAccountResponse } from '@trener/shared';
 import {
   useClientMe,
@@ -147,35 +147,23 @@ function ProfileForm({
       <AvatarBlock account={account} />
 
       {linked ? (
-        <section className="flex flex-col gap-1 rounded-xl bg-card px-4 py-3">
-          <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-mutedxl">
-            Ваш тренер
+        <Link
+          to="/trainer"
+          className="flex items-center justify-between gap-3 rounded-xl bg-card px-4 py-3 active:bg-card-elevated"
+        >
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-mutedxl">
+              Ваш тренер
+            </span>
+            <span className="truncate text-[15px] font-semibold text-ink">
+              {trainer.data ? `${trainer.data.firstName} ${trainer.data.lastName}` : 'Загрузка…'}
+            </span>
+            {trainer.data?.title && (
+              <span className="truncate text-[13px] text-ink-muted">{trainer.data.title}</span>
+            )}
           </span>
-          {trainer.data ? (
-            <>
-              <span className="text-[15px] font-semibold text-ink">
-                {trainer.data.firstName} {trainer.data.lastName}
-              </span>
-              {trainer.data.title && (
-                <span className="text-[13px] text-ink-muted">{trainer.data.title}</span>
-              )}
-              {trainer.data.bio && (
-                <span className="mt-1 text-[13px] text-ink-muted">{trainer.data.bio}</span>
-              )}
-              {trainer.data.contacts.length > 0 && (
-                <ul className="mt-1 flex flex-col gap-0.5">
-                  {trainer.data.contacts.map((c, i) => (
-                    <li key={i} className="text-[13px] text-ink-muted">
-                      {c.type}: {c.value}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
-          ) : (
-            <span className="text-[13px] text-ink-muted">Загрузка…</span>
-          )}
-        </section>
+          <ChevronRight size={18} className="shrink-0 text-ink-mutedxl" />
+        </Link>
       ) : (
         <Link
           to="/connect"

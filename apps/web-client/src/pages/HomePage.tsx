@@ -4,16 +4,15 @@ import {
   ArrowRight,
   ArrowUpRight,
   Bell,
+  BookOpen,
   CalendarDays,
   Dumbbell,
   MessageSquare,
   Settings,
   TrendingUp,
-  UserCog,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useClientMe } from '../api/auth';
-import { useClientTrainer } from '../api/trainer';
 import { useClientSessions } from '../api/calendar';
 import { useClientWorkouts } from '../api/workouts';
 import { useClientChatUnread } from '../api/chat';
@@ -68,12 +67,11 @@ function diffShort(future: Date, now: Date): string {
 }
 
 type Metric = { v: string; s: string | string[] };
-type TileKey = 'workouts' | 'calendar' | 'chat' | 'progress' | 'trainer' | 'notifications';
+type TileKey = 'workouts' | 'calendar' | 'chat' | 'progress' | 'knowledge' | 'notifications';
 
 export function HomePage() {
   const navigate = useNavigate();
   const me = useClientMe();
-  const trainer = useClientTrainer();
   const linked = me.data?.link != null;
 
   const now = new Date();
@@ -113,13 +111,10 @@ export function HomePage() {
   });
 
   const dateLabel = `СЕГОДНЯ · ${DAY_SHORT[now.getDay()]} ${now.getDate()} ${MONTH_FULL[now.getMonth()]}`;
-  const trainerName = trainer.data
-    ? `${trainer.data.firstName} ${trainer.data.lastName}`.trim()
-    : null;
   // Один acid-fill на экран. Непрочитанные в чате → акцент на «Чат»; иначе прочие
-  // уведомления (подтверждения/скоро) → «Уведомления»; иначе не привязан → «Тренер».
+  // уведомления (подтверждения/скоро) → «Уведомления»; иначе без акцента.
   const primaryKey: TileKey | null =
-    unread > 0 ? 'chat' : notifications.length > 0 ? 'notifications' : !linked ? 'trainer' : null;
+    unread > 0 ? 'chat' : notifications.length > 0 ? 'notifications' : null;
 
   const tiles: Array<{
     key: TileKey;
@@ -163,13 +158,12 @@ export function HomePage() {
       onClick: () => void navigate('/progress'),
     },
     {
-      key: 'trainer',
-      title: 'Тренер',
-      sub: trainerName ?? 'не подключён',
+      key: 'knowledge',
+      title: 'База знаний',
+      sub: 'упражнения с тренировок',
       metrics: [],
-      ...(linked ? {} : { kicker: 'ПОДКЛЮЧИТЬ' }),
-      Icon: UserCog,
-      onClick: () => void navigate(linked ? '/trainer' : '/connect'),
+      Icon: BookOpen,
+      onClick: () => void navigate('/knowledge'),
     },
     {
       key: 'notifications',
