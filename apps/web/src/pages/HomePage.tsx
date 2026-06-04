@@ -18,7 +18,7 @@ import { useSessions } from '../api/sessions';
 import { useAccountingSummary } from '../api/accounting';
 import { useChatUnread } from '../api/chat';
 import { usePackageBalances } from '../api/packages';
-import { buildNotifications, isoAddDays, loadDismissed } from '../lib/notifications';
+import { buildNotifications, isoAddDays, loadDismissed, loadSeen } from '../lib/notifications';
 
 const DAY_SHORT = ['ВС', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ'];
 const MONTH_FULL = [
@@ -100,11 +100,13 @@ export function HomePage() {
   // минус скрытые пользователем — для счётчика на плитке «Уведомления».
   const visibleAlerts = useMemo(() => {
     const dismissed = loadDismissed();
+    const seen = loadSeen();
     const paidClientIds = new Set(
       (packageBalances ?? []).filter((b) => b.remaining > 0).map((b) => b.clientId),
     );
     const { alerts } = buildNotifications(clients ?? [], sessionsForAlerts ?? [], paidClientIds);
-    return alerts.filter((a) => !dismissed.has(a.id));
+    // На плитке — только новые (непросмотренные и нескрытые) задачи.
+    return alerts.filter((a) => !dismissed.has(a.id) && !seen.has(a.id));
   }, [clients, sessionsForAlerts, packageBalances]);
 
   // active-клиенты по статусу; если статуса нет — считаем всех.

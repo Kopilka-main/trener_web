@@ -23,6 +23,7 @@ import {
   isoAddDays,
   loadDismissed,
   saveDismissed,
+  saveSeen,
   type AlertType,
   type EventKind,
   type NotifAlert,
@@ -53,6 +54,13 @@ export function NotificationsPage() {
     () => buildNotifications(clients.data ?? [], sessions.data ?? [], paidClientIds),
     [clients.data, sessions.data, paidClientIds],
   );
+
+  // Заход на экран помечает текущие алерты просмотренными → счётчик на главной гаснет.
+  useEffect(() => {
+    if (!balances.isPending && !sessions.isPending && !clients.isPending) {
+      saveSeen(new Set(alerts.map((a) => a.id)));
+    }
+  }, [alerts, balances.isPending, sessions.isPending, clients.isPending]);
 
   const visibleEvents = events.filter((e) => !dismissed.has(e.id));
   const visibleAlerts = alerts.filter((a) => !dismissed.has(a.id));
