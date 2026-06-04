@@ -8,6 +8,7 @@ import * as calendar from '../api/calendar';
 import * as workouts from '../api/workouts';
 import * as chat from '../api/chat';
 import * as measurements from '../api/measurements';
+import * as packages from '../api/packages';
 
 vi.mock('../api/auth');
 vi.mock('../api/trainer');
@@ -15,6 +16,7 @@ vi.mock('../api/calendar');
 vi.mock('../api/workouts');
 vi.mock('../api/chat');
 vi.mock('../api/measurements');
+vi.mock('../api/packages');
 
 function setup(opts: {
   linked: boolean;
@@ -44,6 +46,7 @@ function setup(opts: {
   vi.mocked(measurements.useClientMeasurements).mockReturnValue({
     data: opts.measurements ?? [],
   } as never);
+  vi.mocked(packages.useClientPackages).mockReturnValue({ data: [] } as never);
 }
 
 function renderPage() {

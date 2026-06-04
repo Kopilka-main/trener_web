@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CalendarPlus, Clock, MessageSquare } from 'lucide-react';
+import { CalendarPlus, Clock, MessageSquare, Wallet } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useClientSessions } from '../api/calendar';
 import { useClientChatUnread, useMarkChatRead } from '../api/chat';
+import { useClientPackages } from '../api/packages';
 import { HoldToDelete } from '../components/HoldToDelete';
 import { toISODate } from '../lib/calendar';
 import {
@@ -17,6 +18,7 @@ const ICONS: Record<ClientNotificationKind, LucideIcon> = {
   confirm: CalendarPlus,
   soon: Clock,
   chat: MessageSquare,
+  package: Wallet,
 };
 
 export function NotificationsPage() {
@@ -27,9 +29,10 @@ export function NotificationsPage() {
 
   const sessions = useClientSessions(from, to).data ?? [];
   const unread = useClientChatUnread().data ?? 0;
+  const packages = useClientPackages().data ?? [];
   const [dismissed, setDismissed] = useState<Set<string>>(() => loadDismissed());
 
-  const items = buildClientNotifications({ sessions, unread, now, dismissed });
+  const items = buildClientNotifications({ sessions, unread, now, dismissed, packages });
 
   // Уход со страницы уведомлений = «увидел» новые сообщения → отмечаем чат прочитанным,
   // чтобы счётчик непрочитанных (плитка «Уведомления» на главной) сбросился. Карточка

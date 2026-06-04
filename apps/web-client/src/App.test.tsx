@@ -9,6 +9,7 @@ import * as chat from './api/chat';
 import * as trainer from './api/trainer';
 import * as calendar from './api/calendar';
 import * as measurements from './api/measurements';
+import * as packages from './api/packages';
 
 vi.mock('./api/auth');
 vi.mock('./api/workouts');
@@ -16,6 +17,7 @@ vi.mock('./api/chat');
 vi.mock('./api/trainer');
 vi.mock('./api/calendar');
 vi.mock('./api/measurements');
+vi.mock('./api/packages');
 
 function renderApp() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -50,6 +52,7 @@ describe('App gate', () => {
     vi.mocked(trainer.useClientTrainer).mockReturnValue({ data: null } as never);
     vi.mocked(calendar.useClientSessions).mockReturnValue({ data: [] } as never);
     vi.mocked(measurements.useClientMeasurements).mockReturnValue({ data: [] } as never);
+    vi.mocked(packages.useClientPackages).mockReturnValue({ data: [] } as never);
   });
 
   it('не залогинен → экран входа', () => {

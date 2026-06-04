@@ -1,7 +1,10 @@
-import type { SessionResponse } from '@trener/shared';
+import type { PackageResponse, SessionResponse } from '@trener/shared';
 import { MONTH_GEN, parseISO } from './calendar';
 
-export type ClientNotificationKind = 'confirm' | 'soon' | 'chat';
+export type ClientNotificationKind = 'confirm' | 'soon' | 'chat' | 'package';
+
+/** Пакет считается заканчивающимся, когда остаток занятий ≤ этого порога. */
+const PACKAGE_LOW_THRESHOLD = 2;
 
 export interface ClientNotification {
   id: string;
@@ -46,14 +49,16 @@ function whenLabel(s: SessionResponse): string {
   return `${String(d.getDate())} ${MONTH_GEN[d.getMonth()] ?? ''}, ${s.startTime}`;
 }
 
-/** Уведомления клиента из доступных данных. Чистая функция (без localStorage). */
+/** Уведомления клиента из доступных данных. Чистая функция (без localStorage).
+ * `packages` опционально — для уведомления о заканчивающемся пакете (тренировок/услуг). */
 export function buildClientNotifications(args: {
   sessions: SessionResponse[];
   unread: number;
   now: Date;
   dismissed: Set<string>;
+  packages?: PackageResponse[];
 }): ClientNotification[] {
-  const { sessions, unread, now, dismissed } = args;
+  const { sessions, unread, now, dismissed, packages = [] } = args;
   const nowMs = now.getTime();
   const out: ClientNotification[] = [];
 
@@ -86,7 +91,20 @@ export function buildClientNotifications(args: {
     });
   }
 
-  // 3) Новые сообщения.
+  // 3) Заканчивающийся пакет (тренировок или прочих услуг) — активные пакеты с малым остатком.
+  for (const p of packages) {
+    if (p.status !== 'active') continue;
+    const remaining = p.lessonsPaid - p.lessonsUsed;
+    if (remaining > PACKAGE_LOW_THRESHOLD) continue;
+    const what = p.workoutType ? `Пакет «${p.workoutType}»` : 'Пакет';
+    const text =
+      remaining <= 0
+        ? `${what} закончился — обратитесь к тренеру`
+        : `${what} заканчивается: осталось ${String(remaining)}`;
+    out.push({ id: `package:${p.id}`, kind: 'package', text, to: '/chat' });
+  }
+
+  // 4) Новые сообщения.
   if (unread > 0) {
     out.push({
       id: 'chat',

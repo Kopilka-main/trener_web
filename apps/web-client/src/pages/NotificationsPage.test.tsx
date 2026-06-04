@@ -4,9 +4,11 @@ import { MemoryRouter } from 'react-router-dom';
 import { NotificationsPage } from './NotificationsPage';
 import * as calendar from '../api/calendar';
 import * as chat from '../api/chat';
+import * as packages from '../api/packages';
 
 vi.mock('../api/calendar');
 vi.mock('../api/chat');
+vi.mock('../api/packages');
 
 function renderPage() {
   return render(
@@ -21,6 +23,7 @@ describe('NotificationsPage', () => {
     vi.resetAllMocks();
     localStorage.clear();
     vi.mocked(chat.useMarkChatRead).mockReturnValue({ mutate: vi.fn() } as never);
+    vi.mocked(packages.useClientPackages).mockReturnValue({ data: [] } as never);
   });
 
   it('пусто → «Уведомлений нет»', () => {

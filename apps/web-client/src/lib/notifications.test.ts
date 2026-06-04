@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildClientNotifications } from './notifications';
-import type { SessionResponse } from '@trener/shared';
+import type { PackageResponse, SessionResponse } from '@trener/shared';
 
 function session(over: Partial<SessionResponse>): SessionResponse {
   return {
@@ -103,5 +103,53 @@ describe('buildClientNotifications', () => {
       dismissed: new Set(['confirm:p']),
     });
     expect(filtered.map((n) => n.kind)).toEqual(['soon', 'chat']);
+  });
+
+  it('активный пакет с малым остатком → package; большой остаток/закрытый → нет', () => {
+    const pkg = (over: Partial<PackageResponse>): PackageResponse => ({
+      id: 'pk1',
+      clientId: 'c1',
+      lessonsPaid: 10,
+      lessonsUsed: 9,
+      pricePerLesson: 1000,
+      totalPaid: 10000,
+      workoutType: null,
+      startsAt: '2026-05-01',
+      status: 'active',
+      note: null,
+      tags: [],
+      createdAt: '2026-05-01T00:00:00.000Z',
+      ...over,
+    });
+    const low = buildClientNotifications({
+      sessions: [],
+      unread: 0,
+      now: NOW,
+      dismissed: new Set(),
+      packages: [pkg({ id: 'pk1', lessonsUsed: 9 })], // остаток 1
+    });
+    expect(low.map((n) => n.kind)).toEqual(['package']);
+    expect(low[0]?.id).toBe('package:pk1');
+    expect(low[0]?.text).toContain('осталось 1');
+
+    const ok = buildClientNotifications({
+      sessions: [],
+      unread: 0,
+      now: NOW,
+      dismissed: new Set(),
+      packages: [pkg({ lessonsUsed: 3 }), pkg({ id: 'closed', lessonsUsed: 10, status: 'closed' })], // остаток 7 / закрытый
+    });
+    expect(ok).toEqual([]);
+
+    const ended = buildClientNotifications({
+      sessions: [],
+      unread: 0,
+      now: NOW,
+      dismissed: new Set(),
+      packages: [pkg({ id: 'pk2', lessonsUsed: 10, workoutType: 'Массаж' })], // остаток 0
+    });
+    expect(ended[0]?.kind).toBe('package');
+    expect(ended[0]?.text).toContain('Массаж');
+    expect(ended[0]?.text).toContain('закончился');
   });
 });

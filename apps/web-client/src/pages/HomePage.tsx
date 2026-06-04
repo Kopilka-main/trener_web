@@ -16,6 +16,7 @@ import { useClientMe } from '../api/auth';
 import { useClientSessions } from '../api/calendar';
 import { useClientWorkouts } from '../api/workouts';
 import { useClientChatUnread } from '../api/chat';
+import { useClientPackages } from '../api/packages';
 import { aggregateExerciseOverview } from '../lib/workout-stats';
 import { buildClientNotifications, loadDismissed } from '../lib/notifications';
 
@@ -81,6 +82,7 @@ export function HomePage() {
   const sessions = useClientSessions(today, monthAhead).data ?? [];
   const workouts = useClientWorkouts().data ?? [];
   const unread = useClientChatUnread().data ?? 0;
+  const packages = useClientPackages().data ?? [];
   // Обзор упражнений из проведённых тренировок: для «Базы знаний» (кол-во упражнений)
   // и «Прогресса» (кол-во поставленных рекордов в последних сессиях).
   const exerciseOverview = aggregateExerciseOverview(workouts);
@@ -113,6 +115,7 @@ export function HomePage() {
     unread,
     now,
     dismissed: loadDismissed(),
+    packages,
   });
 
   const dateLabel = `СЕГОДНЯ · ${DAY_SHORT[now.getDay()]} ${now.getDate()} ${MONTH_FULL[now.getMonth()]}`;
