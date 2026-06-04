@@ -1,0 +1,1 @@
+ALTER TABLE "client_workouts" ADD COLUMN "created_by_client" boolean DEFAULT false NOT NULL;
