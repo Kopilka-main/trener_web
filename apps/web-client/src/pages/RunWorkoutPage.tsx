@@ -16,6 +16,7 @@ import {
   useAddWorkoutExercise,
   useClientWorkout,
   useCompleteWorkout,
+  useDeleteWorkout,
   useRemoveWorkoutExercise,
   useReorderWorkoutExercises,
   useStartWorkout,
@@ -198,8 +199,20 @@ function DraftView({ wid, workout }: { wid: string; workout: WorkoutResponse }) 
   const removeExercise = useRemoveWorkoutExercise();
   const reorder = useReorderWorkoutExercises();
   const start = useStartWorkout();
+  const del = useDeleteWorkout();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
+
+  // Черновик — временное превью: если уходим, не нажав «Начать», удаляем его,
+  // чтобы ничего не сохранялось (ни шаблоны, ни черновики).
+  const startedRef = useRef(false);
+  const delRef = useRef(del.mutate);
+  delRef.current = del.mutate;
+  useEffect(() => {
+    return () => {
+      if (!startedRef.current) delRef.current(wid);
+    };
+  }, [wid]);
 
   const labels = exerciseLabels(workout.exercises);
   const items = workout.exercises.map((ex) => ({ ...ex, id: `ex-${String(ex.position)}` }));
@@ -278,7 +291,10 @@ function DraftView({ wid, workout }: { wid: string; workout: WorkoutResponse }) 
           type="button"
           onClick={() =>
             start.mutate(workout.id, {
-              onSuccess: (started) => void navigate(`/workouts/${started.id}/run`),
+              onSuccess: (started) => {
+                startedRef.current = true;
+                void navigate(`/workouts/${started.id}/run`);
+              },
             })
           }
           disabled={start.isPending || empty}

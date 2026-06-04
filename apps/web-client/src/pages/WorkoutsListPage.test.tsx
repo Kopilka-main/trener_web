@@ -189,18 +189,6 @@ describe('WorkoutsListPage', () => {
     expect(screen.getByText('от тренера')).toBeInTheDocument();
   });
 
-  it('черновик → карточка «Начать тренировку», ведёт на /run', () => {
-    mockMe(true);
-    vi.mocked(api.useClientWorkouts).mockReturnValue({
-      isLoading: false,
-      isError: false,
-      data: [workout({ id: 'd1', name: 'Черновик', status: 'draft', createdByClient: true })],
-    } as never);
-    renderPage();
-    fireEvent.click(screen.getByText('Начать тренировку'));
-    expect(navigate).toHaveBeenCalledWith('/workouts/d1/run');
-  });
-
   it('активная: «Продолжить» ведёт на /run', () => {
     mockMe(true);
     vi.mocked(api.useClientWorkouts).mockReturnValue({

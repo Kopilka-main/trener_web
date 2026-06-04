@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronDown, ChevronUp, Play, Plus, RotateCcw, X } from 'lucide-react';
 import type { WorkoutExercisePlan, WorkoutResponse, WorkoutSetResponse } from '@trener/shared';
 import { useClientMe } from '../api/auth';
-import { useClientWorkouts, useCreateWorkout, useStartWorkout } from '../api/workouts';
+import { useClientWorkouts, useCreateWorkout } from '../api/workouts';
 import { useClientTemplates, useDeleteTemplate, useSaveTemplate } from '../api/templates';
 import { HoldToDelete } from '../components/HoldToDelete';
 import { formatDateGroup, formatTime } from '../lib/workoutDates';
@@ -77,7 +77,6 @@ export function WorkoutsListPage() {
   const me = useClientMe();
   const q = useClientWorkouts();
   const create = useCreateWorkout();
-  const start = useStartWorkout();
   const templates = useClientTemplates();
   const delTemplate = useDeleteTemplate();
   const linked = me.data?.link != null;
@@ -85,29 +84,29 @@ export function WorkoutsListPage() {
   const [picker, setPicker] = useState<'none' | 'history' | 'template'>('none');
 
   const all = q.data ?? [];
-  // Текущая тренировка (как у тренера): одна активная/черновик. Пока она есть —
-  // показываем карточку «Продолжить», а не выбор шаблона.
-  const current = all.find((w) => w.status === 'active') ?? all.find((w) => w.status === 'draft');
+  // Текущая тренировка (как у тренера): только запущенная (active). Пока она идёт —
+  // показываем карточку «Продолжить», а не выбор шаблона. Черновики — временное
+  // превью (DraftView): не запускаются и не отображаются в списке, удаляются при уходе.
+  const current = all.find((w) => w.status === 'active');
   const completed = all.filter((w) => w.status === 'completed');
-  const busy = create.isPending || start.isPending;
+  const busy = create.isPending;
 
   // Открыть существующую тренировку (активную/итоги — страница сама разберётся).
   function open(w: WorkoutResponse) {
     void navigate(`/workouts/${w.id}/run`);
   }
 
-  // Создать тренировку из плана и СРАЗУ запустить (без черновика) — открываем активную.
-  function createAndStart(body: { name: string; exercises: WorkoutExercisePlan[] }) {
-    create.mutate(body, {
-      onSuccess: (workout) => start.mutate(workout.id, { onSuccess: (started) => open(started) }),
-    });
+  // Создать ЧЕРНОВИК-превью по плану и открыть редактируемый план (DraftView).
+  // Запуск/сохранение происходит только по «Начать»; уход назад удаляет черновик.
+  function createDraftAndOpen(body: { name: string; exercises: WorkoutExercisePlan[] }) {
+    create.mutate(body, { onSuccess: (workout) => open(workout) });
   }
 
-  // Повтор завершённой: клонируем ФАКТ и сразу тренируемся.
+  // Повтор завершённой: клонируем ФАКТ в превью.
   function repeat(w: WorkoutResponse) {
     const body = repeatBody(w);
     if (body.exercises.length === 0) return;
-    createAndStart(body);
+    createDraftAndOpen(body);
   }
 
   // Элементы пикера «Выберите шаблон»: свои сохранённые шаблоны + проведённые
@@ -131,9 +130,9 @@ export function WorkoutsListPage() {
     })),
   ];
 
-  // Выбор шаблона/тренировки → сразу запускаем тренировку по его плану.
+  // Выбор шаблона/тренировки → открываем редактируемое превью по его плану.
   function fromPick(item: TemplatePick) {
-    createAndStart(item.body);
+    createDraftAndOpen(item.body);
   }
 
   return (
