@@ -19,7 +19,7 @@ import { Avatar } from '../components/Avatar';
 import { HoldToDelete } from '../components/HoldToDelete';
 import { useLogout, useMe, useRemoveMyAvatar, useUpdateMe, useUploadMyAvatar } from '../api/auth';
 import { useCreateGym, useDeleteGym, useGyms } from '../api/gyms';
-import { compressImage } from '../lib/image';
+import { AvatarCropper } from '../components/AvatarCropper';
 
 const CONTACT_TYPES = ['Телефон', 'WhatsApp', 'Telegram', 'MAX', 'Instagram', 'Прочее'] as const;
 
@@ -170,15 +170,13 @@ function AvatarEditor({ trainer }: { trainer: TrainerResponse }) {
   const upload = useUploadMyAvatar();
   const remove = useRemoveMyAvatar();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState<File | null>(null);
   const busy = upload.isPending || remove.isPending;
 
   function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file) return;
-    void compressImage(file).then((blob) => {
-      upload.mutate(blob);
-    });
+    if (file) setPending(file);
   }
 
   const src = trainer.avatarFileId
@@ -215,6 +213,14 @@ function AvatarEditor({ trainer }: { trainer: TrainerResponse }) {
         >
           <Trash2 size={12} strokeWidth={1.9} /> Удалить
         </button>
+      )}
+      {pending && (
+        <AvatarCropper
+          file={pending}
+          busy={upload.isPending}
+          onCancel={() => setPending(null)}
+          onDone={(blob) => upload.mutate(blob, { onSuccess: () => setPending(null) })}
+        />
       )}
     </div>
   );

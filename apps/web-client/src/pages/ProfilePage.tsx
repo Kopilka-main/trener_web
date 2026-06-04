@@ -10,7 +10,7 @@ import {
   useUploadMyAvatar,
 } from '../api/auth';
 import { useClientTrainer } from '../api/trainer';
-import { compressImage } from '../lib/image';
+import { AvatarCropper } from '../components/AvatarCropper';
 
 const CONTACT_TYPES = ['Телефон', 'WhatsApp', 'Telegram', 'MAX', 'Instagram', 'Прочее'] as const;
 type Contact = { type: string; value: string };
@@ -237,15 +237,13 @@ function AvatarBlock({ account }: { account: ClientAccountResponse }) {
   const upload = useUploadMyAvatar();
   const remove = useRemoveMyAvatar();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState<File | null>(null);
   const busy = upload.isPending || remove.isPending;
 
   function onPick(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file) return;
-    void compressImage(file).then((blob) => {
-      upload.mutate(blob);
-    });
+    if (file) setPending(file);
   }
 
   const src = account.avatarFileId ? `/api/client/auth/me/avatar?v=${account.avatarFileId}` : null;
@@ -282,6 +280,14 @@ function AvatarBlock({ account }: { account: ClientAccountResponse }) {
         >
           <Trash2 size={13} strokeWidth={1.9} /> Удалить
         </button>
+      )}
+      {pending && (
+        <AvatarCropper
+          file={pending}
+          busy={upload.isPending}
+          onCancel={() => setPending(null)}
+          onDone={(blob) => upload.mutate(blob, { onSuccess: () => setPending(null) })}
+        />
       )}
     </div>
   );
