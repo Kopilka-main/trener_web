@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
+import { popBack } from '../lib/backStack';
 
 const STORAGE_KEY = 'backfab.y';
 const FAB = 36; // диаметр кнопки, px
@@ -59,6 +60,8 @@ export function BackFab() {
     dragging.current = false;
     localStorage.setItem(STORAGE_KEY, String(y));
     if (moved.current) return;
+    // Если открыт оверлей (лист выбора и т.п.) — кнопка закрывает его, а не уходит.
+    if (popBack()) return;
     // React Router хранит индекс записи в history.state.idx. Если он 0 — это первый
     // экран сессии (страницу открыли по прямой ссылке), шагать назад некуда → на главную.
     const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
@@ -75,7 +78,7 @@ export function BackFab() {
       onPointerUp={onPointerUp}
       onPointerCancel={() => (dragging.current = false)}
       style={{ top: y, width: FAB, height: FAB }}
-      className="fixed right-3 z-40 flex touch-none select-none items-center justify-center rounded-full bg-card-elevated/55 text-ink opacity-65 shadow-[0_4px_14px_-2px_rgba(0,0,0,0.45)] backdrop-blur-sm transition-opacity active:bg-chip/70 active:opacity-100"
+      className="fixed right-3 z-[60] flex touch-none select-none items-center justify-center rounded-full bg-card-elevated/55 text-ink opacity-65 shadow-[0_4px_14px_-2px_rgba(0,0,0,0.45)] backdrop-blur-sm transition-opacity active:bg-chip/70 active:opacity-100"
     >
       <ChevronLeft size={20} strokeWidth={2} />
     </button>

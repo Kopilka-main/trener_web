@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RunWorkoutPage } from './RunWorkoutPage';
 import type { WorkoutResponse } from '@trener/shared';
 import * as workoutsApi from '../api/workouts';
@@ -49,17 +50,42 @@ function activeWorkout(): WorkoutResponse {
 }
 
 function renderPage() {
+  const qc = new QueryClient();
   return render(
-    <MemoryRouter initialEntries={['/workouts/w1/run']}>
-      <Routes>
-        <Route path="/workouts/:wid/run" element={<RunWorkoutPage />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={['/workouts/w1/run']}>
+        <Routes>
+          <Route path="/workouts/:wid/run" element={<RunWorkoutPage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
 describe('RunWorkoutPage', () => {
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(() => {
+    vi.resetAllMocks();
+    // Хуки правки набора вызываются на верхнем уровне — мокаем по умолчанию.
+    vi.mocked(workoutsApi.useAddWorkoutExercise).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as never);
+    vi.mocked(workoutsApi.useRemoveWorkoutExercise).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as never);
+    vi.mocked(workoutsApi.useReorderWorkoutExercises).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as never);
+    vi.mocked(workoutsApi.useDeleteWorkout).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as never);
+    vi.mocked(workoutsApi.clientWorkoutQueryKey).mockImplementation(
+      (wid: string) => ['client', 'workouts', wid] as never,
+    );
+  });
 
   it('лог подхода → useUpdateWorkoutSet с составным setId "<position>:<setIndex>"', () => {
     vi.mocked(workoutsApi.useClientWorkout).mockReturnValue({
@@ -80,7 +106,7 @@ describe('RunWorkoutPage', () => {
 
     renderPage();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Готово' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Отметить выполненным' }));
 
     expect(updateMutate).toHaveBeenCalledTimes(1);
     const [arg] = updateMutate.mock.calls[0] as [
@@ -97,7 +123,8 @@ describe('RunWorkoutPage', () => {
     expect(arg.input.actualWeightKg).toBe(50);
   });
 
-  it('завершение вызывает useCompleteWorkout и навигацию на деталь', () => {
+  it('удержание «Завершить» вызывает useCompleteWorkout и навигацию на деталь', () => {
+    vi.useFakeTimers();
     vi.mocked(workoutsApi.useClientWorkout).mockReturnValue({
       data: activeWorkout(),
       isLoading: false,
@@ -116,15 +143,22 @@ describe('RunWorkoutPage', () => {
 
     renderPage();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Завершить тренировку' }));
+    // Завершение — удержанием 1с (HoldComplete).
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Удерживайте, чтобы завершить' }));
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
 
     expect(completeMutate).toHaveBeenCalledTimes(1);
-    const [vars] = completeMutate.mock.calls[0] as [{ wid: string; input: { rpe: number | null } }];
+    const [vars] = completeMutate.mock.calls[0] as [
+      { wid: string; input: { rpe: number | null; durationSec: number | null } },
+    ];
     expect(vars.wid).toBe('w1');
     expect(navigate).toHaveBeenCalledWith('/workouts/w1');
+    vi.useRealTimers();
   });
 
-  it('не active → сообщение и ссылка назад', () => {
+  it('завершённая → редирект на итоги, без промежуточного экрана', () => {
     vi.mocked(workoutsApi.useClientWorkout).mockReturnValue({
       data: { ...activeWorkout(), status: 'completed' },
       isLoading: false,
@@ -142,6 +176,35 @@ describe('RunWorkoutPage', () => {
 
     renderPage();
 
-    expect(screen.getByText(/не запущена/)).toBeInTheDocument();
+    // Промежуточный экран «уже завершена» убран — идёт редирект на /workouts/:id.
+    expect(screen.queryByText(/уже завершена/)).not.toBeInTheDocument();
+  });
+
+  it('черновик → форма плана с «Начать тренировку»', () => {
+    vi.mocked(workoutsApi.useClientWorkout).mockReturnValue({
+      data: { ...activeWorkout(), status: 'draft' },
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+    } as never);
+    vi.mocked(workoutsApi.useUpdateWorkoutSet).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as never);
+    vi.mocked(workoutsApi.useCompleteWorkout).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as never);
+    const startMutate = vi.fn();
+    vi.mocked(workoutsApi.useStartWorkout).mockReturnValue({
+      mutate: startMutate,
+      isPending: false,
+    } as never);
+
+    renderPage();
+
+    expect(screen.getByText(/План тренировки/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Начать тренировку' }));
+    expect(startMutate).toHaveBeenCalledWith('w1', expect.anything());
   });
 });

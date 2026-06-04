@@ -24,6 +24,7 @@ import {
   useUpdateWorkoutSet,
 } from '../api/workouts';
 import { aggregateExerciseOverview } from '../lib/workout-stats';
+import { useBackClose } from '../lib/backStack';
 import { HoldToDelete } from '../components/HoldToDelete';
 import { SortableList } from '../components/SortableList';
 
@@ -881,6 +882,7 @@ function ExercisePickerSheet({
   onClose: () => void;
   onPick: (exercise: ExerciseResponse) => void;
 }) {
+  useBackClose(onClose);
   const exercises = useClientExercises();
   const workouts = useClientWorkouts();
   const [query, setQuery] = useState('');
@@ -908,16 +910,7 @@ function ExercisePickerSheet({
         onClick={onClose}
         className="absolute inset-0 bg-black/60"
       />
-      <div className="relative z-10 flex items-center justify-start px-5 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Назад"
-          className="flex items-center gap-1 rounded-full bg-card-elevated py-2 pl-2 pr-3 text-[14px] font-medium text-ink active:scale-95"
-        >
-          <ChevronLeft size={20} strokeWidth={2} /> Назад
-        </button>
-      </div>
+      <div className="pointer-events-none relative z-10 h-12 pt-[max(0.75rem,env(safe-area-inset-top))]" />
       <div className="relative z-10 flex flex-1 flex-col overflow-hidden rounded-t-3xl bg-bg pb-[max(1rem,env(safe-area-inset-bottom))]">
         <h2 className="px-5 pb-2 pt-4 text-[16px] font-bold text-ink">Добавить упражнение</h2>
 

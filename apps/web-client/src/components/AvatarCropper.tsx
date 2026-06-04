@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { cropImageToSquare } from '../lib/image';
+import { useBackClose } from '../lib/backStack';
 
 const BOX = 288; // сторона квадрата кропа, px
 const MAX_ZOOM = 4;
@@ -25,6 +26,9 @@ export function AvatarCropper({
   const [working, setWorking] = useState(false);
 
   const drag = useRef<{ px: number; py: number; ox: number; oy: number } | null>(null);
+
+  // Кнопка «Назад» закрывает кроппер (= Отмена).
+  useBackClose(onCancel);
 
   // ObjectURL для предпросмотра; чистим за собой.
   useEffect(() => {

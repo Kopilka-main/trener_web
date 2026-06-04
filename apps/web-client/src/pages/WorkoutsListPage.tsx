@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, ChevronLeft, ChevronUp, Play, Plus, RotateCcw } from 'lucide-react';
+import { ChevronDown, ChevronUp, Play, Plus, RotateCcw } from 'lucide-react';
 import type { WorkoutExercisePlan, WorkoutResponse, WorkoutSetResponse } from '@trener/shared';
 import { useClientMe } from '../api/auth';
 import { useClientWorkouts, useCreateWorkout } from '../api/workouts';
 import { useClientTemplates, useDeleteTemplate, useSaveTemplate } from '../api/templates';
 import { HoldToDelete } from '../components/HoldToDelete';
+import { useBackClose } from '../lib/backStack';
 import { formatDateGroup, formatTime } from '../lib/workoutDates';
 
 /** Элемент пикера «Выберите шаблон»: сохранённый шаблон или проведённая тренером тренировка. */
@@ -458,6 +459,7 @@ function TemplatePickerSheet({
   onPick: (item: TemplatePick) => void;
   onDelete: (id: string) => void;
 }) {
+  useBackClose(onClose);
   return (
     <div className="fixed inset-0 z-50 flex flex-col">
       <button
@@ -466,16 +468,7 @@ function TemplatePickerSheet({
         onClick={onClose}
         className="absolute inset-0 bg-black/60"
       />
-      <div className="relative z-10 flex items-center justify-start px-5 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Назад"
-          className="flex items-center gap-1 rounded-full bg-card-elevated py-2 pl-2 pr-3 text-[14px] font-medium text-ink active:scale-95"
-        >
-          <ChevronLeft size={20} strokeWidth={2} /> Назад
-        </button>
-      </div>
+      <div className="pointer-events-none relative z-10 h-12 pt-[max(0.75rem,env(safe-area-inset-top))]" />
       <div className="relative z-10 flex flex-1 flex-col overflow-hidden rounded-t-3xl bg-bg pb-[max(1rem,env(safe-area-inset-bottom))]">
         <h2 className="px-5 pb-2 pt-4 text-[16px] font-bold text-ink">Выберите шаблон</h2>
 
@@ -535,6 +528,7 @@ function HistoryPickerSheet({
   onClose: () => void;
   onPick: (workout: WorkoutResponse) => void;
 }) {
+  useBackClose(onClose);
   return (
     <div className="fixed inset-0 z-50 flex flex-col">
       <button
@@ -543,16 +537,7 @@ function HistoryPickerSheet({
         onClick={onClose}
         className="absolute inset-0 bg-black/60"
       />
-      <div className="relative z-10 flex items-center justify-start px-5 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Назад"
-          className="flex items-center gap-1 rounded-full bg-card-elevated py-2 pl-2 pr-3 text-[14px] font-medium text-ink active:scale-95"
-        >
-          <ChevronLeft size={20} strokeWidth={2} /> Назад
-        </button>
-      </div>
+      <div className="pointer-events-none relative z-10 h-12 pt-[max(0.75rem,env(safe-area-inset-top))]" />
       <div className="relative z-10 flex flex-1 flex-col overflow-hidden rounded-t-3xl bg-bg pb-[max(1rem,env(safe-area-inset-bottom))]">
         <h2 className="px-5 pb-2 pt-4 text-[16px] font-bold text-ink">Повторить из истории</h2>
 
