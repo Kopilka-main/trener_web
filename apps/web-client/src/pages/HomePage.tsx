@@ -16,7 +16,7 @@ import { useClientMe } from '../api/auth';
 import { useClientSessions } from '../api/calendar';
 import { useClientWorkouts } from '../api/workouts';
 import { useClientChatUnread } from '../api/chat';
-import { useClientMeasurements } from '../api/measurements';
+import { aggregateExerciseOverview } from '../lib/workout-stats';
 import { buildClientNotifications, loadDismissed } from '../lib/notifications';
 
 const DAY_SHORT = ['ВС', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ'];
@@ -81,7 +81,10 @@ export function HomePage() {
   const sessions = useClientSessions(today, monthAhead).data ?? [];
   const workouts = useClientWorkouts().data ?? [];
   const unread = useClientChatUnread().data ?? 0;
-  const measurements = useClientMeasurements().data ?? [];
+  // Обзор упражнений из проведённых тренировок: для «Базы знаний» (кол-во упражнений)
+  // и «Прогресса» (кол-во поставленных рекордов в последних сессиях).
+  const exerciseOverview = aggregateExerciseOverview(workouts);
+  const recordsCount = exerciseOverview.filter((e) => e.lastIsRecord).length;
 
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
@@ -152,8 +155,8 @@ export function HomePage() {
     {
       key: 'progress',
       title: 'Прогресс',
-      sub: 'замеры и графики',
-      metrics: [{ v: pad2(measurements.length), s: 'замеров' }],
+      sub: 'рекорды и графики',
+      metrics: [{ v: pad2(recordsCount), s: 'рекордов' }],
       Icon: TrendingUp,
       onClick: () => void navigate('/progress'),
     },
@@ -161,7 +164,7 @@ export function HomePage() {
       key: 'knowledge',
       title: 'База знаний',
       sub: 'упражнения с тренировок',
-      metrics: [],
+      metrics: [{ v: pad2(exerciseOverview.length), s: 'упражнений' }],
       Icon: BookOpen,
       onClick: () => void navigate('/knowledge'),
     },
