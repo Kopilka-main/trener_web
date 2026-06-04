@@ -15,6 +15,7 @@ import { StatsPage } from './pages/StatsPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { TrainerPage } from './pages/TrainerPage';
 import { KnowledgePage } from './pages/KnowledgePage';
+import { ExerciseDetailPage } from './pages/ExerciseDetailPage';
 
 export function App() {
   const me = useClientMe();
@@ -55,6 +56,7 @@ export function App() {
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/trainer" element={<TrainerPage />} />
         <Route path="/knowledge" element={<KnowledgePage />} />
+        <Route path="/knowledge/:exerciseId" element={<ExerciseDetailPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/connect" element={<ConnectPage code={me.data.account.id} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
