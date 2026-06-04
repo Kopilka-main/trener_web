@@ -47,7 +47,7 @@ export function useClientChatUnread() {
         throw err;
       }
     },
-    refetchInterval: 10000,
+    refetchInterval: 8000,
   });
 }
 

@@ -16,6 +16,7 @@ import { useClients } from '../api/clients';
 import { useExercises } from '../api/exercises';
 import { useSessions } from '../api/sessions';
 import { useAccountingSummary } from '../api/accounting';
+import { useChatUnread } from '../api/chat';
 
 const DAY_SHORT = ['ВС', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ'];
 const MONTH_FULL = [
@@ -87,8 +88,9 @@ export function HomePage() {
   const { data: sessionsMonth } = useSessions(today, monthAhead);
   const { data: finance } = useAccountingSummary(monthStart, today);
 
-  // TODO: эндпоинта непрочитанных сообщений нет → 0.
-  const chatBadge = 0;
+  // Непрочитанные диалоги тренера (плитка «Сообщения» становится primary при > 0).
+  const { data: chatUnread } = useChatUnread();
+  const chatBadge = chatUnread ?? 0;
   // TODO: модуля алертов/уведомлений нет → пустой список.
   const visibleAlerts: unknown[] = [];
 

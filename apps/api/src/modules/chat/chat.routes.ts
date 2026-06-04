@@ -46,6 +46,15 @@ export function chatRoutes(
   );
 
   typed.get(
+    '/api/chat/unread',
+    {
+      preHandler: requireAuth,
+      schema: { response: { 200: z.object({ count: z.number() }) } },
+    },
+    async (req) => ({ count: await svc.trainerUnread(trainerId(req)) }),
+  );
+
+  typed.get(
     '/api/clients/:id/messages',
     {
       preHandler: clientPreHandler,

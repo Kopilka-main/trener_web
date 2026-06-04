@@ -35,6 +35,7 @@ function fakeRepo(over: Partial<ChatRepo> = {}): ChatRepo {
     markRead: vi.fn(() => Promise.resolve()),
     markReadByClient: vi.fn(() => Promise.resolve()),
     clientUnreadCount: vi.fn(() => Promise.resolve(0)),
+    trainerUnreadConversationsCount: vi.fn(() => Promise.resolve(0)),
     trainerReadAt: vi.fn(() => Promise.resolve(null)),
     clientReadAt: vi.fn(() => Promise.resolve(null)),
     ...over,
@@ -75,6 +76,13 @@ describe('chat.service', () => {
     expect(res.senderRole).toBe('trainer');
     expect(res.createdAt).toBe(new Date(0).toISOString());
     expect(addMessage).toHaveBeenCalledWith('A', 'c1', 'newid', 'хай', new Date(0), 'trainer');
+  });
+
+  it('trainerUnread прокидывает trainerId и резолвит число', async () => {
+    const trainerUnreadConversationsCount = vi.fn(() => Promise.resolve(3));
+    const svc = makeChatService(fakeRepo({ trainerUnreadConversationsCount }), deps);
+    await expect(svc.trainerUnread('A')).resolves.toBe(3);
+    expect(trainerUnreadConversationsCount).toHaveBeenCalledWith('A');
   });
 
   it('markRead прокидывает scope и now', async () => {

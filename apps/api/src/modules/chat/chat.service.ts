@@ -66,6 +66,11 @@ export function makeChatService(repo: ChatRepo, deps: ChatDeps) {
       return repo.clientUnreadCount(trainerId, clientId);
     },
 
+    // Сколько диалогов тренера с непрочитанными входящими (для бейджа «Сообщения»).
+    trainerUnread(trainerId: string): Promise<number> {
+      return repo.trainerUnreadConversationsCount(trainerId);
+    },
+
     async trainerReadAt(trainerId: string, clientId: string): Promise<string | null> {
       const at = await repo.trainerReadAt(trainerId, clientId);
       return at ? at.toISOString() : null;

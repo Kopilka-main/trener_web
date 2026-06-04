@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNull, or, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { conversations, messages } from '../../db/schema.js';
 
@@ -216,6 +216,26 @@ export function makeChatRepo(db: Db) {
         .from(messages)
         .where(and(...filters));
       return rows.length;
+    },
+
+    // Сколько диалогов тренера имеют непрочитанные входящие сообщения: есть сообщение
+    // от клиента новее trainerLastReadAt диалога (или диалог ни разу не читался).
+    async trainerUnreadConversationsCount(trainerId: string): Promise<number> {
+      const rows = await db
+        .select({ convId: conversations.id })
+        .from(messages)
+        .innerJoin(conversations, eq(messages.conversationId, conversations.id))
+        .where(
+          and(
+            eq(conversations.trainerId, trainerId),
+            eq(messages.senderRole, 'client'),
+            or(
+              isNull(conversations.trainerLastReadAt),
+              sql`${messages.createdAt} > ${conversations.trainerLastReadAt}`,
+            ),
+          ),
+        );
+      return new Set(rows.map((r) => r.convId)).size;
     },
   };
 }

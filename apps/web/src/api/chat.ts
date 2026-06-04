@@ -83,6 +83,20 @@ export function useConversations() {
   });
 }
 
+const chatUnreadResponseSchema = z.object({ count: z.number() });
+export const chatUnreadQueryKey = ['chat', 'unread'] as const;
+
+/** Число диалогов с непрочитанными входящими — для плитки «Сообщения» на главной.
+ * Опрашивается раз в 8с, чтобы счётчик/акцент обновлялись при новых сообщениях. */
+export function useChatUnread() {
+  return useQuery({
+    queryKey: chatUnreadQueryKey,
+    queryFn: () =>
+      apiFetch('/chat/unread', { schema: chatUnreadResponseSchema }).then((r) => r.count),
+    refetchInterval: 8000,
+  });
+}
+
 /** Отметка диалога прочитанным тренером (при открытии чата) + обновление списка диалогов. */
 export function useMarkConversationRead(clientId: string) {
   const qc = useQueryClient();
