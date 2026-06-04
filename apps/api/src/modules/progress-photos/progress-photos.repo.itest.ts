@@ -17,6 +17,7 @@ describe.skipIf(!url)('progress-photos.repo (integration)', () => {
       id: 'fA',
       trainerId: 'A',
       clientId: 'c1',
+      accountId: null,
       mime: 'image/jpeg',
       sizeBytes: 100,
       storagePath: 'A/c1/fA.jpg',

@@ -30,6 +30,8 @@ export const trainerResponseSchema = z.object({
   title: z.string().nullable(),
   bio: z.string().nullable(),
   contacts: z.array(contactSchema),
+  // .default(null) — терпимость к старому api, который ещё не отдаёт это поле.
+  avatarFileId: z.string().nullable().default(null),
 });
 export type TrainerResponse = z.infer<typeof trainerResponseSchema>;
 
@@ -40,6 +42,7 @@ export const trainerPublicResponseSchema = z.object({
   title: z.string().nullable(),
   bio: z.string().nullable(),
   contacts: z.array(contactSchema),
+  avatarFileId: z.string().nullable().default(null),
 });
 export type TrainerPublicResponse = z.infer<typeof trainerPublicResponseSchema>;
 

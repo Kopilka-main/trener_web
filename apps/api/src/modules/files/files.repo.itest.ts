@@ -14,6 +14,7 @@ describe.skipIf(!url)('files.repo (integration)', () => {
     id: 'f1',
     trainerId: 'A',
     clientId: 'c1',
+    accountId: null,
     mime: 'image/png',
     sizeBytes: 1234,
     storagePath: 'A/c1/f1.png',

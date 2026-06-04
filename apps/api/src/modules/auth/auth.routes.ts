@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
@@ -7,14 +7,47 @@ import {
   trainerResponseSchema,
   updateTrainerRequestSchema,
 } from '@trener/shared';
-import type { AuthService, Session } from './auth.service.js';
+import type { AuthService, AvatarUploadInput, Session } from './auth.service.js';
 import { SESSION_COOKIE } from '../../plugins/tenant-context.js';
-import { unauthorized } from '../../errors.js';
+import { AppError, unauthorized } from '../../errors.js';
 
 const meResponse = z.object({ trainer: trainerResponseSchema });
 
 export function authRoutes(app: FastifyInstance, svc: AuthService, isProd: boolean): void {
   const typed = app.withTypeProvider<ZodTypeProvider>();
+
+  function trainerId(req: { trainerId?: string }): string {
+    if (!req.trainerId) throw unauthorized('Требуется вход');
+    return req.trainerId;
+  }
+
+  // Читает multipart-запрос аватара: собирает файл `photo` в буфер (по образцу
+  // clients.routes). Прочие файловые части дренируем, чтобы не блокировать поток.
+  async function readAvatar(req: FastifyRequest): Promise<AvatarUploadInput> {
+    let fileBuffer: Buffer | null = null;
+    let mime: string | null = null;
+    let originalName: string | null = null;
+
+    for await (const part of req.parts()) {
+      if (part.type === 'file') {
+        if (part.fieldname === 'photo' && fileBuffer === null) {
+          fileBuffer = await part.toBuffer();
+          mime = part.mimetype;
+          originalName = part.filename || null;
+        } else {
+          await part.toBuffer();
+        }
+      }
+    }
+
+    if (!fileBuffer || mime === null) {
+      throw new AppError(400, 'FILE_REQUIRED', 'Файл `photo` обязателен');
+    }
+    if (!mime.startsWith('image/')) {
+      throw new AppError(400, 'UNSUPPORTED_MEDIA_TYPE', 'Ожидается изображение');
+    }
+    return { fileBuffer, mime, originalName };
+  }
 
   function setSessionCookie(reply: FastifyReply, session: Session): void {
     void reply.setCookie(SESSION_COOKIE, session.token, {
@@ -74,6 +107,21 @@ export function authRoutes(app: FastifyInstance, svc: AuthService, isProd: boole
     async (req) => {
       if (!req.trainerId) throw unauthorized('Требуется вход');
       return { trainer: await svc.updateMe(req.trainerId, req.body) };
+    },
+  );
+
+  // Аватар тренера: multipart (поле `photo`, image/*). Бизнес-логика — в service.
+  typed.post('/api/auth/me/avatar', { schema: { response: { 200: meResponse } } }, async (req) => {
+    const input = await readAvatar(req);
+    return { trainer: await svc.setAvatar(trainerId(req), input) };
+  });
+
+  typed.delete(
+    '/api/auth/me/avatar',
+    { schema: { response: { 200: z.object({ ok: z.literal(true) }) } } },
+    async (req) => {
+      await svc.removeAvatar(trainerId(req));
+      return { ok: true as const };
     },
   );
 }

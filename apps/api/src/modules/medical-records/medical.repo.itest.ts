@@ -17,6 +17,7 @@ describe.skipIf(!url)('medical.repo (integration)', () => {
       id: 'fA',
       trainerId: 'A',
       clientId: 'c1',
+      accountId: null,
       mime: 'application/pdf',
       sizeBytes: 100,
       storagePath: 'A/c1/fA.pdf',

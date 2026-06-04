@@ -37,6 +37,14 @@ describe('ProfilePage', () => {
       isPending: false,
       isError: false,
     } as never);
+    vi.mocked(auth.useUploadMyAvatar).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as never);
+    vi.mocked(auth.useRemoveMyAvatar).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as never);
     vi.mocked(trainerApi.useClientTrainer).mockReturnValue({ data: null } as never);
   });
 

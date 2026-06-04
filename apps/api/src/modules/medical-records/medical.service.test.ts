@@ -26,6 +26,7 @@ function fileRow(over: Partial<FileRow> = {}): FileRow {
     id: 'f1',
     trainerId: 'A',
     clientId: 'c1',
+    accountId: null,
     mime: 'application/pdf',
     sizeBytes: 100,
     storagePath: 'A/c1/f1.pdf',
@@ -50,6 +51,9 @@ function fakeFilesRepo(over: Partial<FilesRepo> = {}): FilesRepo {
   return {
     create: vi.fn(() => Promise.resolve(fileRow())),
     getForTrainer: vi.fn(() => Promise.resolve(null)),
+    getForAccount: vi.fn(() => Promise.resolve(null)),
+    getById: vi.fn(() => Promise.resolve(null)),
+    deleteById: vi.fn(() => Promise.resolve(null)),
     delete: vi.fn(() => Promise.resolve(null)),
     ...over,
   };

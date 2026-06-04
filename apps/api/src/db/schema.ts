@@ -33,6 +33,11 @@ export const trainers = pgTable(
     title: text('title'),
     bio: text('bio'),
     contacts: jsonb('contacts').$type<{ type: string; value: string }[]>().notNull().default([]),
+    // Аватар тренера: ссылка на files. NULL = нет фото, удаление файла → set null.
+    // FK-колбэк ленивый (files объявлена ниже). AnyPgColumn разрывает циклическую инференцию.
+    avatarFileId: text('avatar_file_id').references((): AnyPgColumn => files.id, {
+      onDelete: 'set null',
+    }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   // ИНВАРИАНТ: email хранится уже нормализованным (lowercase+trim) — это гарантирует
@@ -386,17 +391,20 @@ export const measurements = pgTable(
   (t) => [index('idx_measurements_trainer_client_date').on(t.trainerId, t.clientId, t.date)],
 );
 
-// Загруженный файл (приватный). Раздаётся только владельцу-тренеру через GET /api/files/:id.
+// Загруженный файл (приватный). Раздаётся только владельцу через соответствующие роуты.
+// Владелец: либо тренер (trainerId задан, accountId null), либо клиент-аккаунт (accountId задан,
+// trainerId null). Инвариант XOR обеспечивается сервисным слоем, не БД.
 // clientId опционален: файл может быть привязан к клиенту (фото/медкарта) либо нет.
 // storagePath — относительный путь от UPLOADS_DIR (<trainerId>/<clientId|'_'>/<id>.<ext>).
 export const files = pgTable(
   'files',
   {
     id: text('id').primaryKey(),
-    trainerId: text('trainer_id')
-      .notNull()
-      .references(() => trainers.id, { onDelete: 'cascade' }),
+    trainerId: text('trainer_id').references(() => trainers.id, { onDelete: 'cascade' }),
     clientId: text('client_id').references(() => clients.id, { onDelete: 'cascade' }),
+    accountId: text('account_id').references((): AnyPgColumn => clientAccounts.id, {
+      onDelete: 'cascade',
+    }),
     mime: text('mime').notNull(),
     sizeBytes: integer('size_bytes').notNull(),
     storagePath: text('storage_path').notNull(),

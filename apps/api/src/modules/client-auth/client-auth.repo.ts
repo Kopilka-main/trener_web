@@ -24,6 +24,33 @@ export function makeClientAuthRepo(db: Db) {
       const [row] = await db.select().from(clientAccounts).where(eq(clientAccounts.id, id));
       return row ?? null;
     },
+    // Проставляет/снимает аватар аккаунта, возвращает прежний avatarFileId (для чистки).
+    // null fileId — снять аватар. null-результат — аккаунт не найден.
+    async setAvatar(
+      accountId: string,
+      fileId: string | null,
+    ): Promise<{ previousFileId: string | null } | null> {
+      const [prev] = await db
+        .select({ avatarFileId: clientAccounts.avatarFileId })
+        .from(clientAccounts)
+        .where(eq(clientAccounts.id, accountId));
+      if (!prev) return null;
+      await db
+        .update(clientAccounts)
+        .set({ avatarFileId: fileId })
+        .where(eq(clientAccounts.id, accountId));
+      return { previousFileId: prev.avatarFileId };
+    },
+
+    // avatarFileId аккаунта, либо null если аккаунт не найден / аватар не задан.
+    async findAvatarFileId(accountId: string): Promise<string | null> {
+      const [row] = await db
+        .select({ avatarFileId: clientAccounts.avatarFileId })
+        .from(clientAccounts)
+        .where(eq(clientAccounts.id, accountId));
+      return row?.avatarFileId ?? null;
+    },
+
     async createSession(s: { id: string; clientAccountId: string; expiresAt: Date }) {
       await db.insert(clientSessionsAuth).values(s);
     },

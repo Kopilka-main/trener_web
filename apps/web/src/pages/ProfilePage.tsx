@@ -1,13 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, ChevronRight, Copy, LogOut, Mail, Pencil, Plus, QrCode, X } from 'lucide-react';
+import {
+  Check,
+  ChevronRight,
+  Copy,
+  LogOut,
+  Mail,
+  Pencil,
+  Plus,
+  QrCode,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import type { TrainerContact, TrainerResponse } from '@trener/shared';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Avatar } from '../components/Avatar';
 import { HoldToDelete } from '../components/HoldToDelete';
-import { useLogout, useMe, useUpdateMe } from '../api/auth';
+import { useLogout, useMe, useRemoveMyAvatar, useUpdateMe, useUploadMyAvatar } from '../api/auth';
 import { useCreateGym, useDeleteGym, useGyms } from '../api/gyms';
+import { compressImage } from '../lib/image';
 
 const CONTACT_TYPES = ['Телефон', 'WhatsApp', 'Telegram', 'MAX', 'Instagram', 'Прочее'] as const;
 
@@ -62,7 +74,7 @@ export function ProfilePage() {
       <div className="flex flex-1 flex-col gap-5 px-4 pb-10 pt-1">
         {/* Карточка тренера */}
         <div className="flex items-center gap-3 rounded-3xl bg-card p-4">
-          <Avatar firstName={trainer.firstName} lastName={trainer.lastName} size={64} />
+          <AvatarEditor trainer={trainer} />
           <div className="min-w-0">
             <div className="text-[19px] font-bold leading-tight text-ink">{fullName}</div>
             {trainer.title && (
@@ -113,6 +125,54 @@ export function ProfilePage() {
 
         <LogoutButton />
       </div>
+    </div>
+  );
+}
+
+/** Аватар тренера в карточке профиля: фото (если есть) или инициалы + загрузка/удаление.
+ * `?v=<id>` в src — кэш-бастинг, чтобы <img> обновился после смены файла. */
+function AvatarEditor({ trainer }: { trainer: TrainerResponse }) {
+  const upload = useUploadMyAvatar();
+  const remove = useRemoveMyAvatar();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const busy = upload.isPending || remove.isPending;
+
+  function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    void compressImage(file).then((blob) => {
+      upload.mutate(blob);
+    });
+  }
+
+  const src = trainer.avatarFileId
+    ? `/api/files/${trainer.avatarFileId}?v=${trainer.avatarFileId}`
+    : null;
+
+  return (
+    <div className="flex shrink-0 flex-col items-center gap-1.5">
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={busy}
+        aria-label="Загрузить фото"
+        className="rounded-full disabled:opacity-50"
+      >
+        <Avatar firstName={trainer.firstName} lastName={trainer.lastName} size={64} src={src} />
+      </button>
+      <input ref={inputRef} type="file" accept="image/*" onChange={onPick} className="hidden" />
+      {trainer.avatarFileId && (
+        <button
+          type="button"
+          onClick={() => remove.mutate()}
+          disabled={busy}
+          aria-label="Удалить фото"
+          className="flex items-center gap-1 text-[11px] font-medium text-ink-muted disabled:opacity-50"
+        >
+          <Trash2 size={12} strokeWidth={1.9} /> Удалить
+        </button>
+      )}
     </div>
   );
 }

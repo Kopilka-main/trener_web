@@ -78,6 +78,7 @@ export function makeMedicalService(
             id: fileId,
             trainerId,
             clientId,
+            accountId: null,
             mime: input.file.mime,
             sizeBytes: saved.sizeBytes,
             storagePath: saved.storagePath,
