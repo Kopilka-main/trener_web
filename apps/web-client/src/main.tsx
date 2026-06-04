@@ -20,7 +20,7 @@ createRoot(rootEl).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <App />
-        <DevInspector />
+        {import.meta.env.DEV && <DevInspector />}
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,

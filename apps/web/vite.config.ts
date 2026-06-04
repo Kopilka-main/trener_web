@@ -36,8 +36,12 @@ function dataLocBabel({ types: t }: { types: typeof BabelTypes }): PluginObj {
   };
 }
 
-export default defineConfig({
-  plugins: [react({ babel: { plugins: [dataLocBabel] } }), tailwindcss()],
+export default defineConfig(({ command }) => ({
+  // data-loc нужен только dev-инспектору (DevInspector) — в прод-сборку не включаем.
+  plugins: [
+    react({ babel: { plugins: command === 'serve' ? [dataLocBabel] : [] } }),
+    tailwindcss(),
+  ],
   server: {
     port: 5173,
     proxy: {
@@ -51,4 +55,4 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
   },
-});
+}));
