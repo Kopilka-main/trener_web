@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, Plus, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Mail, Pencil, Plus, Trash2, X } from 'lucide-react';
 import type { ClientAccountResponse } from '@trener/shared';
 import {
   useClientMe,
@@ -19,24 +19,32 @@ export function ProfilePage() {
   const me = useClientMe();
   const logout = useClientLogout();
   const update = useUpdateClientProfile();
+  const [editing, setEditing] = useState(false);
+
+  if (!me.data) {
+    return (
+      <div className="flex flex-1 flex-col gap-5 px-4 pb-6 pt-5">
+        <h1 className="font-[family-name:var(--font-display)] text-[28px] text-ink">Профиль</h1>
+        <p className="text-sm text-ink-muted">Загрузка…</p>
+      </div>
+    );
+  }
+
+  const account = me.data.account;
+  const linked = me.data.link !== null;
+
+  if (editing) {
+    return <ProfileEdit account={account} update={update} onClose={() => setEditing(false)} />;
+  }
 
   return (
-    <div className="flex flex-1 flex-col gap-5 px-4 pb-6 pt-5">
-      <h1 className="font-[family-name:var(--font-display)] text-[28px] text-ink">Профиль</h1>
-      {me.data ? (
-        <ProfileForm account={me.data.account} linked={me.data.link !== null} update={update} />
-      ) : (
-        <p className="text-sm text-ink-muted">Загрузка…</p>
-      )}
-      <button
-        type="button"
-        onClick={() => logout.mutate()}
-        disabled={logout.isPending}
-        className="mt-2 rounded-xl bg-card py-3 text-[14px] font-semibold text-ink active:bg-card-elevated disabled:opacity-60"
-      >
-        Выйти
-      </button>
-    </div>
+    <ProfileView
+      account={account}
+      linked={linked}
+      onEdit={() => setEditing(true)}
+      onLogout={() => logout.mutate()}
+      logoutPending={logout.isPending}
+    />
   );
 }
 
@@ -69,7 +77,161 @@ function displayToIso(display: string): string | null {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-/** Блок аватара клиента: фото (если есть) либо инициалы + загрузка/удаление.
+// ─── Просмотр профиля ──────────────────────────────────────────────────────────
+
+/** Аватар клиента в режиме просмотра: фото (если есть) либо инициалы, без загрузки. */
+function AvatarView({ account }: { account: ClientAccountResponse }) {
+  const src = account.avatarFileId ? `/api/client/auth/me/avatar?v=${account.avatarFileId}` : null;
+  return src ? (
+    <img
+      src={src}
+      alt={`${account.firstName} ${account.lastName}`.trim()}
+      className="h-16 w-16 shrink-0 rounded-full bg-chip object-cover"
+    />
+  ) : (
+    <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-chip font-[family-name:var(--font-display)] text-[22px] text-ink">
+      {initials(account.firstName, account.lastName)}
+    </span>
+  );
+}
+
+function ProfileView({
+  account,
+  linked,
+  onEdit,
+  onLogout,
+  logoutPending,
+}: {
+  account: ClientAccountResponse;
+  linked: boolean;
+  onEdit: () => void;
+  onLogout: () => void;
+  logoutPending: boolean;
+}) {
+  const trainer = useClientTrainer();
+  const fullName = `${account.firstName} ${account.lastName}`.trim();
+
+  return (
+    <div className="flex flex-1 flex-col gap-5 px-4 pb-6 pt-5">
+      <div className="flex items-center justify-between">
+        <h1 className="font-[family-name:var(--font-display)] text-[28px] text-ink">Профиль</h1>
+        <button
+          type="button"
+          onClick={onEdit}
+          aria-label="Редактировать профиль"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-ink active:bg-card-elevated"
+        >
+          <Pencil size={17} strokeWidth={1.9} />
+        </button>
+      </div>
+
+      {/* Карточка клиента */}
+      <div className="flex items-center gap-3 rounded-3xl bg-card p-4">
+        <AvatarView account={account} />
+        <div className="min-w-0">
+          <div className="text-[19px] font-bold leading-tight text-ink">{fullName}</div>
+          <div className="truncate text-[12px] text-ink-mutedxl">{account.email}</div>
+          {account.birthDate && (
+            <div className="truncate text-[12px] text-ink-mutedxl">
+              Дата рождения: {isoToDisplay(account.birthDate)}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Тренер */}
+      {linked ? (
+        <Link
+          to="/trainer"
+          className="flex items-center gap-3 rounded-xl bg-card px-4 py-3 active:bg-card-elevated"
+        >
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-card-elevated">
+            {trainer.data?.avatarFileId ? (
+              <img
+                src={`/api/client/trainer/avatar?v=${trainer.data.avatarFileId}`}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <span className="text-[15px] font-bold text-ink">
+                {trainer.data ? initials(trainer.data.firstName, trainer.data.lastName) : '—'}
+              </span>
+            )}
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-mutedxl">
+              Ваш тренер
+            </span>
+            <span className="truncate text-[15px] font-semibold text-ink">
+              {trainer.data ? `${trainer.data.firstName} ${trainer.data.lastName}` : 'Загрузка…'}
+            </span>
+            {trainer.data?.title && (
+              <span className="truncate text-[13px] text-ink-muted">{trainer.data.title}</span>
+            )}
+          </span>
+          <ChevronRight size={18} className="shrink-0 text-ink-mutedxl" />
+        </Link>
+      ) : (
+        <Link
+          to="/connect"
+          className="rounded-xl bg-card px-4 py-3 text-[14px] font-semibold text-accent active:bg-card-elevated"
+        >
+          Подключить тренера
+        </Link>
+      )}
+
+      {/* Контакты */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-ink-muted">Контакты</span>
+        <a
+          href={`mailto:${account.email}`}
+          className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3"
+        >
+          <Mail size={16} className="shrink-0 text-ink-muted" />
+          <span className="shrink-0 text-[13px] text-ink-muted">Email</span>
+          <span className="ml-auto min-w-0 truncate text-[14px] font-semibold text-ink">
+            {account.email}
+          </span>
+          <ChevronRight size={15} className="shrink-0 text-ink-mutedxl" />
+        </a>
+        {account.contacts.map((c, i) => (
+          <div
+            key={`${c.type}-${String(i)}`}
+            className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3"
+          >
+            <span className="shrink-0 text-[13px] text-ink-muted">{c.type}</span>
+            <span className="ml-auto min-w-0 truncate text-[14px] font-semibold text-ink">
+              {c.value}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* О себе */}
+      {account.bio && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-ink-muted">О себе / цели</span>
+          <div className="rounded-2xl bg-card p-3.5 text-[14px] leading-relaxed text-ink">
+            {account.bio}
+          </div>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={onLogout}
+        disabled={logoutPending}
+        className="mt-2 rounded-xl bg-card py-3 text-[14px] font-semibold text-ink active:bg-card-elevated disabled:opacity-60"
+      >
+        Выйти
+      </button>
+    </div>
+  );
+}
+
+// ─── Редактирование профиля ─────────────────────────────────────────────────────
+
+/** Блок аватара клиента в режиме редактирования: фото/инициалы + загрузка/удаление.
  * Свой URL фиксированный, поэтому `?v=<id>` — кэш-бастинг при смене файла. */
 function AvatarBlock({ account }: { account: ClientAccountResponse }) {
   const upload = useUploadMyAvatar();
@@ -125,23 +287,21 @@ function AvatarBlock({ account }: { account: ClientAccountResponse }) {
   );
 }
 
-function ProfileForm({
+function ProfileEdit({
   account,
-  linked,
   update,
+  onClose,
 }: {
   account: ClientAccountResponse;
-  linked: boolean;
   update: ReturnType<typeof useUpdateClientProfile>;
+  onClose: () => void;
 }) {
-  const trainer = useClientTrainer();
   const [firstName, setFirstName] = useState(account.firstName);
   const [lastName, setLastName] = useState(account.lastName);
   // birthDate хранится в state как отображаемая строка ДД.ММ.ГГГГ.
   const [birthDate, setBirthDate] = useState(isoToDisplay(account.birthDate ?? ''));
   const [bio, setBio] = useState(account.bio ?? '');
   const [contacts, setContacts] = useState<Contact[]>(account.contacts);
-  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     setFirstName(account.firstName);
@@ -153,7 +313,6 @@ function ProfileForm({
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSaved(false);
     update.mutate(
       {
         firstName: firstName.trim(),
@@ -164,53 +323,28 @@ function ProfileForm({
           .filter((c) => c.value.trim() !== '')
           .map((c) => ({ type: c.type, value: c.value.trim() })),
       },
-      { onSuccess: () => setSaved(true) },
+      { onSuccess: onClose },
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <AvatarBlock account={account} />
+    <form onSubmit={handleSubmit} className="flex flex-1 flex-col gap-4 px-4 pb-6 pt-5">
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Назад"
+          className="-ml-2 flex h-9 w-9 items-center justify-center rounded-full text-ink active:bg-card-elevated"
+        >
+          <ChevronLeft size={22} strokeWidth={1.9} />
+        </button>
+        <h1 className="font-[family-name:var(--font-display)] text-[22px] text-ink">
+          Редактировать
+        </h1>
+        <span className="h-9 w-9" />
+      </div>
 
-      {linked ? (
-        <Link
-          to="/trainer"
-          className="flex items-center gap-3 rounded-xl bg-card px-4 py-3 active:bg-card-elevated"
-        >
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-card-elevated">
-            {trainer.data?.avatarFileId ? (
-              <img
-                src={`/api/client/trainer/avatar?v=${trainer.data.avatarFileId}`}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <span className="text-[15px] font-bold text-ink">
-                {trainer.data ? initials(trainer.data.firstName, trainer.data.lastName) : '—'}
-              </span>
-            )}
-          </span>
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-mutedxl">
-              Ваш тренер
-            </span>
-            <span className="truncate text-[15px] font-semibold text-ink">
-              {trainer.data ? `${trainer.data.firstName} ${trainer.data.lastName}` : 'Загрузка…'}
-            </span>
-            {trainer.data?.title && (
-              <span className="truncate text-[13px] text-ink-muted">{trainer.data.title}</span>
-            )}
-          </span>
-          <ChevronRight size={18} className="shrink-0 text-ink-mutedxl" />
-        </Link>
-      ) : (
-        <Link
-          to="/connect"
-          className="rounded-xl bg-card px-4 py-3 text-[14px] font-semibold text-accent active:bg-card-elevated"
-        >
-          Подключить тренера
-        </Link>
-      )}
+      <AvatarBlock account={account} />
 
       <div className="grid grid-cols-2 gap-3">
         <label className="flex flex-col gap-1.5">
@@ -303,11 +437,6 @@ function ProfileForm({
       {update.isError && (
         <p className="text-sm text-ink-muted" role="alert">
           Не удалось сохранить. Попробуйте снова.
-        </p>
-      )}
-      {saved && !update.isPending && (
-        <p className="text-sm text-ink-muted" role="status">
-          Сохранено.
         </p>
       )}
 

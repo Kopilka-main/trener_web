@@ -48,7 +48,7 @@ describe('ProfilePage', () => {
     vi.mocked(trainerApi.useClientTrainer).mockReturnValue({ data: null } as never);
   });
 
-  it('показывает значения профиля и кнопку «Выйти»', () => {
+  it('просмотр: значения профиля, тренер и кнопка «Выйти»', () => {
     vi.mocked(auth.useClientMe).mockReturnValue({
       isLoading: false,
       data: { account, link: { trainerId: 't1', clientId: 'cl1' } },
@@ -64,11 +64,13 @@ describe('ProfilePage', () => {
       },
     } as never);
     renderPage();
-    expect(screen.getByDisplayValue('Иван')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('Цель — присед 100')).toBeInTheDocument();
+    expect(screen.getByText('Иван Петров')).toBeInTheDocument();
+    expect(screen.getByText('Цель — присед 100')).toBeInTheDocument();
     expect(screen.getByText('Ваш тренер')).toBeInTheDocument();
     expect(screen.getByText('Иван Тренеров')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Выйти' })).toBeInTheDocument();
+    // По умолчанию форма скрыта.
+    expect(screen.queryByRole('button', { name: 'Сохранить' })).not.toBeInTheDocument();
   });
 
   it('не подключён → ссылка «Подключить тренера»', () => {
@@ -80,12 +82,24 @@ describe('ProfilePage', () => {
     expect(screen.getByText('Подключить тренера')).toBeInTheDocument();
   });
 
-  it('«Сохранить» вызывает мутацию с payload', () => {
+  it('«Редактировать профиль» открывает форму с текущими значениями', () => {
     vi.mocked(auth.useClientMe).mockReturnValue({
       isLoading: false,
       data: { account, link: null },
     } as never);
     renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Редактировать профиль' }));
+    expect(screen.getByDisplayValue('Иван')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Цель — присед 100')).toBeInTheDocument();
+  });
+
+  it('в форме «Сохранить» вызывает мутацию с payload', () => {
+    vi.mocked(auth.useClientMe).mockReturnValue({
+      isLoading: false,
+      data: { account, link: null },
+    } as never);
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Редактировать профиль' }));
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
     expect(mutate).toHaveBeenCalledWith(
       expect.objectContaining({ firstName: 'Иван', bio: 'Цель — присед 100' }),
