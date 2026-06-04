@@ -55,7 +55,10 @@ function renderPage() {
 }
 
 describe('HomePage (client)', () => {
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(() => {
+    vi.resetAllMocks();
+    localStorage.clear();
+  });
 
   it('привязан: показывает герой-число и плитки', () => {
     setup({
@@ -83,6 +86,8 @@ describe('HomePage (client)', () => {
     expect(screen.getByText('Тренировки')).toBeInTheDocument();
     expect(screen.getByText('Календарь')).toBeInTheDocument();
     expect(screen.getByText('Прогресс')).toBeInTheDocument();
+    expect(screen.getByText('Уведомления')).toBeInTheDocument();
+    expect(screen.queryByText('Профиль')).not.toBeInTheDocument();
     // метрика завершённых тренировок = 02
     expect(screen.getByText('02')).toBeInTheDocument();
   });
@@ -93,11 +98,10 @@ describe('HomePage (client)', () => {
     expect(screen.getByText('Подключите тренера')).toBeInTheDocument();
   });
 
-  it('есть непрочитанные → плитка «Чат» primary (acid-fill)', () => {
+  it('есть непрочитанные → плитка «Уведомления» primary (acid-fill)', () => {
     setup({ linked: true, unread: 3 });
     renderPage();
-    // У primary-плитки класс tile-shadow-primary.
-    const chatTile = screen.getByText('Чат').closest('button');
-    expect(chatTile?.className).toContain('tile-shadow-primary');
+    const tile = screen.getByText('Уведомления').closest('button');
+    expect(tile?.className).toContain('tile-shadow-primary');
   });
 });

@@ -3,12 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
   ArrowUpRight,
+  Bell,
   CalendarDays,
   Dumbbell,
   MessageSquare,
   Settings,
   TrendingUp,
-  User,
   UserCog,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -18,6 +18,7 @@ import { useClientSessions } from '../api/calendar';
 import { useClientWorkouts } from '../api/workouts';
 import { useClientChatUnread } from '../api/chat';
 import { useClientMeasurements } from '../api/measurements';
+import { buildClientNotifications, loadDismissed } from '../lib/notifications';
 
 const DAY_SHORT = ['ВС', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ'];
 const MONTH_FULL = [
@@ -67,7 +68,7 @@ function diffShort(future: Date, now: Date): string {
 }
 
 type Metric = { v: string; s: string | string[] };
-type TileKey = 'workouts' | 'calendar' | 'chat' | 'progress' | 'trainer' | 'profile';
+type TileKey = 'workouts' | 'calendar' | 'chat' | 'progress' | 'trainer' | 'notifications';
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -104,25 +105,20 @@ export function HomePage() {
     )[0];
   const nextSessionDate = nextSession ? toLocalDate(nextSession.date, nextSession.startTime) : null;
 
-  // Есть ли будущая сессия, ждущая подтверждения.
-  const pendingExists = sessions.some(
-    (s) =>
-      s.status !== 'cancelled' &&
-      s.clientConfirmation === 'pending' &&
-      (s.date > today || (s.date === today && timeToMinutes(s.startTime) >= nowMinutes)),
-  );
+  const notifications = buildClientNotifications({
+    sessions,
+    unread,
+    now,
+    dismissed: loadDismissed(),
+  });
 
   const dateLabel = `СЕГОДНЯ · ${DAY_SHORT[now.getDay()]} ${now.getDate()} ${MONTH_FULL[now.getMonth()]}`;
   const trainerName = trainer.data
     ? `${trainer.data.firstName} ${trainer.data.lastName}`.trim()
     : null;
-  const clientName = me.data
-    ? `${me.data.account.firstName} ${me.data.account.lastName}`.trim()
-    : '';
-
   // Один acid-fill на экран.
   const primaryKey: TileKey | null =
-    unread > 0 ? 'chat' : pendingExists ? 'calendar' : !linked ? 'trainer' : null;
+    notifications.length > 0 ? 'notifications' : !linked ? 'trainer' : null;
 
   const tiles: Array<{
     key: TileKey;
@@ -175,12 +171,13 @@ export function HomePage() {
       onClick: () => void navigate(linked ? '/profile' : '/connect'),
     },
     {
-      key: 'profile',
-      title: 'Профиль',
-      sub: clientName || 'аккаунт',
-      metrics: [],
-      Icon: User,
-      onClick: () => void navigate('/profile'),
+      key: 'notifications',
+      title: 'Уведомления',
+      sub: notifications.length > 0 ? 'требуют внимания' : 'нет открытых задач',
+      metrics: notifications.length > 0 ? [{ v: pad2(notifications.length), s: 'новых' }] : [],
+      kicker: notifications.length > 0 ? 'НОВЫЕ' : 'ВСЁ ТИХО',
+      Icon: Bell,
+      onClick: () => void navigate('/notifications'),
     },
   ];
 
