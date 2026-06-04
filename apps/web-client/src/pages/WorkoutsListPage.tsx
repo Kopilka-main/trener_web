@@ -1,14 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, ChevronUp, Plus, RotateCcw, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Play, Plus, RotateCcw, X } from 'lucide-react';
 import type { WorkoutExercisePlan, WorkoutResponse, WorkoutSetResponse } from '@trener/shared';
 import { useClientMe } from '../api/auth';
-import {
-  useClientWorkouts,
-  useCreateWorkout,
-  useDeleteWorkout,
-  useStartWorkout,
-} from '../api/workouts';
+import { useClientWorkouts, useCreateWorkout, useStartWorkout } from '../api/workouts';
 import { useClientTemplates, useDeleteTemplate, useSaveTemplate } from '../api/templates';
 import { HoldToDelete } from '../components/HoldToDelete';
 import { formatDateGroup, formatTime } from '../lib/workoutDates';
@@ -83,7 +78,6 @@ export function WorkoutsListPage() {
   const q = useClientWorkouts();
   const create = useCreateWorkout();
   const start = useStartWorkout();
-  const del = useDeleteWorkout();
   const templates = useClientTemplates();
   const delTemplate = useDeleteTemplate();
   const linked = me.data?.link != null;
@@ -91,7 +85,9 @@ export function WorkoutsListPage() {
   const [picker, setPicker] = useState<'none' | 'history' | 'template'>('none');
 
   const all = q.data ?? [];
-  const own = all.filter((w) => w.createdByClient && w.status !== 'completed');
+  // Текущая тренировка (как у тренера): одна активная/черновик. Пока она есть —
+  // показываем карточку «Продолжить», а не выбор шаблона.
+  const current = all.find((w) => w.status === 'active') ?? all.find((w) => w.status === 'draft');
   const completed = all.filter((w) => w.status === 'completed');
   const busy = create.isPending || start.isPending;
 
@@ -105,11 +101,6 @@ export function WorkoutsListPage() {
     create.mutate(body, {
       onSuccess: (workout) => start.mutate(workout.id, { onSuccess: (started) => open(started) }),
     });
-  }
-
-  // Создать новую пустую и сразу тренироваться (упражнения добавляются в ходе).
-  function createNew() {
-    createAndStart({ name: 'Моя тренировка', exercises: [] });
   }
 
   // Повтор завершённой: клонируем ФАКТ и сразу тренируемся.
@@ -149,59 +140,25 @@ export function WorkoutsListPage() {
     <div className="flex flex-1 flex-col gap-4 px-4 pb-6 pt-5">
       <h1 className="font-[family-name:var(--font-display)] text-[28px] text-ink">Тренировки</h1>
 
-      {linked ? (
-        <NewWorkoutCard
-          busy={busy}
-          hasHistory={completed.length > 0}
-          onPickBase={() => setPicker('template')}
-          onCreate={createNew}
-          onPickHistory={() => setPicker('history')}
-        />
-      ) : (
+      {!linked ? (
         <p className="text-sm text-ink-muted">
           Вы пока не подключены к тренеру. Подключите его, чтобы здесь появились назначенные
           тренировки.
         </p>
+      ) : current ? (
+        <ContinueCard workout={current} onOpen={() => open(current)} />
+      ) : (
+        <NewWorkoutCard
+          busy={busy}
+          hasHistory={completed.length > 0}
+          onPickBase={() => setPicker('template')}
+          onPickHistory={() => setPicker('history')}
+        />
       )}
 
       {q.isLoading && <p className="text-sm text-ink-muted">Загрузка…</p>}
       {q.isError && (
         <p className="text-sm text-ink-muted">Не удалось загрузить. Потяните обновить.</p>
-      )}
-
-      {own.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <h2 className="px-1 text-[12px] font-semibold uppercase tracking-wide text-ink-mutedxl">
-            Активные и черновики
-          </h2>
-          {own.map((w) => (
-            <div
-              key={w.id}
-              className="flex items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3"
-            >
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate text-[15px] font-semibold text-ink">{w.name}</span>
-                <span className="text-[12px] text-ink-muted">
-                  {w.status === 'active' ? 'В процессе' : 'Черновик'} · {w.exercises.length} упр.
-                </span>
-              </span>
-              <span className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => open(w)}
-                  className="rounded-xl bg-accent px-3 py-2 text-[13px] font-semibold text-accent-on active:opacity-90"
-                >
-                  {w.status === 'active' ? 'Продолжить' : 'Открыть'}
-                </button>
-                <HoldToDelete
-                  icon="trash"
-                  label="Удерживайте, чтобы удалить тренировку"
-                  onDelete={() => del.mutate(w.id)}
-                />
-              </span>
-            </div>
-          ))}
-        </section>
       )}
 
       {completed.length > 0 && (
@@ -422,18 +379,38 @@ function HistoryRow({
   );
 }
 
-/** Карточка-плейсхолдер новой тренировки: выбрать из базы, создать новую или повторить. */
+/** Карточка текущей тренировки (активная/черновик) — как у тренера: «идёт» + «Продолжить». */
+function ContinueCard({ workout, onOpen }: { workout: WorkoutResponse; onOpen: () => void }) {
+  const active = workout.status === 'active';
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex flex-col gap-3 rounded-3xl bg-card p-4 text-left active:scale-[0.99]"
+    >
+      <div className="min-w-0">
+        <div className="truncate text-[18px] font-bold text-ink">{workout.name}</div>
+        <div className="font-[family-name:var(--font-mono)] text-[12px] text-ink-muted">
+          {workout.exercises.length} упр.{active ? ' · идёт' : ''}
+        </div>
+      </div>
+      <span className="flex items-center justify-center gap-2 rounded-2xl bg-accent py-3 text-[15px] font-semibold text-accent-on">
+        <Play size={16} fill="currentColor" /> {active ? 'Продолжить' : 'Начать тренировку'}
+      </span>
+    </button>
+  );
+}
+
+/** Карточка-плейсхолдер новой тренировки: выбрать из базы или повторить. */
 function NewWorkoutCard({
   busy,
   hasHistory,
   onPickBase,
-  onCreate,
   onPickHistory,
 }: {
   busy: boolean;
   hasHistory: boolean;
   onPickBase: () => void;
-  onCreate: () => void;
   onPickHistory: () => void;
 }) {
   return (
@@ -443,7 +420,7 @@ function NewWorkoutCard({
       </div>
       <div className="mt-3 text-[15px] font-semibold text-ink">Тренировка не запланирована</div>
       <div className="mx-auto mt-1 max-w-[280px] text-[12px] text-ink-muted">
-        Выберите готовый шаблон или создайте новую — и сразу тренируйтесь.
+        Выберите готовый шаблон — и сразу тренируйтесь.
       </div>
       <button
         type="button"
@@ -452,14 +429,6 @@ function NewWorkoutCard({
         className="mt-4 w-full rounded-2xl bg-accent py-3 text-[14px] font-semibold text-accent-on active:scale-[0.99] disabled:opacity-60"
       >
         {busy ? 'Запускаем…' : 'Выбрать из базы'}
-      </button>
-      <button
-        type="button"
-        onClick={onCreate}
-        disabled={busy}
-        className="mt-2 w-full rounded-2xl bg-card py-3 text-[14px] font-semibold text-ink active:bg-card-elevated disabled:opacity-60"
-      >
-        Создать новую
       </button>
       <button
         type="button"

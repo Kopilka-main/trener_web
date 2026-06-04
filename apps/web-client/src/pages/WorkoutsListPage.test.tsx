@@ -103,9 +103,8 @@ describe('WorkoutsListPage', () => {
     expect(screen.queryByText('Новая тренировка')).not.toBeInTheDocument();
   });
 
-  it('«Выбрать из базы» → пикер с тренировками от тренера; выбор создаёт из плана', () => {
+  it('«Выбрать из базы» открывает пикер; проведённая тренером тренировка в списке', () => {
     mockMe(true);
-    const { create } = mockMutations();
     mockTemplates();
     vi.mocked(api.useClientWorkouts).mockReturnValue({
       isLoading: false,
@@ -113,8 +112,8 @@ describe('WorkoutsListPage', () => {
       data: [
         workout({
           id: 'tr1',
-          name: 'Push план',
-          status: 'active',
+          name: 'Тренер-шаблон',
+          status: 'completed',
           createdByClient: false,
           exercises: [
             {
@@ -131,7 +130,7 @@ describe('WorkoutsListPage', () => {
                   actualReps: null,
                   actualWeightKg: null,
                   actualTimeSec: null,
-                  done: false,
+                  done: true,
                 },
               ],
             },
@@ -142,14 +141,8 @@ describe('WorkoutsListPage', () => {
     renderPage();
     fireEvent.click(screen.getByText('Выбрать из базы'));
     expect(screen.getByText('Выберите шаблон')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Push план'));
-    expect(create).toHaveBeenCalledWith(
-      {
-        name: 'Push план',
-        exercises: [{ exerciseId: 'e1', sets: [{ plannedReps: 10, plannedWeightKg: 60 }] }],
-      },
-      expect.anything(),
-    );
+    // Тренировка от тренера доступна как шаблон (есть и в «Завершённых», и в пикере).
+    expect(screen.getAllByText('Тренер-шаблон').length).toBeGreaterThan(1);
   });
 
   it('пикер шаблонов: выбор шаблона создаёт тренировку из его плана', () => {
@@ -175,24 +168,7 @@ describe('WorkoutsListPage', () => {
     );
   });
 
-  it('«Создать новую» создаёт пустую тренировку', () => {
-    mockMe(true);
-    const { create } = mockMutations();
-    mockTemplates();
-    vi.mocked(api.useClientWorkouts).mockReturnValue({
-      isLoading: false,
-      isError: false,
-      data: [],
-    } as never);
-    renderPage();
-    fireEvent.click(screen.getByText('Создать новую'));
-    expect(create).toHaveBeenCalledWith(
-      { name: 'Моя тренировка', exercises: [] },
-      expect.anything(),
-    );
-  });
-
-  it('разделяет свои активные/черновики и завершённые с бейджами', () => {
+  it('активная тренировка → карточка «Продолжить» вместо выбора; завершённые отдельно', () => {
     mockMe(true);
     vi.mocked(api.useClientWorkouts).mockReturnValue({
       isLoading: false,
@@ -200,24 +176,20 @@ describe('WorkoutsListPage', () => {
       data: [
         workout({ id: 'own1', name: 'Своя активная', status: 'active', createdByClient: true }),
         workout({ id: 'tr1', name: 'От тренера', status: 'completed', createdByClient: false }),
-        workout({
-          id: 'own2',
-          name: 'Своя завершённая',
-          status: 'completed',
-          createdByClient: true,
-        }),
       ],
     } as never);
     renderPage();
-    expect(screen.getByText('Активные и черновики')).toBeInTheDocument();
+    // Пока идёт тренировка — выбор скрыт, видна карточка «Продолжить».
     expect(screen.getByText('Своя активная')).toBeInTheDocument();
+    expect(screen.getByText('Продолжить')).toBeInTheDocument();
+    expect(screen.queryByText('Выбрать из базы')).not.toBeInTheDocument();
+    // Завершённые показываются отдельно с бейджем.
     expect(screen.getByText('Завершённые')).toBeInTheDocument();
     expect(screen.getByText('От тренера')).toBeInTheDocument();
     expect(screen.getByText('от тренера')).toBeInTheDocument();
-    expect(screen.getByText('своя')).toBeInTheDocument();
   });
 
-  it('черновик: «Открыть» ведёт на /run (форму плана)', () => {
+  it('черновик → карточка «Начать тренировку», ведёт на /run', () => {
     mockMe(true);
     vi.mocked(api.useClientWorkouts).mockReturnValue({
       isLoading: false,
@@ -225,7 +197,7 @@ describe('WorkoutsListPage', () => {
       data: [workout({ id: 'd1', name: 'Черновик', status: 'draft', createdByClient: true })],
     } as never);
     renderPage();
-    fireEvent.click(screen.getByText('Открыть'));
+    fireEvent.click(screen.getByText('Начать тренировку'));
     expect(navigate).toHaveBeenCalledWith('/workouts/d1/run');
   });
 
