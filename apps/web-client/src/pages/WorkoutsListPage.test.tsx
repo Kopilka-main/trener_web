@@ -103,22 +103,51 @@ describe('WorkoutsListPage', () => {
     expect(screen.queryByText('Новая тренировка')).not.toBeInTheDocument();
   });
 
-  it('«Выбрать из базы» → пикер шаблонов; «Собрать с нуля» создаёт пустую', () => {
+  it('«Выбрать из базы» → пикер с тренировками от тренера; выбор создаёт из плана', () => {
     mockMe(true);
     const { create } = mockMutations();
     mockTemplates();
     vi.mocked(api.useClientWorkouts).mockReturnValue({
       isLoading: false,
       isError: false,
-      data: [],
+      data: [
+        workout({
+          id: 'tr1',
+          name: 'Push план',
+          status: 'active',
+          createdByClient: false,
+          exercises: [
+            {
+              position: 0,
+              exerciseId: 'e1',
+              exerciseName: 'Жим',
+              sets: [
+                {
+                  setIndex: 0,
+                  plannedReps: 10,
+                  plannedWeightKg: 60,
+                  plannedTimeSec: null,
+                  plannedRestSec: null,
+                  actualReps: null,
+                  actualWeightKg: null,
+                  actualTimeSec: null,
+                  done: false,
+                },
+              ],
+            },
+          ],
+        }),
+      ],
     } as never);
     renderPage();
     fireEvent.click(screen.getByText('Выбрать из базы'));
-    // Открылся пикер «Выберите шаблон».
     expect(screen.getByText('Выберите шаблон')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Собрать с нуля'));
+    fireEvent.click(screen.getByText('Push план'));
     expect(create).toHaveBeenCalledWith(
-      { name: 'Моя тренировка', exercises: [] },
+      {
+        name: 'Push план',
+        exercises: [{ exerciseId: 'e1', sets: [{ plannedReps: 10, plannedWeightKg: 60 }] }],
+      },
       expect.anything(),
     );
   });

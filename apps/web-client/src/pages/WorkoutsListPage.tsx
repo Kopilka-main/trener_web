@@ -1,12 +1,21 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDown, ChevronUp, Plus, RotateCcw, X } from 'lucide-react';
-import type { ClientTemplateResponse, WorkoutResponse, WorkoutSetResponse } from '@trener/shared';
+import type { WorkoutExercisePlan, WorkoutResponse, WorkoutSetResponse } from '@trener/shared';
 import { useClientMe } from '../api/auth';
 import { useClientWorkouts, useCreateWorkout, useDeleteWorkout } from '../api/workouts';
 import { useClientTemplates, useDeleteTemplate, useSaveTemplate } from '../api/templates';
 import { HoldToDelete } from '../components/HoldToDelete';
 import { formatDateGroup, formatTime } from '../lib/workoutDates';
+
+/** Элемент пикера «Выберите шаблон»: сохранённый шаблон или проведённая тренером тренировка. */
+type TemplatePick = {
+  key: string;
+  name: string;
+  count: number;
+  body: { name: string; exercises: WorkoutExercisePlan[] };
+  templateId?: string;
+};
 
 /** Повтор «точь-в-точь»: ФАКТ выполненных подходов → новый план, пропущенные исключаются. */
 function repeatBody(w: WorkoutResponse): { name: string; exercises: ReturnType<typeof planEx>[] } {
@@ -86,21 +95,6 @@ export function WorkoutsListPage() {
     void navigate(`/workouts/${w.id}/run`);
   }
 
-  // Новая тренировка: создаём пустой ЧЕРНОВИК и открываем форму плана (как у тренера) —
-  // там добавляются упражнения и затем «Начать тренировку».
-  // Чтобы не плодить пустышки, переиспользуем уже существующий пустой черновик.
-  function createEmpty() {
-    const empty = own.find((w) => w.exercises.length === 0);
-    if (empty) {
-      open(empty);
-      return;
-    }
-    create.mutate(
-      { name: 'Моя тренировка', exercises: [] },
-      { onSuccess: (workout) => open(workout) },
-    );
-  }
-
   // Повтор завершённой: клонируем факт в новый ЧЕРНОВИК и открываем форму плана.
   function repeat(w: WorkoutResponse) {
     const body = repeatBody(w);
@@ -108,12 +102,31 @@ export function WorkoutsListPage() {
     create.mutate(body, { onSuccess: (workout) => open(workout) });
   }
 
-  // Из шаблона: создаём новый ЧЕРНОВИК по плану шаблона и открываем форму плана.
-  function fromTemplate(t: ClientTemplateResponse) {
-    create.mutate(
-      { name: t.name, exercises: t.exercises },
-      { onSuccess: (workout) => open(workout) },
-    );
+  // Элементы пикера «Выберите шаблон»: свои сохранённые шаблоны + проведённые
+  // тренером тренировки (их клиент тоже воспринимает как шаблоны). Выбор любого
+  // создаёт новый черновик по его плану.
+  const trainerWorkouts = [...all]
+    .filter((w) => !w.createdByClient && w.exercises.length > 0)
+    .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
+  const pickItems: TemplatePick[] = [
+    ...(templates.data ?? []).map((t) => ({
+      key: `t:${t.id}`,
+      name: t.name,
+      count: t.exercises.length,
+      body: { name: t.name, exercises: t.exercises },
+      templateId: t.id,
+    })),
+    ...trainerWorkouts.map((w) => ({
+      key: `w:${w.id}`,
+      name: w.name,
+      count: w.exercises.length,
+      body: templateBody(w),
+    })),
+  ];
+
+  // Из шаблона/тренировки: создаём новый ЧЕРНОВИК по плану и открываем форму плана.
+  function fromPick(item: TemplatePick) {
+    create.mutate(item.body, { onSuccess: (workout) => open(workout) });
   }
 
   return (
@@ -208,17 +221,13 @@ export function WorkoutsListPage() {
 
       {picker === 'template' && (
         <TemplatePickerSheet
-          templates={templates.data ?? []}
-          loading={templates.isLoading}
+          items={pickItems}
+          loading={templates.isLoading || q.isLoading}
           pending={busy}
           onClose={() => setPicker('none')}
-          onPick={(t) => {
+          onPick={(item) => {
             setPicker('none');
-            fromTemplate(t);
-          }}
-          onScratch={() => {
-            setPicker('none');
-            createEmpty();
+            fromPick(item);
           }}
           onDelete={(id) => delTemplate.mutate(id)}
         />
@@ -437,22 +446,21 @@ function NewWorkoutCard({
   );
 }
 
-/** Лист выбора своего шаблона тренировки (интерфейс как у тренера). */
+/** Лист выбора шаблона тренировки (интерфейс как у тренера): свои сохранённые
+ * шаблоны и проведённые тренером тренировки. */
 function TemplatePickerSheet({
-  templates,
+  items,
   loading,
   pending,
   onClose,
   onPick,
-  onScratch,
   onDelete,
 }: {
-  templates: ClientTemplateResponse[];
+  items: TemplatePick[];
   loading: boolean;
   pending: boolean;
   onClose: () => void;
-  onPick: (template: ClientTemplateResponse) => void;
-  onScratch: () => void;
+  onPick: (item: TemplatePick) => void;
   onDelete: (id: string) => void;
 }) {
   return (
@@ -478,50 +486,42 @@ function TemplatePickerSheet({
 
         <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-5 pt-1">
           {loading && <p className="text-sm text-ink-muted">Загрузка…</p>}
-          {!loading && templates.length === 0 && (
+          {!loading && items.length === 0 && (
             <p className="text-sm text-ink-muted">
-              Шаблонов пока нет. Сохраните проведённую тренировку как шаблон — и она появится здесь.
+              Шаблонов пока нет. Они появятся из проведённых тренером тренировок или когда вы
+              сохраните тренировку как шаблон.
             </p>
           )}
-          {templates.map((t) => (
+          {items.map((item) => (
             <div
-              key={t.id}
+              key={item.key}
               className="flex items-center gap-2 rounded-2xl bg-card pr-2 active:bg-card-elevated"
             >
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => onPick(t)}
+                onClick={() => onPick(item)}
                 className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left disabled:opacity-50"
               >
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-chip font-[family-name:var(--font-mono)] text-sm font-bold tabular-nums text-ink">
-                  {t.exercises.length}
+                  {item.count}
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="truncate text-[15px] font-semibold text-ink">{t.name}</span>
+                  <span className="truncate text-[15px] font-semibold text-ink">{item.name}</span>
                   <span className="font-[family-name:var(--font-mono)] text-[12px] text-ink-muted">
-                    {t.exercises.length} упр.
+                    {item.count} упр.
                   </span>
                 </span>
               </button>
-              <HoldToDelete
-                icon="trash"
-                label="Удерживайте, чтобы удалить шаблон"
-                onDelete={() => onDelete(t.id)}
-              />
+              {item.templateId !== undefined && (
+                <HoldToDelete
+                  icon="trash"
+                  label="Удерживайте, чтобы удалить шаблон"
+                  onDelete={() => onDelete(item.templateId!)}
+                />
+              )}
             </div>
           ))}
-        </div>
-
-        <div className="px-5 pt-2">
-          <button
-            type="button"
-            onClick={onScratch}
-            disabled={pending}
-            className="w-full rounded-2xl border border-dashed border-line py-3 text-[14px] font-semibold text-ink-muted active:border-accent disabled:opacity-50"
-          >
-            Собрать с нуля
-          </button>
         </div>
       </div>
     </div>
