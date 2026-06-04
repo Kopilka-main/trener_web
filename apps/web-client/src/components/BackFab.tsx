@@ -58,7 +58,12 @@ export function BackFab() {
     if (!dragging.current) return;
     dragging.current = false;
     localStorage.setItem(STORAGE_KEY, String(y));
-    if (!moved.current) void navigate(-1);
+    if (moved.current) return;
+    // React Router хранит индекс записи в history.state.idx. Если он 0 — это первый
+    // экран сессии (страницу открыли по прямой ссылке), шагать назад некуда → на главную.
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (idx > 0) void navigate(-1);
+    else void navigate('/');
   }
 
   return (
