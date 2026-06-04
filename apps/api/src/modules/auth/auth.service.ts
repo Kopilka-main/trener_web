@@ -1,4 +1,6 @@
 import type { AuthRepo } from './auth.repo.js';
+import type { FilesRepo } from '../files/files.repo.js';
+import type { Storage } from '../../files/storage.js';
 import type {
   LoginRequest,
   RegisterRequest,
@@ -10,9 +12,22 @@ import { AppError, unauthorized } from '../../errors.js';
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 дней
 
+// Расширение файла выводим ИЗ MIME по whitelist (НЕ из имени файла клиента).
+const MIME_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+
 export type AuthDeps = { newId: () => string; now: () => Date };
 
 export type Session = { token: string; expiresAt: Date };
+
+export type AvatarUploadInput = {
+  fileBuffer: Buffer;
+  mime: string;
+  originalName: string | null;
+};
 
 function toTrainerResponse(t: {
   id: string;
@@ -36,7 +51,12 @@ function toTrainerResponse(t: {
   };
 }
 
-export function makeAuthService(repo: AuthRepo, deps: AuthDeps) {
+export function makeAuthService(
+  repo: AuthRepo,
+  filesRepo: FilesRepo,
+  storage: Storage,
+  deps: AuthDeps,
+) {
   async function startSession(trainerId: string): Promise<Session> {
     const token = deps.newId();
     const expiresAt = new Date(deps.now().getTime() + SESSION_TTL_MS);
@@ -98,6 +118,64 @@ export function makeAuthService(repo: AuthRepo, deps: AuthDeps) {
       const trainer = await repo.updateTrainer(trainerId, patch);
       if (!trainer) throw unauthorized('Сессия недействительна');
       return toTrainerResponse(trainer);
+    },
+
+    // Загрузка аватара тренера (зеркало clients.service.setAvatar, владелец — тренер):
+    // mime→ext, storage.save, filesRepo.create({trainerId, clientId:null, accountId:null}),
+    // repo.setAvatar; прежний файл удаляем best-effort через filesRepo.delete(trainerId, …).
+    async setAvatar(trainerId: string, input: AvatarUploadInput): Promise<TrainerResponse> {
+      const ext = MIME_EXT[input.mime];
+      if (!ext) {
+        throw new AppError(400, 'UNSUPPORTED_MEDIA_TYPE', 'Неподдерживаемый тип файла');
+      }
+
+      const fileId = deps.newId();
+      const saved = await storage.save(trainerId, null, fileId, ext, input.fileBuffer);
+
+      let result: { previousFileId: string | null } | null;
+      try {
+        await filesRepo.create({
+          id: fileId,
+          trainerId,
+          clientId: null,
+          accountId: null,
+          mime: input.mime,
+          sizeBytes: saved.sizeBytes,
+          storagePath: saved.storagePath,
+          originalName: input.originalName,
+        });
+        result = await repo.setAvatar(trainerId, fileId);
+      } catch (err) {
+        await storage.remove(saved.storagePath).catch(() => undefined);
+        throw err;
+      }
+
+      // Тренер не найден (сессия протухла): откатываем созданный файл.
+      if (!result) {
+        await filesRepo.delete(trainerId, fileId).catch(() => undefined);
+        await storage.remove(saved.storagePath).catch(() => undefined);
+        throw unauthorized('Сессия недействительна');
+      }
+
+      // Старый аватар: удаляем строку files (каскадом обнулит ссылку) + файл с диска.
+      if (result.previousFileId && result.previousFileId !== fileId) {
+        const old = await filesRepo.delete(trainerId, result.previousFileId).catch(() => null);
+        if (old) await storage.remove(old.storagePath).catch(() => undefined);
+      }
+
+      const trainer = await repo.findTrainerById(trainerId);
+      if (!trainer) throw unauthorized('Сессия недействительна');
+      return toTrainerResponse(trainer);
+    },
+
+    // Снять аватар: avatarFileId = null, старый файл удалить best-effort.
+    async removeAvatar(trainerId: string): Promise<void> {
+      const result = await repo.setAvatar(trainerId, null);
+      if (!result) throw unauthorized('Сессия недействительна');
+      if (result.previousFileId) {
+        const old = await filesRepo.delete(trainerId, result.previousFileId).catch(() => null);
+        if (old) await storage.remove(old.storagePath).catch(() => undefined);
+      }
     },
   };
 }

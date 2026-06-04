@@ -13,6 +13,7 @@ import { errorHandler } from './plugins/error-handler.js';
 import { tenantContext } from './plugins/tenant-context.js';
 import { healthRoutes } from './modules/health/health.routes.js';
 import { makeAuthRepo } from './modules/auth/auth.repo.js';
+import { makeFilesRepo } from './modules/files/files.repo.js';
 import { makeAuthService } from './modules/auth/auth.service.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { registerClientAuthModule } from './modules/client-auth/client-auth.module.js';
@@ -56,8 +57,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // Общий провайдер newId/now для auth и доменных модулей (детерминизм в тестах).
   const clock = realClock;
 
+  // Общий files-repo: используется auth/client-auth/client-app-trainer для аватаров
+  // (раздача + чистка прежних файлов), а также модулем files.
+  const filesRepo = makeFilesRepo(deps.db);
+
   const repo = makeAuthRepo(deps.db);
-  const svc = makeAuthService(repo, clock);
+  const svc = makeAuthService(repo, filesRepo, storage, clock);
 
   await app.register(tenantContext, { findSession: (id) => repo.findSession(id) });
 
