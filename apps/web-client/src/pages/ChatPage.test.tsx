@@ -71,7 +71,7 @@ describe('ChatPage', () => {
       },
     } as never);
     renderPage();
-    expect(screen.getByRole('heading', { name: 'Иван Тренеров' })).toBeInTheDocument();
+    expect(screen.getByText('Иван Тренеров')).toBeInTheDocument();
   });
 
   it('своё сообщение отрисовано (прочитанное и новое)', () => {
@@ -99,7 +99,7 @@ describe('ChatPage', () => {
     mockMe(true);
     renderPage();
     fireEvent.change(screen.getByPlaceholderText('Сообщение…'), { target: { value: 'Тест' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Отпр.' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
     expect(sendMutate).toHaveBeenCalledWith({ body: 'Тест' }, expect.anything());
   });
 });
