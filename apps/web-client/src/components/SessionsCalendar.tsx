@@ -289,27 +289,22 @@ function MonthView({
   );
 }
 
-/** Скроллируемый контейнер day/week. При монтаже/смене даты: если есть занятие
- * (`centerMin` — минуты от полуночи), центрирует его в видимой области; иначе скроллит к 7:00. */
+/** Скроллируемый контейнер day/week — при монтаже/смене даты скроллит к 7:00.
+ * Если в дне/неделе есть занятие, DayView/WeekView дополнительно центрируют его блок
+ * через scrollIntoView (работает с реальным скроллером, даже если им является страница). */
 function ScrollableGrid({
   hourHeight,
-  centerMin = null,
   children,
 }: {
   hourHeight: number;
-  centerMin?: number | null;
   children: React.ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const top =
-      centerMin !== null
-        ? ((centerMin - CAL_START_HOUR * 60) / 60) * hourHeight - el.clientHeight / 2
-        : (SCROLL_HOUR - CAL_START_HOUR) * hourHeight;
-    el.scrollTo({ top: Math.max(0, top), behavior: 'auto' });
-  }, [hourHeight, centerMin]);
+    el.scrollTo({ top: (SCROLL_HOUR - CAL_START_HOUR) * hourHeight, behavior: 'auto' });
+  }, [hourHeight]);
   return (
     <div ref={ref} className="flex-1 overflow-y-auto pb-6">
       {children}
@@ -348,12 +343,16 @@ function DayView({
   const now = new Date();
   const gridH = CAL_HOURS * DAY_HOUR_H;
   const nowTop = ((now.getHours() * 60 + now.getMinutes() - CAL_START_HOUR * 60) / 60) * DAY_HOUR_H;
-  // Есть занятие в этот день → центрируем его (середину блока) в видимой области.
+  // Есть занятие в этот день → центрируем его блок (scrollIntoView находит реальный скроллер).
   const focus = items[0];
-  const centerMin = focus ? timeToMin(focus.startTime) + focus.durationMin / 2 : null;
+  const focusRef = useRef<HTMLButtonElement>(null);
+  const dateKey = toISODate(date);
+  useEffect(() => {
+    focusRef.current?.scrollIntoView({ block: 'center', behavior: 'auto' });
+  }, [focus?.id, dateKey]);
 
   return (
-    <ScrollableGrid hourHeight={DAY_HOUR_H} centerMin={centerMin}>
+    <ScrollableGrid hourHeight={DAY_HOUR_H}>
       <div className="flex px-4 pt-3">
         <div className="relative w-10 shrink-0" style={{ height: gridH }}>
           {hours.map((h, i) => (
@@ -394,6 +393,7 @@ function DayView({
             return (
               <button
                 key={s.id}
+                ref={s.id === focus?.id ? focusRef : undefined}
                 type="button"
                 onClick={() => onPick(s)}
                 className={`absolute left-1.5 right-1.5 z-10 overflow-hidden rounded-xl px-2.5 py-1.5 text-left ${tileClasses(s.status)}`}
@@ -444,16 +444,19 @@ function WeekView({
   const todayIndex = dates.findIndex((d) => sameDay(d, now));
   const nowTop =
     ((now.getHours() * 60 + now.getMinutes() - CAL_START_HOUR * 60) / 60) * WEEK_HOUR_H;
-  // Есть занятия на неделе → центрируем самое раннее по времени суток.
+  // Есть занятия на неделе → центрируем блок самого раннего по времени суток занятия.
   const weekIso = new Set(dates.map((d) => toISODate(d)));
-  const weekItems = sessions
+  const focus = sessions
     .filter((s) => weekIso.has(s.date))
-    .sort((a, b) => timeToMin(a.startTime) - timeToMin(b.startTime));
-  const focus = weekItems[0];
-  const centerMin = focus ? timeToMin(focus.startTime) + focus.durationMin / 2 : null;
+    .sort((a, b) => timeToMin(a.startTime) - timeToMin(b.startTime))[0];
+  const focusRef = useRef<HTMLButtonElement>(null);
+  const weekKey = dates[0] ? toISODate(dates[0]) : '';
+  useEffect(() => {
+    focusRef.current?.scrollIntoView({ block: 'center', behavior: 'auto' });
+  }, [focus?.id, weekKey]);
 
   return (
-    <ScrollableGrid hourHeight={WEEK_HOUR_H} centerMin={centerMin}>
+    <ScrollableGrid hourHeight={WEEK_HOUR_H}>
       <div className="px-2 pt-1">
         <div className="sticky top-0 z-30 flex border-b border-line bg-bg pb-1.5 pt-1">
           <div className="w-7 shrink-0" />
@@ -538,6 +541,7 @@ function WeekView({
                     return (
                       <button
                         key={s.id}
+                        ref={s.id === focus?.id ? focusRef : undefined}
                         type="button"
                         onClick={() => onPick(s)}
                         className={`absolute inset-x-[1px] z-10 flex items-center justify-center overflow-hidden rounded-md px-0.5 ${tileClasses(s.status)}`}
