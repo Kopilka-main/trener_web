@@ -74,7 +74,8 @@ export function clientWorkoutsRoutes(
       preHandler,
       schema: { params: clientParams, response: { 200: workoutListResponseSchema } },
     },
-    async (req) => ({ workouts: await svc.list(trainerId(req), req.params.id) }),
+    // Тренер видит только тренерские тренировки клиента (не самостоятельные).
+    async (req) => ({ workouts: await svc.list(trainerId(req), req.params.id, 'trainer') }),
   );
 
   typed.get(

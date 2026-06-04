@@ -14,6 +14,7 @@ function row(over: Partial<WorkoutRow> = {}): WorkoutRow {
     durationSec: null,
     trainerNote: null,
     rpe: null,
+    createdByClient: false,
     createdAt: new Date(0),
     exercises: [
       {
@@ -72,7 +73,121 @@ describe('client-workouts.service', () => {
       'A',
       'c1',
       expect.objectContaining({ id: 'newid', name: 'День 1' }),
+      false,
     );
+  });
+
+  it('create по умолчанию createdByClient=false; ответ отражает флаг строки', async () => {
+    const create = vi.fn(() => Promise.resolve(row({ createdByClient: false })));
+    const svc = makeClientWorkoutsService(fakeRepo({ create }), deps);
+    const res = await svc.create('A', 'c1', {
+      name: 'День 1',
+      exercises: [{ exerciseId: 'g1', sets: [{ plannedReps: 10 }] }],
+    });
+    expect(res.createdByClient).toBe(false);
+    expect(create).toHaveBeenCalledWith('A', 'c1', expect.objectContaining({ id: 'newid' }), false);
+  });
+
+  it('create с createdByClient=true прокидывает флаг в repo и в ответ', async () => {
+    const create = vi.fn(() => Promise.resolve(row({ createdByClient: true })));
+    const svc = makeClientWorkoutsService(fakeRepo({ create }), deps);
+    const res = await svc.create(
+      'A',
+      'c1',
+      { name: 'Моя', exercises: [{ exerciseId: 'g1', sets: [{ plannedReps: 10 }] }] },
+      true,
+    );
+    expect(res.createdByClient).toBe(true);
+    expect(create).toHaveBeenCalledWith('A', 'c1', expect.objectContaining({ id: 'newid' }), true);
+  });
+
+  it('list по умолчанию owner=all; прокидывается в repo', async () => {
+    const listForClient = vi.fn(() => Promise.resolve([row()]));
+    const svc = makeClientWorkoutsService(fakeRepo({ listForClient }), deps);
+    await svc.list('A', 'c1');
+    expect(listForClient).toHaveBeenCalledWith('A', 'c1', 'all');
+  });
+
+  it('list с owner=trainer прокидывает фильтр владельца в repo', async () => {
+    const listForClient = vi.fn(() => Promise.resolve([]));
+    const svc = makeClientWorkoutsService(fakeRepo({ listForClient }), deps);
+    await svc.list('A', 'c1', 'trainer');
+    expect(listForClient).toHaveBeenCalledWith('A', 'c1', 'trainer');
+  });
+
+  it('start с ownedByClientOnly прокидывает флаг в repo', async () => {
+    const setStatusActive = vi.fn(() => Promise.resolve('updated' as const));
+    const svc = makeClientWorkoutsService(
+      fakeRepo({
+        setStatusActive,
+        getFull: vi.fn(() => Promise.resolve(row({ status: 'active', createdByClient: true }))),
+      }),
+      deps,
+    );
+    await svc.start('A', 'c1', 'w1', { ownedByClientOnly: true });
+    expect(setStatusActive).toHaveBeenCalledWith('A', 'c1', 'w1', deps.now(), true);
+  });
+
+  it('start чужой/тренерской с ownedByClientOnly (repo → not_found) → 404', async () => {
+    const svc = makeClientWorkoutsService(
+      fakeRepo({ setStatusActive: vi.fn(() => Promise.resolve('not_found' as const)) }),
+      deps,
+    );
+    await expect(svc.start('A', 'c1', 'w1', { ownedByClientOnly: true })).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it('updateSet с ownedByClientOnly прокидывает флаг в repo', async () => {
+    const updateSet = vi.fn(() => Promise.resolve(row({ createdByClient: true })));
+    const svc = makeClientWorkoutsService(fakeRepo({ updateSet }), deps);
+    await svc.updateSet('A', 'c1', 'w1', 0, 0, { done: true }, { ownedByClientOnly: true });
+    expect(updateSet).toHaveBeenCalledWith(
+      'A',
+      'c1',
+      'w1',
+      0,
+      0,
+      expect.objectContaining({ done: true }),
+      true,
+    );
+  });
+
+  it('complete с ownedByClientOnly прокидывает флаг в repo', async () => {
+    const complete = vi.fn(() => Promise.resolve('updated' as const));
+    const svc = makeClientWorkoutsService(
+      fakeRepo({
+        complete,
+        getFull: vi.fn(() => Promise.resolve(row({ status: 'completed', createdByClient: true }))),
+      }),
+      deps,
+    );
+    await svc.complete('A', 'c1', 'w1', { rpe: 8 }, { ownedByClientOnly: true });
+    expect(complete).toHaveBeenCalledWith(
+      'A',
+      'c1',
+      'w1',
+      expect.objectContaining({ rpe: 8 }),
+      deps.now(),
+      true,
+    );
+  });
+
+  it('remove с ownedByClientOnly прокидывает флаг в repo', async () => {
+    const remove = vi.fn(() => Promise.resolve(true));
+    const svc = makeClientWorkoutsService(fakeRepo({ remove }), deps);
+    await svc.remove('A', 'c1', 'w1', { ownedByClientOnly: true });
+    expect(remove).toHaveBeenCalledWith('A', 'c1', 'w1', true);
+  });
+
+  it('remove тренерской с ownedByClientOnly (repo → false) → 404', async () => {
+    const svc = makeClientWorkoutsService(
+      fakeRepo({ remove: vi.fn(() => Promise.resolve(false)) }),
+      deps,
+    );
+    await expect(svc.remove('A', 'c1', 'w1', { ownedByClientOnly: true })).rejects.toMatchObject({
+      status: 404,
+    });
   });
 
   it('create с невидимым упражнением (repo.create → null) → 400 UNKNOWN_EXERCISE', async () => {
@@ -101,7 +216,7 @@ describe('client-workouts.service', () => {
     );
     const res = await svc.start('A', 'c1', 'w1');
     expect(res.status).toBe('active');
-    expect(setStatusActive).toHaveBeenCalledWith('A', 'c1', 'w1', deps.now());
+    expect(setStatusActive).toHaveBeenCalledWith('A', 'c1', 'w1', deps.now(), false);
   });
 
   it('start несуществующей (repo → not_found) → 404', async () => {
@@ -144,6 +259,7 @@ describe('client-workouts.service', () => {
       0,
       0,
       expect.objectContaining({ actualReps: 12, done: true }),
+      false,
     );
   });
 
@@ -162,6 +278,7 @@ describe('client-workouts.service', () => {
       0,
       0,
       expect.objectContaining({ plannedReps: 8, plannedWeightKg: 60, plannedTimeSec: null }),
+      false,
     );
   });
 
@@ -184,6 +301,7 @@ describe('client-workouts.service', () => {
       'w1',
       expect.objectContaining({ rpe: 8 }),
       deps.now(),
+      false,
     );
   });
 
@@ -257,6 +375,7 @@ describe('client-workouts.service', () => {
       'c1',
       'w1',
       expect.objectContaining({ exerciseId: 'g2' }),
+      false,
     );
   });
 

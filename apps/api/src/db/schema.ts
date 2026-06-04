@@ -6,6 +6,7 @@ import {
   primaryKey,
   integer,
   doublePrecision,
+  boolean,
   foreignKey,
   index,
   check,
@@ -202,6 +203,7 @@ export const clientWorkouts = pgTable(
     durationSec: integer('duration_sec'),
     trainerNote: text('trainer_note'),
     rpe: integer('rpe'),
+    createdByClient: boolean('created_by_client').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

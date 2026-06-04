@@ -34,6 +34,7 @@ function toResponse(r: WorkoutRow): WorkoutResponse {
     durationSec: r.durationSec,
     trainerNote: r.trainerNote,
     rpe: r.rpe,
+    createdByClient: r.createdByClient,
     exercises: r.exercises.map((e) => ({
       position: e.position,
       exerciseId: e.exerciseId,
@@ -73,6 +74,7 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
       trainerId: string,
       clientId: string,
       input: CreateWorkoutRequest,
+      createdByClient = false,
     ): Promise<WorkoutResponse> {
       const plan = {
         id: deps.newId(),
@@ -80,14 +82,18 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
         sourceTemplateId: input.sourceTemplateId ?? null,
         exercises: input.exercises.map(toExerciseInput),
       };
-      const row = await repo.create(trainerId, clientId, plan);
+      const row = await repo.create(trainerId, clientId, plan, createdByClient);
       // null = одно из упражнений невидимо тренеру.
       if (!row) throw unknownExercise();
       return toResponse(row);
     },
 
-    async list(trainerId: string, clientId: string): Promise<WorkoutResponse[]> {
-      const rows = await repo.listForClient(trainerId, clientId);
+    async list(
+      trainerId: string,
+      clientId: string,
+      owner: 'trainer' | 'all' = 'all',
+    ): Promise<WorkoutResponse[]> {
+      const rows = await repo.listForClient(trainerId, clientId, owner);
       return rows.map(toResponse);
     },
 
@@ -98,8 +104,19 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
     },
 
     // draft → active атомарно. 404 (нет в паре) / 409 BAD_STATUS (не из черновика).
-    async start(trainerId: string, clientId: string, workoutId: string): Promise<WorkoutResponse> {
-      const res = await repo.setStatusActive(trainerId, clientId, workoutId, deps.now());
+    async start(
+      trainerId: string,
+      clientId: string,
+      workoutId: string,
+      opts: { ownedByClientOnly?: boolean } = {},
+    ): Promise<WorkoutResponse> {
+      const res = await repo.setStatusActive(
+        trainerId,
+        clientId,
+        workoutId,
+        deps.now(),
+        opts.ownedByClientOnly ?? false,
+      );
       if (res === 'not_found') throw notFound('Тренировка не найдена');
       if (res === 'bad_status') throw badStatus('Тренировку можно начать только из черновика');
       const updated = await repo.getFull(trainerId, clientId, workoutId);
@@ -114,6 +131,7 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
       position: number,
       setIndex: number,
       patch: UpdateSetRequest,
+      opts: { ownedByClientOnly?: boolean } = {},
     ): Promise<WorkoutResponse> {
       const repoPatch: SetPatchInput = {};
       if (patch.plannedReps !== undefined) repoPatch.plannedReps = patch.plannedReps ?? null;
@@ -136,6 +154,7 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
         position,
         setIndex,
         repoPatch,
+        opts.ownedByClientOnly ?? false,
       );
       // null = тренировка не принадлежит паре ИЛИ подход не найден.
       if (!row) throw notFound('Подход не найден');
@@ -148,13 +167,21 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
       clientId: string,
       workoutId: string,
       input: CompleteWorkoutRequest,
+      opts: { ownedByClientOnly?: boolean } = {},
     ): Promise<WorkoutResponse> {
       const repoInput: CompleteInput = {};
       if (input.durationSec !== undefined) repoInput.durationSec = input.durationSec ?? null;
       if (input.trainerNote !== undefined) repoInput.trainerNote = input.trainerNote ?? null;
       if (input.rpe !== undefined) repoInput.rpe = input.rpe ?? null;
 
-      const res = await repo.complete(trainerId, clientId, workoutId, repoInput, deps.now());
+      const res = await repo.complete(
+        trainerId,
+        clientId,
+        workoutId,
+        repoInput,
+        deps.now(),
+        opts.ownedByClientOnly ?? false,
+      );
       if (res === 'not_found') throw notFound('Тренировка не найдена');
       if (res === 'bad_status') throw badStatus('Завершить можно только активную тренировку');
       const updated = await repo.getFull(trainerId, clientId, workoutId);
@@ -162,8 +189,13 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
       return toResponse(updated);
     },
 
-    async remove(trainerId: string, clientId: string, workoutId: string): Promise<void> {
-      const ok = await repo.remove(trainerId, clientId, workoutId);
+    async remove(
+      trainerId: string,
+      clientId: string,
+      workoutId: string,
+      opts: { ownedByClientOnly?: boolean } = {},
+    ): Promise<void> {
+      const ok = await repo.remove(trainerId, clientId, workoutId, opts.ownedByClientOnly ?? false);
       if (!ok) throw notFound('Тренировка не найдена');
     },
 
@@ -173,14 +205,23 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
       clientId: string,
       workoutId: string,
       input: AddWorkoutExerciseRequest,
+      opts: { ownedByClientOnly?: boolean } = {},
     ): Promise<WorkoutResponse> {
       // Сначала проверяем существование тренировки в паре (404), затем видимость (400).
       const existing = await repo.getFull(trainerId, clientId, workoutId);
-      if (!existing) throw notFound('Тренировка не найдена');
+      const ownedByClientOnly = opts.ownedByClientOnly ?? false;
+      if (!existing || (ownedByClientOnly && !existing.createdByClient))
+        throw notFound('Тренировка не найдена');
       const visible = await repo.areExercisesVisible(trainerId, [input.exerciseId]);
       if (!visible) throw unknownExercise();
 
-      const row = await repo.addExercise(trainerId, clientId, workoutId, toExerciseInput(input));
+      const row = await repo.addExercise(
+        trainerId,
+        clientId,
+        workoutId,
+        toExerciseInput(input),
+        ownedByClientOnly,
+      );
       if (!row) throw notFound('Тренировка не найдена');
       return toResponse(row);
     },

@@ -1,14 +1,32 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { workoutResponseSchema, workoutListResponseSchema } from '@trener/shared';
+import {
+  createWorkoutRequestSchema,
+  updateSetRequestSchema,
+  completeWorkoutRequestSchema,
+  workoutResponseSchema,
+  workoutListResponseSchema,
+} from '@trener/shared';
 import type { ClientWorkoutsService } from '../client-workouts/client-workouts.service.js';
 import { requireClient } from '../../plugins/client-context.js';
 import { notFound } from '../../errors.js';
 import { makeClientScope, type ResolveScope } from '../../core/client-scope.js';
 
 const widParams = z.object({ wid: z.string() });
+const setParams = z.object({ wid: z.string(), setId: z.string() });
 const workoutWrap = z.object({ workout: workoutResponseSchema });
+
+// Клиентский set-id «position:setIndex» (PATCH .../sets/:setId). Парсим в позицию/индекс.
+function parseSetId(setId: string): { position: number; setIndex: number } | null {
+  const parts = setId.split(':');
+  if (parts.length !== 2) return null;
+  const position = Number(parts[0]);
+  const setIndex = Number(parts[1]);
+  if (!Number.isInteger(position) || position < 0) return null;
+  if (!Number.isInteger(setIndex) || setIndex < 0) return null;
+  return { position, setIndex };
+}
 
 export function clientAppWorkoutsRoutes(
   app: FastifyInstance,
@@ -18,16 +36,15 @@ export function clientAppWorkoutsRoutes(
   const typed = app.withTypeProvider<ZodTypeProvider>();
   const scope = makeClientScope(resolveScope);
 
+  // Список клиента: свои (любой статус) + тренерские ТОЛЬКО завершённые (owner='all', затем
+  // фильтр). Тренерские черновики/активные клиенту не показываем. Секционирование — на фронте.
   typed.get(
     '/api/client/workouts',
     { preHandler: requireClient, schema: { response: { 200: workoutListResponseSchema } } },
     async (req) => {
       const { trainerId, clientId } = await scope(req);
-      const all = await svc.list(trainerId, clientId);
-      const ts = (iso: string | null): number => (iso ? new Date(iso).getTime() : 0);
-      const workouts = all
-        .filter((w) => w.status === 'completed')
-        .sort((a, b) => ts(b.completedAt) - ts(a.completedAt));
+      const all = await svc.list(trainerId, clientId, 'all');
+      const workouts = all.filter((w) => w.createdByClient || w.status === 'completed');
       return { workouts };
     },
   );
@@ -38,8 +55,93 @@ export function clientAppWorkoutsRoutes(
     async (req) => {
       const { trainerId, clientId } = await scope(req);
       const workout = await svc.get(trainerId, clientId, req.params.wid);
-      if (workout.status !== 'completed') throw notFound('Тренировка не найдена');
+      // Клиент видит деталь только своей (любой статус) или завершённой тренерской.
+      if (!workout.createdByClient && workout.status !== 'completed')
+        throw notFound('Тренировка не найдена');
       return { workout };
+    },
+  );
+
+  // Создание самостоятельной тренировки (createdByClient=true) → draft.
+  typed.post(
+    '/api/client/workouts',
+    {
+      preHandler: requireClient,
+      schema: { body: createWorkoutRequestSchema, response: { 201: workoutWrap } },
+    },
+    async (req, reply) => {
+      const { trainerId, clientId } = await scope(req);
+      const workout = await svc.create(trainerId, clientId, req.body, true);
+      void reply.status(201);
+      return { workout };
+    },
+  );
+
+  // Старт/лог/завершение/удаление — только свои (ownedByClientOnly): тренерская → 404.
+  typed.post(
+    '/api/client/workouts/:wid/start',
+    { preHandler: requireClient, schema: { params: widParams, response: { 200: workoutWrap } } },
+    async (req) => {
+      const { trainerId, clientId } = await scope(req);
+      const workout = await svc.start(trainerId, clientId, req.params.wid, {
+        ownedByClientOnly: true,
+      });
+      return { workout };
+    },
+  );
+
+  typed.patch(
+    '/api/client/workouts/:wid/sets/:setId',
+    {
+      preHandler: requireClient,
+      schema: { params: setParams, body: updateSetRequestSchema, response: { 200: workoutWrap } },
+    },
+    async (req) => {
+      const { trainerId, clientId } = await scope(req);
+      const parsed = parseSetId(req.params.setId);
+      if (!parsed) throw notFound('Подход не найден');
+      const workout = await svc.updateSet(
+        trainerId,
+        clientId,
+        req.params.wid,
+        parsed.position,
+        parsed.setIndex,
+        req.body,
+        { ownedByClientOnly: true },
+      );
+      return { workout };
+    },
+  );
+
+  typed.post(
+    '/api/client/workouts/:wid/complete',
+    {
+      preHandler: requireClient,
+      schema: {
+        params: widParams,
+        body: completeWorkoutRequestSchema,
+        response: { 200: workoutWrap },
+      },
+    },
+    async (req) => {
+      const { trainerId, clientId } = await scope(req);
+      const workout = await svc.complete(trainerId, clientId, req.params.wid, req.body, {
+        ownedByClientOnly: true,
+      });
+      return { workout };
+    },
+  );
+
+  typed.delete(
+    '/api/client/workouts/:wid',
+    {
+      preHandler: requireClient,
+      schema: { params: widParams, response: { 200: z.object({ ok: z.literal(true) }) } },
+    },
+    async (req) => {
+      const { trainerId, clientId } = await scope(req);
+      await svc.remove(trainerId, clientId, req.params.wid, { ownedByClientOnly: true });
+      return { ok: true as const };
     },
   );
 }

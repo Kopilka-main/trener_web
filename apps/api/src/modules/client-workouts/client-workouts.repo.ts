@@ -39,6 +39,7 @@ export type WorkoutRow = {
   durationSec: number | null;
   trainerNote: string | null;
   rpe: number | null;
+  createdByClient: boolean;
   createdAt: Date;
   exercises: WorkoutExerciseRow[];
 };
@@ -123,6 +124,7 @@ export function makeClientWorkoutsRepo(db: Db) {
         durationSec: clientWorkouts.durationSec,
         trainerNote: clientWorkouts.trainerNote,
         rpe: clientWorkouts.rpe,
+        createdByClient: clientWorkouts.createdByClient,
         createdAt: clientWorkouts.createdAt,
       })
       .from(clientWorkouts)
@@ -270,6 +272,7 @@ export function makeClientWorkoutsRepo(db: Db) {
       trainerId: string,
       clientId: string,
       plan: CreateWorkoutInput,
+      createdByClient = false,
     ): Promise<WorkoutRow | null> {
       const visible = await areExercisesVisible(
         trainerId,
@@ -285,6 +288,7 @@ export function makeClientWorkoutsRepo(db: Db) {
           sourceTemplateId: plan.sourceTemplateId ?? null,
           name: plan.name,
           status: 'draft',
+          createdByClient,
         });
         await tx.insert(clientWorkoutExercises).values(
           plan.exercises.map((ex, position) => ({
@@ -310,7 +314,14 @@ export function makeClientWorkoutsRepo(db: Db) {
       return getFull(trainerId, clientId, plan.id);
     },
 
-    async listForClient(trainerId: string, clientId: string): Promise<WorkoutRow[]> {
+    async listForClient(
+      trainerId: string,
+      clientId: string,
+      owner: 'trainer' | 'all' = 'all',
+    ): Promise<WorkoutRow[]> {
+      // owner='trainer' → только тренерские (createdByClient=false): тренер не видит
+      // самостоятельные тренировки клиента; 'all' → свои + тренерские (клиентский фасад).
+      const ownerCond = owner === 'trainer' ? eq(clientWorkouts.createdByClient, false) : undefined;
       const heads = await db
         .select({
           id: clientWorkouts.id,
@@ -323,10 +334,17 @@ export function makeClientWorkoutsRepo(db: Db) {
           durationSec: clientWorkouts.durationSec,
           trainerNote: clientWorkouts.trainerNote,
           rpe: clientWorkouts.rpe,
+          createdByClient: clientWorkouts.createdByClient,
           createdAt: clientWorkouts.createdAt,
         })
         .from(clientWorkouts)
-        .where(and(eq(clientWorkouts.trainerId, trainerId), eq(clientWorkouts.clientId, clientId)))
+        .where(
+          and(
+            eq(clientWorkouts.trainerId, trainerId),
+            eq(clientWorkouts.clientId, clientId),
+            ownerCond,
+          ),
+        )
         .orderBy(desc(clientWorkouts.createdAt));
 
       const result: WorkoutRow[] = [];
@@ -344,11 +362,15 @@ export function makeClientWorkoutsRepo(db: Db) {
       clientId: string,
       workoutId: string,
       startedAt: Date,
+      ownedByClientOnly = false,
     ): Promise<StatusTransitionResult> {
+      // ownedByClientOnly=true → клиент может стартовать только свою (createdByClient=true);
+      // тренерская не попадёт в scope → 'not_found'.
       const scope = and(
         eq(clientWorkouts.id, workoutId),
         eq(clientWorkouts.trainerId, trainerId),
         eq(clientWorkouts.clientId, clientId),
+        ownedByClientOnly ? eq(clientWorkouts.createdByClient, true) : undefined,
       );
       const res = await db
         .update(clientWorkouts)
@@ -369,9 +391,11 @@ export function makeClientWorkoutsRepo(db: Db) {
       position: number,
       setIndex: number,
       patch: SetPatchInput,
+      ownedByClientOnly = false,
     ): Promise<WorkoutRow | null> {
       const head = await loadHead(trainerId, clientId, workoutId);
-      if (!head) return null;
+      // ownedByClientOnly=true и тренировка не самостоятельная → как «не найдено».
+      if (!head || (ownedByClientOnly && !head.createdByClient)) return null;
 
       const setPatch: Partial<{
         plannedReps: number | null;
@@ -423,6 +447,7 @@ export function makeClientWorkoutsRepo(db: Db) {
       workoutId: string,
       input: CompleteInput,
       completedAt: Date,
+      ownedByClientOnly = false,
     ): Promise<StatusTransitionResult> {
       const headPatch: {
         status: WorkoutStatus;
@@ -439,6 +464,7 @@ export function makeClientWorkoutsRepo(db: Db) {
         eq(clientWorkouts.id, workoutId),
         eq(clientWorkouts.trainerId, trainerId),
         eq(clientWorkouts.clientId, clientId),
+        ownedByClientOnly ? eq(clientWorkouts.createdByClient, true) : undefined,
       );
       const res = await db
         .update(clientWorkouts)
@@ -457,9 +483,10 @@ export function makeClientWorkoutsRepo(db: Db) {
       clientId: string,
       workoutId: string,
       exercise: WorkoutExerciseInput,
+      ownedByClientOnly = false,
     ): Promise<WorkoutRow | null> {
       const head = await loadHead(trainerId, clientId, workoutId);
-      if (!head) return null;
+      if (!head || (ownedByClientOnly && !head.createdByClient)) return null;
       const visible = await areExercisesVisible(trainerId, [exercise.exerciseId]);
       if (!visible) return null;
 
@@ -497,9 +524,10 @@ export function makeClientWorkoutsRepo(db: Db) {
       clientId: string,
       workoutId: string,
       pos: number,
+      ownedByClientOnly = false,
     ): Promise<WorkoutRow | null | 'not_found_pos'> {
       const head = await loadHead(trainerId, clientId, workoutId);
-      if (!head) return null;
+      if (!head || (ownedByClientOnly && !head.createdByClient)) return null;
 
       const result = await db.transaction(async (tx) => {
         const rows = await tx
@@ -560,7 +588,12 @@ export function makeClientWorkoutsRepo(db: Db) {
       return getFull(trainerId, clientId, workoutId);
     },
 
-    async remove(trainerId: string, clientId: string, workoutId: string): Promise<boolean> {
+    async remove(
+      trainerId: string,
+      clientId: string,
+      workoutId: string,
+      ownedByClientOnly = false,
+    ): Promise<boolean> {
       const res = await db
         .delete(clientWorkouts)
         .where(
@@ -568,6 +601,7 @@ export function makeClientWorkoutsRepo(db: Db) {
             eq(clientWorkouts.id, workoutId),
             eq(clientWorkouts.trainerId, trainerId),
             eq(clientWorkouts.clientId, clientId),
+            ownedByClientOnly ? eq(clientWorkouts.createdByClient, true) : undefined,
           ),
         )
         .returning({ id: clientWorkouts.id });

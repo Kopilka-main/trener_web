@@ -34,6 +34,7 @@ function workout(over: Partial<WorkoutResponse>): WorkoutResponse {
     durationSec: 3600,
     trainerNote: null,
     rpe: 7,
+    createdByClient: false,
     exercises: [],
     ...over,
   };

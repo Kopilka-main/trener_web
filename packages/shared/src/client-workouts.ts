@@ -98,6 +98,7 @@ export const workoutResponseSchema = z.object({
   durationSec: z.number().nullable(),
   trainerNote: z.string().nullable(),
   rpe: z.number().nullable(),
+  createdByClient: z.boolean(),
   exercises: z.array(workoutExerciseResponseSchema),
 });
 export type WorkoutResponse = z.infer<typeof workoutResponseSchema>;
