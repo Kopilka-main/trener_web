@@ -15,6 +15,7 @@ import {
   clientWorkoutQueryKey,
   useAddWorkoutExercise,
   useClientWorkout,
+  useClientWorkouts,
   useCompleteWorkout,
   useDeleteWorkout,
   useRemoveWorkoutExercise,
@@ -22,6 +23,7 @@ import {
   useStartWorkout,
   useUpdateWorkoutSet,
 } from '../api/workouts';
+import { aggregateExerciseOverview } from '../lib/workout-stats';
 import { HoldToDelete } from '../components/HoldToDelete';
 import { SortableList } from '../components/SortableList';
 
@@ -880,8 +882,18 @@ function ExercisePickerSheet({
   onPick: (exercise: ExerciseResponse) => void;
 }) {
   const exercises = useClientExercises();
+  const workouts = useClientWorkouts();
   const [query, setQuery] = useState('');
-  const list = exercises.data ?? [];
+  // Доступны только упражнения из базы знаний — те, что были на проведённых тренировках.
+  const kbIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const ov of aggregateExerciseOverview(workouts.data ?? [])) ids.add(ov.exerciseId);
+    return ids;
+  }, [workouts.data]);
+  const list = useMemo(
+    () => (exercises.data ?? []).filter((e) => kbIds.has(e.id)),
+    [exercises.data, kbIds],
+  );
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (q === '') return list;
