@@ -340,8 +340,8 @@ function ActiveView({
   const completed = workout.exercises.filter(isDoneEx);
   const pending = workout.exercises.filter((ex) => !isDoneEx(ex));
   const pendingItems = pending.map((ex) => ({ ...ex, id: `ex-${String(ex.position)}` }));
-  // Свёрнуто видно только последний завершённый; развёрнуто — все.
-  const visibleCompleted = doneExpanded ? completed : completed.slice(-1);
+  // Свёрнуто коллектор пуст (виден только заголовок-счётчик); развёрнуто — все завершённые.
+  const visibleCompleted = doneExpanded ? completed : [];
 
   function toggleDone(ex: WorkoutExerciseResponse, set: WorkoutSetResponse) {
     const nextDone = !set.done;
