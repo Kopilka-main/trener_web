@@ -10,17 +10,18 @@ vi.mock('../api/workouts');
 vi.mock('../api/exercises');
 vi.mock('../api/auth');
 
-function makeWorkout(exerciseId: string, name: string, weight: number) {
+function makeWorkout(exerciseId: string, name: string, weight: number, workoutName = 'Тренировка') {
   return {
     id: `w-${exerciseId}`,
     clientId: 'c1',
-    name: 'Тренировка',
+    name: workoutName,
     status: 'completed',
     startedAt: null,
     completedAt: '2026-06-03T08:30:00Z',
     durationSec: 3600,
     trainerNote: null,
     rpe: null,
+    createdByClient: false,
     exercises: [
       {
         position: 0,
@@ -44,6 +45,22 @@ function makeWorkout(exerciseId: string, name: string, weight: number) {
   };
 }
 
+function exercise(id: string, name: string, category: string, subgroup: string | null) {
+  return {
+    id,
+    isGlobal: true,
+    name,
+    category,
+    subgroup,
+    description: null,
+    defaultReps: null,
+    defaultWeightKg: null,
+    defaultTimeSec: null,
+    restSec: 90,
+    note: null,
+  };
+}
+
 function mockMe(linked: boolean) {
   vi.mocked(auth.useClientMe).mockReturnValue({
     isLoading: false,
@@ -51,6 +68,24 @@ function mockMe(linked: boolean) {
       account: { id: 'ca1', email: 'a@b.co', firstName: 'И', lastName: 'К', avatarFileId: null },
       link: linked ? { trainerId: 't1', clientId: 'cl1' } : null,
     },
+  } as never);
+}
+
+function mockData(
+  workouts: ReturnType<typeof makeWorkout>[],
+  exercises: ReturnType<typeof exercise>[],
+) {
+  vi.mocked(workoutsApi.useClientWorkouts).mockReturnValue({
+    isLoading: false,
+    isError: false,
+    isSuccess: true,
+    data: workouts,
+  } as never);
+  vi.mocked(exercisesApi.useClientExercises).mockReturnValue({
+    isLoading: false,
+    isError: false,
+    isSuccess: true,
+    data: exercises,
   } as never);
 }
 
@@ -65,96 +100,39 @@ function renderPage() {
 describe('KnowledgePage', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it('рендерит список из охвата тренировок, обогащённый каталогом', () => {
+  it('по умолчанию — вкладка «Тренировки» с проведёнными тренером', () => {
     mockMe(true);
-    vi.mocked(workoutsApi.useClientWorkouts).mockReturnValue({
-      isLoading: false,
-      isError: false,
-      isSuccess: true,
-      data: [makeWorkout('e1', 'Жим лёжа', 80), makeWorkout('e2', 'Присед', 100)],
-    } as never);
-    vi.mocked(exercisesApi.useClientExercises).mockReturnValue({
-      isLoading: false,
-      isError: false,
-      isSuccess: true,
-      data: [
-        {
-          id: 'e1',
-          isGlobal: true,
-          name: 'Жим лёжа',
-          category: 'Грудь',
-          subgroup: 'Середина',
-          description: null,
-          defaultReps: null,
-          defaultWeightKg: null,
-          defaultTimeSec: null,
-          restSec: 90,
-          note: null,
-        },
-        {
-          id: 'e2',
-          isGlobal: true,
-          name: 'Присед',
-          category: 'Ноги',
-          subgroup: 'Квадрицепс',
-          description: null,
-          defaultReps: null,
-          defaultWeightKg: null,
-          defaultTimeSec: null,
-          restSec: 90,
-          note: null,
-        },
-      ],
-    } as never);
+    mockData(
+      [makeWorkout('e1', 'Жим лёжа', 80, 'Push — грудь')],
+      [exercise('e1', 'Жим лёжа', 'Грудь', 'Середина')],
+    );
     renderPage();
+    expect(screen.getByText('Push — грудь')).toBeInTheDocument();
+    // Упражнения скрыты, пока не переключишь вкладку.
+    expect(screen.queryByText('Грудь · Середина')).not.toBeInTheDocument();
+  });
+
+  it('вкладка «Упражнения»: список из охвата, обогащённый каталогом', () => {
+    mockMe(true);
+    mockData(
+      [makeWorkout('e1', 'Жим лёжа', 80), makeWorkout('e2', 'Присед', 100)],
+      [exercise('e1', 'Жим лёжа', 'Грудь', 'Середина'), exercise('e2', 'Присед', 'Ноги', null)],
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('tab', { name: 'Упражнения' }));
     expect(screen.getByText('Жим лёжа')).toBeInTheDocument();
     expect(screen.getByText('Присед')).toBeInTheDocument();
     expect(screen.getByText('Грудь · Середина')).toBeInTheDocument();
   });
 
-  it('фильтрует список по выбранной группе мышц', () => {
+  it('фильтрует упражнения по выбранной группе мышц', () => {
     mockMe(true);
-    vi.mocked(workoutsApi.useClientWorkouts).mockReturnValue({
-      isLoading: false,
-      isError: false,
-      isSuccess: true,
-      data: [makeWorkout('e1', 'Жим лёжа', 80), makeWorkout('e2', 'Присед', 100)],
-    } as never);
-    vi.mocked(exercisesApi.useClientExercises).mockReturnValue({
-      isLoading: false,
-      isError: false,
-      isSuccess: true,
-      data: [
-        {
-          id: 'e1',
-          isGlobal: true,
-          name: 'Жим лёжа',
-          category: 'Грудь',
-          subgroup: null,
-          description: null,
-          defaultReps: null,
-          defaultWeightKg: null,
-          defaultTimeSec: null,
-          restSec: 90,
-          note: null,
-        },
-        {
-          id: 'e2',
-          isGlobal: true,
-          name: 'Присед',
-          category: 'Ноги',
-          subgroup: null,
-          description: null,
-          defaultReps: null,
-          defaultWeightKg: null,
-          defaultTimeSec: null,
-          restSec: 90,
-          note: null,
-        },
-      ],
-    } as never);
+    mockData(
+      [makeWorkout('e1', 'Жим лёжа', 80), makeWorkout('e2', 'Присед', 100)],
+      [exercise('e1', 'Жим лёжа', 'Грудь', null), exercise('e2', 'Присед', 'Ноги', null)],
+    );
     renderPage();
-
+    fireEvent.click(screen.getByRole('tab', { name: 'Упражнения' }));
     fireEvent.click(screen.getByRole('button', { name: 'Ноги' }));
     expect(screen.getByText('Присед')).toBeInTheDocument();
     expect(screen.queryByText('Жим лёжа')).not.toBeInTheDocument();
@@ -162,18 +140,7 @@ describe('KnowledgePage', () => {
 
   it('не привязан, пусто → приглашение подключить тренера', () => {
     mockMe(false);
-    vi.mocked(workoutsApi.useClientWorkouts).mockReturnValue({
-      isLoading: false,
-      isError: false,
-      isSuccess: true,
-      data: [],
-    } as never);
-    vi.mocked(exercisesApi.useClientExercises).mockReturnValue({
-      isLoading: false,
-      isError: false,
-      isSuccess: true,
-      data: [],
-    } as never);
+    mockData([], []);
     renderPage();
     expect(screen.getByText(/Подключите тренера/)).toBeInTheDocument();
   });
