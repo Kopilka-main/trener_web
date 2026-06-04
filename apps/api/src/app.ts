@@ -76,6 +76,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     db: deps.db,
     clock,
     isProd: deps.isProd,
+    filesRepo,
+    storage,
   });
   registerClientAppWorkoutsModule(app, {
     db: deps.db,
@@ -89,6 +91,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
   registerClientAppTrainerModule(app, {
     db: deps.db,
+    filesRepo,
+    storage,
     resolveScope: (id) => clientAuthSvc.resolveScope(id),
   });
   registerClientAppCalendarModule(app, {
