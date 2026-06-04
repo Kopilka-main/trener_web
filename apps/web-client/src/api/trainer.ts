@@ -1,7 +1,8 @@
 import { trainerPublicResponseSchema, type TrainerPublicResponse } from '@trener/shared';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { apiFetch, ApiError } from './client';
+import { clientMeQueryKey } from './auth';
 
 const trainerWrap = z.object({ trainer: trainerPublicResponseSchema });
 
@@ -19,6 +20,22 @@ export function useClientTrainer() {
         if (err instanceof ApiError && err.status === 409) return null;
         throw err;
       }
+    },
+  });
+}
+
+/** Отключение от тренера (мягкая отвязка аккаунта). После — клиент «не подключён». */
+export function useDisconnectTrainer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch('/client/trainer/disconnect', {
+        method: 'POST',
+        schema: z.object({ ok: z.literal(true) }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: clientMeQueryKey });
+      void qc.invalidateQueries({ queryKey: clientTrainerQueryKey });
     },
   });
 }

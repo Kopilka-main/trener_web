@@ -25,7 +25,13 @@ export type FileByIdPort = {
   getById(id: string): Promise<{ mime: string; storagePath: string } | null>;
 };
 
+// Порт отвязки клиента от тренера (мягкой — снимает привязку аккаунта, данные сохраняет).
+export type ClientLinkWriter = {
+  detachAccountFromClient(clientId: string): Promise<void>;
+};
+
 const trainerWrap = z.object({ trainer: trainerPublicResponseSchema });
+const okResponse = z.object({ ok: z.literal(true) });
 
 export function clientAppTrainerRoutes(
   app: FastifyInstance,
@@ -33,6 +39,7 @@ export function clientAppTrainerRoutes(
   files: FileByIdPort,
   storage: Storage,
   resolveScope: ResolveScope,
+  link: ClientLinkWriter,
 ): void {
   const typed = app.withTypeProvider<ZodTypeProvider>();
   const scope = makeClientScope(resolveScope);
@@ -68,4 +75,16 @@ export function clientAppTrainerRoutes(
     reply.header('Content-Type', row.mime);
     return reply.send(storage.openRead(row.storagePath));
   });
+
+  // Отключение от тренера по инициативе клиента: scope (401/409) → снимаем привязку
+  // аккаунта к карточке клиента. Данные клиента у тренера сохраняются.
+  typed.post(
+    '/api/client/trainer/disconnect',
+    { preHandler: requireClient, schema: { response: { 200: okResponse } } },
+    async (req) => {
+      const { clientId } = await scope(req);
+      await link.detachAccountFromClient(clientId);
+      return { ok: true as const };
+    },
+  );
 }

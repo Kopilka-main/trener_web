@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useClientTrainer } from '../api/trainer';
+import { useClientTrainer, useDisconnectTrainer } from '../api/trainer';
 
 function initials(first: string, last: string): string {
   return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase();
@@ -91,8 +91,75 @@ export function TrainerPage() {
               </ul>
             </section>
           )}
+
+          <DisconnectSection trainerName={`${t.firstName} ${t.lastName}`.trim()} />
         </div>
       )}
     </div>
+  );
+}
+
+/** Отключение от тренера: раскрывается в подтверждение вводом имени тренера.
+ * Данные клиента при этом сохраняются — рвётся только привязка к тренеру. */
+function DisconnectSection({ trainerName }: { trainerName: string }) {
+  const disconnect = useDisconnectTrainer();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+
+  const matches = name.trim().toLowerCase() === trainerName.toLowerCase();
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-2 rounded-xl bg-card py-3 text-[14px] font-semibold text-ink active:bg-card-elevated"
+      >
+        Отключиться от тренера
+      </button>
+    );
+  }
+
+  return (
+    <section className="mt-2 flex flex-col gap-3 rounded-2xl bg-card p-4">
+      <p className="text-[13px] leading-relaxed text-ink-muted">
+        Связь с тренером будет разорвана. Ваши тренировки, замеры и история сохранятся. Чтобы
+        подтвердить, введите имя тренера:{' '}
+        <span className="font-semibold text-ink">{trainerName}</span>
+      </p>
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Имя тренера"
+        autoFocus
+        className="rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
+      />
+      {disconnect.isError && (
+        <p className="text-[13px] text-ink-muted" role="alert">
+          Не удалось отключиться. Попробуйте снова.
+        </p>
+      )}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setName('');
+          }}
+          disabled={disconnect.isPending}
+          className="flex-1 rounded-xl bg-card-elevated py-3 text-[14px] font-semibold text-ink active:opacity-90 disabled:opacity-60"
+        >
+          Отмена
+        </button>
+        <button
+          type="button"
+          onClick={() => disconnect.mutate()}
+          disabled={!matches || disconnect.isPending}
+          className="flex-1 rounded-xl bg-danger py-3 text-[14px] font-semibold text-white active:opacity-90 disabled:opacity-40"
+        >
+          {disconnect.isPending ? 'Отключение…' : 'Отключиться'}
+        </button>
+      </div>
+    </section>
   );
 }

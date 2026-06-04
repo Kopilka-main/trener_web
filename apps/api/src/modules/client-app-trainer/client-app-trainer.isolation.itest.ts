@@ -92,4 +92,78 @@ describe.skipIf(!url)('client-app-trainer (isolation)', () => {
     const noAuth = await app.inject({ method: 'GET', url: '/api/client/trainer' });
     expect(noAuth.statusCode).toBe(401);
   });
+
+  it('disconnect: отвязывает клиента (409 после), карточка у тренера сохраняется', async () => {
+    const reg = await app.inject({
+      method: 'POST',
+      url: '/api/client/auth/register',
+      payload: { email: 'tr-dc@b.co', password: 'longenough1', firstName: 'Д', lastName: 'К' },
+    });
+    const accId = reg.json<{ account: { id: string } }>().account.id;
+    const cSid = clientSid(reg);
+
+    const regT = await app.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: {
+        email: 'coach-dc@b.co',
+        password: 'longenough1',
+        firstName: 'Пётр',
+        lastName: 'Т',
+      },
+    });
+    const tSid = trainerSid(regT);
+    const cli = await app.inject({
+      method: 'POST',
+      url: '/api/clients',
+      cookies: { sid: tSid },
+      payload: { firstName: 'Кли', lastName: 'Ент', accountId: accId },
+    });
+    const clientId = cli.json<{ client: { id: string } }>().client.id;
+
+    // До отключения — клиент видит тренера.
+    const linked = await app.inject({
+      method: 'GET',
+      url: '/api/client/trainer',
+      cookies: { client_sid: cSid },
+    });
+    expect(linked.statusCode).toBe(200);
+
+    // Отключение.
+    const dc = await app.inject({
+      method: 'POST',
+      url: '/api/client/trainer/disconnect',
+      cookies: { client_sid: cSid },
+    });
+    expect(dc.statusCode).toBe(200);
+
+    // После — клиент уже не привязан (409).
+    const after = await app.inject({
+      method: 'GET',
+      url: '/api/client/trainer',
+      cookies: { client_sid: cSid },
+    });
+    expect(after.statusCode).toBe(409);
+
+    // Карточка клиента у тренера сохранилась (данные не сброшены) — лишь снята привязка аккаунта.
+    const roster = await app.inject({
+      method: 'GET',
+      url: '/api/clients',
+      cookies: { sid: tSid },
+    });
+    expect(roster.statusCode).toBe(200);
+    const found = roster
+      .json<{ clients: { id: string; accountId: string | null }[] }>()
+      .clients.find((c) => c.id === clientId);
+    expect(found).toBeTruthy();
+    expect(found?.accountId).toBeNull();
+
+    // Повторный disconnect — уже 409 (нет активной привязки).
+    const again = await app.inject({
+      method: 'POST',
+      url: '/api/client/trainer/disconnect',
+      cookies: { client_sid: cSid },
+    });
+    expect(again.statusCode).toBe(409);
+  });
 });

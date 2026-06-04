@@ -77,6 +77,13 @@ export function makeClientAuthRepo(db: Db) {
       return row ?? null;
     },
 
+    // Мягкая отвязка от тренера: снимаем только привязку аккаунта к карточке клиента
+    // (clients.accountId = null). Данные клиента (тренировки, замеры, пакеты, история)
+    // остаются нетронутыми у тренера — ничего не удаляется.
+    async detachAccountFromClient(clientId: string): Promise<void> {
+      await db.update(clients).set({ accountId: null }).where(eq(clients.id, clientId));
+    },
+
     async updateAccount(
       id: string,
       patch: {
