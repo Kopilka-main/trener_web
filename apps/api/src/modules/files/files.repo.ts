@@ -4,8 +4,9 @@ import { files } from '../../db/schema.js';
 
 export type FileRow = {
   id: string;
-  trainerId: string;
+  trainerId: string | null;
   clientId: string | null;
+  accountId: string | null;
   mime: string;
   sizeBytes: number;
   storagePath: string;
@@ -15,8 +16,9 @@ export type FileRow = {
 
 export type CreateFileInput = {
   id: string;
-  trainerId: string;
+  trainerId: string | null;
   clientId: string | null;
+  accountId: string | null;
   mime: string;
   sizeBytes: number;
   storagePath: string;
@@ -27,6 +29,7 @@ const columns = {
   id: files.id,
   trainerId: files.trainerId,
   clientId: files.clientId,
+  accountId: files.accountId,
   mime: files.mime,
   sizeBytes: files.sizeBytes,
   storagePath: files.storagePath,
@@ -34,8 +37,8 @@ const columns = {
   createdAt: files.createdAt,
 };
 
-// Репозиторий файлов: scoped по trainerId. HTTP-слой не импортирует.
-// Привязка к клиенту (clientId) — для доменных модулей (фото/медкарта).
+// Репозиторий файлов. Файл принадлежит либо тренеру (trainerId), либо клиент-аккаунту
+// (accountId) — инвариант XOR обеспечивается сервисным слоем.
 export function makeFilesRepo(db: Db) {
   return {
     async create(input: CreateFileInput): Promise<FileRow> {
@@ -45,6 +48,7 @@ export function makeFilesRepo(db: Db) {
           id: input.id,
           trainerId: input.trainerId,
           clientId: input.clientId,
+          accountId: input.accountId,
           mime: input.mime,
           sizeBytes: input.sizeBytes,
           storagePath: input.storagePath,
@@ -61,6 +65,27 @@ export function makeFilesRepo(db: Db) {
         .select(columns)
         .from(files)
         .where(and(eq(files.id, id), eq(files.trainerId, trainerId)));
+      return row ?? null;
+    },
+
+    // Файл в scope клиент-аккаунта, либо null (нет/чужой).
+    async getForAccount(accountId: string, id: string): Promise<FileRow | null> {
+      const [row] = await db
+        .select(columns)
+        .from(files)
+        .where(and(eq(files.id, id), eq(files.accountId, accountId)));
+      return row ?? null;
+    },
+
+    // Файл по id без проверки владельца (владение проверяет вызывающий по avatarFileId).
+    async getById(id: string): Promise<FileRow | null> {
+      const [row] = await db.select(columns).from(files).where(eq(files.id, id));
+      return row ?? null;
+    },
+
+    // Удаляет файл по id без проверки владельца и возвращает удалённую строку (или null).
+    async deleteById(id: string): Promise<FileRow | null> {
+      const [row] = await db.delete(files).where(eq(files.id, id)).returning(columns);
       return row ?? null;
     },
 

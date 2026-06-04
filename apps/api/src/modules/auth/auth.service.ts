@@ -22,6 +22,7 @@ function toTrainerResponse(t: {
   title: string | null;
   bio: string | null;
   contacts: { type: string; value: string }[];
+  avatarFileId?: string | null;
 }): TrainerResponse {
   return {
     id: t.id,
@@ -31,6 +32,7 @@ function toTrainerResponse(t: {
     title: t.title,
     bio: t.bio,
     contacts: t.contacts,
+    avatarFileId: t.avatarFileId ?? null,
   };
 }
 

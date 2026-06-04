@@ -32,6 +32,7 @@ describe.skipIf(!url)('files routes (integration)', () => {
       id,
       trainerId: ownerTrainerId,
       clientId: null,
+      accountId: null,
       mime: 'image/png',
       sizeBytes: saved.sizeBytes,
       storagePath: saved.storagePath,

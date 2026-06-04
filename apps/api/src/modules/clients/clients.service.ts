@@ -174,6 +174,7 @@ export function makeClientsService(
           id: fileId,
           trainerId,
           clientId,
+          accountId: null,
           mime: input.mime,
           sizeBytes: saved.sizeBytes,
           storagePath: saved.storagePath,

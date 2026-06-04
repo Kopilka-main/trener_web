@@ -14,6 +14,7 @@ export type TrainerLookup = {
     title: string | null;
     bio: string | null;
     contacts: { type: string; value: string }[];
+    avatarFileId?: string | null;
   } | null>;
 };
 
@@ -41,6 +42,7 @@ export function clientAppTrainerRoutes(
         title: t.title,
         bio: t.bio,
         contacts: t.contacts,
+        avatarFileId: t.avatarFileId ?? null,
       };
       return { trainer };
     },

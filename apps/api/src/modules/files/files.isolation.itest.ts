@@ -57,6 +57,7 @@ describe.skipIf(!url)('files isolation (integration)', () => {
       id,
       trainerId: a.trainerId,
       clientId: null,
+      accountId: null,
       mime: 'image/png',
       sizeBytes: saved.sizeBytes,
       storagePath: saved.storagePath,
