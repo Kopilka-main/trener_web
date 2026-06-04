@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Wifi, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Link2, Link2Off, Wifi, X } from 'lucide-react';
 import type { SessionResponse, SessionStatus } from '@trener/shared';
 import {
   CAL_HOURS,
@@ -200,11 +200,47 @@ function tileClasses(status: SessionStatus): string {
 }
 
 /** Индикатор ответа клиента: ✓ подтвердил, ✕ отклонил, ничего — ждёт ответа. */
-function ConfirmMark({ value }: { value: SessionResponse['clientConfirmation'] }) {
-  if (value === 'confirmed') return <Check size={12} strokeWidth={2.4} className="shrink-0" />;
-  if (value === 'declined')
-    return <X size={12} strokeWidth={2.4} className="shrink-0 opacity-70" />;
-  return null;
+/**
+ * Бейдж состояния связи с клиентом (кружок с иконкой):
+ *  • подтверждено клиентом → галочка, акцент;
+ *  • отправлено клиенту (есть тренировка), ждёт ответа → цепь, акцент;
+ *  • отклонено клиентом → разорванная цепь, коралл;
+ *  • не отправлено (тренировка не прикреплена) → разорванная цепь, серая.
+ */
+interface StateInfo {
+  Icon: typeof Link2Off;
+  color: string;
+  label: string;
+}
+
+/** Состояние связи занятия с клиентом — иконка, цвет и подробная подпись. */
+function stateInfo(session: SessionResponse): StateInfo {
+  if (session.clientConfirmation === 'confirmed') {
+    return { Icon: Check, color: 'var(--color-accent)', label: 'Клиент подтвердил' };
+  }
+  if (session.clientConfirmation === 'declined') {
+    return { Icon: X, color: 'var(--color-danger)', label: 'Клиент отклонил' };
+  }
+  if (session.workoutId) {
+    return { Icon: Link2, color: 'var(--color-accent)', label: 'Отправлено, ждём ответа' };
+  }
+  return { Icon: Link2Off, color: 'var(--color-ink-mutedxl)', label: 'Не отправлено клиенту' };
+}
+
+function StateBadge({ session, compact = false }: { session: SessionResponse; compact?: boolean }) {
+  const { Icon, color, label } = stateInfo(session);
+  return (
+    <span
+      aria-label={label}
+      title={label}
+      className={`flex shrink-0 items-center justify-center rounded-full bg-[var(--color-bg)] ring-1 ring-white/10 ${
+        compact ? 'h-4 w-4' : 'h-5 w-5'
+      }`}
+      style={{ color }}
+    >
+      <Icon size={compact ? 10 : 12} strokeWidth={2.4} />
+    </span>
+  );
 }
 
 /** Сессии конкретного дня, отсортированы по времени. */
@@ -381,13 +417,22 @@ function DayView({
                   <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">
                     {renderLabel(s)}
                   </span>
-                  <ConfirmMark value={s.clientConfirmation} />
+                  <StateBadge session={s} />
                 </div>
                 <div className="truncate font-[family-name:var(--font-mono)] text-[11px] opacity-80">
                   {[`${s.startTime}–${endTime(s.startTime, s.durationMin)}`, s.location]
                     .filter(Boolean)
                     .join(' · ')}
                 </div>
+                {height >= 50 && (
+                  <div className="mt-0.5 flex items-center justify-end gap-1 text-[10px] font-semibold opacity-90">
+                    {(() => {
+                      const { Icon } = stateInfo(s);
+                      return <Icon size={11} strokeWidth={2.4} className="shrink-0" />;
+                    })()}
+                    <span className="truncate">{stateInfo(s).label}</span>
+                  </div>
+                )}
               </button>
             );
           })}
@@ -513,7 +558,7 @@ function WeekView({
                             {label}
                           </span>
                         )}
-                        <ConfirmMark value={s.clientConfirmation} />
+                        <StateBadge session={s} compact />
                       </button>
                     );
                   })}

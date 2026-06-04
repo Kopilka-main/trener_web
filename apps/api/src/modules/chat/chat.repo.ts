@@ -88,9 +88,13 @@ export function makeChatRepo(db: Db) {
     getOrCreateConversation,
 
     // Диалоги тренера: сортировка по последней активности (lastMessageAt desc nulls last,
-    // createdAt как fallback для диалогов без сообщений).
-    async listConversations(trainerId: string): Promise<ConversationRow[]> {
-      return db
+    // createdAt как fallback для диалогов без сообщений). unreadCount — входящие от клиента
+    // новее trainerLastReadAt (или все, если диалог ни разу не читался). Счётчик считаем
+    // отдельным агрегат-запросом с join (квалифицированные колонки), затем мёржим по id.
+    async listConversations(
+      trainerId: string,
+    ): Promise<(ConversationRow & { unreadCount: number })[]> {
+      const rows = await db
         .select(conversationColumns)
         .from(conversations)
         .where(eq(conversations.trainerId, trainerId))
@@ -98,6 +102,37 @@ export function makeChatRepo(db: Db) {
           desc(sql`coalesce(${conversations.lastMessageAt}, ${conversations.createdAt})`),
           desc(conversations.createdAt),
         );
+
+      const counts = await db
+        .select({
+          conversationId: messages.conversationId,
+          cnt: sql<number>`count(*)::int`,
+        })
+        .from(messages)
+        .innerJoin(conversations, eq(conversations.id, messages.conversationId))
+        .where(
+          and(
+            eq(conversations.trainerId, trainerId),
+            eq(messages.senderRole, 'client'),
+            or(
+              isNull(conversations.trainerLastReadAt),
+              gt(messages.createdAt, conversations.trainerLastReadAt),
+            ),
+          ),
+        )
+        .groupBy(messages.conversationId);
+
+      const unreadByConv = new Map(counts.map((c) => [c.conversationId, c.cnt]));
+      return rows.map((r) => ({ ...r, unreadCount: unreadByConv.get(r.id) ?? 0 }));
+    },
+
+    // Удаление диалога пары (тренер+клиент). Сообщения сносятся каскадом (FK onDelete).
+    async deleteConversation(trainerId: string, clientId: string): Promise<boolean> {
+      const res = await db
+        .delete(conversations)
+        .where(and(eq(conversations.trainerId, trainerId), eq(conversations.clientId, clientId)))
+        .returning({ id: conversations.id });
+      return res.length > 0;
     },
 
     // Сообщения диалога пары, сортировка по курсору (createdAt, id) asc. sinceId — для

@@ -1,10 +1,27 @@
 import type { ClientsRepo, ClientRow, UpdateClientInput } from './clients.repo.js';
 import type { FilesRepo } from '../files/files.repo.js';
 import type { Storage } from '../../files/storage.js';
-import type { ClientResponse, CreateClientRequest, UpdateClientRequest } from '@trener/shared';
+import type {
+  AccountProfileResponse,
+  ClientResponse,
+  CreateClientRequest,
+  UpdateClientRequest,
+} from '@trener/shared';
 import { AppError, notFound } from '../../errors.js';
 
-export type ClientsDeps = { newId: () => string; accountExists: (id: string) => Promise<boolean> };
+export type AccountProfile = {
+  firstName: string;
+  lastName: string;
+  birthDate: string | null;
+  contacts: { type: string; value: string }[];
+};
+
+export type ClientsDeps = {
+  newId: () => string;
+  accountExists: (id: string) => Promise<boolean>;
+  /** Профиль клиентского аккаунта по id (для авто-заполнения карточки). */
+  accountProfile: (id: string) => Promise<AccountProfile | null>;
+};
 
 // Расширение файла выводим ИЗ MIME по whitelist (НЕ из имени файла клиента).
 const MIME_EXT: Record<string, string> = {
@@ -71,6 +88,18 @@ export function makeClientsService(
     verifyConnectCode(code: string): Promise<boolean> {
       const c = code.trim();
       return c === '' ? Promise.resolve(false) : deps.accountExists(c);
+    },
+
+    // Профиль подключённого клиентского аккаунта — для кнопки «Получить данные».
+    async getAccountProfile(accountId: string): Promise<AccountProfileResponse> {
+      const p = await deps.accountProfile(accountId.trim());
+      if (!p) throw notFound('Клиентский аккаунт не найден');
+      return {
+        firstName: p.firstName,
+        lastName: p.lastName,
+        birthDate: p.birthDate,
+        contacts: p.contacts,
+      };
     },
 
     async list(trainerId: string): Promise<ClientResponse[]> {

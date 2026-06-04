@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
@@ -17,6 +17,8 @@ import { useExercises } from '../api/exercises';
 import { useSessions } from '../api/sessions';
 import { useAccountingSummary } from '../api/accounting';
 import { useChatUnread } from '../api/chat';
+import { usePackageBalances } from '../api/packages';
+import { buildNotifications, isoAddDays, loadDismissed } from '../lib/notifications';
 
 const DAY_SHORT = ['ВС', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ'];
 const MONTH_FULL = [
@@ -86,13 +88,24 @@ export function HomePage() {
   const monthStart = isoDate(new Date(now.getFullYear(), now.getMonth(), 1));
 
   const { data: sessionsMonth } = useSessions(today, monthAhead);
+  const { data: sessionsForAlerts } = useSessions(isoAddDays(-14), isoAddDays(30));
+  const { data: packageBalances } = usePackageBalances();
   const { data: finance } = useAccountingSummary(monthStart, today);
 
   // Непрочитанные диалоги тренера (плитка «Сообщения» становится primary при > 0).
   const { data: chatUnread } = useChatUnread();
   const chatBadge = chatUnread ?? 0;
-  // TODO: модуля алертов/уведомлений нет → пустой список.
-  const visibleAlerts: unknown[] = [];
+
+  // Уведомления «требует действия» считаем на клиенте (как на /notifications),
+  // минус скрытые пользователем — для счётчика на плитке «Уведомления».
+  const visibleAlerts = useMemo(() => {
+    const dismissed = loadDismissed();
+    const paidClientIds = new Set(
+      (packageBalances ?? []).filter((b) => b.remaining > 0).map((b) => b.clientId),
+    );
+    const { alerts } = buildNotifications(clients ?? [], sessionsForAlerts ?? [], paidClientIds);
+    return alerts.filter((a) => !dismissed.has(a.id));
+  }, [clients, sessionsForAlerts, packageBalances]);
 
   // active-клиенты по статусу; если статуса нет — считаем всех.
   const activeClients = (clients ?? []).filter((c) => c.status === 'active');

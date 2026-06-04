@@ -94,6 +94,18 @@ export function chatRoutes(
     },
   );
 
+  typed.delete(
+    '/api/clients/:id/messages',
+    {
+      preHandler: clientPreHandler,
+      schema: { params: clientParams, response: { 200: z.object({ ok: z.literal(true) }) } },
+    },
+    async (req) => {
+      await svc.deleteConversation(trainerId(req), req.params.id);
+      return { ok: true as const };
+    },
+  );
+
   typed.post(
     '/api/clients/:id/messages/read',
     {

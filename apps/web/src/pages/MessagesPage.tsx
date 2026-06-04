@@ -18,6 +18,15 @@ function relativeTime(iso: string | null): string {
   return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
 }
 
+/** «новое сообщение / новых сообщения / новых сообщений» по числу. */
+function pluralMessages(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'новое сообщение';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'новых сообщения';
+  return 'новых сообщений';
+}
+
 export function MessagesPage() {
   const conversations = useConversations();
   const clients = useClients();
@@ -63,20 +72,42 @@ export function MessagesPage() {
         {list.map((conv) => {
           const c = clientById.get(conv.clientId);
           const name = c ? `${c.firstName} ${c.lastName}` : 'Клиент';
+          const unread = conv.unreadCount > 0;
           return (
             <Link
               key={conv.id}
               to={`/clients/${conv.clientId}/chat`}
               className="row-glow flex items-center gap-3 rounded-2xl bg-card px-3 py-2.5 transition-colors active:bg-card-elevated"
             >
-              <Avatar firstName={c?.firstName ?? '·'} lastName={c?.lastName ?? ''} size={44} />
+              <div className="relative shrink-0">
+                <Avatar firstName={c?.firstName ?? '·'} lastName={c?.lastName ?? ''} size={44} />
+                {unread && (
+                  <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full bg-accent ring-2 ring-card" />
+                )}
+              </div>
               <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-[15px] font-semibold text-ink">{name}</span>
-                <span className="truncate font-[family-name:var(--font-mono)] text-[12px] text-ink-muted">
-                  {relativeTime(conv.lastMessageAt)}
+                <span
+                  className={`truncate text-[15px] ${unread ? 'font-bold text-ink' : 'font-semibold text-ink'}`}
+                >
+                  {name}
+                </span>
+                <span
+                  className={`truncate font-[family-name:var(--font-mono)] text-[12px] ${
+                    unread ? 'font-semibold text-ink' : 'text-ink-muted'
+                  }`}
+                >
+                  {unread
+                    ? `${String(conv.unreadCount)} ${pluralMessages(conv.unreadCount)}`
+                    : relativeTime(conv.lastMessageAt)}
                 </span>
               </span>
-              <ChevronRight size={16} className="tile-chevron shrink-0" />
+              {unread ? (
+                <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-bold tabular-nums text-accent-on">
+                  {conv.unreadCount}
+                </span>
+              ) : (
+                <ChevronRight size={16} className="tile-chevron shrink-0" />
+              )}
             </Link>
           );
         })}

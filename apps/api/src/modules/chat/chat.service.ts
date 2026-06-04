@@ -3,11 +3,14 @@ import type { ConversationResponse, MessageResponse, SendMessageRequest } from '
 
 export type ChatDeps = { newId: () => string; now: () => Date };
 
-function toConversationResponse(r: ConversationRow): ConversationResponse {
+function toConversationResponse(
+  r: ConversationRow & { unreadCount: number },
+): ConversationResponse {
   return {
     id: r.id,
     clientId: r.clientId,
     lastMessageAt: r.lastMessageAt ? r.lastMessageAt.toISOString() : null,
+    unreadCount: r.unreadCount,
     createdAt: r.createdAt.toISOString(),
   };
 }
@@ -56,6 +59,11 @@ export function makeChatService(repo: ChatRepo, deps: ChatDeps) {
 
     async markRead(trainerId: string, clientId: string): Promise<void> {
       await repo.markRead(trainerId, clientId, deps.now());
+    },
+
+    // Удалить диалог с клиентом (всю переписку). Идемпотентно: нет диалога → ничего.
+    async deleteConversation(trainerId: string, clientId: string): Promise<void> {
+      await repo.deleteConversation(trainerId, clientId);
     },
 
     async markReadByClient(trainerId: string, clientId: string): Promise<void> {

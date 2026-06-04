@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { paymentPackages } from '../../db/schema.js';
 
@@ -103,6 +103,21 @@ export function makePackagesRepo(db: Db) {
           and(eq(paymentPackages.trainerId, trainerId), eq(paymentPackages.clientId, clientId)),
         )
         .orderBy(desc(paymentPackages.createdAt));
+    },
+
+    // Остаток оплаченных тренировок по клиентам (только активные пакеты):
+    // Σ(lessonsPaid − lessonsUsed), сгруппировано по клиенту.
+    async activeBalancesForTrainer(
+      trainerId: string,
+    ): Promise<{ clientId: string; remaining: number }[]> {
+      return db
+        .select({
+          clientId: paymentPackages.clientId,
+          remaining: sql<number>`coalesce(sum(${paymentPackages.lessonsPaid} - ${paymentPackages.lessonsUsed}), 0)::int`,
+        })
+        .from(paymentPackages)
+        .where(and(eq(paymentPackages.trainerId, trainerId), eq(paymentPackages.status, 'active')))
+        .groupBy(paymentPackages.clientId);
     },
 
     // Пакет в scope пары, либо null (нет в паре).

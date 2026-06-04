@@ -49,3 +49,15 @@ export const packageListResponseSchema = z.object({
   packages: z.array(packageResponseSchema),
 });
 export type PackageListResponse = z.infer<typeof packageListResponseSchema>;
+
+// Остаток оплаченных тренировок по клиенту (для алертов/сводки тренера).
+export const packageBalanceSchema = z.object({
+  clientId: z.string(),
+  remaining: z.number(),
+});
+export type PackageBalance = z.infer<typeof packageBalanceSchema>;
+
+export const packageBalanceListResponseSchema = z.object({
+  balances: z.array(packageBalanceSchema),
+});
+export type PackageBalanceListResponse = z.infer<typeof packageBalanceListResponseSchema>;

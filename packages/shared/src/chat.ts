@@ -21,6 +21,8 @@ export const conversationResponseSchema = z.object({
   id: z.string(),
   clientId: z.string(),
   lastMessageAt: z.string().nullable(),
+  /** Непрочитанные тренером входящие сообщения (от клиента). */
+  unreadCount: z.number(),
   createdAt: z.string(),
 });
 export type ConversationResponse = z.infer<typeof conversationResponseSchema>;

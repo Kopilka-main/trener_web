@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
+  CalendarCheck,
+  CalendarOff,
+  CalendarX2,
   Cake,
   CalendarPlus,
   CheckCircle2,
@@ -10,185 +13,21 @@ import {
   Wifi,
   X,
 } from 'lucide-react';
-import type { ClientResponse, SessionResponse } from '@trener/shared';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { HoldToDelete } from '../components/HoldToDelete';
 import { useClients } from '../api/clients';
 import { useSessions } from '../api/sessions';
-
-const RU_MONTHS = [
-  'янв',
-  'фев',
-  'мар',
-  'апр',
-  'мая',
-  'июн',
-  'июл',
-  'авг',
-  'сен',
-  'окт',
-  'ноя',
-  'дек',
-];
-
-const DISMISSED_KEY = 'notifications_dismissed';
-
-function loadDismissed(): Set<string> {
-  try {
-    const raw = localStorage.getItem(DISMISSED_KEY);
-    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
-  } catch {
-    return new Set();
-  }
-}
-
-function isoAddDays(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-function fullName(c: ClientResponse): string {
-  return `${c.firstName} ${c.lastName}`.trim();
-}
-
-/** «3 июн, 14:30» / «3 июн» */
-function labelDate(iso: string, time?: string): string {
-  const [, m, d] = iso.split('-').map(Number);
-  if (!m || !d) return iso;
-  const base = `${String(d)} ${RU_MONTHS[m - 1] ?? ''}`;
-  return time ? `${base}, ${time}` : base;
-}
-
-// ─── Модели уведомлений (вычисляются на клиенте) ──────────────────────────────
-
-type EventKind = 'completed' | 'planned' | 'cancelled' | 'birthday';
-interface NotifEvent {
-  id: string;
-  kind: EventKind;
-  clientId: string | null;
-  title: string;
-  message: string;
-  when: string;
-  /** Метка времени для сортировки (мс). */
-  ts: number;
-}
-
-type AlertType = 'no_upcoming' | 'online_today';
-interface NotifAlert {
-  id: string;
-  type: AlertType;
-  severity: 'danger' | 'warn';
-  clientId: string | null;
-  headline: string;
-  clientName: string;
-  message: string;
-}
-
-function buildNotifications(
-  clients: ClientResponse[],
-  sessions: SessionResponse[],
-): { events: NotifEvent[]; alerts: NotifAlert[] } {
-  const today = new Date().toISOString().slice(0, 10);
-  const in7 = isoAddDays(7);
-  const ago14 = isoAddDays(-14);
-  const in14 = isoAddDays(14);
-  const nameById = new Map(clients.map((c) => [c.id, fullName(c)]));
-  const tsOf = (iso: string, time: string) => Date.parse(`${iso}T${time || '00:00'}:00`);
-
-  const events: NotifEvent[] = [];
-  const alerts: NotifAlert[] = [];
-
-  // События по сессиям.
-  for (const s of sessions) {
-    const who = nameById.get(s.clientId) ?? 'Клиент';
-    if (s.status === 'completed' && s.date >= ago14 && s.date <= today) {
-      events.push({
-        id: `ev:done:${s.id}`,
-        kind: 'completed',
-        clientId: s.clientId,
-        title: who,
-        message: `Проведено занятие${s.title ? ` · ${s.title}` : ''}`,
-        when: labelDate(s.date, s.startTime),
-        ts: tsOf(s.date, s.startTime),
-      });
-    } else if (s.status === 'planned' && s.date >= today && s.date <= in14) {
-      events.push({
-        id: `ev:plan:${s.id}`,
-        kind: 'planned',
-        clientId: s.clientId,
-        title: who,
-        message: `Запланировано занятие${s.title ? ` · ${s.title}` : ''}`,
-        when: labelDate(s.date, s.startTime),
-        ts: tsOf(s.date, s.startTime),
-      });
-    } else if (s.status === 'cancelled' && s.date >= ago14 && s.date <= in14) {
-      events.push({
-        id: `ev:cancel:${s.id}`,
-        kind: 'cancelled',
-        clientId: s.clientId,
-        title: who,
-        message: 'Занятие отменено',
-        when: labelDate(s.date, s.startTime),
-        ts: tsOf(s.date, s.startTime),
-      });
-    }
-
-    // Алерт: онлайн-тренировка сегодня.
-    if (s.status === 'planned' && s.isOnline && s.date === today) {
-      alerts.push({
-        id: `al:online:${s.id}`,
-        type: 'online_today',
-        severity: 'warn',
-        clientId: s.clientId,
-        headline: 'Онлайн-тренировка сегодня',
-        clientName: who,
-        message: `Сегодня в ${s.startTime}${s.title ? ` · ${s.title}` : ''}`,
-      });
-    }
-  }
-
-  // Дни рождения сегодня (по клиентам).
-  const [, tm, td] = today.split('-').map(Number);
-  for (const c of clients) {
-    if (!c.birthDate) continue;
-    const [, bm, bd] = c.birthDate.split('-').map(Number);
-    if (bm === tm && bd === td) {
-      events.push({
-        id: `ev:bday:${c.id}`,
-        kind: 'birthday',
-        clientId: c.id,
-        title: fullName(c),
-        message: 'Сегодня день рождения 🎂',
-        when: 'сегодня',
-        ts: Date.now() + 1, // вверху ленты
-      });
-    }
-  }
-
-  // Алерт: у клиента нет запланированных занятий на ближайшую неделю.
-  const hasUpcoming = new Set(
-    sessions
-      .filter((s) => s.status === 'planned' && s.date >= today && s.date <= in7)
-      .map((s) => s.clientId),
-  );
-  for (const c of clients) {
-    if (!hasUpcoming.has(c.id)) {
-      alerts.push({
-        id: `al:noup:${c.id}`,
-        type: 'no_upcoming',
-        severity: 'warn',
-        clientId: c.id,
-        headline: 'Нет занятий на неделю',
-        clientName: fullName(c),
-        message: 'Не запланировано ни одного занятия на ближайшие 7 дней',
-      });
-    }
-  }
-
-  events.sort((a, b) => b.ts - a.ts);
-  return { events, alerts };
-}
+import { usePackageBalances } from '../api/packages';
+import {
+  buildNotifications,
+  isoAddDays,
+  loadDismissed,
+  saveDismissed,
+  type AlertType,
+  type EventKind,
+  type NotifAlert,
+  type NotifEvent,
+} from '../lib/notifications';
 
 // ─── Страница ─────────────────────────────────────────────────────────────────
 
@@ -197,20 +36,22 @@ type Tab = 'events' | 'action';
 export function NotificationsPage() {
   const clients = useClients();
   const sessions = useSessions(isoAddDays(-14), isoAddDays(30));
+  const balances = usePackageBalances();
   const [tab, setTab] = useState<Tab>('events');
   const [dismissed, setDismissed] = useState<Set<string>>(() => loadDismissed());
 
   useEffect(() => {
-    try {
-      localStorage.setItem(DISMISSED_KEY, JSON.stringify(Array.from(dismissed)));
-    } catch {
-      /* приватный режим */
-    }
+    saveDismissed(dismissed);
   }, [dismissed]);
 
+  const paidClientIds = useMemo(
+    () => new Set((balances.data ?? []).filter((b) => b.remaining > 0).map((b) => b.clientId)),
+    [balances.data],
+  );
+
   const { events, alerts } = useMemo(
-    () => buildNotifications(clients.data ?? [], sessions.data ?? []),
-    [clients.data, sessions.data],
+    () => buildNotifications(clients.data ?? [], sessions.data ?? [], paidClientIds),
+    [clients.data, sessions.data, paidClientIds],
   );
 
   const visibleEvents = events.filter((e) => !dismissed.has(e.id));
@@ -327,8 +168,8 @@ function eventIcon(kind: EventKind): { Icon: typeof Cake; color: string } {
       return { Icon: Cake, color: 'var(--color-coral)' };
     case 'completed':
       return { Icon: CheckCircle2, color: 'var(--color-accent)' };
-    case 'cancelled':
-      return { Icon: X, color: 'var(--color-ink-mutedxl)' };
+    case 'confirmed':
+      return { Icon: CalendarCheck, color: 'var(--color-accent)' };
     default:
       return { Icon: CalendarPlus, color: 'var(--color-ink)' };
   }
@@ -364,6 +205,8 @@ function EventCard({ event, onDismiss }: { event: NotifEvent; onDismiss: () => v
 function alertIcon(type: AlertType): typeof Wifi {
   if (type === 'online_today') return Wifi;
   if (type === 'no_upcoming') return Dumbbell;
+  if (type === 'cancelled') return CalendarOff;
+  if (type === 'declined') return CalendarX2;
   return AlertTriangle;
 }
 

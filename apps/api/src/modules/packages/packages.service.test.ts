@@ -25,6 +25,7 @@ function fakeRepo(over: Partial<PackagesRepo> = {}): PackagesRepo {
   return {
     create: vi.fn(() => Promise.resolve(row())),
     listForClient: vi.fn(() => Promise.resolve([])),
+    activeBalancesForTrainer: vi.fn(() => Promise.resolve([])),
     getForTrainer: vi.fn(() => Promise.resolve(null)),
     update: vi.fn(() => Promise.resolve(null)),
     remove: vi.fn(() => Promise.resolve(false)),

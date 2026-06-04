@@ -68,3 +68,13 @@ export type ClientResponse = z.infer<typeof clientResponseSchema>;
 
 export const clientListResponseSchema = z.object({ clients: z.array(clientResponseSchema) });
 export type ClientListResponse = z.infer<typeof clientListResponseSchema>;
+
+// Профиль подключённого клиентского аккаунта (для авто-заполнения карточки тренером).
+// Email НЕ передаём — это логин аккаунта, а не то, что клиент указал о себе.
+export const accountProfileResponseSchema = z.object({
+  firstName: z.string(),
+  lastName: z.string(),
+  birthDate: z.string().nullable(),
+  contacts: z.array(contactSchema),
+});
+export type AccountProfileResponse = z.infer<typeof accountProfileResponseSchema>;

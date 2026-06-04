@@ -6,6 +6,7 @@ import {
   updatePackageRequestSchema,
   packageResponseSchema,
   packageListResponseSchema,
+  packageBalanceListResponseSchema,
 } from '@trener/shared';
 import type { PackagesService } from './packages.service.js';
 import { requireAuth } from '../../plugins/tenant-context.js';
@@ -36,6 +37,16 @@ export function packagesRoutes(
     if (!req.trainerId) throw unauthorized('Требуется вход');
     return req.trainerId;
   }
+
+  // Остатки оплаченных тренировок по всем клиентам тренера (для алертов/сводки).
+  typed.get(
+    '/api/packages/balances',
+    {
+      preHandler: requireAuth,
+      schema: { response: { 200: packageBalanceListResponseSchema } },
+    },
+    async (req) => ({ balances: await svc.listBalances(trainerId(req)) }),
+  );
 
   typed.post(
     '/api/clients/:id/packages',

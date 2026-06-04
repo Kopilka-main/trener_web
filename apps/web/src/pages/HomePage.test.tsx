@@ -8,18 +8,21 @@ import { useExercises } from '../api/exercises';
 import { useSessions } from '../api/sessions';
 import { useAccountingSummary } from '../api/accounting';
 import { useChatUnread } from '../api/chat';
+import { usePackageBalances } from '../api/packages';
 
 vi.mock('../api/clients', () => ({ useClients: vi.fn() }));
 vi.mock('../api/exercises', () => ({ useExercises: vi.fn() }));
 vi.mock('../api/sessions', () => ({ useSessions: vi.fn() }));
 vi.mock('../api/accounting', () => ({ useAccountingSummary: vi.fn() }));
 vi.mock('../api/chat', () => ({ useChatUnread: vi.fn() }));
+vi.mock('../api/packages', () => ({ usePackageBalances: vi.fn() }));
 
 const mockedUseClients = vi.mocked(useClients);
 const mockedUseExercises = vi.mocked(useExercises);
 const mockedUseSessions = vi.mocked(useSessions);
 const mockedUseAccounting = vi.mocked(useAccountingSummary);
 const mockedUseChatUnread = vi.mocked(useChatUnread);
+const mockedUsePackageBalances = vi.mocked(usePackageBalances);
 
 function client(over: Partial<ClientResponse>): ClientResponse {
   return {
@@ -72,6 +75,10 @@ beforeEach(() => {
   mockedUseAccounting.mockReset();
   mockedUseChatUnread.mockReset();
   mockedUseChatUnread.mockReturnValue({ data: 0 } as unknown as ReturnType<typeof useChatUnread>);
+  mockedUsePackageBalances.mockReset();
+  mockedUsePackageBalances.mockReturnValue({
+    data: [],
+  } as unknown as ReturnType<typeof usePackageBalances>);
 
   mockedUseClients.mockReturnValue({
     data: [client({ id: 'c1' }), client({ id: 'c2', status: 'archived' })],

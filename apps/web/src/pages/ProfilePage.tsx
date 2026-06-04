@@ -338,7 +338,7 @@ function ProfileEdit({ trainer, onClose }: { trainer: TrainerResponse; onClose: 
             type="button"
             onClick={save}
             disabled={update.isPending}
-            className="px-1 text-[14px] font-semibold text-ink disabled:opacity-40"
+            className="px-1 text-[14px] font-semibold text-accent disabled:opacity-40"
           >
             {update.isPending ? '…' : 'Сохранить'}
           </button>

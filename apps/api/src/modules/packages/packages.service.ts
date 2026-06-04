@@ -54,6 +54,11 @@ export function makePackagesService(repo: PackagesRepo, deps: PackagesDeps) {
       return rows.map(toResponse);
     },
 
+    // Остатки оплаченных тренировок по клиентам тренера (активные пакеты).
+    async listBalances(trainerId: string): Promise<{ clientId: string; remaining: number }[]> {
+      return repo.activeBalancesForTrainer(trainerId);
+    },
+
     async get(trainerId: string, clientId: string, packageId: string): Promise<PackageResponse> {
       const row = await repo.getForTrainer(trainerId, clientId, packageId);
       if (!row) throw notFound('Пакет не найден');

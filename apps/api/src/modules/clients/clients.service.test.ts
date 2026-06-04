@@ -67,10 +67,20 @@ function fakeStorage(over: Partial<Storage> = {}): Storage {
   };
 }
 
+type AccountProfileFn = (id: string) => Promise<{
+  firstName: string;
+  lastName: string;
+  birthDate: string | null;
+  contacts: { type: string; value: string }[];
+} | null>;
+
+const defaultAccountProfile: AccountProfileFn = () => Promise.resolve(null);
+
 function makeDeps(
   accountExists: (id: string) => Promise<boolean> = vi.fn(() => Promise.resolve(true)),
+  accountProfile: AccountProfileFn = defaultAccountProfile,
 ) {
-  return { newId: () => 'newid', accountExists };
+  return { newId: () => 'newid', accountExists, accountProfile };
 }
 const deps = makeDeps();
 
@@ -80,13 +90,17 @@ function makeSvc(
     filesRepo?: Partial<FilesRepo>;
     storage?: Partial<Storage>;
     accountExists?: (id: string) => Promise<boolean>;
+    accountProfile?: AccountProfileFn;
   } = {},
 ) {
+  const hasDepOverride = over.accountExists !== undefined || over.accountProfile !== undefined;
   return makeClientsService(
     fakeRepo(over.repo),
     fakeFilesRepo(over.filesRepo),
     fakeStorage(over.storage),
-    over.accountExists ? makeDeps(over.accountExists) : deps,
+    hasDepOverride
+      ? makeDeps(over.accountExists ?? (() => Promise.resolve(true)), over.accountProfile)
+      : deps,
   );
 }
 
@@ -320,6 +334,31 @@ describe('clients.service', () => {
     const svc = makeSvc({ accountExists });
     expect(await svc.verifyConnectCode(' code1 ')).toBe(true);
     expect(accountExists).toHaveBeenCalledWith('code1');
+  });
+
+  it('getAccountProfile возвращает профиль аккаунта (с тримом id)', async () => {
+    const accountProfile = vi.fn(() =>
+      Promise.resolve({
+        firstName: 'Имя',
+        lastName: 'Фам',
+        birthDate: '1990-01-01',
+        contacts: [{ type: 'Телефон', value: '+7900' }],
+      }),
+    );
+    const svc = makeSvc({ accountProfile });
+    const res = await svc.getAccountProfile('  acc-1  ');
+    expect(accountProfile).toHaveBeenCalledWith('acc-1');
+    expect(res).toEqual({
+      firstName: 'Имя',
+      lastName: 'Фам',
+      birthDate: '1990-01-01',
+      contacts: [{ type: 'Телефон', value: '+7900' }],
+    });
+  });
+
+  it('getAccountProfile бросает 404, если аккаунт не найден', async () => {
+    const svc = makeSvc({ accountProfile: () => Promise.resolve(null) });
+    await expect(svc.getAccountProfile('ghost')).rejects.toMatchObject({ status: 404 });
   });
 
   it('create с несуществующим accountId → 422 CLIENT_ACCOUNT_NOT_FOUND', async () => {

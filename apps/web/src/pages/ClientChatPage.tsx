@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Send, Check, CheckCheck } from 'lucide-react';
 import type { MessageResponse } from '@trener/shared';
-import { useChatMessages, useMarkConversationRead, useSendMessage } from '../api/chat';
+import {
+  useChatMessages,
+  useDeleteConversation,
+  useMarkConversationRead,
+  useSendMessage,
+} from '../api/chat';
 import { useClient } from '../api/clients';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { HoldToDelete } from '../components/HoldToDelete';
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
@@ -14,10 +20,12 @@ function formatTime(iso: string): string {
 
 export function ClientChatPage() {
   const { id = '' } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const client = useClient(id);
   const messages = useChatMessages(id);
   const send = useSendMessage(id);
   const markRead = useMarkConversationRead(id);
+  const removeChat = useDeleteConversation(id);
 
   const [draft, setDraft] = useState('');
   const listEndRef = useRef<HTMLDivElement>(null);
@@ -60,7 +68,23 @@ export function ClientChatPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <ScreenHeader title={title} back={`/clients/${id}`} />
+      <ScreenHeader
+        title={title}
+        back={`/clients/${id}`}
+        right={
+          list.length > 0 ? (
+            <HoldToDelete
+              icon="trash"
+              label="Удерживайте, чтобы удалить переписку"
+              onDelete={() =>
+                removeChat.mutate(undefined, {
+                  onSuccess: () => void navigate(`/clients/${id}`),
+                })
+              }
+            />
+          ) : undefined
+        }
+      />
 
       <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-4 pb-3 pt-2">
         {messages.isPending && (

@@ -6,6 +6,7 @@ import {
   updateClientRequestSchema,
   clientResponseSchema,
   clientListResponseSchema,
+  accountProfileResponseSchema,
 } from '@trener/shared';
 import type { ClientsService, AvatarUploadInput } from './clients.service.js';
 import { requireAuth } from '../../plugins/tenant-context.js';
@@ -94,6 +95,22 @@ export function clientsRoutes(
     async (req) => {
       trainerId(req); // гард: только авторизованный тренер
       return { exists: await svc.verifyConnectCode(req.query.code) };
+    },
+  );
+
+  // Профиль подключённого клиентского аккаунта — для кнопки «Получить данные».
+  typed.get(
+    '/api/clients/account-profile',
+    {
+      preHandler: requireAuth,
+      schema: {
+        querystring: z.object({ accountId: z.string().min(1) }),
+        response: { 200: z.object({ profile: accountProfileResponseSchema }) },
+      },
+    },
+    async (req) => {
+      trainerId(req); // гард: только авторизованный тренер
+      return { profile: await svc.getAccountProfile(req.query.accountId) };
     },
   );
 

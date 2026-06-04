@@ -2,7 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import type { ChatRepo, ConversationRow, MessageRow } from './chat.repo.js';
 import { makeChatService } from './chat.service.js';
 
-function convRow(over: Partial<ConversationRow> = {}): ConversationRow {
+function convRow(
+  over: Partial<ConversationRow & { unreadCount: number }> = {},
+): ConversationRow & { unreadCount: number } {
   return {
     id: 'conv1',
     trainerId: 'A',
@@ -11,6 +13,7 @@ function convRow(over: Partial<ConversationRow> = {}): ConversationRow {
     trainerLastReadAt: null,
     clientLastReadAt: null,
     createdAt: new Date(0),
+    unreadCount: 0,
     ...over,
   };
 }
@@ -32,6 +35,7 @@ function fakeRepo(over: Partial<ChatRepo> = {}): ChatRepo {
     listConversations: vi.fn(() => Promise.resolve([])),
     listMessages: vi.fn(() => Promise.resolve([])),
     addMessage: vi.fn(() => Promise.resolve(msgRow())),
+    deleteConversation: vi.fn(() => Promise.resolve(true)),
     markRead: vi.fn(() => Promise.resolve()),
     markReadByClient: vi.fn(() => Promise.resolve()),
     clientUnreadCount: vi.fn(() => Promise.resolve(0)),

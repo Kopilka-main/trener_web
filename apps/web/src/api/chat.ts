@@ -34,6 +34,14 @@ export function markConversationRead(clientId: string): Promise<void> {
   }).then(() => undefined);
 }
 
+/** Удалить переписку с клиентом (DELETE .../messages). */
+export function deleteConversation(clientId: string): Promise<void> {
+  return apiFetch(`/clients/${clientId}/messages`, {
+    method: 'DELETE',
+    schema: z.object({ ok: z.literal(true) }),
+  }).then(() => undefined);
+}
+
 export function sendClientMessage(
   clientId: string,
   input: SendMessageRequest,
@@ -104,6 +112,19 @@ export function useMarkConversationRead(clientId: string) {
     mutationFn: () => markConversationRead(clientId),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: conversationsQueryKey });
+    },
+  });
+}
+
+/** Удаление переписки с клиентом + обновление ленты, списка диалогов и счётчика. */
+export function useDeleteConversation(clientId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => deleteConversation(clientId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: clientMessagesQueryKey(clientId) });
+      void qc.invalidateQueries({ queryKey: conversationsQueryKey });
+      void qc.invalidateQueries({ queryKey: chatUnreadQueryKey });
     },
   });
 }

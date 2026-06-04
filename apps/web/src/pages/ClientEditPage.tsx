@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Camera, ChevronRight, QrCode, Trash2, X } from 'lucide-react';
+import { Camera, ChevronRight, Download, QrCode, Trash2, X } from 'lucide-react';
 import type { Contact } from '@trener/shared';
 import {
+  getAccountProfile,
   useClient,
   useCreateClient,
   useDeleteClient,
@@ -47,6 +48,8 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
   const [connectOpen, setConnectOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
+  const [fetchingProfile, setFetchingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   useEffect(() => {
     if (editing && existing.data) {
@@ -93,6 +96,38 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
 
   function removeContact(index: number) {
     setContacts((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  // «Получить данные»: тянем профиль подключённого аккаунта и заполняем поля.
+  async function fillFromAccount() {
+    const id = accountId.trim();
+    if (id === '') return;
+    setProfileError(null);
+    setFetchingProfile(true);
+    try {
+      const p = await getAccountProfile(id);
+      if (p.firstName) setFirstName(p.firstName);
+      if (p.lastName) setLastName(p.lastName);
+      if (p.birthDate) setBirthDate(p.birthDate);
+      // Контакты: добавляем недостающие из аккаунта (по паре тип+значение), не дублируя.
+      const incoming = [...p.contacts];
+      setContacts((prev) => {
+        const seen = new Set(prev.map((c) => `${c.type}|${c.value}`));
+        const merged = [...prev];
+        for (const c of incoming) {
+          const key = `${c.type}|${c.value}`;
+          if (c.value.trim() !== '' && !seen.has(key)) {
+            seen.add(key);
+            merged.push(c);
+          }
+        }
+        return merged;
+      });
+    } catch {
+      setProfileError('Не удалось получить данные аккаунта.');
+    } finally {
+      setFetchingProfile(false);
+    }
   }
 
   function addTag() {
@@ -294,6 +329,21 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
             </span>
             <ChevronRight size={18} className="tile-chevron shrink-0" />
           </button>
+
+          {accountId.trim() !== '' && (
+            <>
+              <button
+                type="button"
+                onClick={() => void fillFromAccount()}
+                disabled={fetchingProfile}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-accent/50 py-3 text-[13px] font-semibold text-accent active:bg-accent/10 disabled:opacity-50"
+              >
+                <Download size={15} strokeWidth={2} />
+                {fetchingProfile ? 'Получаем…' : 'Получить данные из профиля клиента'}
+              </button>
+              {profileError && <span className="text-[12px] text-danger">{profileError}</span>}
+            </>
+          )}
         </Section>
 
         {/* Имя / Фамилия — 2 колонки. */}

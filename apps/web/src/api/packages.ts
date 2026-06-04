@@ -3,9 +3,11 @@ import {
   updatePackageRequestSchema,
   packageResponseSchema,
   packageListResponseSchema,
+  packageBalanceListResponseSchema,
   type CreatePackageRequest,
   type UpdatePackageRequest,
   type PackageResponse,
+  type PackageBalance,
 } from '@trener/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
@@ -56,6 +58,20 @@ export function deleteClientPackage(clientId: string, pid: string): Promise<void
   }).then(() => undefined);
 }
 
+export const packageBalancesQueryKey = ['packages', 'balances'] as const;
+
+/** Остатки оплаченных тренировок по всем клиентам тренера. */
+export function listPackageBalances(): Promise<PackageBalance[]> {
+  return apiFetch('/packages/balances', { schema: packageBalanceListResponseSchema }).then(
+    (r) => r.balances,
+  );
+}
+
+/** Хук: остатки оплаченных тренировок по клиентам (для алертов). */
+export function usePackageBalances() {
+  return useQuery({ queryKey: packageBalancesQueryKey, queryFn: listPackageBalances });
+}
+
 /** Пакеты клиента (список). */
 export function useClientPackages(clientId: string) {
   return useQuery({
@@ -69,6 +85,7 @@ export function useClientPackages(clientId: string) {
 function invalidatePackageQueries(qc: ReturnType<typeof useQueryClient>, clientId: string): void {
   void qc.invalidateQueries({ queryKey: clientPackagesQueryKey(clientId) });
   void qc.invalidateQueries({ queryKey: ['accounting'] });
+  void qc.invalidateQueries({ queryKey: packageBalancesQueryKey });
 }
 
 export function useCreatePackage(clientId: string) {

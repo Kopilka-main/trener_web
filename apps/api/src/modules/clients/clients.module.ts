@@ -21,6 +21,16 @@ export function registerClientsModule(
   const svc = makeClientsService(repo, filesRepo, deps.storage, {
     newId: deps.clock.newId,
     accountExists: (id) => clientAuthRepo.accountExists(id),
+    accountProfile: async (id) => {
+      const a = await clientAuthRepo.findAccountById(id);
+      if (!a) return null;
+      return {
+        firstName: a.firstName,
+        lastName: a.lastName,
+        birthDate: a.birthDate,
+        contacts: a.contacts,
+      };
+    },
   });
   const requireClientAccess = makeRequireClientAccess(repo);
   clientsRoutes(app, svc, requireClientAccess);

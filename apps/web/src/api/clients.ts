@@ -4,6 +4,8 @@ import {
   updateClientRequestSchema,
   clientResponseSchema,
   clientListResponseSchema,
+  accountProfileResponseSchema,
+  type AccountProfileResponse,
   type ClientResponse,
   type CreateClientRequest,
   type UpdateClientRequest,
@@ -31,6 +33,14 @@ export function verifyConnectCode(code: string): Promise<boolean> {
   return apiFetch(`/clients/connect-code/check?${params.toString()}`, {
     schema: z.object({ exists: z.boolean() }),
   }).then((r) => r.exists);
+}
+
+/** Профиль подключённого клиентского аккаунта по коду привязки (для «Получить данные»). */
+export function getAccountProfile(accountId: string): Promise<AccountProfileResponse> {
+  const params = new URLSearchParams({ accountId });
+  return apiFetch(`/clients/account-profile?${params.toString()}`, {
+    schema: z.object({ profile: accountProfileResponseSchema }),
+  }).then((r) => r.profile);
 }
 
 export function createClient(input: CreateClientRequest): Promise<ClientResponse> {
