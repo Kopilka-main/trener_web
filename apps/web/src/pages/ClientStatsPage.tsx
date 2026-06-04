@@ -569,7 +569,7 @@ function HistoryTable({
           >
             <div className="text-ink-muted">{p.date ? formatFullDate(p.date) : '—'}</div>
             <div className="flex items-baseline gap-3 font-[family-name:var(--font-mono)] text-[12px] tabular-nums">
-              <span className="text-ink-muted">{p.totalSets} ×</span>
+              <span className="text-ink-mutedxl">{p.totalSets} подх.</span>
               {isTimeBased ? (
                 <>
                   {p.maxTimeSec !== null && (
@@ -585,11 +585,16 @@ function HistoryTable({
                 <>
                   {p.maxWeightKg !== null && (
                     <span className="text-ink-muted">
+                      {p.topReps !== null && (
+                        <>
+                          <b className="text-ink">{p.topReps}</b> ×{' '}
+                        </>
+                      )}
                       <b className="text-ink">{p.maxWeightKg}</b> кг
                     </span>
                   )}
                   <span className="text-ink-muted">
-                    {p.tonnage} <span className="text-ink-mutedxl">кг</span>
+                    {p.tonnage} <span className="text-ink-mutedxl">кг тоннаж</span>
                   </span>
                 </>
               )}

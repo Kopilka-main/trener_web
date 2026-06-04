@@ -225,6 +225,8 @@ export interface ExerciseHistoryPoint {
   totalSets: number;
   /** Максимальный рабочий вес в сессии, кг; null — без веса. */
   maxWeightKg: number | null;
+  /** Повторы в самом тяжёлом подходе сессии (для подписи «повт × вес»); null — без веса. */
+  topReps: number | null;
   /** Тоннаж сессии, кг (Σ вес × повторы по done-подходам). */
   tonnage: number;
   /** Максимальное время в подходе, сек; null — без времени. */
@@ -261,22 +263,33 @@ export function aggregateExerciseHistory(
 
   for (const w of completed) {
     const date = w.completedAt ?? w.startedAt;
+
+    // Агрегируем ВСЕ вхождения упражнения за тренировку в одну точку:
+    // тоннаж — сумма (вес × повторы) по выполненным подходам всей тренировки;
+    // сила — максимальный рабочий вес за тренировку (не по каждому подходу/блоку).
+    let totalSets = 0;
+    let maxWeightKg: number | null = null;
+    let topReps: number | null = null;
+    let tonnage = 0;
+    let maxTimeSec: number | null = null;
+    let totalTimeSec = 0;
+
     for (const ex of w.exercises) {
       if (ex.exerciseId !== exerciseId) continue;
       name = ex.exerciseName;
-
-      let totalSets = 0;
-      let maxWeightKg: number | null = null;
-      let tonnage = 0;
-      let maxTimeSec: number | null = null;
-      let totalTimeSec = 0;
 
       for (const set of ex.sets) {
         if (!set.done) continue;
         totalSets += 1;
         if (set.actualWeightKg !== null) {
           weightSetCount += 1;
-          maxWeightKg = Math.max(maxWeightKg ?? 0, set.actualWeightKg);
+          // Самый тяжёлый подход за тренировку и его повторы (для подписи «повт × вес»).
+          if (maxWeightKg === null || set.actualWeightKg > maxWeightKg) {
+            maxWeightKg = set.actualWeightKg;
+            topReps = set.actualReps;
+          } else if (set.actualWeightKg === maxWeightKg && set.actualReps !== null) {
+            topReps = Math.max(topReps ?? 0, set.actualReps);
+          }
           if (set.actualReps !== null) tonnage += set.actualWeightKg * set.actualReps;
         }
         if (set.actualTimeSec !== null) {
@@ -285,18 +298,19 @@ export function aggregateExerciseHistory(
           totalTimeSec += set.actualTimeSec;
         }
       }
+    }
 
-      if (totalSets > 0) {
-        points.push({
-          workoutId: w.id,
-          date: date ?? null,
-          totalSets,
-          maxWeightKg,
-          tonnage: Math.round(tonnage),
-          maxTimeSec,
-          totalTimeSec,
-        });
-      }
+    if (totalSets > 0) {
+      points.push({
+        workoutId: w.id,
+        date: date ?? null,
+        totalSets,
+        maxWeightKg,
+        topReps,
+        tonnage: Math.round(tonnage),
+        maxTimeSec,
+        totalTimeSec,
+      });
     }
   }
 
