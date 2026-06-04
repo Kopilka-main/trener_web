@@ -84,6 +84,18 @@ export function makeSessionsService(repo: SessionsRepo, deps: SessionsDeps) {
       id: string,
       status: 'confirmed' | 'declined',
     ): Promise<SessionResponse> {
+      // Уже согласованное занятие отклонить нельзя — подтверждение фиксируется.
+      if (status === 'declined') {
+        const current = await repo.getForTrainer(trainerId, id);
+        if (!current) throw notFound('Занятие не найдено');
+        if (current.clientConfirmation === 'confirmed') {
+          throw new AppError(
+            409,
+            'ALREADY_CONFIRMED',
+            'Занятие уже подтверждено — отклонить нельзя',
+          );
+        }
+      }
       const row = await repo.setClientConfirmation(trainerId, clientId, id, status);
       if (!row) throw notFound('Занятие не найдено');
       return toResponse(row);

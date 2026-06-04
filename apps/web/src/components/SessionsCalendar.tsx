@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, Timer, Wifi, X } from 'lucide-react';
-import type { SessionResponse, SessionStatus } from '@trener/shared';
+import type { SessionResponse } from '@trener/shared';
 import {
   CAL_HOURS,
   CAL_START_HOUR,
@@ -204,14 +204,16 @@ function ViewSwitcher({
   );
 }
 
-// --- Цвет блока занятия по статусу ---
-// planned   — акцентный лайм (bg-accent text-accent-on)
-// completed — приглушённый (bg-card-elevated)
-// cancelled — перечёркнут + opacity-50
-function tileClasses(status: SessionStatus): string {
-  if (status === 'planned') return 'bg-accent text-accent-on';
-  if (status === 'completed') return 'bg-card-elevated text-ink';
-  return 'bg-card-elevated text-ink-muted line-through opacity-50';
+// --- Цвет блока занятия (кислотные тона) ---
+// Запланированное окрашивается по согласованию клиентом:
+//   на согласовании — оранжевый, согласовано — зелёный (лайм), отказ — красный.
+// completed — приглушённый; cancelled — перечёркнут + opacity-50.
+function tileClasses(s: SessionResponse): string {
+  if (s.status === 'cancelled') return 'bg-card-elevated text-ink-muted line-through opacity-50';
+  if (s.status === 'completed') return 'bg-card-elevated text-ink';
+  if (s.clientConfirmation === 'confirmed') return 'bg-[#caff3a] text-[#0b0c10]';
+  if (s.clientConfirmation === 'declined') return 'bg-[#ff5a5a] text-[#1a0606]';
+  return 'bg-[#ffab2e] text-[#1a1200]';
 }
 
 /** Индикатор ответа клиента: ✓ подтвердил, ✕ отклонил, ничего — ждёт ответа. */
@@ -412,7 +414,7 @@ function DayView({
                 key={s.id}
                 type="button"
                 onClick={() => onPick(s)}
-                className={`absolute left-1.5 right-1.5 z-10 overflow-hidden rounded-xl px-2.5 py-1.5 text-left ${tileClasses(s.status)}`}
+                className={`absolute left-1.5 right-1.5 z-10 overflow-hidden rounded-xl px-2.5 py-1.5 text-left ${tileClasses(s)}`}
                 style={{ top, height }}
               >
                 <div className="flex items-center gap-1.5 pr-4">
@@ -558,7 +560,7 @@ function WeekView({
                         key={s.id}
                         type="button"
                         onClick={() => onPick(s)}
-                        className={`absolute inset-x-[1px] z-10 flex items-center justify-center overflow-hidden rounded-md ${tileClasses(s.status)}`}
+                        className={`absolute inset-x-[1px] z-10 flex items-center justify-center overflow-hidden rounded-md ${tileClasses(s)}`}
                         style={{ top, height }}
                       >
                         <span className="font-extrabold uppercase leading-none tracking-tight text-[clamp(24px,6.8vw,40px)]">

@@ -11,6 +11,17 @@ body,
   height: 100%;
 }
 
+/* Скрываем полосы прокрутки — на мобильных они overlay, в десктоп-вебвью мешают. */
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
 body {
   margin: 0;
   font-family: var(--font-sans);

@@ -143,4 +143,32 @@ describe('sessions.service', () => {
       status: 404,
     });
   });
+
+  it('setClientConfirmation: отклонить уже подтверждённое занятие нельзя (409)', async () => {
+    const getForTrainer = vi.fn(() => Promise.resolve(row({ clientConfirmation: 'confirmed' })));
+    const setClientConfirmation = vi.fn(() => Promise.resolve(row()));
+    const svc = makeSessionsService(fakeRepo({ getForTrainer, setClientConfirmation }), {
+      newId: () => 'x',
+    });
+    await expect(svc.setClientConfirmation('A', 'c1', 's1', 'declined')).rejects.toMatchObject({
+      status: 409,
+      code: 'ALREADY_CONFIRMED',
+    });
+    // Запись не трогаем — подтверждение зафиксировано.
+    expect(setClientConfirmation).not.toHaveBeenCalled();
+  });
+
+  it('setClientConfirmation: повторно подтвердить подтверждённое можно', async () => {
+    const getForTrainer = vi.fn(() => Promise.resolve(row({ clientConfirmation: 'confirmed' })));
+    const setClientConfirmation = vi.fn(() =>
+      Promise.resolve(row({ clientConfirmation: 'confirmed' })),
+    );
+    const svc = makeSessionsService(fakeRepo({ getForTrainer, setClientConfirmation }), {
+      newId: () => 'x',
+    });
+    const res = await svc.setClientConfirmation('A', 'c1', 's1', 'confirmed');
+    expect(res.clientConfirmation).toBe('confirmed');
+    // confirmed-ветка не читает текущее состояние.
+    expect(getForTrainer).not.toHaveBeenCalled();
+  });
 });

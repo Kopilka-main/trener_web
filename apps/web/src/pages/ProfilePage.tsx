@@ -110,9 +110,6 @@ export function ProfilePage() {
           />
           <div className="min-w-0">
             <div className="text-[19px] font-bold leading-tight text-ink">{fullName}</div>
-            {trainer.title && (
-              <div className="mt-0.5 truncate text-[13px] text-ink-muted">{trainer.title}</div>
-            )}
             <div className="truncate text-[12px] text-ink-mutedxl">{trainer.email}</div>
             {trainer.birthDate && (
               <div className="truncate text-[12px] text-ink-mutedxl">
@@ -391,7 +388,6 @@ function ProfileEdit({ trainer, onClose }: { trainer: TrainerResponse; onClose: 
   const update = useUpdateMe();
   const [firstName, setFirstName] = useState(trainer.firstName);
   const [lastName, setLastName] = useState(trainer.lastName);
-  const [title, setTitle] = useState(trainer.title ?? '');
   const [bio, setBio] = useState(trainer.bio ?? '');
   const [birthDate, setBirthDate] = useState(isoToDisplay(trainer.birthDate ?? ''));
   const [contacts, setContacts] = useState<TrainerContact[]>(trainer.contacts);
@@ -427,7 +423,6 @@ function ProfileEdit({ trainer, onClose }: { trainer: TrainerResponse; onClose: 
       {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        title: title.trim() === '' ? null : title.trim(),
         bio: bio.trim() === '' ? null : bio.trim(),
         birthDate: birthDate.trim() === '' ? null : displayToIso(birthDate),
         contacts: cleanContacts,
@@ -467,12 +462,6 @@ function ProfileEdit({ trainer, onClose }: { trainer: TrainerResponse; onClose: 
             placeholder="Фамилия"
           />
         </div>
-        <EditField
-          label="Должность"
-          value={title}
-          onChange={setTitle}
-          placeholder="Напр. персональный тренер"
-        />
         <label className="flex flex-col gap-1.5">
           <span className={KICKER}>Дата рождения</span>
           <input

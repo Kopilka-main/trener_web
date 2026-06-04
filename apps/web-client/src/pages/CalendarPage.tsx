@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Wifi, X } from 'lucide-react';
 import type { SessionResponse } from '@trener/shared';
 import { useClientMe } from '../api/auth';
+import { useClientTrainer } from '../api/trainer';
 import { useClientSessions, useConfirmSession } from '../api/calendar';
 import { SessionsCalendar } from '../components/SessionsCalendar';
 import { MONTH_GEN, endTime, humanDuration, monthGrid, parseISO, toISODate } from '../lib/calendar';
@@ -14,8 +15,14 @@ const CONFIRM_LABEL: Record<SessionResponse['clientConfirmation'], string> = {
 
 export function CalendarPage() {
   const me = useClientMe();
+  const trainer = useClientTrainer();
   const linked = me.data?.link != null;
   const [anchor, setAnchor] = useState<Date>(new Date());
+
+  // Инициалы тренера для недельного вида (как у тренера — инициалы клиента).
+  const trainerName = trainer.data
+    ? `${trainer.data.firstName} ${trainer.data.lastName}`.trim()
+    : '';
 
   // Диапазон месяца-сетки текущего якоря (42 дня) — покрывает day/week/month.
   const { from, to } = useMemo(() => {
@@ -55,6 +62,7 @@ export function CalendarPage() {
           anchor={anchor}
           onAnchorChange={setAnchor}
           onSessionClick={setSelected}
+          renderInitials={() => trainerName}
         />
       )}
 

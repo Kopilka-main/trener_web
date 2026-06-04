@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Wifi, X } from 'lucide-react';
-import type { SessionResponse, SessionStatus } from '@trener/shared';
+import { Check, ChevronLeft, ChevronRight, Timer, Wifi, X } from 'lucide-react';
+import type { SessionResponse } from '@trener/shared';
 import {
   CAL_HOURS,
   CAL_START_HOUR,
@@ -33,6 +33,17 @@ function defaultLabel(s: SessionResponse): string {
   return s.title ?? 'Занятие';
 }
 
+/** Инициалы из метки — до 2 заглавных букв: «Иван Иванов» → «ИИ».
+ *  Пустая метка → пустая строка (на плитке только бейдж). */
+function initialsOf(label: string): string {
+  const parts = label.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '';
+  return parts
+    .slice(0, 2)
+    .map((p) => p.charAt(0).toUpperCase())
+    .join('');
+}
+
 export type SessionsCalendarProps = {
   sessions: SessionResponse[];
   /** Стартовый вид (по умолчанию — месяц). */
@@ -43,6 +54,8 @@ export type SessionsCalendarProps = {
   onSessionClick: (session: SessionResponse) => void;
   /** Метка-заголовок блока занятия (по умолчанию — title ?? 'Занятие'). */
   renderLabel?: (s: SessionResponse) => string;
+  /** Источник инициалов для недельного вида (по умолчанию — из renderLabel). */
+  renderInitials?: (s: SessionResponse) => string;
   /** Управляемый якорь периода (опц.). Если передан onAnchorChange — компонент управляемый. */
   anchor?: Date;
   onAnchorChange?: (d: Date) => void;
@@ -59,6 +72,7 @@ export function SessionsCalendar({
   onSlotClick,
   onSessionClick,
   renderLabel = defaultLabel,
+  renderInitials,
   anchor: anchorProp,
   onAnchorChange,
 }: SessionsCalendarProps) {
@@ -137,6 +151,7 @@ export function SessionsCalendar({
           onSlot={onSlotClick ?? (() => {})}
           slotsEnabled={onSlotClick !== undefined}
           renderLabel={renderLabel}
+          renderInitials={renderInitials}
         />
       )}
       {view === 'day' && (
@@ -191,30 +206,39 @@ function ViewSwitcher({
   );
 }
 
-// --- Цвет блока занятия по статусу ---
-// planned   — акцентный лайм (bg-accent text-accent-on)
-// completed — приглушённый (bg-card-elevated)
-// cancelled — перечёркнут + opacity-50
-function tileClasses(status: SessionStatus): string {
-  if (status === 'planned') return 'bg-accent text-accent-on';
-  if (status === 'completed') return 'bg-card-elevated text-ink';
-  return 'bg-card-elevated text-ink-muted line-through opacity-50';
+// --- Цвет блока занятия (кислотные тона) ---
+// Запланированное окрашивается по согласованию клиентом:
+//   ждёт ответа — оранжевый, подтверждено — зелёный (лайм), отклонено — красный.
+// completed — приглушённый; cancelled — перечёркнут + opacity-50.
+function tileClasses(s: SessionResponse): string {
+  if (s.status === 'cancelled') return 'bg-card-elevated text-ink-muted line-through opacity-50';
+  if (s.status === 'completed') return 'bg-card-elevated text-ink';
+  if (s.clientConfirmation === 'confirmed') return 'bg-[#caff3a] text-[#0b0c10]';
+  if (s.clientConfirmation === 'declined') return 'bg-[#ff5a5a] text-[#1a0606]';
+  return 'bg-[#ffab2e] text-[#1a1200]';
 }
 
-/** Индикатор подтверждения клиента на блоке занятия. */
-function ConfirmMark({ value }: { value: SessionResponse['clientConfirmation'] }) {
-  if (value === 'confirmed') return <Check size={12} strokeWidth={2.4} className="shrink-0" />;
-  if (value === 'declined')
-    return <X size={12} strokeWidth={2.4} className="shrink-0 opacity-70" />;
-  return null;
+interface StateInfo {
+  Icon: typeof Timer;
+  color: string;
+  label: string;
 }
 
-/** Текстовый статус занятия для клиента: отмена тренером важнее статуса подтверждения. */
+/** Состояние подтверждения занятия — от лица клиента: иконка, цвет, подпись. */
+function stateInfo(session: SessionResponse): StateInfo {
+  if (session.clientConfirmation === 'confirmed') {
+    return { Icon: Check, color: 'var(--color-accent)', label: 'Вы подтвердили' };
+  }
+  if (session.clientConfirmation === 'declined') {
+    return { Icon: X, color: 'var(--color-danger)', label: 'Вы отклонили' };
+  }
+  return { Icon: Timer, color: '#000000', label: 'Ждём подтверждения' };
+}
+
+/** Текстовый статус занятия: отмена тренером важнее статуса подтверждения. */
 function clientStatusLabel(s: SessionResponse): string {
   if (s.status === 'cancelled') return 'Отменено тренером';
-  if (s.clientConfirmation === 'confirmed') return 'Подтверждено';
-  if (s.clientConfirmation === 'declined') return 'Вы отклонили';
-  return 'Ожидает подтверждения';
+  return stateInfo(s).label;
 }
 
 /** Сессии конкретного дня, отсортированы по времени. */
@@ -238,13 +262,14 @@ function MonthView({
   const month = anchor.getMonth();
   const now = new Date();
 
-  // Счётчики по дате: planned vs остальные (completed/cancelled).
+  // Счётчики по дате и подтверждению клиента: pending / confirmed / declined.
   const counts = useMemo(() => {
-    const map = new Map<string, { planned: number; other: number }>();
+    const map = new Map<string, { pending: number; confirmed: number; declined: number }>();
     for (const s of sessions) {
-      const c = map.get(s.date) ?? { planned: 0, other: 0 };
-      if (s.status === 'planned') c.planned += 1;
-      else c.other += 1;
+      const c = map.get(s.date) ?? { pending: 0, confirmed: 0, declined: 0 };
+      if (s.clientConfirmation === 'confirmed') c.confirmed += 1;
+      else if (s.clientConfirmation === 'declined') c.declined += 1;
+      else c.pending += 1;
       map.set(s.date, c);
     }
     return map;
@@ -265,29 +290,34 @@ function MonthView({
           const c = counts.get(iso);
           const inMonth = d.getMonth() === month;
           const today = sameDay(d, now);
+          const hasSessions = c ? c.pending + c.confirmed + c.declined > 0 : false;
           return (
             <button
               key={iso}
               type="button"
               onClick={() => onPickDay(d)}
-              className={`flex aspect-square flex-col items-center justify-center gap-1 rounded-xl bg-card active:bg-card-elevated ${
+              className={`relative flex aspect-square flex-col items-center justify-center gap-1 overflow-hidden rounded-xl bg-card active:bg-card-elevated ${
                 today ? 'ring-2 ring-accent' : ''
               } ${inMonth ? '' : 'opacity-40'}`}
             >
+              {/* Есть занятия в этот день → четвертькруга акцентом в правом верхнем углу. */}
+              {hasSessions && (
+                <span
+                  aria-hidden
+                  className="absolute right-0 top-0 h-3 w-3 rounded-bl-full bg-accent"
+                />
+              )}
               <span className="font-[family-name:var(--font-mono)] text-[13px] font-semibold tabular-nums text-ink">
                 {d.getDate()}
               </span>
-              {c && (c.planned > 0 || c.other > 0) ? (
-                <span className="flex items-center gap-0.5">
-                  {c.planned > 0 && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />
-                  )}
-                  {c.other > 0 && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-ink-mutedxl" aria-hidden />
-                  )}
+              {c && c.pending + c.confirmed + c.declined > 0 ? (
+                <span className="flex items-center gap-1 font-[family-name:var(--font-mono)] text-[10px] font-bold leading-none tabular-nums">
+                  {c.pending > 0 && <span className="text-ink-mutedxl">{c.pending}</span>}
+                  {c.confirmed > 0 && <span className="text-accent">{c.confirmed}</span>}
+                  {c.declined > 0 && <span className="text-danger">{c.declined}</span>}
                 </span>
               ) : (
-                <span className="h-1.5" aria-hidden />
+                <span className="h-2.5" aria-hidden />
               )}
             </button>
           );
@@ -398,32 +428,45 @@ function DayView({
             const startMin = timeToMin(s.startTime);
             const top = ((startMin - CAL_START_HOUR * 60) / 60) * DAY_HOUR_H;
             const height = Math.max((s.durationMin / 60) * DAY_HOUR_H - 2, 18);
+            const state = stateInfo(s);
             return (
               <button
                 key={s.id}
                 ref={s.id === focus?.id ? focusRef : undefined}
                 type="button"
                 onClick={() => onPick(s)}
-                className={`absolute left-1.5 right-1.5 z-10 overflow-hidden rounded-xl px-2.5 py-1.5 text-left ${tileClasses(s.status)}`}
+                className={`absolute left-1.5 right-1.5 z-10 overflow-hidden rounded-xl px-2.5 py-1.5 text-left ${tileClasses(s)}`}
                 style={{ top, height }}
               >
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 pr-4">
                   {s.isOnline && <Wifi size={12} strokeWidth={2.2} className="shrink-0" />}
                   <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">
                     {renderLabel(s)}
                   </span>
-                  <ConfirmMark value={s.clientConfirmation} />
                 </div>
-                {height >= 48 && (
-                  <div className="truncate text-[10px] font-semibold opacity-90">
+                {/* Описание статуса — сразу под названием. */}
+                {height >= 50 && (
+                  <div className="truncate pr-4 text-[10px] font-semibold opacity-90">
                     {clientStatusLabel(s)}
                   </div>
                 )}
-                <div className="truncate font-[family-name:var(--font-mono)] text-[11px] opacity-80">
-                  {[`${s.startTime}–${endTime(s.startTime, s.durationMin)}`, s.location]
+                <div className="truncate pr-5 font-[family-name:var(--font-mono)] text-[11px] opacity-80">
+                  {[
+                    `${s.startTime}–${endTime(s.startTime, s.durationMin)}`,
+                    s.isOnline ? 'Online' : s.location,
+                  ]
                     .filter(Boolean)
                     .join(' · ')}
                 </div>
+                {/* Статус — иконка на белом четвертькруге с чёрной обводкой в правом нижнем углу. */}
+                <span
+                  aria-label={state.label}
+                  title={state.label}
+                  className="absolute bottom-0 right-0 flex h-[20px] w-[20px] items-end justify-end rounded-tl-full border-l border-t border-black bg-white pb-px pr-px"
+                  style={{ color: state.color }}
+                >
+                  <state.Icon size={12} strokeWidth={2.8} />
+                </span>
               </button>
             );
           })}
@@ -441,6 +484,7 @@ function WeekView({
   onSlot,
   slotsEnabled,
   renderLabel,
+  renderInitials,
 }: {
   anchor: Date;
   sessions: SessionResponse[];
@@ -449,6 +493,7 @@ function WeekView({
   onSlot: (date: Date, hour: number) => void;
   slotsEnabled: boolean;
   renderLabel: (s: SessionResponse) => string;
+  renderInitials?: ((s: SessionResponse) => string) | undefined;
 }) {
   const dates = weekDates(anchor);
   const hours = Array.from({ length: CAL_HOURS }, (_, i) => CAL_START_HOUR + i);
@@ -550,28 +595,29 @@ function WeekView({
                     const startMin = timeToMin(s.startTime);
                     const top = ((startMin - CAL_START_HOUR * 60) / 60) * WEEK_HOUR_H;
                     const height = Math.max((s.durationMin / 60) * WEEK_HOUR_H - 1, 14);
-                    const label = renderLabel(s);
+                    const label = renderInitials ? renderInitials(s) : renderLabel(s);
+                    const state = stateInfo(s);
                     return (
                       <button
                         key={s.id}
                         ref={s.id === focus?.id ? focusRef : undefined}
                         type="button"
                         onClick={() => onPick(s)}
-                        className={`absolute inset-x-[1px] z-10 flex items-center justify-center overflow-hidden rounded-md px-0.5 ${tileClasses(s.status)}`}
+                        className={`absolute inset-x-[1px] z-10 flex items-center justify-center overflow-hidden rounded-md ${tileClasses(s)}`}
                         style={{ top, height }}
                       >
-                        {s.isOnline ? (
-                          <Wifi
-                            size={height < 20 ? 10 : 12}
-                            strokeWidth={2.2}
-                            className="shrink-0"
-                          />
-                        ) : (
-                          <span className="truncate text-[10px] font-semibold leading-none">
-                            {label}
-                          </span>
-                        )}
-                        <ConfirmMark value={s.clientConfirmation} />
+                        <span className="font-extrabold uppercase leading-none tracking-tight text-[clamp(24px,6.8vw,40px)]">
+                          {initialsOf(label)}
+                        </span>
+                        {/* Бейдж статуса: иконка на белой заливке-четвертькруга в углу. */}
+                        <span
+                          aria-label={state.label}
+                          title={state.label}
+                          className="absolute bottom-0 right-0 flex h-[18px] w-[18px] items-end justify-end rounded-tl-full border-l border-t border-black bg-white pb-px pr-px"
+                          style={{ color: state.color }}
+                        >
+                          <state.Icon size={11} strokeWidth={2.8} />
+                        </span>
                       </button>
                     );
                   })}
