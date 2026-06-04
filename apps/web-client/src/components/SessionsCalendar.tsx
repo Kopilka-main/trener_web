@@ -289,20 +289,27 @@ function MonthView({
   );
 }
 
-/** Скроллируемый контейнер day/week — при монтаже/смене даты скроллит к 7:00. */
+/** Скроллируемый контейнер day/week. При монтаже/смене даты: если есть занятие
+ * (`centerMin` — минуты от полуночи), центрирует его в видимой области; иначе скроллит к 7:00. */
 function ScrollableGrid({
   hourHeight,
+  centerMin = null,
   children,
 }: {
   hourHeight: number;
+  centerMin?: number | null;
   children: React.ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.scrollTo({ top: (SCROLL_HOUR - CAL_START_HOUR) * hourHeight, behavior: 'auto' });
-  }, [hourHeight]);
+    const top =
+      centerMin !== null
+        ? ((centerMin - CAL_START_HOUR * 60) / 60) * hourHeight - el.clientHeight / 2
+        : (SCROLL_HOUR - CAL_START_HOUR) * hourHeight;
+    el.scrollTo({ top: Math.max(0, top), behavior: 'auto' });
+  }, [hourHeight, centerMin]);
   return (
     <div ref={ref} className="flex-1 overflow-y-auto pb-6">
       {children}
@@ -341,9 +348,12 @@ function DayView({
   const now = new Date();
   const gridH = CAL_HOURS * DAY_HOUR_H;
   const nowTop = ((now.getHours() * 60 + now.getMinutes() - CAL_START_HOUR * 60) / 60) * DAY_HOUR_H;
+  // Есть занятие в этот день → центрируем его (середину блока) в видимой области.
+  const focus = items[0];
+  const centerMin = focus ? timeToMin(focus.startTime) + focus.durationMin / 2 : null;
 
   return (
-    <ScrollableGrid hourHeight={DAY_HOUR_H}>
+    <ScrollableGrid hourHeight={DAY_HOUR_H} centerMin={centerMin}>
       <div className="flex px-4 pt-3">
         <div className="relative w-10 shrink-0" style={{ height: gridH }}>
           {hours.map((h, i) => (
@@ -434,9 +444,16 @@ function WeekView({
   const todayIndex = dates.findIndex((d) => sameDay(d, now));
   const nowTop =
     ((now.getHours() * 60 + now.getMinutes() - CAL_START_HOUR * 60) / 60) * WEEK_HOUR_H;
+  // Есть занятия на неделе → центрируем самое раннее по времени суток.
+  const weekIso = new Set(dates.map((d) => toISODate(d)));
+  const weekItems = sessions
+    .filter((s) => weekIso.has(s.date))
+    .sort((a, b) => timeToMin(a.startTime) - timeToMin(b.startTime));
+  const focus = weekItems[0];
+  const centerMin = focus ? timeToMin(focus.startTime) + focus.durationMin / 2 : null;
 
   return (
-    <ScrollableGrid hourHeight={WEEK_HOUR_H}>
+    <ScrollableGrid hourHeight={WEEK_HOUR_H} centerMin={centerMin}>
       <div className="px-2 pt-1">
         <div className="sticky top-0 z-30 flex border-b border-line bg-bg pb-1.5 pt-1">
           <div className="w-7 shrink-0" />
