@@ -6,6 +6,20 @@ import { useClientWorkouts, useStartWorkout, useDeleteWorkout } from '../api/wor
 import { HoldToDelete } from '../components/HoldToDelete';
 import { formatDateGroup, formatTime } from '../lib/workoutDates';
 
+/** Подсчёт упражнений на карточке завершённой тренировки: показываем реально
+ * выполненные (с хотя бы одним сделанным подходом). Если выполнено не всё —
+ * «N из M упр.», чтобы было видно отклонение от плана; иначе просто «M упр.». */
+function exercisesText(w: WorkoutResponse): string {
+  const total = w.exercises.length;
+  const done = w.exercises.filter((ex) =>
+    ex.sets.some(
+      (s) =>
+        s.done || s.actualReps !== null || s.actualWeightKg !== null || s.actualTimeSec !== null,
+    ),
+  ).length;
+  return done < total ? `${done} из ${total} упр.` : `${total} упр.`;
+}
+
 function groupByDate(workouts: WorkoutResponse[]): { label: string; items: WorkoutResponse[] }[] {
   const groups: { label: string; items: WorkoutResponse[] }[] = [];
   for (const w of workouts) {
@@ -134,7 +148,7 @@ export function WorkoutsListPage() {
                     <span className="text-[12px] text-ink-muted">
                       {w.completedAt ? formatTime(w.completedAt) : ''}
                       {' · '}
-                      {w.exercises.length} упр.
+                      {exercisesText(w)}
                       {w.durationSec ? ` · ${Math.round(w.durationSec / 60)} мин` : ''}
                       {w.rpe ? ` · RPE ${w.rpe}` : ''}
                     </span>
