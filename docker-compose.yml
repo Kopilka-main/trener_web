@@ -5,8 +5,11 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: trener
+    # Только localhost: БД не должна торчать в интернет. Сервисы ходят к ней
+    # по внутренней сети Docker (postgres:5432), внешний порт нужен лишь для
+    # локального админ-доступа на самом сервере.
     ports:
-      - '5432:5432'
+      - '127.0.0.1:5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -31,23 +34,43 @@ services:
   nginx:
     image: ${WEB_IMAGE:-trener-web:local}
     build: { context: ., dockerfile: apps/web/Dockerfile }
-    ports: ['8080:80']
+    # Порт открыт только на localhost: для healthcheck деплоя и отладки.
+    # Публичный доступ — через caddy (TLS), не напрямую.
+    ports: ['127.0.0.1:8080:80']
     depends_on: [api]
 
   web-client:
     image: ${WEB_CLIENT_IMAGE:-trener-web-client:local}
     build: { context: ., dockerfile: apps/web-client/Dockerfile }
-    ports: ['8081:80']
+    ports: ['127.0.0.1:8081:80']
     depends_on: [api]
+
+  # TLS-терминация + маршрутизация по поддоменам (app./my.fitbond.ru).
+  # Сертификаты Let's Encrypt — автоматически (нужны порты 80/443 и делегированный домен).
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ['80:80', '443:443']
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:-admin@fitbond.ru}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [nginx, web-client]
 
   backup:
     image: postgres:16
     restart: unless-stopped
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # Сколько суток хранить бэкапы (старше — удаляются). По умолчанию 7.
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
     depends_on:
       postgres: { condition: service_healthy }
     volumes:
+      # Бэкапы на основном диске (named volume). Когда загрузки вырастут — можно
+      # подключить отдельный HDD и заменить на bind-mount /mnt/backups:/backups.
       - backups:/backups
       - uploads:/data/uploads:ro
     entrypoint: ['/bin/sh', '-c']
@@ -60,6 +83,9 @@ services:
             && tar czf "/backups/uploads-$$ts.tar.gz" -C /data uploads \
             && echo "[backup] ok $$ts" \
             || echo "[backup] FAILED $$ts"
+          # Ротация: удаляем дампы и архивы старше BACKUP_RETENTION_DAYS суток.
+          find /backups -name 'db-*.dump' -mtime +$$BACKUP_RETENTION_DAYS -delete
+          find /backups -name 'uploads-*.tar.gz' -mtime +$$BACKUP_RETENTION_DAYS -delete
           sleep 86400
         done
 
@@ -67,3 +93,5 @@ volumes:
   pgdata:
   uploads:
   backups:
+  caddy_data:
+  caddy_config:

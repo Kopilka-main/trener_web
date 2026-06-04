@@ -1,0 +1,19 @@
+# Caddy: TLS-терминация + маршрутизация по поддоменам.
+# Сертификаты Let's Encrypt выпускаются и продлеваются автоматически
+# (нужны открытые порты 80/443 и делегированный домен fitbond.ru).
+#
+# email — для уведомлений Let's Encrypt об истечении; задаётся через ACME_EMAIL.
+
+{
+	email {$ACME_EMAIL}
+}
+
+# Приложение тренера.
+app.fitbond.ru {
+	reverse_proxy nginx:80
+}
+
+# Приложение клиента.
+my.fitbond.ru {
+	reverse_proxy web-client:80
+}

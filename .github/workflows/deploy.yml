@@ -42,17 +42,27 @@ jobs:
             ghcr.io/${{ github.repository }}/web:${{ github.sha }}
             ghcr.io/${{ github.repository }}/web:latest
 
+      - name: Build & push web-client image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web-client/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/web-client:${{ github.sha }}
+            ghcr.io/${{ github.repository }}/web-client:latest
+
       - name: Deploy to VPS over SSH
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: COOKIE_SECRET,POSTGRES_PASSWORD,API_IMAGE,WEB_IMAGE
+          envs: COOKIE_SECRET,POSTGRES_PASSWORD,API_IMAGE,WEB_IMAGE,WEB_CLIENT_IMAGE
           script: |
             set -e
             cd /opt/trener
-            export API_IMAGE WEB_IMAGE
+            export API_IMAGE WEB_IMAGE WEB_CLIENT_IMAGE
             docker compose pull
             docker compose run --rm api node apps/api/dist/migrate.js
             docker compose up -d
@@ -71,3 +81,4 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           API_IMAGE: ghcr.io/${{ github.repository }}/api:${{ github.sha }}
           WEB_IMAGE: ghcr.io/${{ github.repository }}/web:${{ github.sha }}
+          WEB_CLIENT_IMAGE: ghcr.io/${{ github.repository }}/web-client:${{ github.sha }}
