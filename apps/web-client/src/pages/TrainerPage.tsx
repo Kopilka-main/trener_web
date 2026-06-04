@@ -1,7 +1,36 @@
+import { useState } from 'react';
 import { useClientTrainer } from '../api/trainer';
 
 function initials(first: string, last: string): string {
   return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase();
+}
+
+/** Кружок тренера: фото (если есть и грузится), иначе инициалы. */
+function TrainerAvatar({
+  firstName,
+  lastName,
+  avatarFileId,
+}: {
+  firstName: string;
+  lastName: string;
+  avatarFileId: string | null;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (avatarFileId && !failed) {
+    return (
+      <img
+        src={`/api/client/trainer/avatar?v=${avatarFileId}`}
+        alt={`${firstName} ${lastName}`.trim()}
+        onError={() => setFailed(true)}
+        className="h-16 w-16 shrink-0 rounded-full bg-chip object-cover"
+      />
+    );
+  }
+  return (
+    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-chip font-[family-name:var(--font-display)] text-[22px] text-ink">
+      {initials(firstName, lastName)}
+    </div>
+  );
 }
 
 /** Полная карточка привязанного тренера: имя, специализация, «о себе», контакты.
@@ -22,9 +51,11 @@ export function TrainerPage() {
       {t && (
         <div className="mt-4 flex flex-col gap-5">
           <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-chip font-[family-name:var(--font-display)] text-[22px] text-ink">
-              {initials(t.firstName, t.lastName)}
-            </div>
+            <TrainerAvatar
+              firstName={t.firstName}
+              lastName={t.lastName}
+              avatarFileId={t.avatarFileId}
+            />
             <div className="flex min-w-0 flex-col">
               <span className="truncate text-[20px] font-bold text-ink">
                 {t.firstName} {t.lastName}

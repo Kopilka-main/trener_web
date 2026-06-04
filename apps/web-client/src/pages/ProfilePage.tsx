@@ -1,9 +1,16 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, X } from 'lucide-react';
+import { Plus, Trash2, X } from 'lucide-react';
 import type { ClientAccountResponse } from '@trener/shared';
-import { useClientMe, useClientLogout, useUpdateClientProfile } from '../api/auth';
+import {
+  useClientMe,
+  useClientLogout,
+  useRemoveMyAvatar,
+  useUpdateClientProfile,
+  useUploadMyAvatar,
+} from '../api/auth';
 import { useClientTrainer } from '../api/trainer';
+import { compressImage } from '../lib/image';
 
 const CONTACT_TYPES = ['Телефон', 'WhatsApp', 'Telegram', 'MAX', 'Instagram', 'Прочее'] as const;
 type Contact = { type: string; value: string };
@@ -29,6 +36,66 @@ export function ProfilePage() {
       >
         Выйти
       </button>
+    </div>
+  );
+}
+
+function initials(first: string, last: string): string {
+  return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase() || '?';
+}
+
+/** Блок аватара клиента: фото (если есть) либо инициалы + загрузка/удаление.
+ * Свой URL фиксированный, поэтому `?v=<id>` — кэш-бастинг при смене файла. */
+function AvatarBlock({ account }: { account: ClientAccountResponse }) {
+  const upload = useUploadMyAvatar();
+  const remove = useRemoveMyAvatar();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const busy = upload.isPending || remove.isPending;
+
+  function onPick(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    void compressImage(file).then((blob) => {
+      upload.mutate(blob);
+    });
+  }
+
+  const src = account.avatarFileId ? `/api/client/auth/me/avatar?v=${account.avatarFileId}` : null;
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={busy}
+        aria-label="Загрузить фото"
+        className="rounded-full disabled:opacity-50"
+      >
+        {src ? (
+          <img
+            src={src}
+            alt={`${account.firstName} ${account.lastName}`.trim()}
+            className="h-20 w-20 rounded-full bg-chip object-cover"
+          />
+        ) : (
+          <span className="flex h-20 w-20 items-center justify-center rounded-full bg-chip font-[family-name:var(--font-display)] text-[26px] text-ink">
+            {initials(account.firstName, account.lastName)}
+          </span>
+        )}
+      </button>
+      <input ref={inputRef} type="file" accept="image/*" onChange={onPick} className="hidden" />
+      {account.avatarFileId && (
+        <button
+          type="button"
+          onClick={() => remove.mutate()}
+          disabled={busy}
+          aria-label="Удалить фото"
+          className="flex items-center gap-1 text-[12px] font-medium text-ink-muted disabled:opacity-50"
+        >
+          <Trash2 size={13} strokeWidth={1.9} /> Удалить
+        </button>
+      )}
     </div>
   );
 }
@@ -77,6 +144,8 @@ function ProfileForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <AvatarBlock account={account} />
+
       {linked ? (
         <section className="flex flex-col gap-1 rounded-xl bg-card px-4 py-3">
           <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-mutedxl">
