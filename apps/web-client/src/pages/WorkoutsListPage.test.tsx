@@ -5,6 +5,7 @@ import type { WorkoutResponse } from '@trener/shared';
 import { WorkoutsListPage } from './WorkoutsListPage';
 import * as api from '../api/workouts';
 import * as auth from '../api/auth';
+import * as templatesApi from '../api/templates';
 
 const navigate = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -14,6 +15,20 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('../api/workouts');
 vi.mock('../api/auth');
+vi.mock('../api/templates');
+
+function mockTemplates() {
+  vi.mocked(templatesApi.useClientTemplates).mockReturnValue({
+    data: [],
+    isLoading: false,
+  } as never);
+  vi.mocked(templatesApi.useSaveTemplate).mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+    isSuccess: false,
+  } as never);
+  vi.mocked(templatesApi.useDeleteTemplate).mockReturnValue({ mutate: vi.fn() } as never);
+}
 
 function mockMe(linked: boolean) {
   vi.mocked(auth.useClientMe).mockReturnValue({
@@ -25,10 +40,11 @@ function mockMe(linked: boolean) {
   } as never);
 }
 
-function mockMutations(start = vi.fn(), del = vi.fn()) {
+function mockMutations(start = vi.fn(), del = vi.fn(), create = vi.fn()) {
+  vi.mocked(api.useCreateWorkout).mockReturnValue({ mutate: create, isPending: false } as never);
   vi.mocked(api.useStartWorkout).mockReturnValue({ mutate: start, isPending: false } as never);
   vi.mocked(api.useDeleteWorkout).mockReturnValue({ mutate: del, isPending: false } as never);
-  return { start, del };
+  return { start, del, create };
 }
 
 function workout(over: Partial<WorkoutResponse> = {}): WorkoutResponse {
@@ -60,9 +76,10 @@ describe('WorkoutsListPage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mockMutations();
+    mockTemplates();
   });
 
-  it('привязан, пусто → подсказка создать тренировку', () => {
+  it('привязан, пусто → карточка-плейсхолдер новой тренировки', () => {
     mockMe(true);
     vi.mocked(api.useClientWorkouts).mockReturnValue({
       isLoading: false,
@@ -70,7 +87,8 @@ describe('WorkoutsListPage', () => {
       data: [],
     } as never);
     renderPage();
-    expect(screen.getByText(/Пока нет тренировок/)).toBeInTheDocument();
+    expect(screen.getByText('Тренировка не запланирована')).toBeInTheDocument();
+    expect(screen.getByText('Выбрать из базы')).toBeInTheDocument();
   });
 
   it('не привязан → приглашение подключить тренера, нет кнопки «Новая»', () => {
@@ -85,16 +103,47 @@ describe('WorkoutsListPage', () => {
     expect(screen.queryByText('Новая тренировка')).not.toBeInTheDocument();
   });
 
-  it('привязан → кнопка «Новая» ведёт на /workouts/new', () => {
+  it('«Выбрать из базы» → пикер шаблонов; «Собрать с нуля» создаёт пустую', () => {
     mockMe(true);
+    const { create } = mockMutations();
+    mockTemplates();
     vi.mocked(api.useClientWorkouts).mockReturnValue({
       isLoading: false,
       isError: false,
       data: [],
     } as never);
     renderPage();
-    fireEvent.click(screen.getByText('Новая тренировка'));
-    expect(navigate).toHaveBeenCalledWith('/workouts/new');
+    fireEvent.click(screen.getByText('Выбрать из базы'));
+    // Открылся пикер «Выберите шаблон».
+    expect(screen.getByText('Выберите шаблон')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Собрать с нуля'));
+    expect(create).toHaveBeenCalledWith(
+      { name: 'Моя тренировка', exercises: [] },
+      expect.anything(),
+    );
+  });
+
+  it('пикер шаблонов: выбор шаблона создаёт тренировку из его плана', () => {
+    mockMe(true);
+    const { create } = mockMutations();
+    vi.mocked(templatesApi.useClientTemplates).mockReturnValue({
+      data: [
+        { id: 'tpl1', name: 'Push', exercises: [{ exerciseId: 'e1', sets: [{}] }], createdAt: '' },
+      ],
+      isLoading: false,
+    } as never);
+    vi.mocked(api.useClientWorkouts).mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [],
+    } as never);
+    renderPage();
+    fireEvent.click(screen.getByText('Выбрать из базы'));
+    fireEvent.click(screen.getByText('Push'));
+    expect(create).toHaveBeenCalledWith(
+      { name: 'Push', exercises: [{ exerciseId: 'e1', sets: [{}] }] },
+      expect.anything(),
+    );
   });
 
   it('разделяет свои активные/черновики и завершённые с бейджами', () => {
@@ -122,17 +171,16 @@ describe('WorkoutsListPage', () => {
     expect(screen.getByText('своя')).toBeInTheDocument();
   });
 
-  it('черновик: «Начать» вызывает useStartWorkout', () => {
+  it('черновик: «Открыть» ведёт на /run (форму плана)', () => {
     mockMe(true);
-    const { start } = mockMutations();
     vi.mocked(api.useClientWorkouts).mockReturnValue({
       isLoading: false,
       isError: false,
       data: [workout({ id: 'd1', name: 'Черновик', status: 'draft', createdByClient: true })],
     } as never);
     renderPage();
-    fireEvent.click(screen.getByText('Начать'));
-    expect(start).toHaveBeenCalledWith('d1', expect.anything());
+    fireEvent.click(screen.getByText('Открыть'));
+    expect(navigate).toHaveBeenCalledWith('/workouts/d1/run');
   });
 
   it('активная: «Продолжить» ведёт на /run', () => {

@@ -218,6 +218,13 @@
       "when": 1780575714014,
       "tag": "0030_legal_shinobi_shaw",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1780595260174,
+      "tag": "0031_closed_oracle",
+      "breakpoints": true
     }
   ]
 }

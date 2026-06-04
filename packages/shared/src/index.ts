@@ -5,6 +5,7 @@ export * from './clients.js';
 export * from './exercises.js';
 export * from './workout-templates.js';
 export * from './client-workouts.js';
+export * from './client-templates.js';
 export * from './sessions.js';
 export * from './packages.js';
 export * from './accounting.js';

@@ -253,6 +253,29 @@ export const clientWorkoutSets = pgTable(
   ],
 );
 
+// Собственные шаблоны тренировок клиента (план хранится JSONB). Клиент сохраняет
+// проведённую тренировку как шаблон и переиспользует. Скоуп по паре (тренер, клиент).
+type TemplatePlanSet = {
+  plannedReps?: number | null;
+  plannedWeightKg?: number | null;
+  plannedTimeSec?: number | null;
+  plannedRestSec?: number | null;
+};
+type TemplatePlanExercise = { exerciseId: string; sets: TemplatePlanSet[] };
+
+export const clientWorkoutTemplates = pgTable('client_workout_templates', {
+  id: text('id').primaryKey(),
+  trainerId: text('trainer_id')
+    .notNull()
+    .references(() => trainers.id, { onDelete: 'cascade' }),
+  clientId: text('client_id')
+    .notNull()
+    .references(() => clients.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  exercises: jsonb('exercises').$type<TemplatePlanExercise[]>().notNull().default([]),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 // Занятие-календарь тренера (НЕ путать с sessions_auth — это календарь, не аутентификация).
 export const sessions = pgTable(
   'sessions',
