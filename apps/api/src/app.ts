@@ -22,6 +22,7 @@ import { registerClientAppChatModule } from './modules/client-app-chat/client-ap
 import { registerClientAppTrainerModule } from './modules/client-app-trainer/client-app-trainer.module.js';
 import { registerClientAppCalendarModule } from './modules/client-app-calendar/client-app-calendar.module.js';
 import { registerClientAppMeasurementsModule } from './modules/client-app-measurements/client-app-measurements.module.js';
+import { registerClientAppExercisesModule } from './modules/client-app-exercises/client-app-exercises.module.js';
 import { registerClientsModule } from './modules/clients/clients.module.js';
 import { registerExercisesModule } from './modules/exercises/exercises.module.js';
 import { registerTemplatesModule } from './modules/workout-templates/templates.module.js';
@@ -101,6 +102,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     resolveScope: (id) => clientAuthSvc.resolveScope(id),
   });
   registerClientAppMeasurementsModule(app, {
+    db: deps.db,
+    clock,
+    resolveScope: (id) => clientAuthSvc.resolveScope(id),
+  });
+  registerClientAppExercisesModule(app, {
     db: deps.db,
     clock,
     resolveScope: (id) => clientAuthSvc.resolveScope(id),
