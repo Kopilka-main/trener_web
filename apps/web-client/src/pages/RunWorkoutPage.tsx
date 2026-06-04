@@ -1,38 +1,166 @@
-import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Check } from 'lucide-react';
-import type { UpdateSetRequest, WorkoutExerciseResponse, WorkoutSetResponse } from '@trener/shared';
-import { useClientWorkout, useUpdateWorkoutSet, useCompleteWorkout } from '../api/workouts';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Pencil, Plus, X } from 'lucide-react';
+import type {
+  ExerciseResponse,
+  UpdateSetRequest,
+  WorkoutExerciseResponse,
+  WorkoutResponse,
+  WorkoutSetResponse,
+} from '@trener/shared';
+import { useClientExercises } from '../api/exercises';
+import {
+  clientWorkoutQueryKey,
+  useAddWorkoutExercise,
+  useClientWorkout,
+  useCompleteWorkout,
+  useRemoveWorkoutExercise,
+  useReorderWorkoutExercises,
+  useStartWorkout,
+  useUpdateWorkoutSet,
+} from '../api/workouts';
+import { HoldToDelete } from '../components/HoldToDelete';
+import { SortableList } from '../components/SortableList';
 
-const RPE_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
+/** Запускает обновление DOM внутри View Transition (плавный морфинг), где доступно. */
+function runWithTransition(update: () => void): void {
+  const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+  if (typeof doc.startViewTransition === 'function') {
+    doc.startViewTransition(() => {
+      flushSync(update);
+    });
+  } else {
+    update();
+  }
+}
 
-function numOrNull(raw: string): number | null {
+function num(raw: string): number | null {
   const t = raw.trim();
   if (t === '') return null;
   const n = Number(t);
   return Number.isFinite(n) ? n : null;
 }
 
+/** Метки упражнений: повторяющиеся имена нумеруются «Имя 1», «Имя 2»… (по position). */
+function exerciseLabels(exercises: WorkoutExerciseResponse[]): Map<number, string> {
+  const total = new Map<string, number>();
+  for (const ex of exercises) total.set(ex.exerciseName, (total.get(ex.exerciseName) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  const out = new Map<number, string>();
+  for (const ex of [...exercises].sort((a, b) => a.position - b.position)) {
+    if ((total.get(ex.exerciseName) ?? 0) > 1) {
+      const n = (seen.get(ex.exerciseName) ?? 0) + 1;
+      seen.set(ex.exerciseName, n);
+      out.set(ex.position, `${ex.exerciseName} ${String(n)}`);
+    } else {
+      out.set(ex.position, ex.exerciseName);
+    }
+  }
+  return out;
+}
+
+/** Оптимистично применяет частичный патч к конкретному подходу. */
+function withSetPatch(
+  w: WorkoutResponse,
+  pos: number,
+  idx: number,
+  patch: Partial<WorkoutSetResponse>,
+): WorkoutResponse {
+  return {
+    ...w,
+    exercises: w.exercises.map((ex) =>
+      ex.position !== pos
+        ? ex
+        : { ...ex, sets: ex.sets.map((s) => (s.setIndex === idx ? { ...s, ...patch } : s)) },
+    ),
+  };
+}
+
+/** Оптимистично переставляет упражнения по новому порядку позиций (с перенумерацией). */
+function withReordered(w: WorkoutResponse, order: number[]): WorkoutResponse {
+  const byPos = new Map(w.exercises.map((e) => [e.position, e]));
+  const exercises = order
+    .map((p, i): WorkoutExerciseResponse | undefined => {
+      const e = byPos.get(p);
+      return e ? { ...e, position: i } : undefined;
+    })
+    .filter((e): e is WorkoutExerciseResponse => e !== undefined);
+  return { ...w, exercises };
+}
+
+function formatDuration(totalSec: number): string {
+  const sec = totalSec % 60;
+  const m = Math.floor(totalSec / 60);
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  const two = (n: number) => String(n).padStart(2, '0');
+  return h > 0 ? `${String(h)}:${two(mm)}:${two(sec)}` : `${String(m)}:${two(sec)}`;
+}
+
+/** Секунды, прошедшие с момента startedAt (тикает раз в секунду). */
+function useElapsed(startedAt: string | null): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!startedAt) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [startedAt]);
+  if (!startedAt) return 0;
+  const start = Date.parse(startedAt);
+  if (Number.isNaN(start)) return 0;
+  return Math.max(0, Math.floor((now - start) / 1000));
+}
+
+function plannedText(set: WorkoutSetResponse | undefined): string {
+  if (!set) return '—';
+  const parts: string[] = [];
+  if (set.plannedReps !== null) parts.push(String(set.plannedReps));
+  if (set.plannedWeightKg !== null) parts.push(`× ${String(set.plannedWeightKg)} кг`);
+  if (set.plannedTimeSec !== null) parts.push(`${String(set.plannedTimeSec)} с`);
+  return parts.join(' ') || '—';
+}
+
+function actualText(set: WorkoutSetResponse): string {
+  const parts: string[] = [];
+  if (set.actualReps !== null) parts.push(String(set.actualReps));
+  if (set.actualWeightKg !== null) parts.push(`× ${String(set.actualWeightKg)} кг`);
+  if (set.actualTimeSec !== null) parts.push(`${String(set.actualTimeSec)} с`);
+  return parts.join(' ') || '—';
+}
+
+/** Один подход из дефолтов упражнения (для повторов/времени + отдых). */
+function buildPlannedSet(ex: ExerciseResponse): {
+  plannedReps?: number;
+  plannedWeightKg?: number;
+  plannedTimeSec?: number;
+  plannedRestSec?: number;
+} {
+  const set: {
+    plannedReps?: number;
+    plannedWeightKg?: number;
+    plannedTimeSec?: number;
+    plannedRestSec?: number;
+  } = {};
+  if (ex.defaultTimeSec !== null) {
+    set.plannedTimeSec = ex.defaultTimeSec;
+  } else {
+    if (ex.defaultReps !== null) set.plannedReps = ex.defaultReps;
+    if (ex.defaultWeightKg !== null) set.plannedWeightKg = ex.defaultWeightKg;
+  }
+  if (ex.restSec !== null) set.plannedRestSec = ex.restSec;
+  return set;
+}
+
 export function RunWorkoutPage() {
   const { wid = '' } = useParams<{ wid: string }>();
-  const navigate = useNavigate();
   const q = useClientWorkout(wid);
-  const updateSet = useUpdateWorkoutSet();
-  const complete = useCompleteWorkout();
-  const [rpe, setRpe] = useState<number | null>(null);
-
   const workout = q.data;
-  const isActive = workout?.status === 'active';
 
-  function finish() {
-    complete.mutate(
-      { wid, input: { rpe } },
-      {
-        onSuccess: () => {
-          void navigate(`/workouts/${wid}`);
-        },
-      },
-    );
+  // Завершённую тренировку не показываем в режиме проведения — сразу её итоги.
+  if (workout && workout.status !== 'draft' && workout.status !== 'active') {
+    return <Navigate to={`/workouts/${wid}`} replace />;
   }
 
   return (
@@ -45,17 +173,6 @@ export function RunWorkoutPage() {
       </Link>
 
       {q.isLoading && <p className="text-sm text-ink-muted">Загрузка…</p>}
-
-      {q.isSuccess && !isActive && (
-        <div className="flex flex-col gap-3">
-          <p className="text-sm text-ink-muted">
-            Эта тренировка не запущена. Запустите её из списка тренировок.
-          </p>
-          <Link to="/workouts" className="text-sm font-medium text-accent">
-            К списку
-          </Link>
-        </div>
-      )}
       {q.isError && (
         <div className="flex flex-col gap-3">
           <p className="text-sm text-ink-muted">Тренировка не найдена.</p>
@@ -65,182 +182,757 @@ export function RunWorkoutPage() {
         </div>
       )}
 
-      {workout && isActive && (
-        <>
-          <h1 className="font-[family-name:var(--font-display)] text-[24px] text-ink">
-            {workout.name}
-          </h1>
-
-          <div className="flex flex-col gap-3">
-            {workout.exercises.map((ex) => (
-              <ExerciseCard
-                key={ex.position}
-                ex={ex}
-                onLog={(setIndex, input) =>
-                  updateSet.mutate({ wid, setId: `${ex.position}:${setIndex}`, input })
-                }
-                pending={updateSet.isPending}
-              />
-            ))}
-          </div>
-
-          <section className="flex flex-col gap-2 rounded-2xl bg-card p-4">
-            <span className="text-[13px] font-semibold text-ink">Оценка нагрузки (RPE)</span>
-            <div className="flex flex-wrap gap-2">
-              {RPE_VALUES.map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setRpe(rpe === v ? null : v)}
-                  className={`h-9 w-9 rounded-full text-[14px] font-semibold transition-colors ${
-                    rpe === v ? 'bg-accent text-accent-on' : 'bg-card-elevated text-ink'
-                  }`}
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
-          </section>
-        </>
-      )}
-
-      {workout && isActive && (
-        <div className="fixed inset-x-0 bottom-0 mx-auto max-w-[430px] border-t border-card bg-bg px-4 py-3">
-          <button
-            type="button"
-            onClick={finish}
-            disabled={complete.isPending}
-            className="flex w-full items-center justify-center rounded-2xl bg-accent px-4 py-3 text-[15px] font-semibold text-accent-on active:opacity-90 disabled:opacity-50"
-          >
-            {complete.isPending ? 'Завершаем…' : 'Завершить тренировку'}
-          </button>
-        </div>
-      )}
+      {workout && workout.status === 'draft' && <DraftView wid={wid} workout={workout} />}
+      {workout && workout.status === 'active' && <ActiveView wid={wid} workout={workout} />}
     </div>
   );
 }
 
-function ExerciseCard({
-  ex,
-  onLog,
-  pending,
-}: {
-  ex: WorkoutExerciseResponse;
-  onLog: (setIndex: number, input: UpdateSetRequest) => void;
-  pending: boolean;
-}) {
-  return (
-    <section className="rounded-2xl bg-card p-4">
-      <h2 className="mb-2 text-[15px] font-semibold text-ink">{ex.exerciseName}</h2>
-      <ul className="flex flex-col gap-2">
-        {ex.sets.map((s) => (
-          <SetRow
-            key={s.setIndex}
-            set={s}
-            onLog={(input) => onLog(s.setIndex, input)}
-            pending={pending}
-          />
-        ))}
-      </ul>
-    </section>
-  );
-}
+/* ---------- Черновик: план + «Начать» + drag/add/remove/edit ---------- */
 
-function SetRow({
-  set,
-  onLog,
-  pending,
-}: {
-  set: WorkoutSetResponse;
-  onLog: (input: UpdateSetRequest) => void;
-  pending: boolean;
-}) {
-  const timeBased = set.plannedTimeSec !== null;
-  const [reps, setReps] = useState<string>(
-    set.actualReps !== null
-      ? String(set.actualReps)
-      : set.plannedReps !== null
-        ? String(set.plannedReps)
-        : '',
-  );
-  const [weight, setWeight] = useState<string>(
-    set.actualWeightKg !== null
-      ? String(set.actualWeightKg)
-      : set.plannedWeightKg !== null
-        ? String(set.plannedWeightKg)
-        : '',
-  );
-  const [time, setTime] = useState<string>(
-    set.actualTimeSec !== null
-      ? String(set.actualTimeSec)
-      : set.plannedTimeSec !== null
-        ? String(set.plannedTimeSec)
-        : '',
-  );
+function DraftView({ wid, workout }: { wid: string; workout: WorkoutResponse }) {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const updateSet = useUpdateWorkoutSet();
+  const addExercise = useAddWorkoutExercise();
+  const removeExercise = useRemoveWorkoutExercise();
+  const reorder = useReorderWorkoutExercises();
+  const start = useStartWorkout();
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
 
-  function log() {
-    const input: UpdateSetRequest = { done: true };
-    if (timeBased) {
-      input.actualTimeSec = numOrNull(time);
-    } else {
-      input.actualReps = numOrNull(reps);
-      input.actualWeightKg = numOrNull(weight);
-    }
-    onLog(input);
+  const labels = exerciseLabels(workout.exercises);
+  const items = workout.exercises.map((ex) => ({ ...ex, id: `ex-${String(ex.position)}` }));
+  const empty = workout.exercises.length === 0;
+
+  function savePlan(pos: number, set: WorkoutSetResponse, input: UpdateSetRequest) {
+    updateSet.mutate(
+      { wid, setId: `${String(pos)}:${String(set.setIndex)}`, input },
+      { onSuccess: () => setEditing(null) },
+    );
   }
 
   return (
-    <li
-      className={`flex items-center gap-2 rounded-xl px-2 py-2 ${
-        set.done ? 'bg-card-elevated' : ''
-      }`}
-    >
-      <span className="w-5 shrink-0 text-center text-[13px] font-semibold tabular-nums text-ink-muted">
-        {set.setIndex + 1}
-      </span>
-      {timeBased ? (
-        <input
-          type="number"
-          inputMode="numeric"
-          aria-label="Время, сек"
-          value={time}
-          onChange={(e) => setTime(e.target.value)}
-          className="min-w-0 flex-1 rounded-lg bg-card-elevated px-3 py-2 text-[15px] text-ink outline-none"
-          placeholder="сек"
+    <>
+      <h1 className="font-[family-name:var(--font-display)] text-[24px] text-ink">
+        {workout.name}
+      </h1>
+      <p className="-mt-2 text-[13px] text-ink-muted">
+        План тренировки. Нажмите «Начать», чтобы провести.
+      </p>
+
+      <SortableList
+        items={items}
+        onReorder={(next) => {
+          const order = next.map((it) => it.position);
+          qc.setQueryData(clientWorkoutQueryKey(wid), (prev?: WorkoutResponse) =>
+            prev ? withReordered(prev, order) : prev,
+          );
+          reorder.mutate({ wid, order });
+        }}
+        renderItem={(ex) => (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate text-[14px] font-semibold text-ink">
+                {labels.get(ex.position) ?? ex.exerciseName}
+              </span>
+              <HoldToDelete
+                icon="trash"
+                label="Удерживайте, чтобы убрать упражнение"
+                onDelete={() => removeExercise.mutate({ wid, pos: ex.position })}
+              />
+            </div>
+            {ex.sets.map((set) => {
+              const key = `${String(ex.position)}-${String(set.setIndex)}`;
+              return editing === key ? (
+                <PlannedSetEditor
+                  key={set.setIndex}
+                  set={set}
+                  onCancel={() => setEditing(null)}
+                  onSave={(input) => savePlan(ex.position, set, input)}
+                />
+              ) : (
+                <div key={set.setIndex} className="flex items-center justify-between gap-2">
+                  <span className="font-[family-name:var(--font-mono)] text-[19px] tabular-nums text-ink-muted">
+                    {plannedText(set)}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Изменить план"
+                    onClick={() => setEditing(key)}
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-95"
+                  >
+                    <Pencil size={16} strokeWidth={1.8} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      />
+
+      <AddExerciseButton onClick={() => setAdding(true)} />
+
+      <div className="fixed inset-x-0 bottom-0 mx-auto max-w-[430px] border-t border-card bg-bg px-4 py-3">
+        <button
+          type="button"
+          onClick={() =>
+            start.mutate(workout.id, {
+              onSuccess: (started) => void navigate(`/workouts/${started.id}/run`),
+            })
+          }
+          disabled={start.isPending || empty}
+          className="flex w-full items-center justify-center rounded-2xl bg-accent px-4 py-3 text-[15px] font-semibold text-accent-on active:opacity-90 disabled:opacity-50"
+        >
+          {start.isPending ? 'Запускаем…' : empty ? 'Добавьте упражнение' : 'Начать тренировку'}
+        </button>
+      </div>
+
+      {adding && (
+        <ExercisePickerSheet
+          pending={addExercise.isPending}
+          onClose={() => setAdding(false)}
+          onPick={(ex) =>
+            addExercise.mutate(
+              { wid, input: { exerciseId: ex.id, sets: [buildPlannedSet(ex)] } },
+              { onSuccess: () => setAdding(false) },
+            )
+          }
         />
-      ) : (
-        <>
-          <input
-            type="number"
-            inputMode="numeric"
-            aria-label="Повторы"
-            value={reps}
-            onChange={(e) => setReps(e.target.value)}
-            className="min-w-0 flex-1 rounded-lg bg-card-elevated px-3 py-2 text-[15px] text-ink outline-none"
-            placeholder="повт"
-          />
-          <input
-            type="number"
-            inputMode="decimal"
-            aria-label="Вес, кг"
-            value={weight}
-            onChange={(e) => setWeight(e.target.value)}
-            className="min-w-0 flex-1 rounded-lg bg-card-elevated px-3 py-2 text-[15px] text-ink outline-none"
-            placeholder="кг"
-          />
-        </>
       )}
+    </>
+  );
+}
+
+/* ---------- Активная: чек-лист + таймер + drag/add/remove + завершение ---------- */
+
+function ActiveView({ wid, workout }: { wid: string; workout: WorkoutResponse }) {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const updateSet = useUpdateWorkoutSet();
+  const complete = useCompleteWorkout();
+  const reorder = useReorderWorkoutExercises();
+  const addExercise = useAddWorkoutExercise();
+  const removeExercise = useRemoveWorkoutExercise();
+  const elapsed = useElapsed(workout.startedAt);
+
+  const [editing, setEditing] = useState<string | null>(null);
+  const [rest, setRest] = useState<{ key: string; sec: number } | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [doneExpanded, setDoneExpanded] = useState(false);
+
+  const finishWorkout = () =>
+    complete.mutate(
+      { wid, input: { durationSec: elapsed > 0 ? elapsed : null, rpe: null } },
+      { onSuccess: () => void navigate(`/workouts/${wid}`) },
+    );
+
+  const counters = useMemo(() => {
+    const all = workout.exercises.flatMap((e) => e.sets);
+    return { done: all.filter((s) => s.done).length, total: all.length };
+  }, [workout]);
+
+  const isDoneEx = (ex: WorkoutExerciseResponse) =>
+    ex.sets.length > 0 && ex.sets.every((s) => s.done);
+  const completed = workout.exercises.filter(isDoneEx);
+  const pending = workout.exercises.filter((ex) => !isDoneEx(ex));
+  const pendingItems = pending.map((ex) => ({ ...ex, id: `ex-${String(ex.position)}` }));
+  const visibleCompleted = doneExpanded ? completed : [];
+
+  function toggleDone(ex: WorkoutExerciseResponse, set: WorkoutSetResponse) {
+    const nextDone = !set.done;
+    const noActual =
+      set.actualReps === null && set.actualWeightKg === null && set.actualTimeSec === null;
+    const fillActual = nextDone && noActual;
+
+    const patch: Partial<WorkoutSetResponse> = { done: nextDone };
+    const input: UpdateSetRequest = { done: nextDone };
+    if (fillActual) {
+      patch.actualReps = set.plannedReps;
+      patch.actualWeightKg = set.plannedWeightKg;
+      patch.actualTimeSec = set.plannedTimeSec;
+      input.actualReps = set.plannedReps;
+      input.actualWeightKg = set.plannedWeightKg;
+      input.actualTimeSec = set.plannedTimeSec;
+    }
+
+    runWithTransition(() => {
+      qc.setQueryData(clientWorkoutQueryKey(wid), (prev?: WorkoutResponse) =>
+        prev ? withSetPatch(prev, ex.position, set.setIndex, patch) : prev,
+      );
+    });
+    updateSet.mutate({ wid, setId: `${String(ex.position)}:${String(set.setIndex)}`, input });
+    if (nextDone && set.plannedRestSec && set.plannedRestSec > 0) {
+      setRest({ key: `${String(ex.position)}-${String(set.setIndex)}`, sec: set.plannedRestSec });
+    }
+  }
+
+  function saveFact(ex: WorkoutExerciseResponse, set: WorkoutSetResponse, input: UpdateSetRequest) {
+    updateSet.mutate(
+      {
+        wid,
+        setId: `${String(ex.position)}:${String(set.setIndex)}`,
+        input: { ...input, done: true },
+      },
+      {
+        onSuccess: () => {
+          setEditing(null);
+          if (set.plannedRestSec && set.plannedRestSec > 0) {
+            setRest({
+              key: `${String(ex.position)}-${String(set.setIndex)}`,
+              sec: set.plannedRestSec,
+            });
+          }
+        },
+      },
+    );
+  }
+
+  const labels = exerciseLabels(workout.exercises);
+  const cardBody = (ex: WorkoutExerciseResponse) => (
+    <ul
+      className="flex flex-col gap-2"
+      style={{ viewTransitionName: `wex-${String(ex.position)}` }}
+    >
+      {ex.sets.map((set) => {
+        const key = `${String(ex.position)}-${String(set.setIndex)}`;
+        const isEditing = editing === key;
+        const hasFact =
+          set.actualReps !== null || set.actualWeightKg !== null || set.actualTimeSec !== null;
+        return (
+          <li key={key} className="flex flex-col gap-2 px-0.5 py-1">
+            <span className="truncate text-[14px] font-semibold text-ink">
+              {labels.get(ex.position) ?? ex.exerciseName}
+            </span>
+            {isEditing ? (
+              <SetEditor
+                set={set}
+                onCancel={() => setEditing(null)}
+                onSave={(input) => saveFact(ex, set, input)}
+                onDelete={() => {
+                  setEditing(null);
+                  removeExercise.mutate({ wid, pos: ex.position });
+                }}
+              />
+            ) : (
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-[family-name:var(--font-mono)] text-[19px] tabular-nums text-ink-muted">
+                  {hasFact ? actualText(set) : plannedText(set)}
+                </span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label="Изменить факт"
+                    onClick={() => setEditing(key)}
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-95"
+                  >
+                    <Pencil size={16} strokeWidth={1.8} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={set.done ? 'Снять отметку' : 'Отметить выполненным'}
+                    onClick={() => toggleDone(ex, set)}
+                    className={`flex h-10 w-10 items-center justify-center rounded-full active:scale-95 ${
+                      set.done ? 'bg-accent text-accent-on' : 'bg-card-elevated text-ink-muted'
+                    }`}
+                  >
+                    <Check size={18} strokeWidth={2.6} />
+                  </button>
+                </span>
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+
+  return (
+    <>
+      <h1 className="font-[family-name:var(--font-display)] text-[24px] text-ink">
+        {workout.name}
+      </h1>
+
+      {/* Сводка: слева — прошедшее время; справа — отдых либо завершение удержанием. */}
+      <div className="tile-shadow-primary flex items-center justify-between gap-3 rounded-2xl px-4 py-3">
+        <span className="flex shrink-0 flex-col">
+          <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.06em] opacity-70">
+            Прошло
+          </span>
+          <span className="text-2xl font-bold tabular-nums leading-tight">
+            {formatDuration(elapsed)}
+          </span>
+        </span>
+        {rest ? (
+          <RestTimer
+            key={rest.key}
+            seconds={rest.sec}
+            onDone={() => setRest(null)}
+            onSkip={() => setRest(null)}
+          />
+        ) : (
+          <HoldComplete pending={complete.isPending} onComplete={finishWorkout} />
+        )}
+      </div>
+
+      {/* Коллектор завершённых: свёрнуто — только счётчик, развёрнуто — все. */}
+      <div className="flex flex-col gap-2">
+        <button
+          type="button"
+          onClick={() => setDoneExpanded((v) => !v)}
+          className="flex items-center justify-between gap-2 rounded-xl bg-card px-3.5 py-3"
+        >
+          <span className="font-[family-name:var(--font-mono)] text-[13px] font-semibold uppercase tracking-[0.06em] text-ink-muted">
+            Завершено · {completed.length}
+          </span>
+          <span className="flex items-center gap-2.5">
+            <span className="font-[family-name:var(--font-mono)] text-[13px] font-semibold tabular-nums text-ink">
+              {counters.done} / {counters.total}
+              <span className="ml-1 text-[10px] font-medium uppercase tracking-[0.06em] text-ink-mutedxl">
+                подходов
+              </span>
+            </span>
+            <ChevronDown
+              size={18}
+              className={`text-ink-muted transition-transform ${doneExpanded ? 'rotate-180' : ''}`}
+            />
+          </span>
+        </button>
+        {visibleCompleted.map((ex) => (
+          <div key={ex.position} className="shelf rounded-2xl px-3 py-1 opacity-80">
+            {cardBody(ex)}
+          </div>
+        ))}
+      </div>
+
+      {pendingItems.length > 0 && (
+        <SortableList
+          items={pendingItems}
+          onReorder={(next) => {
+            const order = [...completed.map((c) => c.position), ...next.map((it) => it.position)];
+            qc.setQueryData(clientWorkoutQueryKey(wid), (prev?: WorkoutResponse) =>
+              prev ? withReordered(prev, order) : prev,
+            );
+            reorder.mutate({ wid, order });
+          }}
+          renderItem={(ex) => cardBody(ex)}
+        />
+      )}
+
+      <AddExerciseButton onClick={() => setAdding(true)} />
+
+      {/* Все подходы выполнены — большая кнопка завершения. */}
+      {workout.exercises.length > 0 && pending.length === 0 && (
+        <HoldComplete variant="block" pending={complete.isPending} onComplete={finishWorkout} />
+      )}
+
+      {adding && (
+        <ExercisePickerSheet
+          pending={addExercise.isPending}
+          onClose={() => setAdding(false)}
+          onPick={(ex) =>
+            addExercise.mutate(
+              { wid, input: { exerciseId: ex.id, sets: [buildPlannedSet(ex)] } },
+              { onSuccess: () => setAdding(false) },
+            )
+          }
+        />
+      )}
+    </>
+  );
+}
+
+function AddExerciseButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line py-3.5 text-[13px] font-semibold text-ink-muted active:bg-card-elevated"
+    >
+      <Plus size={16} strokeWidth={2.2} /> Добавить упражнение
+    </button>
+  );
+}
+
+/* ---------- Редактор факта подхода (active) ---------- */
+
+function SetEditor({
+  set,
+  onCancel,
+  onSave,
+  onDelete,
+}: {
+  set: WorkoutSetResponse;
+  onCancel: () => void;
+  onSave: (input: UpdateSetRequest) => void;
+  onDelete: () => void;
+}) {
+  const showReps = set.plannedReps !== null || set.plannedWeightKg !== null;
+  const showWeight = set.plannedWeightKg !== null;
+  const showTime = set.plannedTimeSec !== null;
+  const [reps, setReps] = useState(String(set.actualReps ?? set.plannedReps ?? ''));
+  const [weight, setWeight] = useState(String(set.actualWeightKg ?? set.plannedWeightKg ?? ''));
+  const [time, setTime] = useState(String(set.actualTimeSec ?? set.plannedTimeSec ?? ''));
+  const repsShown = showReps || (!showWeight && !showTime);
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex flex-1 items-center gap-2">
+        {repsShown && <NumBox value={reps} onChange={setReps} ariaLabel="повторы" />}
+        {showWeight && (
+          <>
+            <span className="font-[family-name:var(--font-mono)] text-[14px] text-ink-muted">
+              ×
+            </span>
+            <NumBox value={weight} onChange={setWeight} ariaLabel="вес" />
+          </>
+        )}
+        {showTime && (
+          <>
+            {repsShown && (
+              <span className="font-[family-name:var(--font-mono)] text-[14px] text-ink-muted">
+                ·
+              </span>
+            )}
+            <NumBox value={time} onChange={setTime} ariaLabel="секунды" />
+          </>
+        )}
+      </div>
       <button
         type="button"
-        onClick={log}
-        disabled={pending}
-        aria-label="Готово"
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-50 ${
-          set.done ? 'bg-accent text-accent-on' : 'bg-card-elevated text-ink-muted'
-        }`}
+        aria-label="Сохранить подход"
+        onClick={() =>
+          onSave({
+            actualReps: repsShown ? num(reps) : null,
+            actualWeightKg: showWeight ? num(weight) : null,
+            actualTimeSec: showTime ? num(time) : null,
+          })
+        }
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-on active:scale-90"
       >
-        <Check size={18} />
+        <Check size={18} strokeWidth={2.8} />
       </button>
-    </li>
+      <button
+        type="button"
+        aria-label="Отменить"
+        onClick={onCancel}
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-90"
+      >
+        <X size={18} strokeWidth={2.2} />
+      </button>
+      <HoldToDelete
+        icon="trash"
+        size="sm"
+        label="Удерживайте, чтобы удалить упражнение"
+        onDelete={onDelete}
+      />
+    </div>
+  );
+}
+
+/* ---------- Редактор плановых значений подхода (draft) ---------- */
+
+function PlannedSetEditor({
+  set,
+  onCancel,
+  onSave,
+}: {
+  set: WorkoutSetResponse;
+  onCancel: () => void;
+  onSave: (input: UpdateSetRequest) => void;
+}) {
+  const showReps = set.plannedReps !== null || set.plannedWeightKg !== null;
+  const showWeight = set.plannedWeightKg !== null;
+  const showTime = set.plannedTimeSec !== null;
+  const [reps, setReps] = useState(String(set.plannedReps ?? ''));
+  const [weight, setWeight] = useState(String(set.plannedWeightKg ?? ''));
+  const [time, setTime] = useState(String(set.plannedTimeSec ?? ''));
+  const repsShown = showReps || (!showWeight && !showTime);
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex flex-1 items-center gap-2">
+        {repsShown && <NumBox value={reps} onChange={setReps} ariaLabel="повторы" />}
+        {showWeight && (
+          <>
+            <span className="font-[family-name:var(--font-mono)] text-[14px] text-ink-muted">
+              ×
+            </span>
+            <NumBox value={weight} onChange={setWeight} ariaLabel="вес" />
+          </>
+        )}
+        {showTime && (
+          <>
+            {repsShown && (
+              <span className="font-[family-name:var(--font-mono)] text-[14px] text-ink-muted">
+                ·
+              </span>
+            )}
+            <NumBox value={time} onChange={setTime} ariaLabel="секунды" />
+          </>
+        )}
+      </div>
+      <button
+        type="button"
+        aria-label="Сохранить подход"
+        onClick={() =>
+          onSave({
+            plannedReps: repsShown ? num(reps) : null,
+            plannedWeightKg: showWeight ? num(weight) : null,
+            plannedTimeSec: showTime ? num(time) : null,
+          })
+        }
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-on active:scale-90"
+      >
+        <Check size={18} strokeWidth={2.8} />
+      </button>
+      <button
+        type="button"
+        aria-label="Отменить"
+        onClick={onCancel}
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-90"
+      >
+        <X size={18} strokeWidth={2.2} />
+      </button>
+    </div>
+  );
+}
+
+function NumBox({
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <label className="flex h-10 min-w-0 flex-1 items-center rounded-lg border border-line bg-chip px-2 focus-within:border-accent">
+      <input
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={ariaLabel}
+        className="w-full min-w-0 bg-transparent text-center font-[family-name:var(--font-mono)] text-[15px] tabular-nums text-ink outline-none"
+      />
+    </label>
+  );
+}
+
+/* ---------- Таймер отдыха ---------- */
+
+function RestTimer({
+  seconds,
+  onDone,
+  onSkip,
+}: {
+  seconds: number;
+  onDone: () => void;
+  onSkip: () => void;
+}) {
+  const [left, setLeft] = useState(seconds);
+  const doneRef = useRef(onDone);
+  doneRef.current = onDone;
+
+  useEffect(() => {
+    setLeft(seconds);
+    const id = window.setInterval(() => {
+      setLeft((prev) => {
+        if (prev <= 1) {
+          window.clearInterval(id);
+          doneRef.current();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [seconds]);
+
+  const progress = seconds > 0 ? left / seconds : 0;
+  const C = 2 * Math.PI * 16;
+
+  return (
+    <div className="flex min-w-0 items-center gap-2 rounded-full bg-black/10 px-2 py-1">
+      <span className="relative flex h-9 w-9 shrink-0 items-center justify-center">
+        <svg aria-hidden viewBox="0 0 36 36" className="absolute inset-0 h-full w-full -rotate-90">
+          <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(11,12,16,0.25)" strokeWidth="3" />
+          <circle
+            cx="18"
+            cy="18"
+            r="16"
+            fill="none"
+            stroke="var(--color-accent-on)"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeDasharray={C}
+            strokeDashoffset={C * (1 - progress)}
+            style={{ transition: 'stroke-dashoffset 1s linear' }}
+          />
+        </svg>
+        <span className="font-[family-name:var(--font-mono)] text-[11px] font-bold tabular-nums text-accent-on">
+          {left}
+        </span>
+      </span>
+      <span className="truncate text-[13px] font-semibold text-accent-on">Отдых</span>
+      <button
+        type="button"
+        aria-label="Отменить отдых"
+        onClick={onSkip}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/10 text-accent-on active:scale-90"
+      >
+        <X size={18} strokeWidth={2.2} />
+      </button>
+    </div>
+  );
+}
+
+/* ---------- Завершение удержанием ---------- */
+
+const HOLD_COMPLETE_MS = 1000;
+
+function HoldComplete({
+  pending,
+  onComplete,
+  variant = 'pill',
+}: {
+  pending: boolean;
+  onComplete: () => void;
+  variant?: 'pill' | 'block';
+}) {
+  const [holding, setHolding] = useState(false);
+  const timer = useRef<number | null>(null);
+
+  function clear() {
+    if (timer.current !== null) {
+      window.clearTimeout(timer.current);
+      timer.current = null;
+    }
+  }
+  function start() {
+    if (pending) return;
+    setHolding(true);
+    clear();
+    timer.current = window.setTimeout(() => {
+      setHolding(false);
+      timer.current = null;
+      onComplete();
+    }, HOLD_COMPLETE_MS);
+  }
+  function cancel() {
+    clear();
+    setHolding(false);
+  }
+
+  return (
+    <button
+      type="button"
+      aria-label="Удерживайте, чтобы завершить"
+      disabled={pending}
+      onPointerDown={start}
+      onPointerUp={cancel}
+      onPointerLeave={cancel}
+      onPointerCancel={cancel}
+      onContextMenu={(e) => e.preventDefault()}
+      style={{
+        ['--hold-p' as string]: holding ? '100%' : '0%',
+        transition: holding
+          ? `--hold-p ${String(HOLD_COMPLETE_MS)}ms linear`
+          : '--hold-p 160ms linear',
+      }}
+      className={`hold-ring relative flex touch-none select-none items-center justify-center disabled:opacity-50 ${
+        variant === 'block'
+          ? 'h-12 w-full rounded-2xl bg-accent text-accent-on'
+          : 'h-10 rounded-full bg-black/10 px-5 text-accent-on'
+      }`}
+    >
+      <span className="text-[14px] font-medium">Завершить</span>
+    </button>
+  );
+}
+
+/* ---------- Лист выбора упражнения из каталога ---------- */
+
+function ExercisePickerSheet({
+  pending,
+  onClose,
+  onPick,
+}: {
+  pending: boolean;
+  onClose: () => void;
+  onPick: (exercise: ExerciseResponse) => void;
+}) {
+  const exercises = useClientExercises();
+  const [query, setQuery] = useState('');
+  const list = exercises.data ?? [];
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (q === '') return list;
+    return list.filter((e) => e.name.toLowerCase().includes(q));
+  }, [list, query]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col">
+      <button
+        type="button"
+        aria-label="Закрыть"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/60"
+      />
+      <div className="relative z-10 flex items-center justify-end px-5 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Закрыть"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-card-elevated text-ink active:scale-95"
+        >
+          <X size={20} strokeWidth={1.8} />
+        </button>
+      </div>
+      <div className="relative z-10 flex flex-1 flex-col overflow-hidden rounded-t-3xl bg-bg pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <h2 className="px-5 pb-2 pt-4 text-[16px] font-bold text-ink">Добавить упражнение</h2>
+
+        <div className="px-5 pb-2">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Поиск упражнения"
+            className="w-full rounded-2xl bg-card px-4 py-2.5 text-[14px] text-ink outline-none placeholder:text-ink-muted"
+          />
+        </div>
+
+        <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-5 pt-1">
+          {exercises.isLoading && <p className="text-sm text-ink-muted">Загрузка…</p>}
+          {exercises.isError && (
+            <p className="text-sm text-ink-muted" role="alert">
+              Не удалось загрузить каталог.
+            </p>
+          )}
+          {exercises.isSuccess && filtered.length === 0 && (
+            <p className="text-sm text-ink-muted">Ничего не найдено.</p>
+          )}
+          {filtered.map((ex) => (
+            <button
+              key={ex.id}
+              type="button"
+              disabled={pending}
+              onClick={() => onPick(ex)}
+              className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3 text-left transition-colors active:bg-card-elevated disabled:opacity-50"
+            >
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="truncate text-[15px] font-semibold text-ink">{ex.name}</span>
+                {(ex.category || ex.subgroup) && (
+                  <span className="font-[family-name:var(--font-mono)] text-[12px] text-ink-muted">
+                    {[ex.category, ex.subgroup].filter(Boolean).join(' · ')}
+                  </span>
+                )}
+              </span>
+              <ChevronRight size={16} className="shrink-0 text-ink-mutedxl" />
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
