@@ -15,7 +15,7 @@ describe('client-workouts schemas', () => {
     expect(() => workoutStatusSchema.parse('paused')).toThrow();
   });
 
-  it('create тримит name и требует хотя бы одно упражнение с подходами', () => {
+  it('create тримит name и принимает упражнения с подходами', () => {
     const r = createWorkoutRequestSchema.parse({
       name: '  Тренировка А  ',
       exercises: [{ exerciseId: 'ex1', sets: [{ plannedReps: 10, plannedWeightKg: 60 }] }],
@@ -44,8 +44,9 @@ describe('client-workouts schemas', () => {
     ).toThrow();
   });
 
-  it('create отклоняет пустой список упражнений', () => {
-    expect(() => createWorkoutRequestSchema.parse({ name: 'X', exercises: [] })).toThrow();
+  it('create допускает пустой список упражнений (пустая тренировка)', () => {
+    const r = createWorkoutRequestSchema.parse({ name: 'X', exercises: [] });
+    expect(r.exercises).toHaveLength(0);
   });
 
   it('create отклоняет упражнение без подходов', () => {

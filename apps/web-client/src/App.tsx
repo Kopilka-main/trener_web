@@ -7,7 +7,6 @@ import { RegisterPage } from './pages/RegisterPage';
 import { ConnectPage } from './pages/ConnectPage';
 import { HomePage } from './pages/HomePage';
 import { WorkoutsListPage } from './pages/WorkoutsListPage';
-import { CreateWorkoutPage } from './pages/CreateWorkoutPage';
 import { RunWorkoutPage } from './pages/RunWorkoutPage';
 import { WorkoutDetailPage } from './pages/WorkoutDetailPage';
 import { ProfilePage } from './pages/ProfilePage';
@@ -52,7 +51,6 @@ export function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/workouts" element={<WorkoutsListPage />} />
-          <Route path="/workouts/new" element={<CreateWorkoutPage />} />
           <Route path="/workouts/:wid/run" element={<RunWorkoutPage />} />
           <Route path="/workouts/:wid" element={<WorkoutDetailPage />} />
           <Route path="/calendar" element={<CalendarPage />} />

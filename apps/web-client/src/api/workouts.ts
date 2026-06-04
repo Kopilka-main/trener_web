@@ -1,9 +1,12 @@
 import {
+  addWorkoutExerciseRequestSchema,
   completeWorkoutRequestSchema,
   createWorkoutRequestSchema,
+  reorderWorkoutExercisesRequestSchema,
   updateSetRequestSchema,
   workoutListResponseSchema,
   workoutResponseSchema,
+  type AddWorkoutExerciseRequest,
   type CompleteWorkoutRequest,
   type CreateWorkoutRequest,
   type UpdateSetRequest,
@@ -99,6 +102,53 @@ export function useUpdateWorkoutSet() {
       apiFetch(`/client/workouts/${wid}/sets/${setId}`, {
         method: 'PATCH',
         body: updateSetRequestSchema.parse(input),
+        schema: workoutWrap,
+      }).then((r) => r.workout),
+    onSuccess: (workout) => {
+      invalidate(workout.id);
+    },
+  });
+}
+
+/** Добавить упражнение в свою тренировку (одна позиция: exerciseId + подходы). */
+export function useAddWorkoutExercise() {
+  const invalidate = useInvalidateWorkouts();
+  return useMutation<WorkoutResponse, ApiError, { wid: string; input: AddWorkoutExerciseRequest }>({
+    mutationFn: ({ wid, input }) =>
+      apiFetch(`/client/workouts/${wid}/exercises`, {
+        method: 'POST',
+        body: addWorkoutExerciseRequestSchema.parse(input),
+        schema: workoutWrap,
+      }).then((r) => r.workout),
+    onSuccess: (workout) => {
+      invalidate(workout.id);
+    },
+  });
+}
+
+/** Переставить упражнения своей тренировки (order — старые position в новом порядке). */
+export function useReorderWorkoutExercises() {
+  const invalidate = useInvalidateWorkouts();
+  return useMutation<WorkoutResponse, ApiError, { wid: string; order: number[] }>({
+    mutationFn: ({ wid, order }) =>
+      apiFetch(`/client/workouts/${wid}/exercises`, {
+        method: 'PATCH',
+        body: reorderWorkoutExercisesRequestSchema.parse({ order }),
+        schema: workoutWrap,
+      }).then((r) => r.workout),
+    onSuccess: (workout) => {
+      invalidate(workout.id);
+    },
+  });
+}
+
+/** Убрать упражнение из своей тренировки по позиции. */
+export function useRemoveWorkoutExercise() {
+  const invalidate = useInvalidateWorkouts();
+  return useMutation<WorkoutResponse, ApiError, { wid: string; pos: number }>({
+    mutationFn: ({ wid, pos }) =>
+      apiFetch(`/client/workouts/${wid}/exercises/${String(pos)}`, {
+        method: 'DELETE',
         schema: workoutWrap,
       }).then((r) => r.workout),
     onSuccess: (workout) => {

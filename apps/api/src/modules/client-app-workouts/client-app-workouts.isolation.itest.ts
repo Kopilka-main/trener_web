@@ -159,6 +159,117 @@ describe.skipIf(!url)('client-app-workouts (isolation)', () => {
     expect(crossDetail.statusCode).toBe(404);
   });
 
+  it('пустая своя тренировка: add/remove упражнения; тренерскую править нельзя', async () => {
+    // Тренер + клиентский аккаунт + связь + видимое упражнение.
+    const regT = await app.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: { email: 'tr2@b.co', password: 'longenough1', firstName: 'T', lastName: 'R' },
+    });
+    const cookieT = trainerCookie(regT);
+    const regC = await app.inject({
+      method: 'POST',
+      url: '/api/client/auth/register',
+      payload: { email: 'wc@b.co', password: 'longenough1', firstName: 'C', lastName: 'K' },
+    });
+    const accCId = regC.json<{ account: { id: string } }>().account.id;
+    const cookieC = clientCookie(regC);
+    const cli = await app.inject({
+      method: 'POST',
+      url: '/api/clients',
+      headers: { cookie: cookieT },
+      payload: { firstName: 'Це', lastName: 'Ка', accountId: accCId },
+    });
+    const clientId = cli.json<{ client: { id: string } }>().client.id;
+    const ex = await app.inject({
+      method: 'POST',
+      url: '/api/exercises',
+      headers: { cookie: cookieT },
+      payload: { name: 'Присед', category: 'Ноги' },
+    });
+    const exerciseId = ex.json<{ exercise: { id: string } }>().exercise.id;
+
+    // Клиент создаёт ПУСТУЮ тренировку.
+    const create = await app.inject({
+      method: 'POST',
+      url: '/api/client/workouts',
+      headers: { cookie: cookieC },
+      payload: { name: 'Своя пустая', exercises: [] },
+    });
+    expect(create.statusCode).toBe(201);
+    const wid = create.json<{ workout: { id: string; exercises: unknown[] } }>().workout.id;
+    expect(create.json<{ workout: { exercises: unknown[] } }>().workout.exercises).toHaveLength(0);
+
+    // Добавляет упражнение.
+    const add = await app.inject({
+      method: 'POST',
+      url: `/api/client/workouts/${wid}/exercises`,
+      headers: { cookie: cookieC },
+      payload: { exerciseId, sets: [{ plannedReps: 10, plannedWeightKg: 40 }] },
+    });
+    expect(add.statusCode).toBe(200);
+    expect(add.json<{ workout: { exercises: unknown[] } }>().workout.exercises).toHaveLength(1);
+
+    // Добавляет второе упражнение и переставляет местами (reorder).
+    await app.inject({
+      method: 'POST',
+      url: `/api/client/workouts/${wid}/exercises`,
+      headers: { cookie: cookieC },
+      payload: { exerciseId, sets: [{ plannedReps: 12 }] },
+    });
+    const reorder = await app.inject({
+      method: 'PATCH',
+      url: `/api/client/workouts/${wid}/exercises`,
+      headers: { cookie: cookieC },
+      payload: { order: [1, 0] },
+    });
+    expect(reorder.statusCode).toBe(200);
+    expect(reorder.json<{ workout: { exercises: unknown[] } }>().workout.exercises).toHaveLength(2);
+
+    // Убирает упражнение по позиции 0 (после reorder), затем второе.
+    const del = await app.inject({
+      method: 'DELETE',
+      url: `/api/client/workouts/${wid}/exercises/0`,
+      headers: { cookie: cookieC },
+    });
+    expect(del.statusCode).toBe(200);
+    expect(del.json<{ workout: { exercises: unknown[] } }>().workout.exercises).toHaveLength(1);
+    await app.inject({
+      method: 'DELETE',
+      url: `/api/client/workouts/${wid}/exercises/0`,
+      headers: { cookie: cookieC },
+    });
+
+    // Тренерскую тренировку клиент править не может (ownedByClientOnly → 404).
+    const wkT = await app.inject({
+      method: 'POST',
+      url: `/api/clients/${clientId}/workouts`,
+      headers: { cookie: cookieT },
+      payload: { name: 'Тренерская', exercises: [{ exerciseId, sets: [{ plannedReps: 8 }] }] },
+    });
+    const widT = wkT.json<{ workout: { id: string } }>().workout.id;
+    const addToTrainer = await app.inject({
+      method: 'POST',
+      url: `/api/client/workouts/${widT}/exercises`,
+      headers: { cookie: cookieC },
+      payload: { exerciseId, sets: [{ plannedReps: 5 }] },
+    });
+    expect(addToTrainer.statusCode).toBe(404);
+    const delFromTrainer = await app.inject({
+      method: 'DELETE',
+      url: `/api/client/workouts/${widT}/exercises/0`,
+      headers: { cookie: cookieC },
+    });
+    expect(delFromTrainer.statusCode).toBe(404);
+    const reorderTrainer = await app.inject({
+      method: 'PATCH',
+      url: `/api/client/workouts/${widT}/exercises`,
+      headers: { cookie: cookieC },
+      payload: { order: [0] },
+    });
+    expect(reorderTrainer.statusCode).toBe(404);
+  });
+
   it('без сессии → 401', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/client/workouts' });
     expect(res.statusCode).toBe(401);

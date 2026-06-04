@@ -290,13 +290,16 @@ export function makeClientWorkoutsRepo(db: Db) {
           status: 'draft',
           createdByClient,
         });
-        await tx.insert(clientWorkoutExercises).values(
-          plan.exercises.map((ex, position) => ({
-            workoutId: plan.id,
-            position,
-            exerciseId: ex.exerciseId,
-          })),
-        );
+        // Пустая тренировка (exercises: []) допустима — клиент наполняет её позже.
+        if (plan.exercises.length > 0) {
+          await tx.insert(clientWorkoutExercises).values(
+            plan.exercises.map((ex, position) => ({
+              workoutId: plan.id,
+              position,
+              exerciseId: ex.exerciseId,
+            })),
+          );
+        }
         const setValues = plan.exercises.flatMap((ex, position) =>
           ex.sets.map((s, setIndex) => ({
             workoutId: plan.id,

@@ -26,7 +26,9 @@ export type WorkoutExercisePlan = z.infer<typeof workoutExercisePlanSchema>;
 export const createWorkoutRequestSchema = z.object({
   name,
   sourceTemplateId: z.string().nullish(),
-  exercises: z.array(workoutExercisePlanSchema).min(1),
+  // Допускаем пустой список: клиент создаёт пустую тренировку и наполняет её
+  // упражнениями уже на странице проведения (как тренер в ActiveWorkout).
+  exercises: z.array(workoutExercisePlanSchema),
 });
 export type CreateWorkoutRequest = z.infer<typeof createWorkoutRequestSchema>;
 

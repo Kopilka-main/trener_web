@@ -232,7 +232,13 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
       clientId: string,
       workoutId: string,
       pos: number,
+      opts: { ownedByClientOnly?: boolean } = {},
     ): Promise<WorkoutResponse> {
+      // Клиент правит только свои тренировки: тренерскую трогать нельзя (404).
+      if (opts.ownedByClientOnly) {
+        const existing = await repo.getFull(trainerId, clientId, workoutId);
+        if (!existing || !existing.createdByClient) throw notFound('Тренировка не найдена');
+      }
       const res = await repo.removeExercise(trainerId, clientId, workoutId, pos);
       if (res === null) throw notFound('Тренировка не найдена');
       if (res === 'not_found_pos') throw notFound('Упражнение не найдено');
@@ -245,7 +251,13 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
       clientId: string,
       workoutId: string,
       order: number[],
+      opts: { ownedByClientOnly?: boolean } = {},
     ): Promise<WorkoutResponse> {
+      // Клиент правит только свои тренировки: тренерскую трогать нельзя (404).
+      if (opts.ownedByClientOnly) {
+        const existing = await repo.getFull(trainerId, clientId, workoutId);
+        if (!existing || !existing.createdByClient) throw notFound('Тренировка не найдена');
+      }
       const res = await repo.reorderExercises(trainerId, clientId, workoutId, order);
       if (res === null) throw notFound('Тренировка не найдена');
       if (res === 'bad_order')

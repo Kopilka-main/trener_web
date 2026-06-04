@@ -22,6 +22,34 @@ body,
   -ms-overflow-style: none;
 }
 
+/* Прогресс-рамка «удержания»: заполняется по периметру кнопки за время удержания.
+   Анимируем угол conic-gradient через регистрируемое свойство --hold-p. */
+@property --hold-p {
+  syntax: '<percentage>';
+  inherits: true;
+  initial-value: 0%;
+}
+.hold-ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2.5px;
+  background: conic-gradient(currentColor var(--hold-p, 0%), transparent 0);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Плавный морфинг при перемещении карточек (View Transitions API). */
+::view-transition-group(*) {
+  animation-duration: 420ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 body {
   margin: 0;
   font-family: var(--font-sans);

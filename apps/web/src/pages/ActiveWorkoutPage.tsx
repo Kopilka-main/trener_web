@@ -480,7 +480,10 @@ function ActiveView({
           </span>
 
           {rest ? (
+            // key по подходу: новый отдых перемонтирует таймер и сбрасывает отсчёт,
+            // даже если длительность та же (иначе useEffect[seconds] не сработает).
             <RestTimer
+              key={rest.key}
               seconds={rest.sec}
               onDone={() => setRest(null)}
               onSkip={() => setRest(null)}
