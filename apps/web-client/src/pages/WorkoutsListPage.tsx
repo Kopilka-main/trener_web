@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, ChevronUp, Play, Plus, RotateCcw, X } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronUp, Play, Plus, RotateCcw } from 'lucide-react';
 import type { WorkoutExercisePlan, WorkoutResponse, WorkoutSetResponse } from '@trener/shared';
 import { useClientMe } from '../api/auth';
 import { useClientWorkouts, useCreateWorkout } from '../api/workouts';
@@ -466,14 +466,14 @@ function TemplatePickerSheet({
         onClick={onClose}
         className="absolute inset-0 bg-black/60"
       />
-      <div className="relative z-10 flex items-center justify-end px-5 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
+      <div className="relative z-10 flex items-center justify-start px-5 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <button
           type="button"
           onClick={onClose}
-          aria-label="Закрыть"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-card-elevated text-ink active:scale-95"
+          aria-label="Назад"
+          className="flex items-center gap-1 rounded-full bg-card-elevated py-2 pl-2 pr-3 text-[14px] font-medium text-ink active:scale-95"
         >
-          <X size={20} strokeWidth={1.8} />
+          <ChevronLeft size={20} strokeWidth={2} /> Назад
         </button>
       </div>
       <div className="relative z-10 flex flex-1 flex-col overflow-hidden rounded-t-3xl bg-bg pb-[max(1rem,env(safe-area-inset-bottom))]">
@@ -543,14 +543,14 @@ function HistoryPickerSheet({
         onClick={onClose}
         className="absolute inset-0 bg-black/60"
       />
-      <div className="relative z-10 flex items-center justify-end px-5 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
+      <div className="relative z-10 flex items-center justify-start px-5 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <button
           type="button"
           onClick={onClose}
-          aria-label="Закрыть"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-card-elevated text-ink active:scale-95"
+          aria-label="Назад"
+          className="flex items-center gap-1 rounded-full bg-card-elevated py-2 pl-2 pr-3 text-[14px] font-medium text-ink active:scale-95"
         >
-          <X size={20} strokeWidth={1.8} />
+          <ChevronLeft size={20} strokeWidth={2} /> Назад
         </button>
       </div>
       <div className="relative z-10 flex flex-1 flex-col overflow-hidden rounded-t-3xl bg-bg pb-[max(1rem,env(safe-area-inset-bottom))]">
