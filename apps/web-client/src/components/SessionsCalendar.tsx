@@ -209,6 +209,14 @@ function ConfirmMark({ value }: { value: SessionResponse['clientConfirmation'] }
   return null;
 }
 
+/** Текстовый статус занятия для клиента: отмена тренером важнее статуса подтверждения. */
+function clientStatusLabel(s: SessionResponse): string {
+  if (s.status === 'cancelled') return 'Отменено тренером';
+  if (s.clientConfirmation === 'confirmed') return 'Подтверждено';
+  if (s.clientConfirmation === 'declined') return 'Вы отклонили';
+  return 'Ожидает подтверждения';
+}
+
 /** Сессии конкретного дня, отсортированы по времени. */
 function sessionsOf(sessions: SessionResponse[], d: Date): SessionResponse[] {
   const iso = toISODate(d);
@@ -406,6 +414,11 @@ function DayView({
                   </span>
                   <ConfirmMark value={s.clientConfirmation} />
                 </div>
+                {height >= 48 && (
+                  <div className="truncate text-[10px] font-semibold opacity-90">
+                    {clientStatusLabel(s)}
+                  </div>
+                )}
                 <div className="truncate font-[family-name:var(--font-mono)] text-[11px] opacity-80">
                   {[`${s.startTime}–${endTime(s.startTime, s.durationMin)}`, s.location]
                     .filter(Boolean)

@@ -73,7 +73,9 @@ export function CalendarPage() {
 
 function SessionSheet({ session, onClose }: { session: SessionResponse; onClose: () => void }) {
   const confirm = useConfirmSession();
+  const cancelled = session.status === 'cancelled';
   const past = isPast(session);
+  const statusLabel = cancelled ? 'Отменено тренером' : CONFIRM_LABEL[session.clientConfirmation];
   const d = parseISO(session.date);
   const dateLabel = `${String(d.getDate())} ${MONTH_GEN[d.getMonth()]}`;
   const timeLabel = `${session.startTime}–${endTime(session.startTime, session.durationMin)}`;
@@ -119,10 +121,10 @@ function SessionSheet({ session, onClose }: { session: SessionResponse; onClose:
         </div>
 
         <div className="rounded-2xl bg-card px-4 py-3 text-[13px] font-semibold text-ink-muted">
-          {CONFIRM_LABEL[session.clientConfirmation]}
+          {statusLabel}
         </div>
 
-        {!past && (
+        {!past && !cancelled && (
           <div className="flex gap-2">
             <button
               type="button"

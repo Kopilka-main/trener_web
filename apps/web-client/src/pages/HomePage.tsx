@@ -183,7 +183,7 @@ export function HomePage() {
   ];
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-[100dvh] flex-col">
       <div className="relative flex flex-1 flex-col overflow-hidden px-5 pb-5 pt-2">
         <div className="font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--color-ink-mutedxl)]">
           {dateLabel}
