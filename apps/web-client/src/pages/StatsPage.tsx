@@ -5,6 +5,7 @@ import type {
   MeasurementResponse,
   WorkoutResponse,
 } from '@trener/shared';
+import { BackBar } from '../components/BackBar';
 import { HoldToDelete } from '../components/HoldToDelete';
 import { LineChart, type LineChartPoint } from '../components/LineChart';
 import { useClientMe } from '../api/auth';
@@ -39,7 +40,10 @@ export function StatsPage() {
 
   return (
     <div className="flex min-h-full flex-col">
-      <h1 className="px-4 pt-5 font-[family-name:var(--font-display)] text-[24px] text-ink">
+      <div className="px-4">
+        <BackBar />
+      </div>
+      <h1 className="px-4 pt-2 font-[family-name:var(--font-display)] text-[24px] text-ink">
         Статистика
       </h1>
 

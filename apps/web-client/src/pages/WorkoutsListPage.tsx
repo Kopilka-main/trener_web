@@ -3,6 +3,7 @@ import { ChevronRight } from 'lucide-react';
 import type { WorkoutResponse } from '@trener/shared';
 import { useClientMe } from '../api/auth';
 import { useClientWorkouts } from '../api/workouts';
+import { BackBar } from '../components/BackBar';
 import { formatDateGroup, formatTime } from '../lib/workoutDates';
 
 function groupByDate(workouts: WorkoutResponse[]): { label: string; items: WorkoutResponse[] }[] {
@@ -22,8 +23,11 @@ export function WorkoutsListPage() {
   const linked = me.data?.link != null;
 
   return (
-    <div className="flex flex-1 flex-col gap-4 px-4 pb-6 pt-5">
-      <h1 className="font-[family-name:var(--font-display)] text-[28px] text-ink">Тренировки</h1>
+    <div className="flex flex-1 flex-col gap-4 px-4 pb-6 pt-2">
+      <BackBar />
+      <h1 className="-mt-1 font-[family-name:var(--font-display)] text-[28px] text-ink">
+        Тренировки
+      </h1>
 
       {q.isLoading && <p className="text-sm text-ink-muted">Загрузка…</p>}
       {q.isError && (

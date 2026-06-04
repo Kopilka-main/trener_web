@@ -3,6 +3,7 @@ import { Wifi, X } from 'lucide-react';
 import type { SessionResponse } from '@trener/shared';
 import { useClientMe } from '../api/auth';
 import { useClientSessions, useConfirmSession } from '../api/calendar';
+import { BackBar } from '../components/BackBar';
 import { SessionsCalendar } from '../components/SessionsCalendar';
 import { MONTH_GEN, endTime, humanDuration, monthGrid, parseISO, toISODate } from '../lib/calendar';
 
@@ -43,7 +44,10 @@ export function CalendarPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <h1 className="px-4 pb-1 pt-5 font-[family-name:var(--font-display)] text-[24px] text-ink">
+      <div className="px-4">
+        <BackBar />
+      </div>
+      <h1 className="px-4 pb-1 pt-2 font-[family-name:var(--font-display)] text-[24px] text-ink">
         Календарь
       </h1>
 

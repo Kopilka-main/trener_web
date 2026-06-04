@@ -1,6 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useClientMe } from './api/auth';
-import { BottomNav } from './components/BottomNav';
 import { ConnectBanner } from './components/ConnectBanner';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -53,7 +52,6 @@ export function App() {
         <Route path="/connect" element={<ConnectPage code={me.data.account.id} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      <BottomNav />
     </div>
   );
 }

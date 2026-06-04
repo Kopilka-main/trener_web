@@ -73,12 +73,12 @@ describe('App gate', () => {
       },
     } as never);
     renderApp();
-    // В приложение пустили (есть нижняя навигация) и показан баннер подключения.
-    expect(screen.getByRole('navigation')).toBeInTheDocument();
-    expect(screen.getByText('Подключить тренера')).toBeInTheDocument();
+    // В приложение пустили (главная-хаб видна) и показан баннер подключения.
+    expect(screen.getByText('Подключите тренера')).toBeInTheDocument(); // CTA на главной
+    expect(screen.getByText('Подключить тренера')).toBeInTheDocument(); // баннер сверху
   });
 
-  it('привязан → нижняя навигация, баннера нет', () => {
+  it('привязан → главная-хаб, баннера нет', () => {
     vi.mocked(auth.useClientMe).mockReturnValue({
       isLoading: false,
       data: {
@@ -87,8 +87,7 @@ describe('App gate', () => {
       },
     } as never);
     renderApp();
-    expect(screen.getByRole('navigation')).toBeInTheDocument();
-    expect(screen.getByRole('navigation')).toHaveTextContent('Главная');
+    expect(screen.getByText('Тренировки')).toBeInTheDocument(); // плитка на главной
     expect(screen.queryByText('Подключить тренера')).not.toBeInTheDocument();
   });
 });

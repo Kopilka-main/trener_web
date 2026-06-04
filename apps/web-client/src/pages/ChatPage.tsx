@@ -4,6 +4,7 @@ import { Check, CheckCheck } from 'lucide-react';
 import { useClientMe } from '../api/auth';
 import { useClientMessages, useMarkChatRead, useSendClientMessage } from '../api/chat';
 import { useClientTrainer } from '../api/trainer';
+import { BackBar } from '../components/BackBar';
 
 export function ChatPage() {
   const me = useClientMe();
@@ -39,11 +40,16 @@ export function ChatPage() {
 
   if (!linked) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-ink-muted">Подключите тренера, чтобы написать ему.</p>
-        <Link to="/connect" className="text-sm font-semibold text-accent">
-          Подключить тренера
-        </Link>
+      <div className="flex flex-1 flex-col">
+        <div className="px-4">
+          <BackBar />
+        </div>
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+          <p className="text-sm text-ink-muted">Подключите тренера, чтобы написать ему.</p>
+          <Link to="/connect" className="text-sm font-semibold text-accent">
+            Подключить тренера
+          </Link>
+        </div>
       </div>
     );
   }
@@ -52,7 +58,10 @@ export function ChatPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <h1 className="px-4 pt-5 font-[family-name:var(--font-display)] text-[24px] text-ink">
+      <div className="px-4">
+        <BackBar />
+      </div>
+      <h1 className="px-4 pt-2 font-[family-name:var(--font-display)] text-[24px] text-ink">
         {title}
       </h1>
       <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-4 py-4">
