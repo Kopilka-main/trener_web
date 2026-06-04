@@ -3,7 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronDown, ChevronUp, Plus, RotateCcw, X } from 'lucide-react';
 import type { WorkoutExercisePlan, WorkoutResponse, WorkoutSetResponse } from '@trener/shared';
 import { useClientMe } from '../api/auth';
-import { useClientWorkouts, useCreateWorkout, useDeleteWorkout } from '../api/workouts';
+import {
+  useClientWorkouts,
+  useCreateWorkout,
+  useDeleteWorkout,
+  useStartWorkout,
+} from '../api/workouts';
 import { useClientTemplates, useDeleteTemplate, useSaveTemplate } from '../api/templates';
 import { HoldToDelete } from '../components/HoldToDelete';
 import { formatDateGroup, formatTime } from '../lib/workoutDates';
@@ -77,6 +82,7 @@ export function WorkoutsListPage() {
   const me = useClientMe();
   const q = useClientWorkouts();
   const create = useCreateWorkout();
+  const start = useStartWorkout();
   const del = useDeleteWorkout();
   const templates = useClientTemplates();
   const delTemplate = useDeleteTemplate();
@@ -87,24 +93,34 @@ export function WorkoutsListPage() {
   const all = q.data ?? [];
   const own = all.filter((w) => w.createdByClient && w.status !== 'completed');
   const completed = all.filter((w) => w.status === 'completed');
-  const busy = create.isPending;
+  const busy = create.isPending || start.isPending;
 
-  // Открыть тренировку: страница проведения сама показывает черновик (план +
-  // «Начать тренировку») либо активное проведение — в зависимости от статуса.
+  // Открыть существующую тренировку (активную/итоги — страница сама разберётся).
   function open(w: WorkoutResponse) {
     void navigate(`/workouts/${w.id}/run`);
   }
 
-  // Повтор завершённой: клонируем факт в новый ЧЕРНОВИК и открываем форму плана.
+  // Создать тренировку из плана и СРАЗУ запустить (без черновика) — открываем активную.
+  function createAndStart(body: { name: string; exercises: WorkoutExercisePlan[] }) {
+    create.mutate(body, {
+      onSuccess: (workout) => start.mutate(workout.id, { onSuccess: (started) => open(started) }),
+    });
+  }
+
+  // Создать новую пустую и сразу тренироваться (упражнения добавляются в ходе).
+  function createNew() {
+    createAndStart({ name: 'Моя тренировка', exercises: [] });
+  }
+
+  // Повтор завершённой: клонируем ФАКТ и сразу тренируемся.
   function repeat(w: WorkoutResponse) {
     const body = repeatBody(w);
     if (body.exercises.length === 0) return;
-    create.mutate(body, { onSuccess: (workout) => open(workout) });
+    createAndStart(body);
   }
 
   // Элементы пикера «Выберите шаблон»: свои сохранённые шаблоны + проведённые
-  // тренером тренировки (их клиент тоже воспринимает как шаблоны). Выбор любого
-  // создаёт новый черновик по его плану.
+  // тренером тренировки. Выбор любого сразу запускает тренировку по его плану.
   const trainerWorkouts = [...all]
     .filter((w) => !w.createdByClient && w.exercises.length > 0)
     .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
@@ -124,21 +140,9 @@ export function WorkoutsListPage() {
     })),
   ];
 
-  // Из шаблона/тренировки: открываем форму плана. Чтобы не плодить черновики при
-  // повторном открытии одного шаблона — переиспользуем уже существующий черновик
-  // с тем же именем и числом упражнений; иначе создаём новый.
+  // Выбор шаблона/тренировки → сразу запускаем тренировку по его плану.
   function fromPick(item: TemplatePick) {
-    const existing = own.find(
-      (w) =>
-        w.status === 'draft' &&
-        w.name === item.body.name &&
-        w.exercises.length === item.body.exercises.length,
-    );
-    if (existing) {
-      open(existing);
-      return;
-    }
-    create.mutate(item.body, { onSuccess: (workout) => open(workout) });
+    createAndStart(item.body);
   }
 
   return (
@@ -150,6 +154,7 @@ export function WorkoutsListPage() {
           busy={busy}
           hasHistory={completed.length > 0}
           onPickBase={() => setPicker('template')}
+          onCreate={createNew}
           onPickHistory={() => setPicker('history')}
         />
       ) : (
@@ -417,16 +422,18 @@ function HistoryRow({
   );
 }
 
-/** Карточка-плейсхолдер новой тренировки: собрать из базы знаний или повторить из истории. */
+/** Карточка-плейсхолдер новой тренировки: выбрать из базы, создать новую или повторить. */
 function NewWorkoutCard({
   busy,
   hasHistory,
   onPickBase,
+  onCreate,
   onPickHistory,
 }: {
   busy: boolean;
   hasHistory: boolean;
   onPickBase: () => void;
+  onCreate: () => void;
   onPickHistory: () => void;
 }) {
   return (
@@ -436,7 +443,7 @@ function NewWorkoutCard({
       </div>
       <div className="mt-3 text-[15px] font-semibold text-ink">Тренировка не запланирована</div>
       <div className="mx-auto mt-1 max-w-[280px] text-[12px] text-ink-muted">
-        Соберите тренировку из базы знаний или повторите одну из прошлых тренировок.
+        Выберите готовый шаблон или создайте новую — и сразу тренируйтесь.
       </div>
       <button
         type="button"
@@ -444,7 +451,15 @@ function NewWorkoutCard({
         disabled={busy}
         className="mt-4 w-full rounded-2xl bg-accent py-3 text-[14px] font-semibold text-accent-on active:scale-[0.99] disabled:opacity-60"
       >
-        {busy ? 'Создаём…' : 'Выбрать из базы'}
+        {busy ? 'Запускаем…' : 'Выбрать из базы'}
+      </button>
+      <button
+        type="button"
+        onClick={onCreate}
+        disabled={busy}
+        className="mt-2 w-full rounded-2xl bg-card py-3 text-[14px] font-semibold text-ink active:bg-card-elevated disabled:opacity-60"
+      >
+        Создать новую
       </button>
       <button
         type="button"

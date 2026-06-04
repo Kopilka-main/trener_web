@@ -175,6 +175,23 @@ describe('WorkoutsListPage', () => {
     );
   });
 
+  it('«Создать новую» создаёт пустую тренировку', () => {
+    mockMe(true);
+    const { create } = mockMutations();
+    mockTemplates();
+    vi.mocked(api.useClientWorkouts).mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [],
+    } as never);
+    renderPage();
+    fireEvent.click(screen.getByText('Создать новую'));
+    expect(create).toHaveBeenCalledWith(
+      { name: 'Моя тренировка', exercises: [] },
+      expect.anything(),
+    );
+  });
+
   it('разделяет свои активные/черновики и завершённые с бейджами', () => {
     mockMe(true);
     vi.mocked(api.useClientWorkouts).mockReturnValue({
