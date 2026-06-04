@@ -36,6 +36,7 @@ function toTrainerResponse(t: {
   lastName: string;
   title: string | null;
   bio: string | null;
+  birthDate?: string | null;
   contacts: { type: string; value: string }[];
   avatarFileId?: string | null;
 }): TrainerResponse {
@@ -46,6 +47,7 @@ function toTrainerResponse(t: {
     lastName: t.lastName,
     title: t.title,
     bio: t.bio,
+    birthDate: t.birthDate ?? null,
     contacts: t.contacts,
     avatarFileId: t.avatarFileId ?? null,
   };
@@ -108,12 +110,14 @@ export function makeAuthService(
         lastName?: string;
         title?: string | null;
         bio?: string | null;
+        birthDate?: string | null;
         contacts?: { type: string; value: string }[];
       } = {};
       if (input.firstName !== undefined) patch.firstName = input.firstName;
       if (input.lastName !== undefined) patch.lastName = input.lastName;
       if (input.title !== undefined) patch.title = input.title ?? null;
       if (input.bio !== undefined) patch.bio = input.bio ?? null;
+      if (input.birthDate !== undefined) patch.birthDate = input.birthDate ?? null;
       if (input.contacts !== undefined) patch.contacts = input.contacts;
       const trainer = await repo.updateTrainer(trainerId, patch);
       if (!trainer) throw unauthorized('Сессия недействительна');

@@ -34,19 +34,23 @@ export function ClientWorkoutsPage() {
 
   // Повторить прошлую тренировку: клонируем упражнения и подходы в новый черновик.
   function repeat(w: WorkoutResponse) {
-    if (w.exercises.length === 0) return;
-    const body: CreateWorkoutRequest = {
-      name: w.name,
-      exercises: w.exercises.map((ex) => ({
+    // «Точь-в-точь как провели»: берём ФАКТ (что реально сделали) как новый план,
+    // только ВЫПОЛНЕННЫЕ подходы; пропущенные подходы/упражнения исключаем.
+    const exercises = w.exercises
+      .map((ex) => ({
         exerciseId: ex.exerciseId,
-        sets: ex.sets.map((s) => ({
-          plannedReps: s.plannedReps ?? s.actualReps,
-          plannedWeightKg: s.plannedWeightKg ?? s.actualWeightKg,
-          plannedTimeSec: s.plannedTimeSec ?? s.actualTimeSec,
-          plannedRestSec: s.plannedRestSec,
-        })),
-      })),
-    };
+        sets: ex.sets
+          .filter((s) => s.done)
+          .map((s) => ({
+            plannedReps: s.actualReps ?? s.plannedReps,
+            plannedWeightKg: s.actualWeightKg ?? s.plannedWeightKg,
+            plannedTimeSec: s.actualTimeSec ?? s.plannedTimeSec,
+            plannedRestSec: s.plannedRestSec,
+          })),
+      }))
+      .filter((ex) => ex.sets.length > 0);
+    if (exercises.length === 0) return;
+    const body: CreateWorkoutRequest = { name: w.name, exercises };
     createWorkout.mutate(body, {
       onSuccess: (workout) => {
         void navigate(`/clients/${id}/workouts/${workout.id}`);

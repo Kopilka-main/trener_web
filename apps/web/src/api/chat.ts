@@ -34,9 +34,9 @@ export function markConversationRead(clientId: string): Promise<void> {
   }).then(() => undefined);
 }
 
-/** Удалить переписку с клиентом (DELETE .../messages). */
+/** Удалить переписку с клиентом (тренер-скоуп; работает и для отвязанных клиентов). */
 export function deleteConversation(clientId: string): Promise<void> {
-  return apiFetch(`/clients/${clientId}/messages`, {
+  return apiFetch(`/conversations/${clientId}`, {
     method: 'DELETE',
     schema: z.object({ ok: z.literal(true) }),
   }).then(() => undefined);

@@ -96,7 +96,7 @@ export function SessionsCalendar({
   };
 
   return (
-    <div className="flex h-full flex-col pb-16">
+    <div className="flex min-h-0 flex-1 flex-col pb-16">
       {/* Шапка периода: ‹ / подпись / › + «Сегодня» */}
       <div className="flex items-center gap-1 px-4 pb-2">
         <button

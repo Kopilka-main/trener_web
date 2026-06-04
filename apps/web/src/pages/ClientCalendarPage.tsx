@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
-import { Plus, Trash2, Wifi, X } from 'lucide-react';
+import { Plus, Trash2, X } from 'lucide-react';
 import type { SessionResponse, SessionStatus } from '@trener/shared';
 import {
   useClientSessions,
@@ -9,9 +9,11 @@ import {
   useUpdateSession,
 } from '../api/sessions';
 import { useClient } from '../api/clients';
+import { useGyms } from '../api/gyms';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SessionsCalendar } from '../components/SessionsCalendar';
 import { toISODate } from '../lib/calendar';
+import { EMPTY_PREFS, loadLastPrefs, saveLastPrefs } from '../lib/sessionPrefs';
 
 const STATUS_LABEL: Record<SessionStatus, string> = {
   planned: 'Запланировано',
@@ -99,6 +101,7 @@ export function ClientCalendarPage() {
       {formOpen && (
         <SessionSheet
           clientId={id}
+          clientName={clientName}
           session={editing === 'new' || editing === null ? null : editing}
           defaultDate={createAt?.date ?? toISODate(anchor)}
           defaultStartTime={createAt?.startTime}
@@ -111,33 +114,51 @@ export function ClientCalendarPage() {
 
 function SessionSheet({
   clientId,
+  clientName,
   session,
   defaultDate,
   defaultStartTime,
   onClose,
 }: {
   clientId: string;
+  clientName: string;
   session: SessionResponse | null;
   defaultDate: string;
   defaultStartTime: string | undefined;
   onClose: () => void;
 }) {
   const isEdit = session !== null;
+  const gyms = useGyms();
+  const gymList = gyms.data ?? [];
   const createMutation = useCreateSession(clientId);
   const updateMutation = useUpdateSession(clientId);
   const deleteMutation = useDeleteSession(clientId);
 
+  // Подтягиваем сохранённые предпочтения только для НОВОГО занятия и только при remember.
+  const prefs = useMemo(() => loadLastPrefs(), []);
+  const usePrefs = !isEdit && prefs.remember;
+  const initDuration = session?.durationMin ?? (usePrefs ? prefs.durationMin : 60);
+
+  const [remember, setRemember] = useState(prefs.remember);
   const [date, setDate] = useState(session?.date ?? defaultDate);
   const [startTime, setStartTime] = useState(session?.startTime ?? defaultStartTime ?? '12:00');
   const [title, setTitle] = useState(session?.title ?? '');
-  const [location, setLocation] = useState(session?.location ?? '');
-  const [durationMin, setDurationMin] = useState(session?.durationMin ?? 60);
+  const [location, setLocation] = useState(session?.location ?? (usePrefs ? prefs.location : ''));
+  const [durationMin, setDurationMin] = useState(initDuration);
   const [customDuration, setCustomDuration] = useState(
-    !DURATION_OPTIONS.includes((session?.durationMin ?? 60) as (typeof DURATION_OPTIONS)[number]),
+    !DURATION_OPTIONS.includes(initDuration as (typeof DURATION_OPTIONS)[number]),
   );
-  const [isOnline, setIsOnline] = useState(session?.isOnline ?? false);
+  const [isOnline, setIsOnline] = useState(
+    session?.isOnline ?? (usePrefs ? prefs.isOnline : false),
+  );
   const [status, setStatus] = useState<SessionStatus>(session?.status ?? 'planned');
   const [showErrors, setShowErrors] = useState(false);
+
+  function toggleRemember() {
+    const next = !remember;
+    setRemember(next);
+    saveLastPrefs({ ...loadLastPrefs(), remember: next });
+  }
 
   const dateError = /^\d{4}-\d{2}-\d{2}$/.test(date) ? '' : 'Укажите дату';
   const timeError = /^\d{2}:\d{2}$/.test(startTime) ? '' : 'Укажите время';
@@ -172,6 +193,18 @@ function SessionSheet({
         { onSuccess: onClose },
       );
     } else {
+      // Запоминаем введённое для следующих занятий (если включён тумблер).
+      saveLastPrefs(
+        remember
+          ? {
+              remember: true,
+              clientId,
+              durationMin: safeDuration,
+              location: trimmedLocation,
+              isOnline,
+            }
+          : { ...EMPTY_PREFS },
+      );
       createMutation.mutate(
         {
           clientId,
@@ -205,16 +238,30 @@ function SessionSheet({
         className="absolute inset-0 bg-black/60"
       />
       <div className="relative z-10 flex max-h-[88vh] flex-col rounded-t-3xl bg-bg pb-[max(1rem,env(safe-area-inset-bottom))]">
-        <div className="flex items-center justify-between px-5 pb-2 pt-4">
+        <div className="flex items-center justify-between gap-2 px-5 pb-2 pt-4">
           <h2 className="text-[16px] font-bold text-ink">{isEdit ? 'Занятие' : 'Новое занятие'}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Закрыть"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-ink active:bg-card-elevated"
-          >
-            <X size={20} strokeWidth={1.8} />
-          </button>
+          <div className="flex items-center gap-2">
+            {!isEdit && (
+              <button
+                type="button"
+                onClick={toggleRemember}
+                aria-pressed={remember}
+                className={`rounded-full px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                  remember ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
+                }`}
+              >
+                Запомнить
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Закрыть"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-ink active:bg-card-elevated"
+            >
+              <X size={20} strokeWidth={1.8} />
+            </button>
+          </div>
         </div>
 
         <form
@@ -222,6 +269,12 @@ function SessionSheet({
           onSubmit={handleSubmit}
           className="flex flex-col gap-4 overflow-y-auto px-5 pt-1"
         >
+          {/* Клиент зафиксирован — менять нельзя. */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-ink-muted">Клиент</span>
+            <span className="text-base font-semibold text-ink">{clientName}</span>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <label htmlFor="session-date" className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-ink-muted">Дата</span>
@@ -340,38 +393,46 @@ function SessionSheet({
             )}
           </div>
 
-          <label htmlFor="session-location" className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-ink-muted">Место</span>
-            <input
-              id="session-location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              maxLength={200}
-              placeholder="Зал, адрес или ссылка"
-              className={inputClass}
-            />
-          </label>
-
-          <button
-            type="button"
-            onClick={() => setIsOnline((v) => !v)}
-            className="flex items-center justify-between rounded-xl border border-line bg-chip px-3 py-2.5 text-left"
-          >
-            <span className="flex items-center gap-2 text-base text-ink">
-              <Wifi size={18} strokeWidth={1.8} className="text-ink-muted" /> Онлайн-занятие
-            </span>
-            <span
-              className={`flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${
-                isOnline ? 'bg-accent' : 'bg-card-elevated'
-              }`}
-            >
-              <span
-                className={`h-5 w-5 rounded-full bg-bg transition-transform ${
-                  isOnline ? 'translate-x-4' : ''
+            <div className="flex flex-wrap gap-1.5">
+              {gymList.map((g) => {
+                const active = !isOnline && location === g.name;
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => {
+                      setIsOnline(false);
+                      setLocation(g.name);
+                    }}
+                    className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+                      active ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
+                    }`}
+                  >
+                    {g.name}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOnline(true);
+                  setLocation('');
+                }}
+                className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+                  isOnline ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
                 }`}
-              />
-            </span>
-          </button>
+              >
+                Online
+              </button>
+            </div>
+            {gymList.length === 0 && (
+              <span className="text-[12px] text-ink-mutedxl">
+                Залы можно добавить в профиле тренера.
+              </span>
+            )}
+          </div>
 
           {isEdit && (
             <div className="flex flex-col gap-1.5">

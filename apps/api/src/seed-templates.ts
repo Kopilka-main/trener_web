@@ -145,12 +145,21 @@ async function main(): Promise<void> {
   try {
     const allTrainers = await db.select({ id: trainers.id }).from(trainers);
 
-    // Карта name → exerciseId по ГЛОБАЛЬНОМУ каталогу (trainer_id IS NULL).
+    // Карта name → {id, defaultWeightKg} по ГЛОБАЛЬНОМУ каталогу (trainer_id IS NULL).
     const globalExercises = await db
-      .select({ id: exercises.id, name: exercises.name })
+      .select({
+        id: exercises.id,
+        name: exercises.name,
+        defaultWeightKg: exercises.defaultWeightKg,
+      })
       .from(exercises)
       .where(isNull(exercises.trainerId));
-    const exerciseIdByName = new Map(globalExercises.map((row) => [row.name, row.id]));
+    const exerciseByName = new Map(
+      globalExercises.map((row) => [
+        row.name,
+        { id: row.id, defaultWeightKg: row.defaultWeightKg },
+      ]),
+    );
 
     let createdTemplates = 0;
     let skipped = 0;
@@ -181,18 +190,20 @@ async function main(): Promise<void> {
 
           let position = 0;
           for (const pos of tpl.positions) {
-            const exerciseId = exerciseIdByName.get(pos.exerciseName);
-            if (exerciseId === undefined) {
+            const ex = exerciseByName.get(pos.exerciseName);
+            if (ex === undefined) {
               // Защита: упражнения нет в каталоге — пропускаем позицию.
               continue;
             }
+            // Вес — из дефолта упражнения (для силовых на повторы); у планок/времени null.
+            const weightKg = pos.reps !== null ? ex.defaultWeightKg : null;
             await tx.insert(workoutTemplateExercises).values({
               templateId,
               position,
-              exerciseId,
+              exerciseId: ex.id,
               sets: pos.sets,
               reps: pos.reps,
-              weightKg: null,
+              weightKg,
               timeSec: pos.timeSec,
               restSec: pos.restSec,
             });

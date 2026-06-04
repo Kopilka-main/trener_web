@@ -33,6 +33,7 @@ export const trainers = pgTable(
     lastName: text('last_name').notNull(),
     title: text('title'),
     bio: text('bio'),
+    birthDate: text('birth_date'),
     contacts: jsonb('contacts').$type<{ type: string; value: string }[]>().notNull().default([]),
     // Аватар тренера: ссылка на files. NULL = нет фото, удаление файла → set null.
     // FK-колбэк ленивый (files объявлена ниже). AnyPgColumn разрывает циклическую инференцию.

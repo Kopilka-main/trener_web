@@ -117,14 +117,16 @@ export function HomePage() {
   // Онлайн-тренировки не учитываются в тренерском календаре.
   const sessionsOffline = (sessionsMonth ?? []).filter((s) => !s.isOnline);
 
-  // Hero: сегодняшние офлайн-сессии (любой статус, как в оригинале).
-  const todayCount = sessionsOffline.filter((s) => s.date === today).length;
-
   // Календарь: запланированные/проведённые на 30 дней (не cancelled).
   const plannedNext30d = sessionsOffline.filter((s) => s.status !== 'cancelled').length;
 
   // Ближайшая будущая не-cancelled офлайн-сессия (по date+startTime ≥ now).
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  // Hero: только ПРЕДСТОЯЩИЕ сегодня офлайн-сессии (запланированные, время ещё не прошло).
+  const todayCount = sessionsOffline.filter(
+    (s) => s.date === today && s.status === 'planned' && timeToMinutes(s.startTime) >= nowMinutes,
+  ).length;
   const nextSession = sessionsOffline
     .filter((s) => {
       if (s.status === 'cancelled') return false;

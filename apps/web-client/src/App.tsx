@@ -46,25 +46,27 @@ export function App() {
   // данными мягко показывают приглашение подключиться.
   const linked = me.data.link !== null;
   return (
-    <div className="mx-auto flex min-h-screen max-w-[430px] flex-col bg-bg">
+    <div className="mx-auto flex h-[100dvh] max-w-[430px] flex-col overflow-hidden bg-bg">
       {!linked && <ConnectBanner />}
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/workouts" element={<WorkoutsListPage />} />
-        <Route path="/workouts/new" element={<CreateWorkoutPage />} />
-        <Route path="/workouts/:wid/run" element={<RunWorkoutPage />} />
-        <Route path="/workouts/:wid" element={<WorkoutDetailPage />} />
-        <Route path="/calendar" element={<CalendarPage />} />
-        <Route path="/chat" element={<ChatPage />} />
-        <Route path="/progress" element={<StatsPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/trainer" element={<TrainerPage />} />
-        <Route path="/knowledge" element={<KnowledgePage />} />
-        <Route path="/knowledge/:exerciseId" element={<ExerciseDetailPage />} />
-        <Route path="/notifications" element={<NotificationsPage />} />
-        <Route path="/connect" element={<ConnectPage code={me.data.account.id} />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/workouts" element={<WorkoutsListPage />} />
+          <Route path="/workouts/new" element={<CreateWorkoutPage />} />
+          <Route path="/workouts/:wid/run" element={<RunWorkoutPage />} />
+          <Route path="/workouts/:wid" element={<WorkoutDetailPage />} />
+          <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/progress" element={<StatsPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/trainer" element={<TrainerPage />} />
+          <Route path="/knowledge" element={<KnowledgePage />} />
+          <Route path="/knowledge/:exerciseId" element={<ExerciseDetailPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/connect" element={<ConnectPage code={me.data.account.id} />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
       <BackFab />
     </div>
   );

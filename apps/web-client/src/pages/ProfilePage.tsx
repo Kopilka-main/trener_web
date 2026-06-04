@@ -44,6 +44,31 @@ function initials(first: string, last: string): string {
   return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase() || '?';
 }
 
+// Дата рождения вводится вручную как ДД.ММ.ГГГГ; хранится как ISO YYYY-MM-DD.
+function isoToDisplay(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : '';
+}
+function maskDate(input: string): string {
+  const digits = input.replace(/\D/g, '').slice(0, 8);
+  const parts = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean);
+  return parts.join('.');
+}
+function displayToIso(display: string): string | null {
+  const digits = display.replace(/\D/g, '');
+  if (digits.length !== 8) return null;
+  const dd = digits.slice(0, 2);
+  const mm = digits.slice(2, 4);
+  const yyyy = digits.slice(4, 8);
+  const d = Number(dd);
+  const mo = Number(mm);
+  const y = Number(yyyy);
+  if (y < 1900 || y > 2100) return null;
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 /** Блок аватара клиента: фото (если есть) либо инициалы + загрузка/удаление.
  * Свой URL фиксированный, поэтому `?v=<id>` — кэш-бастинг при смене файла. */
 function AvatarBlock({ account }: { account: ClientAccountResponse }) {
@@ -112,7 +137,8 @@ function ProfileForm({
   const trainer = useClientTrainer();
   const [firstName, setFirstName] = useState(account.firstName);
   const [lastName, setLastName] = useState(account.lastName);
-  const [birthDate, setBirthDate] = useState(account.birthDate ?? '');
+  // birthDate хранится в state как отображаемая строка ДД.ММ.ГГГГ.
+  const [birthDate, setBirthDate] = useState(isoToDisplay(account.birthDate ?? ''));
   const [bio, setBio] = useState(account.bio ?? '');
   const [contacts, setContacts] = useState<Contact[]>(account.contacts);
   const [saved, setSaved] = useState(false);
@@ -120,7 +146,7 @@ function ProfileForm({
   useEffect(() => {
     setFirstName(account.firstName);
     setLastName(account.lastName);
-    setBirthDate(account.birthDate ?? '');
+    setBirthDate(isoToDisplay(account.birthDate ?? ''));
     setBio(account.bio ?? '');
     setContacts(account.contacts);
   }, [account]);
@@ -132,7 +158,7 @@ function ProfileForm({
       {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        birthDate: birthDate === '' ? null : birthDate,
+        birthDate: birthDate.trim() === '' ? null : displayToIso(birthDate),
         bio: bio.trim() === '' ? null : bio.trim(),
         contacts: contacts
           .filter((c) => c.value.trim() !== '')
@@ -149,9 +175,22 @@ function ProfileForm({
       {linked ? (
         <Link
           to="/trainer"
-          className="flex items-center justify-between gap-3 rounded-xl bg-card px-4 py-3 active:bg-card-elevated"
+          className="flex items-center gap-3 rounded-xl bg-card px-4 py-3 active:bg-card-elevated"
         >
-          <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-card-elevated">
+            {trainer.data?.avatarFileId ? (
+              <img
+                src={`/api/client/trainer/avatar?v=${trainer.data.avatarFileId}`}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <span className="text-[15px] font-bold text-ink">
+                {trainer.data ? initials(trainer.data.firstName, trainer.data.lastName) : '—'}
+              </span>
+            )}
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-mutedxl">
               Ваш тренер
             </span>
@@ -195,10 +234,12 @@ function ProfileForm({
       <label className="flex flex-col gap-1.5">
         <span className="text-sm font-medium text-ink-muted">Дата рождения</span>
         <input
-          type="date"
+          inputMode="numeric"
           value={birthDate}
-          onChange={(e) => setBirthDate(e.target.value)}
-          className="rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none focus:border-accent"
+          onChange={(e) => setBirthDate(maskDate(e.target.value))}
+          placeholder="ДД.ММ.ГГГГ"
+          maxLength={10}
+          className="rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
         />
       </label>
 

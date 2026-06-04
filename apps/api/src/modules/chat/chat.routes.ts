@@ -45,6 +45,23 @@ export function chatRoutes(
     async (req) => ({ conversations: await svc.listConversations(trainerId(req)) }),
   );
 
+  // Удаление диалога по клиенту — тренер-скоуп (без проверки активной связи),
+  // чтобы можно было снести и «осиротевшие» диалоги (клиент отвязан/пересоздан).
+  typed.delete(
+    '/api/conversations/:clientId',
+    {
+      preHandler: requireAuth,
+      schema: {
+        params: z.object({ clientId: z.string() }),
+        response: { 200: z.object({ ok: z.literal(true) }) },
+      },
+    },
+    async (req) => {
+      await svc.deleteConversation(trainerId(req), req.params.clientId);
+      return { ok: true as const };
+    },
+  );
+
   typed.get(
     '/api/chat/unread',
     {

@@ -13,6 +13,7 @@ function wk(id: string, sets: { w: number | null; r: number | null }[]): Workout
     durationSec: null,
     trainerNote: null,
     rpe: null,
+    createdByClient: false,
     exercises: [
       {
         position: 0,

@@ -33,14 +33,40 @@ function runWithTransition(update: () => void): void {
   }
 }
 
-/** Оптимистично проставляет done у конкретного подхода. */
-function withSetDone(w: WorkoutResponse, pos: number, idx: number, done: boolean): WorkoutResponse {
+/**
+ * Подписи упражнений: повторяющиеся (одно имя несколько раз) нумеруются 1, 2, 3…
+ * по порядку позиции. Уникальные — без номера. Возвращает Map<position, label>.
+ */
+function exerciseLabels(exercises: WorkoutExerciseResponse[]): Map<number, string> {
+  const total = new Map<string, number>();
+  for (const ex of exercises) total.set(ex.exerciseName, (total.get(ex.exerciseName) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  const out = new Map<number, string>();
+  for (const ex of [...exercises].sort((a, b) => a.position - b.position)) {
+    if ((total.get(ex.exerciseName) ?? 0) > 1) {
+      const n = (seen.get(ex.exerciseName) ?? 0) + 1;
+      seen.set(ex.exerciseName, n);
+      out.set(ex.position, `${ex.exerciseName} ${String(n)}`);
+    } else {
+      out.set(ex.position, ex.exerciseName);
+    }
+  }
+  return out;
+}
+
+/** Оптимистично применяет частичный патч к конкретному подходу. */
+function withSetPatch(
+  w: WorkoutResponse,
+  pos: number,
+  idx: number,
+  patch: Partial<WorkoutSetResponse>,
+): WorkoutResponse {
   return {
     ...w,
     exercises: w.exercises.map((ex) =>
       ex.position !== pos
         ? ex
-        : { ...ex, sets: ex.sets.map((s) => (s.setIndex === idx ? { ...s, done } : s)) },
+        : { ...ex, sets: ex.sets.map((s) => (s.setIndex === idx ? { ...s, ...patch } : s)) },
     ),
   };
 }
@@ -170,6 +196,7 @@ function DraftView({
   }
 
   const items = workout.exercises.map((ex) => ({ ...ex, id: `ex-${String(ex.position)}` }));
+  const labels = exerciseLabels(workout.exercises);
 
   return (
     <div className="flex min-h-full flex-col">
@@ -205,7 +232,7 @@ function DraftView({
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="truncate text-[14px] font-semibold text-ink">
-                  {ex.exerciseName}
+                  {labels.get(ex.position) ?? ex.exerciseName}
                 </span>
                 <HoldToDelete onDelete={() => removeExercise.mutate(ex.position)} />
               </div>
@@ -318,13 +345,35 @@ function ActiveView({
 
   function toggleDone(ex: WorkoutExerciseResponse, set: WorkoutSetResponse) {
     const nextDone = !set.done;
+    // При отметке «выполнено» без введённого факта — копируем план в факт
+    // (тренер выполнил как запланировано), иначе статистика останется пустой.
+    const noActual =
+      set.actualReps === null && set.actualWeightKg === null && set.actualTimeSec === null;
+    const fillActual = nextDone && noActual;
+
+    const patch: Partial<WorkoutSetResponse> = { done: nextDone };
+    const body: {
+      done: boolean;
+      actualReps?: number | null;
+      actualWeightKg?: number | null;
+      actualTimeSec?: number | null;
+    } = { done: nextDone };
+    if (fillActual) {
+      patch.actualReps = set.plannedReps;
+      patch.actualWeightKg = set.plannedWeightKg;
+      patch.actualTimeSec = set.plannedTimeSec;
+      body.actualReps = set.plannedReps;
+      body.actualWeightKg = set.plannedWeightKg;
+      body.actualTimeSec = set.plannedTimeSec;
+    }
+
     // Оптимистично обновляем кэш внутри View Transition — карточки плавно уезжают вверх.
     runWithTransition(() => {
       qc.setQueryData(clientWorkoutQueryKey(clientId, workout.id), (prev?: WorkoutResponse) =>
-        prev ? withSetDone(prev, ex.position, set.setIndex, nextDone) : prev,
+        prev ? withSetPatch(prev, ex.position, set.setIndex, patch) : prev,
       );
     });
-    updateSet.mutate({ pos: ex.position, idx: set.setIndex, body: { done: nextDone } });
+    updateSet.mutate({ pos: ex.position, idx: set.setIndex, body });
     if (nextDone && set.plannedRestSec && set.plannedRestSec > 0) {
       setRest({ key: `${String(ex.position)}-${String(set.setIndex)}`, sec: set.plannedRestSec });
     }
@@ -355,6 +404,7 @@ function ActiveView({
     );
   }
 
+  const labels = exerciseLabels(workout.exercises);
   const cardBody = (ex: WorkoutExerciseResponse) => (
     <ul
       className="flex flex-col gap-2"
@@ -367,7 +417,9 @@ function ActiveView({
           set.actualReps !== null || set.actualWeightKg !== null || set.actualTimeSec !== null;
         return (
           <li key={key} className="flex flex-col gap-2 px-0.5 py-1">
-            <span className="truncate text-[14px] font-semibold text-ink">{ex.exerciseName}</span>
+            <span className="truncate text-[14px] font-semibold text-ink">
+              {labels.get(ex.position) ?? ex.exerciseName}
+            </span>
             {isEditing ? (
               <SetEditor
                 set={set}
@@ -512,6 +564,7 @@ function ActiveView({
 function SummaryView({ workout, backTo }: { workout: WorkoutResponse; backTo: string }) {
   const done = workout.exercises.flatMap((e) => e.sets).filter((s) => s.done).length;
   const total = workout.exercises.flatMap((e) => e.sets).length;
+  const labels = exerciseLabels(workout.exercises);
 
   return (
     <div className="flex min-h-full flex-col">
@@ -540,7 +593,9 @@ function SummaryView({ workout, backTo }: { workout: WorkoutResponse; backTo: st
 
         {workout.exercises.map((ex) => (
           <div key={ex.position} className="flex flex-col gap-2 rounded-2xl bg-card p-4">
-            <h2 className="text-[15px] font-semibold text-ink">{ex.exerciseName}</h2>
+            <h2 className="text-[15px] font-semibold text-ink">
+              {labels.get(ex.position) ?? ex.exerciseName}
+            </h2>
             <ul className="flex flex-col gap-1">
               {ex.sets.map((set) => (
                 <li

@@ -29,6 +29,7 @@ export const trainerResponseSchema = z.object({
   lastName: z.string(),
   title: z.string().nullable(),
   bio: z.string().nullable(),
+  birthDate: z.string().nullable(),
   contacts: z.array(contactSchema),
   avatarFileId: z.string().nullable(),
 });
@@ -50,6 +51,10 @@ export const updateTrainerRequestSchema = z.object({
   lastName: z.string().trim().min(1).max(100).optional(),
   title: z.string().trim().max(200).nullish(),
   bio: z.string().trim().max(2000).nullish(),
+  birthDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullish(),
   contacts: z.array(contactSchema).max(20).optional(),
 });
 export type UpdateTrainerRequest = z.infer<typeof updateTrainerRequestSchema>;

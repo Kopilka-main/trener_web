@@ -7,6 +7,7 @@ import { useGyms } from '../api/gyms';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SessionsCalendar } from '../components/SessionsCalendar';
 import { monthGrid, toISODate } from '../lib/calendar';
+import { EMPTY_PREFS, loadLastPrefs, saveLastPrefs } from '../lib/sessionPrefs';
 
 const STATUS_LABEL: Record<SessionStatus, string> = {
   planned: 'Запланировано',
@@ -25,52 +26,6 @@ function formatDuration(min: number): string {
 
 function clientName(c: ClientResponse): string {
   return `${c.firstName} ${c.lastName}`;
-}
-
-// «Запомнить»: при включённом тумблере последние клиент/длительность/место/online
-// тренера сохраняются и подтягиваются в новые занятия; при выключенном — поля пустые.
-const LAST_PREFS_KEY = 'calendar_last_session_prefs';
-type LastPrefs = {
-  remember: boolean;
-  clientId: string;
-  durationMin: number;
-  location: string;
-  isOnline: boolean;
-};
-
-const EMPTY_PREFS: LastPrefs = {
-  remember: false,
-  clientId: '',
-  durationMin: 60,
-  location: '',
-  isOnline: false,
-};
-
-function loadLastPrefs(): LastPrefs {
-  try {
-    const raw = localStorage.getItem(LAST_PREFS_KEY);
-    if (raw) {
-      const p = JSON.parse(raw) as Partial<LastPrefs>;
-      return {
-        remember: p.remember === true,
-        clientId: typeof p.clientId === 'string' ? p.clientId : '',
-        durationMin: typeof p.durationMin === 'number' && p.durationMin > 0 ? p.durationMin : 60,
-        location: typeof p.location === 'string' ? p.location : '',
-        isOnline: p.isOnline === true,
-      };
-    }
-  } catch {
-    /* битый JSON / приватный режим */
-  }
-  return { ...EMPTY_PREFS };
-}
-
-function saveLastPrefs(p: LastPrefs): void {
-  try {
-    localStorage.setItem(LAST_PREFS_KEY, JSON.stringify(p));
-  } catch {
-    /* приватный режим */
-  }
 }
 
 /** Тап по пустому слоту: предзаполненные дата+время для новой сессии. */

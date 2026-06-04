@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Link2, Link2Off, Wifi, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Timer, Wifi, X } from 'lucide-react';
 import type { SessionResponse, SessionStatus } from '@trener/shared';
 import {
   CAL_HOURS,
@@ -110,7 +110,7 @@ export function SessionsCalendar({
   };
 
   return (
-    <div className="flex h-full flex-col pb-16">
+    <div className="flex min-h-0 flex-1 flex-col pb-16">
       {/* Шапка периода: ‹ / подпись / › + «Сегодня» */}
       <div className="flex items-center gap-1 px-4 pb-2">
         <button
@@ -223,12 +223,12 @@ function tileClasses(status: SessionStatus): string {
  *  • не отправлено (тренировка не прикреплена) → разорванная цепь, серая.
  */
 interface StateInfo {
-  Icon: typeof Link2Off;
+  Icon: typeof Timer;
   color: string;
   label: string;
 }
 
-/** Состояние связи занятия с клиентом — иконка, цвет и подробная подпись. */
+/** Состояние подтверждения занятия клиентом — иконка, цвет и подпись. */
 function stateInfo(session: SessionResponse): StateInfo {
   if (session.clientConfirmation === 'confirmed') {
     return { Icon: Check, color: 'var(--color-accent)', label: 'Клиент подтвердил' };
@@ -236,26 +236,7 @@ function stateInfo(session: SessionResponse): StateInfo {
   if (session.clientConfirmation === 'declined') {
     return { Icon: X, color: 'var(--color-danger)', label: 'Клиент отклонил' };
   }
-  if (session.workoutId) {
-    return { Icon: Link2, color: 'var(--color-accent)', label: 'Отправлено, ждём ответа' };
-  }
-  return { Icon: Link2Off, color: 'var(--color-ink-mutedxl)', label: 'Не отправлено клиенту' };
-}
-
-function StateBadge({ session, compact = false }: { session: SessionResponse; compact?: boolean }) {
-  const { Icon, color, label } = stateInfo(session);
-  return (
-    <span
-      aria-label={label}
-      title={label}
-      className={`flex shrink-0 items-center justify-center rounded-full bg-[var(--color-bg)] ring-1 ring-white/10 ${
-        compact ? 'h-4 w-4' : 'h-5 w-5'
-      }`}
-      style={{ color }}
-    >
-      <Icon size={compact ? 10 : 12} strokeWidth={2.4} />
-    </span>
-  );
+  return { Icon: Timer, color: '#000000', label: 'Ждём подтверждения' };
 }
 
 /** Сессии конкретного дня, отсортированы по времени. */
@@ -425,6 +406,7 @@ function DayView({
             const startMin = timeToMin(s.startTime);
             const top = ((startMin - CAL_START_HOUR * 60) / 60) * DAY_HOUR_H;
             const height = Math.max((s.durationMin / 60) * DAY_HOUR_H - 2, 18);
+            const state = stateInfo(s);
             return (
               <button
                 key={s.id}
@@ -433,24 +415,35 @@ function DayView({
                 className={`absolute left-1.5 right-1.5 z-10 overflow-hidden rounded-xl px-2.5 py-1.5 text-left ${tileClasses(s.status)}`}
                 style={{ top, height }}
               >
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 pr-4">
                   {s.isOnline && <Wifi size={12} strokeWidth={2.2} className="shrink-0" />}
                   <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">
                     {renderLabel(s)}
                   </span>
-                  <StateBadge session={s} />
                 </div>
                 {/* Описание статуса — сразу под названием. */}
                 {height >= 50 && (
-                  <div className="truncate text-[10px] font-semibold opacity-90">
-                    {stateInfo(s).label}
+                  <div className="truncate pr-4 text-[10px] font-semibold opacity-90">
+                    {state.label}
                   </div>
                 )}
-                <div className="truncate font-[family-name:var(--font-mono)] text-[11px] opacity-80">
-                  {[`${s.startTime}–${endTime(s.startTime, s.durationMin)}`, s.location]
+                <div className="truncate pr-5 font-[family-name:var(--font-mono)] text-[11px] opacity-80">
+                  {[
+                    `${s.startTime}–${endTime(s.startTime, s.durationMin)}`,
+                    s.isOnline ? 'Online' : s.location,
+                  ]
                     .filter(Boolean)
                     .join(' · ')}
                 </div>
+                {/* Статус — иконка на белом четвертькруге с чёрной обводкой в правом нижнем углу. */}
+                <span
+                  aria-label={state.label}
+                  title={state.label}
+                  className="absolute bottom-0 right-0 flex h-[20px] w-[20px] items-end justify-end rounded-tl-full border-l border-t border-black bg-white pb-px pr-px"
+                  style={{ color: state.color }}
+                >
+                  <state.Icon size={12} strokeWidth={2.8} />
+                </span>
               </button>
             );
           })}
@@ -575,7 +568,7 @@ function WeekView({
                         <span
                           aria-label={state.label}
                           title={state.label}
-                          className="absolute bottom-0 right-0 flex h-[18px] w-[18px] items-end justify-end rounded-tl-full bg-white pb-px pr-px"
+                          className="absolute bottom-0 right-0 flex h-[18px] w-[18px] items-end justify-end rounded-tl-full border-l border-t border-black bg-white pb-px pr-px"
                           style={{ color: state.color }}
                         >
                           <state.Icon size={11} strokeWidth={2.8} />

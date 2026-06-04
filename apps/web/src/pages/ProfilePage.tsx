@@ -23,6 +23,30 @@ import { compressImage } from '../lib/image';
 
 const CONTACT_TYPES = ['Телефон', 'WhatsApp', 'Telegram', 'MAX', 'Instagram', 'Прочее'] as const;
 
+// Дата рождения: ручной ввод ДД.ММ.ГГГГ ↔ хранение ISO YYYY-MM-DD.
+function isoToDisplay(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : '';
+}
+function maskDate(input: string): string {
+  const digits = input.replace(/\D/g, '').slice(0, 8);
+  return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean).join('.');
+}
+function displayToIso(display: string): string | null {
+  const digits = display.replace(/\D/g, '');
+  if (digits.length !== 8) return null;
+  const dd = digits.slice(0, 2);
+  const mm = digits.slice(2, 4);
+  const yyyy = digits.slice(4, 8);
+  const y = Number(yyyy);
+  if (y < 1900 || y > 2100) return null;
+  const dt = new Date(y, Number(mm) - 1, Number(dd));
+  if (dt.getFullYear() !== y || dt.getMonth() !== Number(mm) - 1 || dt.getDate() !== Number(dd)) {
+    return null;
+  }
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 /** Профиль тренера: карточка, «о себе», залы, контакты и выход. */
 export function ProfilePage() {
   const me = useMe();
@@ -72,15 +96,29 @@ export function ProfilePage() {
       />
 
       <div className="flex flex-1 flex-col gap-5 px-4 pb-10 pt-1">
-        {/* Карточка тренера */}
+        {/* Карточка тренера (просмотр — аватар без загрузки). */}
         <div className="flex items-center gap-3 rounded-3xl bg-card p-4">
-          <AvatarEditor trainer={trainer} />
+          <Avatar
+            firstName={trainer.firstName}
+            lastName={trainer.lastName}
+            size={64}
+            src={
+              trainer.avatarFileId
+                ? `/api/files/${trainer.avatarFileId}?v=${trainer.avatarFileId}`
+                : null
+            }
+          />
           <div className="min-w-0">
             <div className="text-[19px] font-bold leading-tight text-ink">{fullName}</div>
             {trainer.title && (
               <div className="mt-0.5 truncate text-[13px] text-ink-muted">{trainer.title}</div>
             )}
             <div className="truncate text-[12px] text-ink-mutedxl">{trainer.email}</div>
+            {trainer.birthDate && (
+              <div className="truncate text-[12px] text-ink-mutedxl">
+                Дата рождения: {isoToDisplay(trainer.birthDate)}
+              </div>
+            )}
           </div>
         </div>
 
@@ -160,6 +198,14 @@ function AvatarEditor({ trainer }: { trainer: TrainerResponse }) {
         className="rounded-full disabled:opacity-50"
       >
         <Avatar firstName={trainer.firstName} lastName={trainer.lastName} size={64} src={src} />
+      </button>
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={busy}
+        className="text-[12px] font-semibold text-accent disabled:opacity-50"
+      >
+        {busy ? 'Загрузка…' : 'Изменить фото'}
       </button>
       <input ref={inputRef} type="file" accept="image/*" onChange={onPick} className="hidden" />
       {trainer.avatarFileId && (
@@ -347,6 +393,7 @@ function ProfileEdit({ trainer, onClose }: { trainer: TrainerResponse; onClose: 
   const [lastName, setLastName] = useState(trainer.lastName);
   const [title, setTitle] = useState(trainer.title ?? '');
   const [bio, setBio] = useState(trainer.bio ?? '');
+  const [birthDate, setBirthDate] = useState(isoToDisplay(trainer.birthDate ?? ''));
   const [contacts, setContacts] = useState<TrainerContact[]>(trainer.contacts);
   const [error, setError] = useState<string | null>(null);
 
@@ -382,6 +429,7 @@ function ProfileEdit({ trainer, onClose }: { trainer: TrainerResponse; onClose: 
         lastName: lastName.trim(),
         title: title.trim() === '' ? null : title.trim(),
         bio: bio.trim() === '' ? null : bio.trim(),
+        birthDate: birthDate.trim() === '' ? null : displayToIso(birthDate),
         contacts: cleanContacts,
       },
       { onSuccess: onClose, onError: () => setError('Не удалось сохранить. Попробуйте снова.') },
@@ -406,6 +454,10 @@ function ProfileEdit({ trainer, onClose }: { trainer: TrainerResponse; onClose: 
       />
 
       <div className="flex flex-1 flex-col gap-4 px-4 pb-10 pt-1">
+        {/* Смена фото — только в режиме редактирования. */}
+        <div className="flex justify-center pt-1">
+          <AvatarEditor trainer={trainer} />
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <EditField label="Имя" value={firstName} onChange={setFirstName} placeholder="Имя" />
           <EditField
@@ -421,6 +473,17 @@ function ProfileEdit({ trainer, onClose }: { trainer: TrainerResponse; onClose: 
           onChange={setTitle}
           placeholder="Напр. персональный тренер"
         />
+        <label className="flex flex-col gap-1.5">
+          <span className={KICKER}>Дата рождения</span>
+          <input
+            inputMode="numeric"
+            value={birthDate}
+            onChange={(e) => setBirthDate(maskDate(e.target.value))}
+            placeholder="ДД.ММ.ГГГГ"
+            maxLength={10}
+            className="rounded-xl border border-line bg-chip px-3 py-2.5 text-[15px] text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
+          />
+        </label>
         <label className="flex flex-col gap-1.5">
           <span className={KICKER}>О себе</span>
           <textarea

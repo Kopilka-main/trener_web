@@ -12,14 +12,6 @@ const CONFIRM_LABEL: Record<SessionResponse['clientConfirmation'], string> = {
   declined: 'Вы отклонили',
 };
 
-/** Занятие в прошлом: дата+время начала <= now. */
-function isPast(s: SessionResponse): boolean {
-  const d = parseISO(s.date);
-  const [h, m] = s.startTime.split(':').map(Number);
-  d.setHours(h ?? 0, m ?? 0, 0, 0);
-  return d.getTime() <= Date.now();
-}
-
 export function CalendarPage() {
   const me = useClientMe();
   const linked = me.data?.link != null;
@@ -74,7 +66,9 @@ export function CalendarPage() {
 function SessionSheet({ session, onClose }: { session: SessionResponse; onClose: () => void }) {
   const confirm = useConfirmSession();
   const cancelled = session.status === 'cancelled';
-  const past = isPast(session);
+  // Подтвердить/отклонить можно, пока занятие ждёт ответа и не отменено
+  // (независимо от того, прошло ли уже время начала).
+  const canRespond = !cancelled && session.clientConfirmation === 'pending';
   const statusLabel = cancelled ? 'Отменено тренером' : CONFIRM_LABEL[session.clientConfirmation];
   const d = parseISO(session.date);
   const dateLabel = `${String(d.getDate())} ${MONTH_GEN[d.getMonth()]}`;
@@ -124,7 +118,7 @@ function SessionSheet({ session, onClose }: { session: SessionResponse; onClose:
           {statusLabel}
         </div>
 
-        {!past && !cancelled && (
+        {canRespond && (
           <div className="flex gap-2">
             <button
               type="button"

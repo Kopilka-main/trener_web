@@ -72,17 +72,15 @@ export function ClientChatPage() {
         title={title}
         back={`/clients/${id}`}
         right={
-          list.length > 0 ? (
-            <HoldToDelete
-              icon="trash"
-              label="Удерживайте, чтобы удалить переписку"
-              onDelete={() =>
-                removeChat.mutate(undefined, {
-                  onSuccess: () => void navigate(`/clients/${id}`),
-                })
-              }
-            />
-          ) : undefined
+          <HoldToDelete
+            icon="trash"
+            label="Удерживайте, чтобы удалить переписку"
+            onDelete={() =>
+              removeChat.mutate(undefined, {
+                onSuccess: () => void navigate('/messages'),
+              })
+            }
+          />
         }
       />
 

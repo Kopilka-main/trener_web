@@ -31,6 +31,7 @@ export function makeAuthRepo(db: Db) {
         lastName?: string;
         title?: string | null;
         bio?: string | null;
+        birthDate?: string | null;
         contacts?: { type: string; value: string }[];
       },
     ) {

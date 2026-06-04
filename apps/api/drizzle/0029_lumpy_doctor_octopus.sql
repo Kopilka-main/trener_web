@@ -1,0 +1,1 @@
+ALTER TABLE "trainers" ADD COLUMN "birth_date" text;

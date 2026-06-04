@@ -88,8 +88,10 @@ export function HomePage() {
 
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
-  // Сессий сегодня (online включительно — клиент посещает все свои занятия).
-  const todayCount = sessions.filter((s) => s.date === today).length;
+  // Только ПРЕДСТОЯЩИЕ сегодня занятия (запланированные, время ещё не прошло).
+  const todayCount = sessions.filter(
+    (s) => s.date === today && s.status === 'planned' && timeToMinutes(s.startTime) >= nowMinutes,
+  ).length;
   // Не cancelled на 30 дней (диапазон запроса).
   const plannedNext30d = sessions.filter((s) => s.status !== 'cancelled').length;
 
