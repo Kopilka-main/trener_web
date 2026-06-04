@@ -13,6 +13,7 @@ import { ChatPage } from './pages/ChatPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { StatsPage } from './pages/StatsPage';
 import { NotificationsPage } from './pages/NotificationsPage';
+import { TrainerPage } from './pages/TrainerPage';
 
 export function App() {
   const me = useClientMe();
@@ -51,6 +52,7 @@ export function App() {
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/progress" element={<StatsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/trainer" element={<TrainerPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/connect" element={<ConnectPage code={me.data.account.id} />} />
         <Route path="*" element={<Navigate to="/" replace />} />

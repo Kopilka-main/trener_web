@@ -169,7 +169,7 @@ export function HomePage() {
       metrics: [],
       ...(linked ? {} : { kicker: 'ПОДКЛЮЧИТЬ' }),
       Icon: UserCog,
-      onClick: () => void navigate(linked ? '/profile' : '/connect'),
+      onClick: () => void navigate(linked ? '/trainer' : '/connect'),
     },
     {
       key: 'notifications',
