@@ -20,6 +20,7 @@ describe('NotificationsPage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     localStorage.clear();
+    vi.mocked(chat.useMarkChatRead).mockReturnValue({ mutate: vi.fn() } as never);
   });
 
   it('пусто → «Уведомлений нет»', () => {

@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CalendarPlus, Clock, MessageSquare } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useClientSessions } from '../api/calendar';
-import { useClientChatUnread } from '../api/chat';
+import { useClientChatUnread, useMarkChatRead } from '../api/chat';
 import { BackBar } from '../components/BackBar';
 import { HoldToDelete } from '../components/HoldToDelete';
 import { toISODate } from '../lib/calendar';
@@ -31,6 +31,18 @@ export function NotificationsPage() {
   const [dismissed, setDismissed] = useState<Set<string>>(() => loadDismissed());
 
   const items = buildClientNotifications({ sessions, unread, now, dismissed });
+
+  // Уход со страницы уведомлений = «увидел» новые сообщения → отмечаем чат прочитанным,
+  // чтобы счётчик непрочитанных (плитка «Уведомления» на главной) сбросился. Карточка
+  // остаётся видимой и кликабельной всё время просмотра — отметка происходит при размонтировании.
+  const markReadMutate = useMarkChatRead().mutate;
+  const unreadRef = useRef(unread);
+  unreadRef.current = unread;
+  useEffect(() => {
+    return () => {
+      if (unreadRef.current > 0) markReadMutate();
+    };
+  }, [markReadMutate]);
 
   return (
     <div className="flex h-full flex-col">
