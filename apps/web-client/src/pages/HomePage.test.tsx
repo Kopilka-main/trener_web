@@ -98,10 +98,10 @@ describe('HomePage (client)', () => {
     expect(screen.getByText('Подключите тренера')).toBeInTheDocument();
   });
 
-  it('есть непрочитанные → плитка «Уведомления» primary (acid-fill)', () => {
+  it('есть непрочитанные → плитка «Чат» primary (acid-fill)', () => {
     setup({ linked: true, unread: 3 });
     renderPage();
-    const tile = screen.getByText('Уведомления').closest('button');
+    const tile = screen.getByText('Чат').closest('button');
     expect(tile?.className).toContain('tile-shadow-primary');
   });
 });

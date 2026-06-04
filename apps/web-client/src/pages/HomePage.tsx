@@ -116,9 +116,10 @@ export function HomePage() {
   const trainerName = trainer.data
     ? `${trainer.data.firstName} ${trainer.data.lastName}`.trim()
     : null;
-  // Один acid-fill на экран.
+  // Один acid-fill на экран. Непрочитанные в чате → акцент на «Чат»; иначе прочие
+  // уведомления (подтверждения/скоро) → «Уведомления»; иначе не привязан → «Тренер».
   const primaryKey: TileKey | null =
-    notifications.length > 0 ? 'notifications' : !linked ? 'trainer' : null;
+    unread > 0 ? 'chat' : notifications.length > 0 ? 'notifications' : !linked ? 'trainer' : null;
 
   const tiles: Array<{
     key: TileKey;
