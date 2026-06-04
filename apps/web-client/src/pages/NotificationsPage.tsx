@@ -4,7 +4,6 @@ import { CalendarPlus, Clock, MessageSquare } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useClientSessions } from '../api/calendar';
 import { useClientChatUnread, useMarkChatRead } from '../api/chat';
-import { BackBar } from '../components/BackBar';
 import { HoldToDelete } from '../components/HoldToDelete';
 import { toISODate } from '../lib/calendar';
 import {
@@ -46,10 +45,7 @@ export function NotificationsPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="px-4">
-        <BackBar />
-      </div>
-      <h1 className="px-4 pt-2 font-[family-name:var(--font-display)] text-[24px] text-ink">
+      <h1 className="px-4 pt-5 font-[family-name:var(--font-display)] text-[24px] text-ink">
         Уведомления
       </h1>
 

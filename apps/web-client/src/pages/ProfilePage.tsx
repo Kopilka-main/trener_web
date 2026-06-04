@@ -4,7 +4,6 @@ import { Plus, X } from 'lucide-react';
 import type { ClientAccountResponse } from '@trener/shared';
 import { useClientMe, useClientLogout, useUpdateClientProfile } from '../api/auth';
 import { useClientTrainer } from '../api/trainer';
-import { BackBar } from '../components/BackBar';
 
 const CONTACT_TYPES = ['Телефон', 'WhatsApp', 'Telegram', 'MAX', 'Instagram', 'Прочее'] as const;
 type Contact = { type: string; value: string };
@@ -15,9 +14,8 @@ export function ProfilePage() {
   const update = useUpdateClientProfile();
 
   return (
-    <div className="flex flex-1 flex-col gap-5 px-4 pb-6 pt-2">
-      <BackBar />
-      <h1 className="-mt-1 font-[family-name:var(--font-display)] text-[28px] text-ink">Профиль</h1>
+    <div className="flex flex-1 flex-col gap-5 px-4 pb-6 pt-5">
+      <h1 className="font-[family-name:var(--font-display)] text-[28px] text-ink">Профиль</h1>
       {me.data ? (
         <ProfileForm account={me.data.account} linked={me.data.link !== null} update={update} />
       ) : (
