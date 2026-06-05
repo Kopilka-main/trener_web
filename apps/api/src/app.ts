@@ -128,6 +128,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     db: deps.db,
     clock,
     resolveScope: (id) => clientAuthSvc.resolveScope(id),
+    notifyTrainerConfirmation: (trainerId, payload) => {
+      void pushSvc.notifyTrainer(trainerId, payload).catch(() => undefined);
+    },
   });
   registerClientAppMeasurementsModule(app, {
     db: deps.db,
@@ -155,7 +158,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerExercisesModule(app, { db: deps.db, clock });
   registerTemplatesModule(app, { db: deps.db, clock });
   registerClientWorkoutsModule(app, { db: deps.db, clock });
-  registerSessionsModule(app, { db: deps.db, clock });
+  registerSessionsModule(app, {
+    db: deps.db,
+    clock,
+    notifyClientPending: (clientId, payload) => {
+      void pushSvc.notifyByClientId(clientId, payload).catch(() => undefined);
+    },
+  });
   registerPackagesModule(app, { db: deps.db, clock });
   registerAccountingModule(app, { db: deps.db, clock });
   registerMeasurementsModule(app, { db: deps.db, clock });

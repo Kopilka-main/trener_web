@@ -8,8 +8,22 @@ import { sessionsRoutes } from './sessions.routes.js';
 // Регистрация доменного модуля sessions в composition root: собирает repo+service
 // и навешивает HTTP-роуты. Здесь (НЕ в *.routes.ts) допустим импорт repo/db.
 // Проверку связи клиента repo делает прямым запросом к trainer_clients (без зависимости от clients.repo).
-export function registerSessionsModule(app: FastifyInstance, deps: { db: Db; clock: Clock }): void {
+export function registerSessionsModule(
+  app: FastifyInstance,
+  deps: {
+    db: Db;
+    clock: Clock;
+    // Тренер назначил занятие → пуш клиенту «подтвердите» (fire-and-forget).
+    notifyClientPending?: (
+      clientId: string,
+      payload: { title: string; body: string; url?: string },
+    ) => void;
+  },
+): void {
   const repo = makeSessionsRepo(deps.db);
-  const svc = makeSessionsService(repo, { newId: deps.clock.newId });
+  const svc = makeSessionsService(repo, {
+    newId: deps.clock.newId,
+    ...(deps.notifyClientPending ? { notifyClientPending: deps.notifyClientPending } : {}),
+  });
   sessionsRoutes(app, svc);
 }

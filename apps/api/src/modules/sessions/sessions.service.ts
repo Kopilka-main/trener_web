@@ -4,9 +4,38 @@ import type { CreateSessionRequest, SessionResponse, UpdateSessionRequest } from
 import { AppError, notFound } from '../../errors.js';
 import type { ListRange } from './sessions.repo.js';
 
-export type SessionsDeps = { newId: () => string };
+export type SessionPushPayload = { title: string; body: string; url?: string };
+export type SessionsDeps = {
+  newId: () => string;
+  // Тренер назначил занятие → пуш КЛИЕНТУ «подтвердите». Fire-and-forget.
+  notifyClientPending?: (clientId: string, payload: SessionPushPayload) => void;
+  // Клиент подтвердил/отклонил → пуш ТРЕНЕРУ. Fire-and-forget.
+  notifyTrainerConfirmation?: (trainerId: string, payload: SessionPushPayload) => void;
+};
 
 const clientNotLinked = () => new AppError(400, 'CLIENT_NOT_LINKED', 'Клиент не связан с тренером');
+
+const RU_MONTHS_SHORT = [
+  'янв',
+  'фев',
+  'мар',
+  'апр',
+  'мая',
+  'июн',
+  'июл',
+  'авг',
+  'сен',
+  'окт',
+  'ноя',
+  'дек',
+];
+
+// 'YYYY-MM-DD' + 'HH:MM' → '3 июн, 14:30' для текста пуша.
+function formatWhen(date: string, time: string): string {
+  const [, m, d] = date.split('-').map(Number);
+  const mo = RU_MONTHS_SHORT[(m ?? 1) - 1] ?? '';
+  return `${String(d ?? '')} ${mo}, ${time}`;
+}
 
 export function makeSessionsService(repo: SessionsRepo, deps: SessionsDeps) {
   return {
@@ -24,6 +53,14 @@ export function makeSessionsService(repo: SessionsRepo, deps: SessionsDeps) {
         isOnline: input.isOnline,
         workoutId: input.workoutId ?? null,
       });
+      // Назначили занятие → клиенту пуш с просьбой подтвердить.
+      if (deps.notifyClientPending) {
+        deps.notifyClientPending(input.clientId, {
+          title: 'Новое занятие',
+          body: `Подтвердите занятие ${formatWhen(input.date, input.startTime)}`,
+          url: '/calendar',
+        });
+      }
       return toResponse(row);
     },
 
@@ -98,7 +135,26 @@ export function makeSessionsService(repo: SessionsRepo, deps: SessionsDeps) {
       }
       const row = await repo.setClientConfirmation(trainerId, clientId, id, status);
       if (!row) throw notFound('Занятие не найдено');
-      return toResponse(row);
+      const session = toResponse(row);
+      // Клиент подтвердил/отклонил → тренеру пуш.
+      if (deps.notifyTrainerConfirmation) {
+        const when = formatWhen(session.date, session.startTime);
+        deps.notifyTrainerConfirmation(
+          trainerId,
+          status === 'declined'
+            ? {
+                title: 'Занятие отклонено',
+                body: `Клиент отклонил занятие ${when} — согласуйте другое время`,
+                url: `/clients/${clientId}/calendar`,
+              }
+            : {
+                title: 'Занятие подтверждено',
+                body: `Клиент подтвердил занятие ${when}`,
+                url: `/clients/${clientId}/calendar`,
+              },
+        );
+      }
+      return session;
     },
   };
 }
