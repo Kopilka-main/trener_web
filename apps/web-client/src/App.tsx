@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { TelemetryRouter } from '@trener/telemetry';
 import { useClientMe } from './api/auth';
 import { BackFab } from './components/BackFab';
 import { ConnectBanner } from './components/ConnectBanner';
@@ -46,6 +47,7 @@ export function App() {
   const linked = me.data.link !== null;
   return (
     <div className="mx-auto flex h-[100dvh] max-w-[430px] flex-col overflow-hidden bg-bg">
+      <TelemetryRouter />
       {!linked && <ConnectBanner />}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <Routes>
