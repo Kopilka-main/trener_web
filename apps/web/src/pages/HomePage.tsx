@@ -232,9 +232,9 @@ export function HomePage() {
           type="button"
           onClick={() => void navigate('/profile')}
           aria-label="Профиль тренера"
-          className="absolute right-2 top-2 z-10 flex items-center justify-center transition-transform active:scale-95"
+          className="absolute right-3 top-3 z-10 flex items-center justify-center transition-transform active:scale-95"
         >
-          <Settings size={20} strokeWidth={1.8} className="text-[var(--color-ink-muted)]" />
+          <Settings size={30} strokeWidth={1.8} className="text-[var(--color-ink-muted)]" />
         </button>
 
         {/* ─── Hero: большое число сессий сегодня ─── */}
