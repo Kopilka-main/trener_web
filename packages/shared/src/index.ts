@@ -14,3 +14,4 @@ export * from './chat.js';
 export * from './files.js';
 export * from './progress-photos.js';
 export * from './medical.js';
+export * from './telemetry.js';
