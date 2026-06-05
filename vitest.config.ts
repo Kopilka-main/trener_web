@@ -17,6 +17,8 @@ export default defineConfig({
           globals: false,
           environment: 'node',
           include: ['packages/**/*.test.ts', 'apps/api/**/*.test.ts', 'apps/api/**/*.itest.ts'],
+          // packages/telemetry — отдельный jsdom-проект (ниже), не гоняем его в node.
+          exclude: ['packages/telemetry/**'],
           // *.itest.ts шарят одну Postgres-БД и чистят таблицы в beforeEach. При
           // параллельном прогоне файлов truncate одного файла затирает данные другого
           // (гонки duplicate key / пустые списки). Сериализуем файлы — изоляция на
@@ -26,6 +28,8 @@ export default defineConfig({
       },
       // Web-проект: React-компоненты в jsdom (конфиг — в apps/web/vite.config.ts).
       './apps/web/vite.config.ts',
+      // Пакет телеметрии: jsdom (клики/DOM/React) — конфиг рядом с пакетом.
+      './packages/telemetry/vitest.config.ts',
     ],
   },
 });

@@ -16,6 +16,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@tanstack/react-query": "^5.62.0",
     "@trener/shared": "*",
+    "@trener/telemetry": "*",
     "@zxing/browser": "^0.2.0",
     "lucide-react": "^1.17.0",
     "qrcode.react": "^4.2.0",
