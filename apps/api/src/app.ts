@@ -123,8 +123,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     db: deps.db,
     clock,
     resolveScope: (id) => clientAuthSvc.resolveScope(id),
-    notifyTrainer: (trainerId, payload) => {
-      void pushSvc.notifyTrainer(trainerId, payload).catch(() => undefined);
+    notifyTrainer: (trainerId, clientId, build) => {
+      void pushSvc.notifyTrainerFrom(trainerId, clientId, build).catch(() => undefined);
     },
   });
   registerClientAppTrainerModule(app, {
@@ -137,8 +137,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     db: deps.db,
     clock,
     resolveScope: (id) => clientAuthSvc.resolveScope(id),
-    notifyTrainerConfirmation: (trainerId, payload) => {
-      void pushSvc.notifyTrainer(trainerId, payload).catch(() => undefined);
+    notifyTrainerConfirmation: (trainerId, clientId, build) => {
+      void pushSvc.notifyTrainerFrom(trainerId, clientId, build).catch(() => undefined);
     },
   });
   registerClientAppMeasurementsModule(app, {
@@ -169,15 +169,15 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerClientWorkoutsModule(app, {
     db: deps.db,
     clock,
-    notify: (clientId, payload) => {
-      void pushSvc.notifyByClientId(clientId, payload).catch(() => undefined);
+    notify: (clientId, trainerId, build) => {
+      void pushSvc.notifyClientFrom(clientId, trainerId, build).catch(() => undefined);
     },
   });
   registerSessionsModule(app, {
     db: deps.db,
     clock,
-    notifyClientPending: (clientId, payload) => {
-      void pushSvc.notifyByClientId(clientId, payload).catch(() => undefined);
+    notifyClientPending: (clientId, trainerId, build) => {
+      void pushSvc.notifyClientFrom(clientId, trainerId, build).catch(() => undefined);
     },
   });
   registerPackagesModule(app, { db: deps.db, clock });
@@ -186,8 +186,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerChatModule(app, {
     db: deps.db,
     clock,
-    notifyNewMessage: (clientId, payload) => {
-      void pushSvc.notifyByClientId(clientId, payload).catch(() => undefined);
+    notifyNewMessage: (clientId, trainerId, build) => {
+      void pushSvc.notifyClientFrom(clientId, trainerId, build).catch(() => undefined);
     },
   });
   registerFilesModule(app, { db: deps.db, storage });

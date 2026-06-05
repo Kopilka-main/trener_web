@@ -7,10 +7,18 @@ import type { ListRange } from './sessions.repo.js';
 export type SessionPushPayload = { title: string; body: string; url?: string };
 export type SessionsDeps = {
   newId: () => string;
-  // Тренер назначил занятие → пуш КЛИЕНТУ «подтвердите». Fire-and-forget.
-  notifyClientPending?: (clientId: string, payload: SessionPushPayload) => void;
-  // Клиент подтвердил/отклонил → пуш ТРЕНЕРУ. Fire-and-forget.
-  notifyTrainerConfirmation?: (trainerId: string, payload: SessionPushPayload) => void;
+  // Тренер назначил занятие → пуш КЛИЕНТУ (build получает имя тренера). Fire-and-forget.
+  notifyClientPending?: (
+    clientId: string,
+    trainerId: string,
+    build: (trainerName: string) => SessionPushPayload,
+  ) => void;
+  // Клиент подтвердил/отклонил → пуш ТРЕНЕРУ (build получает имя клиента). Fire-and-forget.
+  notifyTrainerConfirmation?: (
+    trainerId: string,
+    clientId: string,
+    build: (clientName: string) => SessionPushPayload,
+  ) => void;
 };
 
 const clientNotLinked = () => new AppError(400, 'CLIENT_NOT_LINKED', 'Клиент не связан с тренером');
@@ -53,13 +61,13 @@ export function makeSessionsService(repo: SessionsRepo, deps: SessionsDeps) {
         isOnline: input.isOnline,
         workoutId: input.workoutId ?? null,
       });
-      // Назначили занятие → клиенту пуш с просьбой подтвердить.
+      // Назначили занятие → клиенту пуш с просьбой подтвердить (с именем тренера).
       if (deps.notifyClientPending) {
-        deps.notifyClientPending(input.clientId, {
+        deps.notifyClientPending(input.clientId, trainerId, (trainerName) => ({
           title: 'Новое занятие',
-          body: `Подтвердите занятие ${formatWhen(input.date, input.startTime)}`,
+          body: `${trainerName} назначил занятие ${formatWhen(input.date, input.startTime)} — подтвердите`,
           url: '/calendar',
-        });
+        }));
       }
       return toResponse(row);
     },
@@ -136,20 +144,19 @@ export function makeSessionsService(repo: SessionsRepo, deps: SessionsDeps) {
       const row = await repo.setClientConfirmation(trainerId, clientId, id, status);
       if (!row) throw notFound('Занятие не найдено');
       const session = toResponse(row);
-      // Клиент подтвердил/отклонил → тренеру пуш.
+      // Клиент подтвердил/отклонил → тренеру пуш (с именем клиента).
       if (deps.notifyTrainerConfirmation) {
         const when = formatWhen(session.date, session.startTime);
-        deps.notifyTrainerConfirmation(
-          trainerId,
+        deps.notifyTrainerConfirmation(trainerId, clientId, (clientName) =>
           status === 'declined'
             ? {
                 title: 'Занятие отклонено',
-                body: `Клиент отклонил занятие ${when} — согласуйте другое время`,
+                body: `${clientName} отклонил занятие ${when} — согласуйте другое время`,
                 url: `/clients/${clientId}/calendar`,
               }
             : {
                 title: 'Занятие подтверждено',
-                body: `Клиент подтвердил занятие ${when}`,
+                body: `${clientName} подтвердил занятие ${when}`,
                 url: `/clients/${clientId}/calendar`,
               },
         );

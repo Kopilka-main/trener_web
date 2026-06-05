@@ -69,6 +69,30 @@ export function makePushService(repo: PushRepo, deps: PushDeps) {
       if (!enabled) return;
       await sendToSubs(await repo.listByTrainer(trainerId), payload);
     },
+
+    // Пуш КЛИЕНТУ с подстановкой имени ТРЕНЕРА: build(имяТренера) → payload.
+    async notifyClientFrom(
+      clientId: string,
+      trainerId: string,
+      build: (trainerName: string) => PushPayload,
+    ): Promise<void> {
+      if (!enabled) return;
+      const accountId = await repo.accountIdByClientId(clientId);
+      if (!accountId) return;
+      const name = (await repo.trainerName(trainerId)) ?? 'Тренер';
+      await sendToSubs(await repo.listByClientAccount(accountId), build(name));
+    },
+
+    // Пуш ТРЕНЕРУ с подстановкой имени КЛИЕНТА: build(имяКлиента) → payload.
+    async notifyTrainerFrom(
+      trainerId: string,
+      clientId: string,
+      build: (clientName: string) => PushPayload,
+    ): Promise<void> {
+      if (!enabled) return;
+      const name = (await repo.clientName(clientId)) ?? 'Клиент';
+      await sendToSubs(await repo.listByTrainer(trainerId), build(name));
+    },
   };
 }
 

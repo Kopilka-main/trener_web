@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
-import { pushSubscriptions, clients } from '../../db/schema.js';
+import { pushSubscriptions, clients, trainers } from '../../db/schema.js';
 
 export type StoredSubscription = { endpoint: string; p256dh: string; auth: string };
 // Владелец подписки: ровно один из двух.
@@ -64,6 +64,25 @@ export function makePushRepo(db: Db) {
         .where(eq(clients.id, clientId))
         .limit(1);
       return row?.accountId ?? null;
+    },
+
+    // Имя «Имя Фамилия» для подстановки в текст уведомления (отправитель).
+    async clientName(clientId: string): Promise<string | null> {
+      const [row] = await db
+        .select({ firstName: clients.firstName, lastName: clients.lastName })
+        .from(clients)
+        .where(eq(clients.id, clientId))
+        .limit(1);
+      return row ? `${row.firstName} ${row.lastName}`.trim() : null;
+    },
+
+    async trainerName(trainerId: string): Promise<string | null> {
+      const [row] = await db
+        .select({ firstName: trainers.firstName, lastName: trainers.lastName })
+        .from(trainers)
+        .where(eq(trainers.id, trainerId))
+        .limit(1);
+      return row ? `${row.firstName} ${row.lastName}`.trim() : null;
     },
   };
 }

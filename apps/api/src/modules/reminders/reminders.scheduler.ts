@@ -52,11 +52,11 @@ async function tick(repo: RemindersRepo, push: PushService, now: Date): Promise<
     const diff = whenMs(s.date, s.startTime) - now.getTime();
     if (Number.isNaN(diff) || diff < 0 || diff > DAY_MS) continue;
     if (await repo.markIfNew(`soon:${s.id}`, now)) {
-      await push.notifyByClientId(s.clientId, {
+      await push.notifyClientFrom(s.clientId, s.trainerId, (trainerName) => ({
         title: 'Скоро занятие',
-        body: `Занятие ${formatWhen(s.date, s.startTime)}`,
+        body: `Занятие с ${trainerName} ${formatWhen(s.date, s.startTime)}`,
         url: '/calendar',
-      });
+      }));
     }
   }
 

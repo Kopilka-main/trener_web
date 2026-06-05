@@ -6,10 +6,18 @@ export type PushPayload = { title: string; body: string; url?: string };
 export type ChatDeps = {
   newId: () => string;
   now: () => Date;
-  // Опциональный триггер web push КЛИЕНТУ (на сообщения тренера). Fire-and-forget.
-  notify?: (clientId: string, payload: PushPayload) => void;
-  // Опциональный триггер web push ТРЕНЕРУ (на сообщения клиента). Fire-and-forget.
-  notifyTrainer?: (trainerId: string, payload: PushPayload) => void;
+  // Пуш КЛИЕНТУ (сообщение тренера): build получает имя ТРЕНЕРА. Fire-and-forget.
+  notify?: (
+    clientId: string,
+    trainerId: string,
+    build: (trainerName: string) => PushPayload,
+  ) => void;
+  // Пуш ТРЕНЕРУ (сообщение клиента): build получает имя КЛИЕНТА. Fire-and-forget.
+  notifyTrainer?: (
+    trainerId: string,
+    clientId: string,
+    build: (clientName: string) => PushPayload,
+  ) => void;
 };
 
 function toConversationResponse(
@@ -63,16 +71,20 @@ export function makeChatService(repo: ChatRepo, deps: ChatDeps) {
         deps.now(),
         senderRole,
       );
-      // Пуш получателю: тренер пишет → клиенту; клиент пишет → тренеру.
+      // Пуш получателю с именем отправителя в заголовке (как в мессенджерах).
       const preview = input.body.length > 120 ? `${input.body.slice(0, 117)}…` : input.body;
       if (senderRole === 'trainer' && deps.notify) {
-        deps.notify(clientId, { title: 'Новое сообщение', body: preview, url: '/chat' });
+        deps.notify(clientId, trainerId, (trainerName) => ({
+          title: trainerName,
+          body: preview,
+          url: '/chat',
+        }));
       } else if (senderRole === 'client' && deps.notifyTrainer) {
-        deps.notifyTrainer(trainerId, {
-          title: 'Новое сообщение',
+        deps.notifyTrainer(trainerId, clientId, (clientName) => ({
+          title: clientName,
           body: preview,
           url: `/clients/${clientId}/chat`,
-        });
+        }));
       }
       return toMessageResponse(row);
     },

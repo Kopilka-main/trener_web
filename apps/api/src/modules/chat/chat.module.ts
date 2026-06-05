@@ -15,10 +15,11 @@ export function registerChatModule(
   deps: {
     db: Db;
     clock: Clock;
-    // Триггер web push: вызывается при сообщении ТРЕНЕРА клиенту (fire-and-forget).
+    // Триггер web push КЛИЕНТУ при сообщении тренера (build получает имя тренера).
     notifyNewMessage?: (
       clientId: string,
-      payload: { title: string; body: string; url?: string },
+      trainerId: string,
+      build: (trainerName: string) => { title: string; body: string; url?: string },
     ) => void;
   },
 ): void {

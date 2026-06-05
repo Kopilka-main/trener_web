@@ -13,10 +13,11 @@ export function registerSessionsModule(
   deps: {
     db: Db;
     clock: Clock;
-    // Тренер назначил занятие → пуш клиенту «подтвердите» (fire-and-forget).
+    // Тренер назначил занятие → пуш клиенту (build получает имя тренера).
     notifyClientPending?: (
       clientId: string,
-      payload: { title: string; body: string; url?: string },
+      trainerId: string,
+      build: (trainerName: string) => { title: string; body: string; url?: string },
     ) => void;
   },
 ): void {

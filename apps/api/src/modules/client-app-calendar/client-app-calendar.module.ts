@@ -12,10 +12,11 @@ export function registerClientAppCalendarModule(
     db: Db;
     clock: Clock;
     resolveScope: (id: string) => Promise<ClientLink>;
-    // Клиент подтвердил/отклонил занятие → пуш тренеру (fire-and-forget).
+    // Клиент подтвердил/отклонил занятие → пуш тренеру (build получает имя клиента).
     notifyTrainerConfirmation?: (
       trainerId: string,
-      payload: { title: string; body: string; url?: string },
+      clientId: string,
+      build: (clientName: string) => { title: string; body: string; url?: string },
     ) => void;
   },
 ): void {

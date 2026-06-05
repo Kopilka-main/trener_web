@@ -20,8 +20,12 @@ import { AppError, notFound } from '../../errors.js';
 export type ClientWorkoutsDeps = {
   newId: () => string;
   now: () => Date;
-  // Тренер назначил тренировку → пуш КЛИЕНТУ (только если создал не сам клиент). Fire-and-forget.
-  notify?: (clientId: string, payload: { title: string; body: string; url?: string }) => void;
+  // Тренер назначил тренировку → пуш КЛИЕНТУ (build получает имя тренера). Fire-and-forget.
+  notify?: (
+    clientId: string,
+    trainerId: string,
+    build: (trainerName: string) => { title: string; body: string; url?: string },
+  ) => void;
 };
 
 const unknownExercise = () =>
@@ -90,9 +94,13 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
       const row = await repo.create(trainerId, clientId, plan, createdByClient);
       // null = одно из упражнений невидимо тренеру.
       if (!row) throw unknownExercise();
-      // Назначил тренер (не сам клиент) → пуш клиенту.
+      // Назначил тренер (не сам клиент) → пуш клиенту с именем тренера.
       if (!createdByClient && deps.notify) {
-        deps.notify(clientId, { title: 'Новая тренировка', body: input.name, url: '/workouts' });
+        deps.notify(clientId, trainerId, (trainerName) => ({
+          title: 'Новая тренировка',
+          body: `${trainerName} добавил тренировку: ${input.name}`,
+          url: '/workouts',
+        }));
       }
       return toResponse(row);
     },

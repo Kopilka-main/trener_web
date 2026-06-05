@@ -12,10 +12,11 @@ export function registerClientAppChatModule(
     db: Db;
     clock: Clock;
     resolveScope: (id: string) => Promise<ClientLink>;
-    // Триггер web push ТРЕНЕРУ на сообщение клиента (fire-and-forget).
+    // Триггер web push ТРЕНЕРУ на сообщение клиента (build получает имя клиента).
     notifyTrainer?: (
       trainerId: string,
-      payload: { title: string; body: string; url?: string },
+      clientId: string,
+      build: (clientName: string) => { title: string; body: string; url?: string },
     ) => void;
   },
 ): void {

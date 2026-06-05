@@ -15,8 +15,12 @@ export function registerClientWorkoutsModule(
   deps: {
     db: Db;
     clock: Clock;
-    // Тренер назначил тренировку → пуш клиенту (fire-and-forget).
-    notify?: (clientId: string, payload: { title: string; body: string; url?: string }) => void;
+    // Тренер назначил тренировку → пуш клиенту (build получает имя тренера).
+    notify?: (
+      clientId: string,
+      trainerId: string,
+      build: (trainerName: string) => { title: string; body: string; url?: string },
+    ) => void;
   },
 ): void {
   const repo = makeClientWorkoutsRepo(deps.db);
