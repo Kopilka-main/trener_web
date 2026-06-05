@@ -68,7 +68,6 @@ input[type='number'] {
 /* Mobile container — каркас как на эскизах */
 .app-shell {
   width: 100%;
-  max-width: 430px;
   height: 100vh;
   height: 100dvh;
   margin-inline: auto;
@@ -77,6 +76,15 @@ input[type='number'] {
   flex-direction: column;
   position: relative;
   overflow: hidden;
+}
+
+/* Рамка-«каркас» 430px — только на десктоп/планшет. На телефонах (включая
+   крупные iPhone ≥430px) приложение во весь экран; иначе в PWA по бокам
+   видны поля цвета «обоев» — выглядит как «прямоугольник внутри экрана». */
+@media (min-width: 600px) {
+  .app-shell {
+    max-width: 430px;
+  }
 }
 
 /* Плитки на главном экране тренера — material-like elevation и
