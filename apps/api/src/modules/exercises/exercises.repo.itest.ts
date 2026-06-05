@@ -18,6 +18,7 @@ describe.skipIf(!url)('exercises.repo (integration)', () => {
   beforeEach(async () => {
     await db.execute(sql`DELETE FROM workout_template_exercises`);
     await db.execute(sql`DELETE FROM workout_templates`);
+    await db.execute(sql`DELETE FROM client_workouts`);
     await db.execute(sql`DELETE FROM exercises`);
     await db.execute(sql`DELETE FROM trainers`);
     await db.insert(trainers).values([

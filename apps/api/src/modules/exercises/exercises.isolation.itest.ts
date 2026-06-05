@@ -20,6 +20,7 @@ describe.skipIf(!url)('exercises isolation (integration)', () => {
   }
 
   beforeEach(async () => {
+    await db.execute(sql`DELETE FROM client_workouts`);
     await db.execute(sql`DELETE FROM exercises`);
     await db.execute(sql`DELETE FROM sessions_auth`);
     await db.execute(sql`DELETE FROM trainers`);

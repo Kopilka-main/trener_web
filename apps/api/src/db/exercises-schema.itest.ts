@@ -9,6 +9,7 @@ describe.skipIf(!url)('exercises schema (integration)', () => {
   const { db, sql: pg } = createDb(url!);
 
   beforeEach(async () => {
+    await db.execute(sql`DELETE FROM client_workouts`);
     await db.execute(sql`DELETE FROM exercises`);
     await db.execute(sql`DELETE FROM trainers`);
   });
