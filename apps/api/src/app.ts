@@ -37,6 +37,7 @@ import { registerChatModule } from './modules/chat/chat.module.js';
 import { registerFilesModule } from './modules/files/files.module.js';
 import { registerProgressPhotosModule } from './modules/progress-photos/progress-photos.module.js';
 import { registerMedicalModule } from './modules/medical-records/medical.module.js';
+import { makeTelemetry, registerTelemetryRoutes } from './modules/telemetry/telemetry.module.js';
 import { makeStorage } from './files/storage.js';
 
 // uploadsDir опционален: в проде передаётся из env.UPLOADS_DIR (server.ts).
@@ -59,6 +60,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   // Общий провайдер newId/now для auth и доменных модулей (детерминизм в тестах).
   const clock = realClock;
+  const telemetry = makeTelemetry(deps.db, clock);
 
   // Общий files-repo: используется auth/client-auth/client-app-trainer для аватаров
   // (раздача + чистка прежних файлов), а также модулем files.
@@ -123,6 +125,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     clock,
     resolveScope: (id) => clientAuthSvc.resolveScope(id),
   });
+  await registerTelemetryRoutes(app, telemetry);
 
   registerClientsModule(app, { db: deps.db, storage, clock });
   registerExercisesModule(app, { db: deps.db, clock });
