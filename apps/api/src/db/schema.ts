@@ -604,3 +604,10 @@ export const pushSubscriptions = pgTable(
     ),
   ],
 );
+
+// Дедупликация запланированных (по времени) push: ключ вроде `soon:<sessionId>`,
+// `bday:<clientId>:<year>` — пишется один раз, повторный tick планировщика не дублирует.
+export const pushReminders = pgTable('push_reminders', {
+  key: text('key').primaryKey(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});

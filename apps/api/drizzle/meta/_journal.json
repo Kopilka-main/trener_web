@@ -253,6 +253,13 @@
       "when": 1780669635442,
       "tag": "0035_chubby_goliath",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1780671777360,
+      "tag": "0036_odd_eddie_brock",
+      "breakpoints": true
     }
   ]
 }

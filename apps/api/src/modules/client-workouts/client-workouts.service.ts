@@ -17,7 +17,12 @@ import type {
 } from '@trener/shared';
 import { AppError, notFound } from '../../errors.js';
 
-export type ClientWorkoutsDeps = { newId: () => string; now: () => Date };
+export type ClientWorkoutsDeps = {
+  newId: () => string;
+  now: () => Date;
+  // Тренер назначил тренировку → пуш КЛИЕНТУ (только если создал не сам клиент). Fire-and-forget.
+  notify?: (clientId: string, payload: { title: string; body: string; url?: string }) => void;
+};
 
 const unknownExercise = () =>
   new AppError(400, 'UNKNOWN_EXERCISE', 'Упражнение недоступно тренеру');
@@ -85,6 +90,10 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
       const row = await repo.create(trainerId, clientId, plan, createdByClient);
       // null = одно из упражнений невидимо тренеру.
       if (!row) throw unknownExercise();
+      // Назначил тренер (не сам клиент) → пуш клиенту.
+      if (!createdByClient && deps.notify) {
+        deps.notify(clientId, { title: 'Новая тренировка', body: input.name, url: '/workouts' });
+      }
       return toResponse(row);
     },
 

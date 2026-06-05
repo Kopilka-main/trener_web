@@ -12,10 +12,19 @@ import { clientWorkoutsRoutes } from './client-workouts.routes.js';
 // (связь тренер↔клиент). Здесь (НЕ в *.routes.ts) допустим импорт repo/db.
 export function registerClientWorkoutsModule(
   app: FastifyInstance,
-  deps: { db: Db; clock: Clock },
+  deps: {
+    db: Db;
+    clock: Clock;
+    // Тренер назначил тренировку → пуш клиенту (fire-and-forget).
+    notify?: (clientId: string, payload: { title: string; body: string; url?: string }) => void;
+  },
 ): void {
   const repo = makeClientWorkoutsRepo(deps.db);
-  const svc = makeClientWorkoutsService(repo, { newId: deps.clock.newId, now: deps.clock.now });
+  const svc = makeClientWorkoutsService(repo, {
+    newId: deps.clock.newId,
+    now: deps.clock.now,
+    ...(deps.notify ? { notify: deps.notify } : {}),
+  });
   const requireClientAccess = makeRequireClientAccess(makeClientsRepo(deps.db));
   clientWorkoutsRoutes(app, svc, requireClientAccess);
 }

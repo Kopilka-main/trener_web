@@ -1,6 +1,8 @@
 import { buildApp } from './app.js';
 import { parseEnv } from './env.js';
 import { createDb } from './db/client.js';
+import { realClock } from './core/app-deps.js';
+import { startRemindersScheduler } from './modules/reminders/reminders.scheduler.js';
 
 const env = parseEnv(process.env);
 const { db } = createDb(env.DATABASE_URL);
@@ -19,6 +21,15 @@ buildApp({
   .then((app) =>
     app.listen({ port: env.PORT, host: '0.0.0.0' }).then((address) => {
       app.log.info(`[trener-api] ${address}`);
+      // Планировщик напоминаний (скоро занятие, пакет, нет занятий, день рождения).
+      startRemindersScheduler({
+        db,
+        push: app.pushService,
+        now: realClock.now,
+        log: (msg, err) => {
+          app.log.error({ err }, msg);
+        },
+      });
     }),
   )
   .catch((err: unknown) => {

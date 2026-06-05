@@ -39,7 +39,15 @@ import { registerProgressPhotosModule } from './modules/progress-photos/progress
 import { registerMedicalModule } from './modules/medical-records/medical.module.js';
 import { makeTelemetry, registerTelemetryRoutes } from './modules/telemetry/telemetry.module.js';
 import { registerPushModule, type VapidConfig } from './modules/push/push.module.js';
+import type { PushService } from './modules/push/push.service.js';
 import { makeStorage } from './files/storage.js';
+
+// Доступ к push-сервису из server.ts (для планировщика напоминаний).
+declare module 'fastify' {
+  interface FastifyInstance {
+    pushService: PushService;
+  }
+}
 
 // uploadsDir опционален: в проде передаётся из env.UPLOADS_DIR (server.ts).
 // В тестах опускается — тогда создаётся изолированный временный каталог,
@@ -110,6 +118,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     clock,
     ...(deps.vapid ? { vapid: deps.vapid } : {}),
   });
+  app.decorate('pushService', pushSvc);
   registerClientAppChatModule(app, {
     db: deps.db,
     clock,
@@ -157,7 +166,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerClientsModule(app, { db: deps.db, storage, clock });
   registerExercisesModule(app, { db: deps.db, clock });
   registerTemplatesModule(app, { db: deps.db, clock });
-  registerClientWorkoutsModule(app, { db: deps.db, clock });
+  registerClientWorkoutsModule(app, {
+    db: deps.db,
+    clock,
+    notify: (clientId, payload) => {
+      void pushSvc.notifyByClientId(clientId, payload).catch(() => undefined);
+    },
+  });
   registerSessionsModule(app, {
     db: deps.db,
     clock,
