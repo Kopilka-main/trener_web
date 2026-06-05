@@ -578,19 +578,29 @@ export const errorLogs = pgTable(
   ],
 );
 
-// Web Push: подписки клиентских аккаунтов на системные уведомления (по устройствам).
+// Web Push: подписки на системные уведомления (по устройствам). Владелец — ЛИБО
+// клиентский аккаунт, ЛИБО тренер (ровно один из двух, check ниже).
 // endpoint уникален — повторная подписка того же браузера обновляет привязку.
 export const pushSubscriptions = pgTable(
   'push_subscriptions',
   {
     id: text('id').primaryKey(),
-    clientAccountId: text('client_account_id')
-      .notNull()
-      .references(() => clientAccounts.id, { onDelete: 'cascade' }),
+    clientAccountId: text('client_account_id').references(() => clientAccounts.id, {
+      onDelete: 'cascade',
+    }),
+    trainerId: text('trainer_id').references(() => trainers.id, { onDelete: 'cascade' }),
     endpoint: text('endpoint').notNull().unique(),
     p256dh: text('p256dh').notNull(),
     auth: text('auth').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('idx_push_subs_account').on(t.clientAccountId)],
+  (t) => [
+    index('idx_push_subs_account').on(t.clientAccountId),
+    index('idx_push_subs_trainer').on(t.trainerId),
+    // Ровно один владелец: client_account_id XOR trainer_id.
+    check(
+      'push_subs_owner_chk',
+      sql`(${t.clientAccountId} IS NOT NULL) <> (${t.trainerId} IS NOT NULL)`,
+    ),
+  ],
 );

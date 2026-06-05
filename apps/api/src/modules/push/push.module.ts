@@ -4,7 +4,7 @@ import type { Db } from '../../db/client.js';
 import type { Clock } from '../../core/app-deps.js';
 import { makePushRepo } from './push.repo.js';
 import { makePushService, type PushService, type PushSender } from './push.service.js';
-import { pushRoutes } from './push.routes.js';
+import { clientPushRoutes, trainerPushRoutes } from './push.routes.js';
 
 export type VapidConfig = { publicKey: string; privateKey: string; subject: string };
 
@@ -50,6 +50,7 @@ export function registerPushModule(
       app.log.error({ err: e }, msg);
     },
   });
-  pushRoutes(app, svc);
+  clientPushRoutes(app, svc);
+  trainerPushRoutes(app, svc);
   return svc;
 }

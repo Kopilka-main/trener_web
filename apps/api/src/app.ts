@@ -103,10 +103,20 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     clock,
     resolveScope: (id) => clientAuthSvc.resolveScope(id),
   });
+  // Web Push: один сервис на оба направления чата — client-app-chat шлёт пуш ТРЕНЕРУ,
+  // chat (ниже) шлёт пуш КЛИЕНТУ. Создаём до клиентских модулей чата.
+  const pushSvc = registerPushModule(app, {
+    db: deps.db,
+    clock,
+    ...(deps.vapid ? { vapid: deps.vapid } : {}),
+  });
   registerClientAppChatModule(app, {
     db: deps.db,
     clock,
     resolveScope: (id) => clientAuthSvc.resolveScope(id),
+    notifyTrainer: (trainerId, payload) => {
+      void pushSvc.notifyTrainer(trainerId, payload).catch(() => undefined);
+    },
   });
   registerClientAppTrainerModule(app, {
     db: deps.db,
@@ -149,12 +159,6 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerPackagesModule(app, { db: deps.db, clock });
   registerAccountingModule(app, { db: deps.db, clock });
   registerMeasurementsModule(app, { db: deps.db, clock });
-  // Web Push: модуль push даёт сервис, чат шлёт через него пуш клиенту на новое сообщение.
-  const pushSvc = registerPushModule(app, {
-    db: deps.db,
-    clock,
-    ...(deps.vapid ? { vapid: deps.vapid } : {}),
-  });
   registerChatModule(app, {
     db: deps.db,
     clock,

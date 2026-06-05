@@ -1,5 +1,5 @@
 import type { PushSubscriptionInput } from '@trener/shared';
-import type { PushRepo, StoredSubscription } from './push.repo.js';
+import type { PushRepo, StoredSubscription, SubOwner } from './push.repo.js';
 
 export type PushPayload = { title: string; body: string; url?: string };
 export type SendResult = { gone: boolean };
@@ -17,9 +17,7 @@ export type PushDeps = {
 export function makePushService(repo: PushRepo, deps: PushDeps) {
   const enabled = deps.publicKey !== '';
 
-  async function notifyClientAccount(clientAccountId: string, payload: PushPayload): Promise<void> {
-    if (!enabled) return;
-    const subs = await repo.listByClientAccount(clientAccountId);
+  async function sendToSubs(subs: StoredSubscription[], payload: PushPayload): Promise<void> {
     if (subs.length === 0) return;
     const body = JSON.stringify(payload);
     await Promise.all(
@@ -34,14 +32,19 @@ export function makePushService(repo: PushRepo, deps: PushDeps) {
     );
   }
 
+  async function notifyClientAccount(clientAccountId: string, payload: PushPayload): Promise<void> {
+    if (!enabled) return;
+    await sendToSubs(await repo.listByClientAccount(clientAccountId), payload);
+  }
+
   return {
     enabled,
     publicKey: deps.publicKey,
 
-    async subscribe(clientAccountId: string, sub: PushSubscriptionInput): Promise<void> {
+    async subscribe(owner: SubOwner, sub: PushSubscriptionInput): Promise<void> {
       await repo.upsert(
         deps.newId(),
-        clientAccountId,
+        owner,
         { endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth: sub.keys.auth },
         deps.now(),
       );
@@ -53,12 +56,18 @@ export function makePushService(repo: PushRepo, deps: PushDeps) {
 
     notifyClientAccount,
 
-    // Триггер по clients.id (используется чатом): резолвит accountId и шлёт на все его устройства.
+    // Триггер по clients.id (чат тренер→клиент): резолвит accountId и шлёт.
     async notifyByClientId(clientId: string, payload: PushPayload): Promise<void> {
       if (!enabled) return;
       const accountId = await repo.accountIdByClientId(clientId);
       if (!accountId) return;
       await notifyClientAccount(accountId, payload);
+    },
+
+    // Триггер тренеру (чат клиент→тренер) на все его устройства.
+    async notifyTrainer(trainerId: string, payload: PushPayload): Promise<void> {
+      if (!enabled) return;
+      await sendToSubs(await repo.listByTrainer(trainerId), payload);
     },
   };
 }

@@ -20,6 +20,7 @@ import { getTheme, setTheme, type Theme } from '../lib/theme';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Avatar } from '../components/Avatar';
 import { HoldToDelete } from '../components/HoldToDelete';
+import { NotificationsToggle } from '../components/NotificationsToggle';
 import { useLogout, useMe, useRemoveMyAvatar, useUpdateMe, useUploadMyAvatar } from '../api/auth';
 import { useCreateGym, useDeleteGym, useGyms } from '../api/gyms';
 import { AvatarCropper } from '../components/AvatarCropper';
@@ -157,6 +158,10 @@ export function ProfilePage() {
               </div>
             ))}
           </div>
+        </Section>
+
+        <Section title="Уведомления">
+          <NotificationsToggle />
         </Section>
 
         <Section title="Тема">
