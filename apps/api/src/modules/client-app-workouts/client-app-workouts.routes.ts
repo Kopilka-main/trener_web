@@ -39,15 +39,18 @@ export function clientAppWorkoutsRoutes(
   const typed = app.withTypeProvider<ZodTypeProvider>();
   const scope = makeClientScope(resolveScope);
 
-  // Список клиента: свои (любой статус) + тренерские ТОЛЬКО завершённые (owner='all', затем
-  // фильтр). Тренерские черновики/активные клиенту не показываем. Секционирование — на фронте.
+  // Список клиента: свои (любой статус) + тренерские завершённые (история) + тренерские
+  // ЧЕРНОВИКИ (назначенные клиенту тренировки). Тренерские АКТИВНЫЕ — это занятия, которые
+  // тренер проводит сам в зале, их клиенту не показываем. Секционирование — на фронте.
   typed.get(
     '/api/client/workouts',
     { preHandler: requireClient, schema: { response: { 200: workoutListResponseSchema } } },
     async (req) => {
       const { trainerId, clientId } = await scope(req);
       const all = await svc.list(trainerId, clientId, 'all');
-      const workouts = all.filter((w) => w.createdByClient || w.status === 'completed');
+      const workouts = all.filter(
+        (w) => w.createdByClient || w.status === 'completed' || w.status === 'draft',
+      );
       return { workouts };
     },
   );
@@ -58,8 +61,9 @@ export function clientAppWorkoutsRoutes(
     async (req) => {
       const { trainerId, clientId } = await scope(req);
       const workout = await svc.get(trainerId, clientId, req.params.wid);
-      // Клиент видит деталь только своей (любой статус) или завершённой тренерской.
-      if (!workout.createdByClient && workout.status !== 'completed')
+      // Клиент видит деталь своей (любой статус), завершённой тренерской (история)
+      // или тренерского черновика (назначенная тренировка). Тренерскую активную — нет.
+      if (!workout.createdByClient && workout.status !== 'completed' && workout.status !== 'draft')
         throw notFound('Тренировка не найдена');
       return { workout };
     },

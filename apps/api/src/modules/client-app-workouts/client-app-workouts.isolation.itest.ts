@@ -115,8 +115,10 @@ describe.skipIf(!url)('client-app-workouts (isolation)', () => {
     });
     expect(list.statusCode).toBe(200);
     const workouts = list.json<{ workouts: { id: string; status: string }[] }>().workouts;
-    expect(workouts.map((w) => w.id)).toEqual([doneWid]);
-    expect(workouts.every((w) => w.status === 'completed')).toBe(true);
+    // Клиент видит завершённую тренерскую (история) И тренерский черновик (назначенную).
+    const ids = workouts.map((w) => w.id);
+    expect(ids).toContain(doneWid);
+    expect(ids).toContain(draftWid);
 
     const okDetail = await app.inject({
       method: 'GET',
@@ -124,12 +126,13 @@ describe.skipIf(!url)('client-app-workouts (isolation)', () => {
       headers: { cookie: cookieA },
     });
     expect(okDetail.statusCode).toBe(200);
+    // Деталь назначенного черновика клиенту доступна (просмотр плана).
     const draftDetail = await app.inject({
       method: 'GET',
       url: `/api/client/workouts/${draftWid}`,
       headers: { cookie: cookieA },
     });
-    expect(draftDetail.statusCode).toBe(404);
+    expect(draftDetail.statusCode).toBe(200);
 
     const regB = await app.inject({
       method: 'POST',

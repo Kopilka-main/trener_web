@@ -1,6 +1,23 @@
 import { describe, it, expect } from 'vitest';
 import { buildClientNotifications } from './notifications';
-import type { PackageResponse, SessionResponse } from '@trener/shared';
+import type { PackageResponse, SessionResponse, WorkoutResponse } from '@trener/shared';
+
+function workout(over: Partial<WorkoutResponse>): WorkoutResponse {
+  return {
+    id: 'w1',
+    clientId: 'c1',
+    name: 'Push — грудь',
+    status: 'draft',
+    startedAt: null,
+    completedAt: null,
+    durationSec: null,
+    trainerNote: null,
+    rpe: null,
+    createdByClient: false,
+    exercises: [],
+    ...over,
+  };
+}
 
 function session(over: Partial<SessionResponse>): SessionResponse {
   return {
@@ -151,5 +168,34 @@ describe('buildClientNotifications', () => {
     expect(ended[0]?.kind).toBe('package');
     expect(ended[0]?.text).toContain('Массаж');
     expect(ended[0]?.text).toContain('закончился');
+  });
+
+  it('назначенная тренером тренировка (черновик, не своя) → workout', () => {
+    const r = buildClientNotifications({
+      sessions: [],
+      unread: 0,
+      now: NOW,
+      dismissed: new Set(),
+      workouts: [workout({ id: 'w1', name: 'Pull', createdByClient: false, status: 'draft' })],
+    });
+    const wn = r.find((n) => n.kind === 'workout');
+    expect(wn?.id).toBe('workout:w1');
+    expect(wn?.text).toContain('Pull');
+    expect(wn?.to).toBe('/workouts');
+  });
+
+  it('своя или завершённая/активная тренировка не даёт workout-уведомления', () => {
+    const r = buildClientNotifications({
+      sessions: [],
+      unread: 0,
+      now: NOW,
+      dismissed: new Set(),
+      workouts: [
+        workout({ id: 'own', createdByClient: true, status: 'draft' }),
+        workout({ id: 'done', createdByClient: false, status: 'completed' }),
+        workout({ id: 'act', createdByClient: false, status: 'active' }),
+      ],
+    });
+    expect(r.some((n) => n.kind === 'workout')).toBe(false);
   });
 });

@@ -5,10 +5,12 @@ import { NotificationsPage } from './NotificationsPage';
 import * as calendar from '../api/calendar';
 import * as chat from '../api/chat';
 import * as packages from '../api/packages';
+import * as workouts from '../api/workouts';
 
 vi.mock('../api/calendar');
 vi.mock('../api/chat');
 vi.mock('../api/packages');
+vi.mock('../api/workouts');
 
 function renderPage() {
   return render(
@@ -24,6 +26,7 @@ describe('NotificationsPage', () => {
     localStorage.clear();
     vi.mocked(chat.useMarkChatRead).mockReturnValue({ mutate: vi.fn() } as never);
     vi.mocked(packages.useClientPackages).mockReturnValue({ data: [] } as never);
+    vi.mocked(workouts.useClientWorkouts).mockReturnValue({ data: [] } as never);
   });
 
   it('пусто → «Уведомлений нет»', () => {

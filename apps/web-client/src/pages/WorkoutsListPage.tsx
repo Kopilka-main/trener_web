@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, ChevronUp, Play, Plus, RotateCcw } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Play, Plus, RotateCcw } from 'lucide-react';
 import type { WorkoutExercisePlan, WorkoutResponse, WorkoutSetResponse } from '@trener/shared';
 import { useClientMe } from '../api/auth';
 import { useClientWorkouts, useCreateWorkout } from '../api/workouts';
@@ -90,6 +90,8 @@ export function WorkoutsListPage() {
   // превью (DraftView): не запускаются и не отображаются в списке, удаляются при уходе.
   const current = all.find((w) => w.status === 'active');
   const completed = all.filter((w) => w.status === 'completed');
+  // Назначенные тренером тренировки (его черновики) — отдельной секцией.
+  const assigned = all.filter((w) => !w.createdByClient && w.status === 'draft');
   const busy = create.isPending;
 
   // Открыть существующую тренировку (активную/итоги — страница сама разберётся).
@@ -113,7 +115,7 @@ export function WorkoutsListPage() {
   // Элементы пикера «Выберите шаблон»: свои сохранённые шаблоны + проведённые
   // тренером тренировки. Выбор любого сразу запускает тренировку по его плану.
   const trainerWorkouts = [...all]
-    .filter((w) => !w.createdByClient && w.exercises.length > 0)
+    .filter((w) => !w.createdByClient && w.status === 'completed' && w.exercises.length > 0)
     .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
   const pickItems: TemplatePick[] = [
     ...(templates.data ?? []).map((t) => ({
@@ -159,6 +161,28 @@ export function WorkoutsListPage() {
       {q.isLoading && <p className="text-sm text-ink-muted">Загрузка…</p>}
       {q.isError && (
         <p className="text-sm text-ink-muted">Не удалось загрузить. Потяните обновить.</p>
+      )}
+
+      {assigned.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="px-1 text-[12px] font-semibold uppercase tracking-wide text-ink-mutedxl">
+            Назначено тренером
+          </h2>
+          {assigned.map((w) => (
+            <button
+              key={w.id}
+              type="button"
+              onClick={() => void navigate(`/workouts/${w.id}`)}
+              className="flex items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3 text-left active:bg-card-elevated"
+            >
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-[15px] font-semibold text-ink">{w.name}</span>
+                <span className="text-[12px] text-ink-muted">{w.exercises.length} упр.</span>
+              </span>
+              <ChevronRight size={18} className="shrink-0 text-ink-mutedxl" />
+            </button>
+          ))}
+        </section>
       )}
 
       {completed.length > 0 && (

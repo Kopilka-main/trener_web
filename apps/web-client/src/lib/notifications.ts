@@ -1,7 +1,7 @@
-import type { PackageResponse, SessionResponse } from '@trener/shared';
+import type { PackageResponse, SessionResponse, WorkoutResponse } from '@trener/shared';
 import { MONTH_GEN, parseISO } from './calendar';
 
-export type ClientNotificationKind = 'confirm' | 'soon' | 'chat' | 'package';
+export type ClientNotificationKind = 'confirm' | 'soon' | 'chat' | 'package' | 'workout';
 
 /** Пакет считается заканчивающимся, когда остаток занятий ≤ этого порога. */
 const PACKAGE_LOW_THRESHOLD = 2;
@@ -57,10 +57,23 @@ export function buildClientNotifications(args: {
   now: Date;
   dismissed: Set<string>;
   packages?: PackageResponse[];
+  workouts?: WorkoutResponse[];
 }): ClientNotification[] {
-  const { sessions, unread, now, dismissed, packages = [] } = args;
+  const { sessions, unread, now, dismissed, packages = [], workouts = [] } = args;
   const nowMs = now.getTime();
   const out: ClientNotification[] = [];
+
+  // 0) Назначенные тренером тренировки (черновики, не свои) — новая тренировка к выполнению.
+  for (const w of workouts) {
+    if (!w.createdByClient && w.status === 'draft') {
+      out.push({
+        id: `workout:${w.id}`,
+        kind: 'workout',
+        text: `Новая тренировка от тренера: ${w.name}`,
+        to: '/workouts',
+      });
+    }
+  }
 
   const future = sessions
     .filter((s) => s.status !== 'cancelled' && startMs(s) >= nowMs)

@@ -116,6 +116,7 @@ export function HomePage() {
     now,
     dismissed: loadDismissed(),
     packages,
+    workouts,
   });
 
   const dateLabel = `СЕГОДНЯ · ${DAY_SHORT[now.getDay()]} ${now.getDate()} ${MONTH_FULL[now.getMonth()]}`;
