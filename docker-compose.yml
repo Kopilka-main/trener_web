@@ -26,6 +26,10 @@ services:
       PORT: 3001
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/trener
       COOKIE_SECRET: ${COOKIE_SECRET:?COOKIE_SECRET обязателен}
+      # Web Push (VAPID). Без ключей push мягко отключён. Берутся из /opt/trener/.env
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@fitbond.ru}
     depends_on:
       postgres: { condition: service_healthy }
     volumes:

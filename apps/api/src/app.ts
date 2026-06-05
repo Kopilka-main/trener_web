@@ -38,12 +38,20 @@ import { registerFilesModule } from './modules/files/files.module.js';
 import { registerProgressPhotosModule } from './modules/progress-photos/progress-photos.module.js';
 import { registerMedicalModule } from './modules/medical-records/medical.module.js';
 import { makeTelemetry, registerTelemetryRoutes } from './modules/telemetry/telemetry.module.js';
+import { registerPushModule, type VapidConfig } from './modules/push/push.module.js';
 import { makeStorage } from './files/storage.js';
 
 // uploadsDir опционален: в проде передаётся из env.UPLOADS_DIR (server.ts).
 // В тестах опускается — тогда создаётся изолированный временный каталог,
 // чтобы не ломать существующие вызовы buildApp({db, cookieSecret, isProd}).
-export type AppDeps = { db: Db; cookieSecret: string; isProd: boolean; uploadsDir?: string };
+// vapid опционален: без ключей web push мягко отключён.
+export type AppDeps = {
+  db: Db;
+  cookieSecret: string;
+  isProd: boolean;
+  uploadsDir?: string;
+  vapid?: VapidConfig;
+};
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
@@ -141,7 +149,19 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerPackagesModule(app, { db: deps.db, clock });
   registerAccountingModule(app, { db: deps.db, clock });
   registerMeasurementsModule(app, { db: deps.db, clock });
-  registerChatModule(app, { db: deps.db, clock });
+  // Web Push: модуль push даёт сервис, чат шлёт через него пуш клиенту на новое сообщение.
+  const pushSvc = registerPushModule(app, {
+    db: deps.db,
+    clock,
+    ...(deps.vapid ? { vapid: deps.vapid } : {}),
+  });
+  registerChatModule(app, {
+    db: deps.db,
+    clock,
+    notifyNewMessage: (clientId, payload) => {
+      void pushSvc.notifyByClientId(clientId, payload).catch(() => undefined);
+    },
+  });
   registerFilesModule(app, { db: deps.db, storage });
   registerProgressPhotosModule(app, { db: deps.db, storage, clock });
   registerMedicalModule(app, { db: deps.db, storage, clock });

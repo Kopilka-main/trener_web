@@ -239,6 +239,13 @@
       "when": 1780650115032,
       "tag": "0033_luxuriant_shape",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1780668260493,
+      "tag": "0034_bright_warpath",
+      "breakpoints": true
     }
   ]
 }

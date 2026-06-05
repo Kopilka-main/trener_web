@@ -27,10 +27,12 @@
     "fastify-type-provider-zod": "^4.0.2",
     "pino": "^9.5.0",
     "postgres": "^3.4.5",
+    "web-push": "^3.6.7",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@types/web-push": "^3.6.4",
     "drizzle-kit": "^0.30.0",
     "tsx": "^4.19.2"
   }

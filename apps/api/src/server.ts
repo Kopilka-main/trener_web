@@ -10,6 +10,11 @@ buildApp({
   cookieSecret: env.COOKIE_SECRET,
   isProd: env.NODE_ENV === 'production',
   uploadsDir: env.UPLOADS_DIR,
+  vapid: {
+    publicKey: env.VAPID_PUBLIC_KEY,
+    privateKey: env.VAPID_PRIVATE_KEY,
+    subject: env.VAPID_SUBJECT,
+  },
 })
   .then((app) =>
     app.listen({ port: env.PORT, host: '0.0.0.0' }).then((address) => {

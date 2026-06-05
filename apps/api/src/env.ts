@@ -6,6 +6,10 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   COOKIE_SECRET: z.string().min(32, 'COOKIE_SECRET должен быть не короче 32 символов'),
   UPLOADS_DIR: z.string().default('/data/uploads'),
+  // Web Push (VAPID). Опциональны: без них push мягко отключается.
+  VAPID_PUBLIC_KEY: z.string().default(''),
+  VAPID_PRIVATE_KEY: z.string().default(''),
+  VAPID_SUBJECT: z.string().default('mailto:admin@fitbond.ru'),
 });
 
 export type Env = z.infer<typeof envSchema>;

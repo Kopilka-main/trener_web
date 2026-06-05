@@ -6,6 +6,7 @@ import { initTelemetry, ErrorBoundary } from '@trener/telemetry';
 import { App } from './App';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
 import { DevInspector } from './components/DevInspector';
+import { registerPushServiceWorker } from './lib/push';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -24,6 +25,9 @@ initTelemetry({
     ? { appVersion: import.meta.env.VITE_APP_VERSION as string }
     : {}),
 });
+
+// Регистрируем SW для приёма push (без запроса разрешений — подписка по тапу в профиле).
+void registerPushServiceWorker();
 
 createRoot(rootEl).render(
   <StrictMode>

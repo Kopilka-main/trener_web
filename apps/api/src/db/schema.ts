@@ -577,3 +577,20 @@ export const errorLogs = pgTable(
     check('error_logs_level_chk', sql`${t.level} IN ('error', 'warn', 'fatal')`),
   ],
 );
+
+// Web Push: подписки клиентских аккаунтов на системные уведомления (по устройствам).
+// endpoint уникален — повторная подписка того же браузера обновляет привязку.
+export const pushSubscriptions = pgTable(
+  'push_subscriptions',
+  {
+    id: text('id').primaryKey(),
+    clientAccountId: text('client_account_id')
+      .notNull()
+      .references(() => clientAccounts.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint').notNull().unique(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('idx_push_subs_account').on(t.clientAccountId)],
+);

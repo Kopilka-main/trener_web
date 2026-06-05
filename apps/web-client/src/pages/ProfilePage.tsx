@@ -12,6 +12,7 @@ import {
 } from '../api/auth';
 import { useClientTrainer } from '../api/trainer';
 import { AvatarCropper } from '../components/AvatarCropper';
+import { NotificationsToggle } from '../components/NotificationsToggle';
 
 const CONTACT_TYPES = ['Телефон', 'WhatsApp', 'Telegram', 'MAX', 'Instagram', 'Прочее'] as const;
 type Contact = { type: string; value: string };
@@ -217,6 +218,12 @@ function ProfileView({
           </div>
         </div>
       )}
+
+      {/* Уведомления */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-ink-muted">Уведомления</span>
+        <NotificationsToggle />
+      </div>
 
       {/* Тема оформления */}
       <div className="flex flex-col gap-1.5">
