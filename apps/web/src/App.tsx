@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { TelemetryRouter } from '@trener/telemetry';
 import { RequireAuth } from './components/RequireAuth';
 import { AppShell } from './components/AppShell';
 import { DevInspector } from './components/DevInspector';
@@ -28,6 +29,7 @@ import { ClientSectionPage } from './pages/StubPage';
 export function App() {
   return (
     <>
+      <TelemetryRouter />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
