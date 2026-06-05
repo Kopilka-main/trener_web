@@ -24,10 +24,14 @@ describe('telemetry service', () => {
   it('атрибутирует актора и санитизирует props (только примитивы, кап ключей)', async () => {
     const { repo, events } = fakeRepo();
     const svc = makeTelemetryService(repo, deps);
-    const big: Record<string, unknown> = { a: 'x', bad: { nested: 1 } };
+    const big: Record<string, string | number | boolean | null | { nested: number }> = {
+      a: 'x',
+      bad: { nested: 1 },
+    };
     for (let i = 0; i < 30; i++) big[`k${String(i)}`] = i;
+    const props = big as unknown as Record<string, string | number | boolean | null>;
     const n = await svc.ingestEvents(
-      { source: 'client', sessionId: 's1', events: [{ name: 'click', props: big }] },
+      { source: 'client', sessionId: 's1', events: [{ name: 'click', props }] },
       { actorType: 'client', actorId: 'ca1' },
       'UA',
     );
