@@ -20,6 +20,11 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/icon.svg" />
+    <!-- iOS: запуск с экрана «Домой» на весь экран (без letterbox-прямоугольника). -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Тренер" />
     <!-- iOS Safari: гасим зум по двойному тапу и авто-увеличение текста; пинч/фокус-зум — через viewport выше. -->
     <style>
       html {
