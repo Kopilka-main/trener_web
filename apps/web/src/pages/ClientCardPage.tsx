@@ -79,12 +79,12 @@ export function ClientCardPage() {
   const [connectOpen, setConnectOpen] = useState(false);
 
   if (client.isPending) {
-    return <p className="px-5 py-6 text-sm text-ink-muted">Загрузка…</p>;
+    return <p className="px-2 py-6 text-sm text-ink-muted">Загрузка…</p>;
   }
 
   if (client.isError || !client.data) {
     return (
-      <p className="px-5 py-6 text-sm text-ink-muted" role="alert">
+      <p className="px-2 py-6 text-sm text-ink-muted" role="alert">
         Не удалось загрузить клиента.
       </p>
     );
@@ -112,7 +112,7 @@ export function ClientCardPage() {
 
   return (
     <div className="flex min-h-full flex-col">
-      <div className="flex flex-col gap-5 px-5 pb-8 pt-4">
+      <div className="flex flex-col gap-5 px-2 pb-8 pt-4">
         {/* Шапка профиля: аватар + имя + возраст + связь (цвет по подключению). */}
         <div className="flex items-center gap-4">
           <Avatar
@@ -224,7 +224,7 @@ export function ClientCardPage() {
                   {key === 'stats' && achievements > 0 && (
                     <span className="flex items-center gap-1 text-[22px] font-bold leading-none text-ink">
                       {achievements}
-                      <TrendingUp size={18} strokeWidth={2.4} className="text-accent" />
+                      <TrendingUp size={18} strokeWidth={2.4} className="text-accent-text" />
                     </span>
                   )}
                   {key === 'payments' && (

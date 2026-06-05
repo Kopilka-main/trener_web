@@ -125,7 +125,7 @@ export function ClientWorkoutsPage() {
         back={`/clients/${id}`}
       />
 
-      <div className="flex flex-1 flex-col gap-6 px-5 pb-28 pt-2">
+      <div className="flex flex-1 flex-col gap-6 px-2 pb-28 pt-2">
         {workouts.isPending && <p className="text-sm text-ink-muted">Загрузка…</p>}
 
         {workouts.isError && (

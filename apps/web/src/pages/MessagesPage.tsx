@@ -78,7 +78,7 @@ export function MessagesPage() {
     <div className="flex min-h-full flex-col">
       <ScreenHeader title="Сообщения" back="/" />
 
-      <div className="flex flex-1 flex-col gap-2 px-5 pb-8 pt-2">
+      <div className="flex flex-1 flex-col gap-2 px-2 pb-8 pt-2">
         {/* Поиск клиента по имени или контакту — написать любому. */}
         <div className="flex items-center gap-2 rounded-xl border border-line bg-chip px-3 py-2.5">
           <Search size={16} className="shrink-0 text-ink-mutedxl" />

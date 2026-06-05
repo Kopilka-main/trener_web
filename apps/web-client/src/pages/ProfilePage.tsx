@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Mail, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Mail, Moon, Pencil, Plus, Sun, Trash2, X } from 'lucide-react';
 import type { ClientAccountResponse } from '@trener/shared';
+import { getTheme, setTheme, type Theme } from '../lib/theme';
 import {
   useClientMe,
   useClientLogout,
@@ -23,7 +24,7 @@ export function ProfilePage() {
 
   if (!me.data) {
     return (
-      <div className="flex flex-1 flex-col gap-5 px-4 pb-6 pt-5">
+      <div className="flex flex-1 flex-col gap-5 px-2 pb-6 pt-5">
         <h1 className="font-[family-name:var(--font-display)] text-[28px] text-ink">Профиль</h1>
         <p className="text-sm text-ink-muted">Загрузка…</p>
       </div>
@@ -112,7 +113,7 @@ function ProfileView({
   const fullName = `${account.firstName} ${account.lastName}`.trim();
 
   return (
-    <div className="flex flex-1 flex-col gap-5 px-4 pb-6 pt-5">
+    <div className="flex flex-1 flex-col gap-5 px-2 pb-6 pt-5">
       <div className="flex items-center justify-between">
         <h1 className="font-[family-name:var(--font-display)] text-[28px] text-ink">Профиль</h1>
         <button
@@ -174,7 +175,7 @@ function ProfileView({
       ) : (
         <Link
           to="/connect"
-          className="rounded-xl bg-card px-4 py-3 text-[14px] font-semibold text-accent active:bg-card-elevated"
+          className="rounded-xl bg-card px-4 py-3 text-[14px] font-semibold text-accent-text active:bg-card-elevated"
         >
           Подключить тренера
         </Link>
@@ -217,6 +218,12 @@ function ProfileView({
         </div>
       )}
 
+      {/* Тема оформления */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-ink-muted">Тема</span>
+        <ThemeToggle />
+      </div>
+
       <button
         type="button"
         onClick={onLogout}
@@ -226,6 +233,56 @@ function ProfileView({
         Выйти
       </button>
     </div>
+  );
+}
+
+/** Переключатель светлой/тёмной темы. */
+function ThemeToggle() {
+  const [theme, setLocal] = useState<Theme>(() => getTheme());
+  const choose = (t: Theme) => {
+    setTheme(t);
+    setLocal(t);
+  };
+  return (
+    <div className="flex gap-2 rounded-2xl bg-card p-1.5">
+      <ThemeOption
+        label="Светлая"
+        active={theme === 'light'}
+        onClick={() => choose('light')}
+        Icon={Sun}
+      />
+      <ThemeOption
+        label="Тёмная"
+        active={theme === 'dark'}
+        onClick={() => choose('dark')}
+        Icon={Moon}
+      />
+    </div>
+  );
+}
+
+function ThemeOption({
+  label,
+  active,
+  onClick,
+  Icon,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  Icon: typeof Sun;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-[14px] font-semibold transition-colors ${
+        active ? 'bg-accent text-accent-on' : 'text-ink-muted active:bg-card-elevated'
+      }`}
+    >
+      <Icon size={16} strokeWidth={2} />
+      {label}
+    </button>
   );
 }
 
@@ -334,7 +391,7 @@ function ProfileEdit({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-1 flex-col gap-4 px-4 pb-6 pt-5">
+    <form onSubmit={handleSubmit} className="flex flex-1 flex-col gap-4 px-2 pb-6 pt-5">
       <div className="flex items-center justify-between">
         <button
           type="button"

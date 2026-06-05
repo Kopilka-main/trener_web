@@ -4,7 +4,7 @@ import { ChevronLeft } from 'lucide-react';
 import { popBack } from '../lib/backStack';
 
 const STORAGE_KEY = 'backfab.y';
-const FAB = 36; // диаметр кнопки, px
+const FAB = 47; // диаметр кнопки, px
 const MARGIN = 16; // отступ от краёв по вертикали
 const DRAG_THRESHOLD = 6; // сдвиг, после которого жест считается перетаскиванием
 
@@ -23,9 +23,23 @@ function initialY(): number {
 }
 
 /**
+ * Родитель текущего экрана по ИЕРАРХИИ страниц (а не по истории браузера):
+ * главная → разделы 1-го уровня → 2-го и т.д. По умолчанию — на сегмент вверх по URL.
+ * Особый случай: проведение тренировки /workouts/:wid/run ведёт к списку /workouts
+ * (минуя экран-деталь, который существует только для завершённых).
+ */
+function parentPath(pathname: string): string {
+  const segs = pathname.replace(/\/+$/, '').split('/').filter(Boolean);
+  if (segs.length <= 1) return '/';
+  if (segs[0] === 'workouts' && segs[segs.length - 1] === 'run') return '/workouts';
+  segs.pop();
+  return '/' + segs.join('/');
+}
+
+/**
  * Плавающая круглая кнопка «назад»: видна на всех внутренних экранах, прижата к
- * правому краю и перетаскивается по вертикали. Короткий тап — шаг назад по истории;
- * позиция запоминается в localStorage. Перенесена из тренерского приложения; в клиенте
+ * правому краю и перетаскивается по вертикали. Короткий тап — на родительский экран
+ * по иерархии; позиция в localStorage. Перенесена из тренерского приложения; в клиенте
  * прокручивается вся страница, поэтому позиционирование `fixed` (а не `absolute`).
  */
 export function BackFab() {
@@ -62,11 +76,8 @@ export function BackFab() {
     if (moved.current) return;
     // Если открыт оверлей (лист выбора и т.п.) — кнопка закрывает его, а не уходит.
     if (popBack()) return;
-    // React Router хранит индекс записи в history.state.idx. Если он 0 — это первый
-    // экран сессии (страницу открыли по прямой ссылке), шагать назад некуда → на главную.
-    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
-    if (idx > 0) void navigate(-1);
-    else void navigate('/');
+    // Всегда поднимаемся по ИЕРАРХИИ страниц (родитель по уровню), не по истории.
+    void navigate(parentPath(location.pathname));
   }
 
   return (
@@ -80,7 +91,7 @@ export function BackFab() {
       style={{ top: y, width: FAB, height: FAB }}
       className="fixed right-3 z-[60] flex touch-none select-none items-center justify-center rounded-full bg-card-elevated/55 text-ink opacity-65 shadow-[0_4px_14px_-2px_rgba(0,0,0,0.45)] backdrop-blur-sm transition-opacity active:bg-chip/70 active:opacity-100"
     >
-      <ChevronLeft size={20} strokeWidth={2} />
+      <ChevronLeft size={26} strokeWidth={2} />
     </button>
   );
 }

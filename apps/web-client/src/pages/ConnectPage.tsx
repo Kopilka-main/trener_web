@@ -4,8 +4,8 @@ import { useNavigate } from 'react-router-dom';
 export function ConnectPage({ code }: { code: string }) {
   const navigate = useNavigate();
   return (
-    <div className="flex flex-1 flex-col justify-center gap-6 px-6 py-8 text-center">
-      <h1 className="font-[family-name:var(--font-display)] text-[28px] leading-tight text-accent">
+    <div className="flex flex-1 flex-col justify-center gap-6 px-2 py-8 text-center">
+      <h1 className="font-[family-name:var(--font-display)] text-[28px] leading-tight text-accent-text">
         Подключение
       </h1>
       <p className="text-sm text-ink-muted">

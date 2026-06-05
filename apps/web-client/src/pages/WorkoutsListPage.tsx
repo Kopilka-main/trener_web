@@ -137,7 +137,7 @@ export function WorkoutsListPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4 px-4 pb-6 pt-5">
+    <div className="flex flex-1 flex-col gap-4 px-2 pb-6 pt-5">
       <h1 className="font-[family-name:var(--font-display)] text-[28px] text-ink">Тренировки</h1>
 
       {!linked ? (

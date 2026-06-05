@@ -86,7 +86,7 @@ export function AccountingPage() {
     <div className="flex min-h-full flex-col">
       <ScreenHeader title="Финансы" back="/" />
 
-      <div className="flex flex-col gap-2 px-4 pt-1">
+      <div className="flex flex-col gap-2 px-2 pt-1">
         <RangePresets value={range} onChange={setRange} />
         {range === 'custom' ? (
           <CustomDateRange
@@ -116,7 +116,7 @@ export function AccountingPage() {
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col px-4 pb-10 pt-3">
+      <div className="flex flex-1 flex-col px-2 pb-10 pt-3">
         {tab === 'summary' && <SummaryTab from={period.from} to={period.to} />}
         {tab === 'income' && <IncomeTab from={period.from} to={period.to} />}
         {tab === 'expenses' && <ExpensesTab from={period.from} to={period.to} />}
@@ -390,7 +390,7 @@ function SummaryTab({ from, to }: { from: string; to: string }) {
           <span className={KICKER}>Доходы</span>
           <span
             className="text-[22px] font-bold leading-none tabular-nums"
-            style={{ color: 'var(--color-accent)' }}
+            style={{ color: 'var(--color-accent-text)' }}
           >
             +{formatMoney(totalIncome)}
           </span>

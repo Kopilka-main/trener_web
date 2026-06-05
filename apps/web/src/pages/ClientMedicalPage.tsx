@@ -39,7 +39,7 @@ export function ClientMedicalPage() {
     <div className="flex min-h-full flex-col">
       <ScreenHeader title="Медкарта" back={`/clients/${id}`} />
 
-      <div className="flex flex-1 flex-col gap-3 px-5 pb-8 pt-1">
+      <div className="flex flex-1 flex-col gap-3 px-2 pb-8 pt-1">
         {records.isPending && <p className="py-6 text-sm text-ink-muted">Загрузка…</p>}
 
         {records.isError && (
@@ -100,7 +100,7 @@ function RecordCard({ clientId, record }: { clientId: string; record: MedicalRec
             />
           ) : (
             <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-chip">
-              <FileText size={22} strokeWidth={1.8} className="text-accent" />
+              <FileText size={22} strokeWidth={1.8} className="text-accent-text" />
             </span>
           )}
           <span className="flex min-w-0 flex-1 flex-col">
@@ -172,9 +172,9 @@ function AddRecordForm({ clientId }: { clientId: string }) {
         <div className="flex items-center gap-3 rounded-xl bg-card-elevated p-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-chip">
             {file.type.startsWith('image/') ? (
-              <ImageIcon size={18} strokeWidth={1.8} className="text-accent" />
+              <ImageIcon size={18} strokeWidth={1.8} className="text-accent-text" />
             ) : (
-              <FileText size={18} strokeWidth={1.8} className="text-accent" />
+              <FileText size={18} strokeWidth={1.8} className="text-accent-text" />
             )}
           </span>
           <span className="min-w-0 flex-1 truncate text-[14px] text-ink">{file.name}</span>

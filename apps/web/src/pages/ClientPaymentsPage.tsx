@@ -102,7 +102,7 @@ export function ClientPaymentsPage() {
     <div className="flex min-h-full flex-col">
       <ScreenHeader title={title} back={`/clients/${id}`} />
 
-      <div className="flex flex-1 flex-col gap-5 px-5 pb-10 pt-2">
+      <div className="flex flex-1 flex-col gap-5 px-2 pb-10 pt-2">
         {/* Баланс тренировок */}
         <BalanceCard done={balance.done} remaining={balance.remaining} loading={balanceLoading} />
 
@@ -205,7 +205,7 @@ function BalanceCard({
       : remaining > 0
         ? 'тренировок оплачено сверх'
         : 'тренировок в долг';
-  const toneClass = remaining > 0 ? 'text-accent' : remaining < 0 ? 'text-danger' : 'text-ink';
+  const toneClass = remaining > 0 ? 'text-accent-text' : remaining < 0 ? 'text-danger' : 'text-ink';
 
   return (
     <section className="rounded-2xl bg-card p-4">
@@ -280,7 +280,7 @@ function OperationRow({
       <div className="flex shrink-0 flex-col items-end gap-2">
         <span
           className={`font-[family-name:var(--font-mono)] text-[15px] font-bold tabular-nums ${
-            sign === '+' ? 'text-accent' : 'text-ink'
+            sign === '+' ? 'text-accent-text' : 'text-ink'
           }`}
         >
           {formatSigned(amount, sign)}

@@ -202,7 +202,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
     return (
       <div className="flex flex-col">
         <ScreenHeader title={title} back={() => void navigate(-1)} />
-        <p className="px-5 py-6 text-sm text-ink-muted">Загрузка…</p>
+        <p className="px-2 py-6 text-sm text-ink-muted">Загрузка…</p>
       </div>
     );
   }
@@ -218,7 +218,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
             type="submit"
             form="client-edit-form"
             disabled={mutation.isPending}
-            className="text-[14px] font-semibold text-accent disabled:opacity-50"
+            className="text-[14px] font-semibold text-accent-text disabled:opacity-50"
           >
             {mutation.isPending ? '…' : 'Сохранить'}
           </button>
@@ -229,7 +229,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
         id="client-edit-form"
         noValidate
         onSubmit={handleSubmit}
-        className="flex flex-col gap-5 px-5 pb-8 pt-1"
+        className="flex flex-col gap-5 px-2 pb-8 pt-1"
       >
         {/* Аватар по центру. В режиме edit — кликабельный (загрузка фото). */}
         <div className="flex flex-col items-center gap-2 pt-1">
@@ -269,7 +269,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
                   type="button"
                   onClick={() => avatarInputRef.current?.click()}
                   disabled={avatarBusy}
-                  className="font-semibold text-accent disabled:opacity-50"
+                  className="font-semibold text-accent-text disabled:opacity-50"
                 >
                   {uploadAvatar.isPending ? 'Загрузка…' : 'Изменить фото'}
                 </button>
@@ -303,7 +303,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
             <span className="flex min-w-0 items-center gap-3">
               <span
                 className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-card-elevated ${
-                  accountId.trim() !== '' ? 'text-accent' : 'text-ink-muted'
+                  accountId.trim() !== '' ? 'text-accent-text' : 'text-ink-muted'
                 }`}
               >
                 <svg
@@ -336,7 +336,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
                 type="button"
                 onClick={() => void fillFromAccount()}
                 disabled={fetchingProfile}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-accent/50 py-3 text-[13px] font-semibold text-accent active:bg-accent/10 disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-accent/50 py-3 text-[13px] font-semibold text-accent-text active:bg-accent/10 disabled:opacity-50"
               >
                 <Download size={15} strokeWidth={2} />
                 {fetchingProfile ? 'Получаем…' : 'Получить данные из профиля клиента'}

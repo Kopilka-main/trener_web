@@ -39,11 +39,11 @@ export function StatsPage() {
 
   return (
     <div className="flex min-h-full flex-col">
-      <h1 className="px-4 pt-5 font-[family-name:var(--font-display)] text-[24px] text-ink">
+      <h1 className="px-2 pt-5 font-[family-name:var(--font-display)] text-[24px] text-ink">
         Статистика
       </h1>
 
-      <div className="px-5 pt-3">
+      <div className="px-2 pt-3">
         <div className="flex gap-1 rounded-xl bg-chip p-1">
           <TabButton active={tab === 'exercises'} onClick={() => setTab('exercises')}>
             Упражнения
@@ -54,7 +54,7 @@ export function StatsPage() {
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col px-5 pb-8 pt-4">
+      <div className="flex flex-1 flex-col px-2 pb-8 pt-4">
         {tab === 'exercises' && <ExercisesTab linked={linked} />}
         {tab === 'measurements' && <MeasurementsTab linked={linked} />}
       </div>
@@ -233,7 +233,7 @@ function ExerciseRow({ ex, onOpen }: { ex: ExerciseOverview; onOpen: () => void 
         <TrendIcon
           size={18}
           strokeWidth={2.4}
-          className={ex.lastIsRecord ? 'shrink-0 text-accent' : 'shrink-0 text-ink-mutedxl'}
+          className={ex.lastIsRecord ? 'shrink-0 text-accent-text' : 'shrink-0 text-ink-mutedxl'}
           aria-label={ex.lastIsRecord ? 'Рекорд в последней сессии' : 'Без рекорда'}
         />
         <ChevronRight size={18} className="shrink-0 text-ink-mutedxl" />

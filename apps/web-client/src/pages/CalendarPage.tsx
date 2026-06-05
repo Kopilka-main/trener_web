@@ -42,17 +42,17 @@ export function CalendarPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <h1 className="px-4 pb-1 pt-5 font-[family-name:var(--font-display)] text-[24px] text-ink">
+      <h1 className="px-2 pb-1 pt-5 font-[family-name:var(--font-display)] text-[24px] text-ink">
         Календарь
       </h1>
 
       {!linked ? (
-        <p className="px-5 pt-6 text-sm text-ink-muted">
+        <p className="px-2 pt-6 text-sm text-ink-muted">
           Вы пока не подключены к тренеру. Подключите его, чтобы здесь появились назначенные
           занятия.
         </p>
       ) : sessions.isError ? (
-        <p className="px-5 pt-4 text-sm text-ink-muted" role="alert">
+        <p className="px-2 pt-4 text-sm text-ink-muted" role="alert">
           Не удалось загрузить занятия. Попробуйте обновить страницу.
         </p>
       ) : (

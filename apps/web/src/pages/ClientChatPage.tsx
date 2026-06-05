@@ -84,7 +84,7 @@ export function ClientChatPage() {
         }
       />
 
-      <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-4 pb-3 pt-2">
+      <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-2 pb-3 pt-2">
         {messages.isPending && (
           <p className="pt-10 text-center text-sm text-ink-muted">Загрузка…</p>
         )}

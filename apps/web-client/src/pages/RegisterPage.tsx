@@ -85,8 +85,8 @@ export function RegisterPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-[430px] flex-col justify-center gap-6 bg-bg px-6 py-8">
-      <h1 className="font-[family-name:var(--font-display)] text-[36px] leading-none tracking-[-0.02em] text-accent">
+    <div className="mx-auto flex min-h-screen max-w-[430px] flex-col justify-center gap-6 bg-bg px-2 py-8">
+      <h1 className="font-[family-name:var(--font-display)] text-[36px] leading-none tracking-[-0.02em] text-accent-text">
         Регистрация
       </h1>
       <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -140,7 +140,7 @@ export function RegisterPage() {
       </form>
       <p className="text-sm text-ink-muted">
         Уже есть аккаунт?{' '}
-        <Link to="/login" className="font-medium text-accent">
+        <Link to="/login" className="font-medium text-accent-text">
           Войти
         </Link>
       </p>

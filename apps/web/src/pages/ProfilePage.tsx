@@ -6,14 +6,17 @@ import {
   Copy,
   LogOut,
   Mail,
+  Moon,
   Pencil,
   Plus,
   QrCode,
+  Sun,
   Trash2,
   X,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import type { TrainerContact, TrainerResponse } from '@trener/shared';
+import { getTheme, setTheme, type Theme } from '../lib/theme';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Avatar } from '../components/Avatar';
 import { HoldToDelete } from '../components/HoldToDelete';
@@ -57,7 +60,7 @@ export function ProfilePage() {
     return (
       <div className="flex min-h-full flex-col">
         <ScreenHeader title="Профиль" back="/" />
-        <p className="px-5 py-6 text-sm text-ink-muted">Загрузка…</p>
+        <p className="px-2 py-6 text-sm text-ink-muted">Загрузка…</p>
       </div>
     );
   }
@@ -65,7 +68,7 @@ export function ProfilePage() {
     return (
       <div className="flex min-h-full flex-col">
         <ScreenHeader title="Профиль" back="/" />
-        <p className="px-5 py-6 text-sm text-ink-muted" role="alert">
+        <p className="px-2 py-6 text-sm text-ink-muted" role="alert">
           Не удалось загрузить профиль.
         </p>
       </div>
@@ -95,7 +98,7 @@ export function ProfilePage() {
         }
       />
 
-      <div className="flex flex-1 flex-col gap-5 px-4 pb-10 pt-1">
+      <div className="flex flex-1 flex-col gap-5 px-2 pb-10 pt-1">
         {/* Карточка тренера (просмотр — аватар без загрузки). */}
         <div className="flex items-center gap-3 rounded-3xl bg-card p-4">
           <Avatar
@@ -156,6 +159,10 @@ export function ProfilePage() {
           </div>
         </Section>
 
+        <Section title="Тема">
+          <ThemeToggle />
+        </Section>
+
         <IdRow id={trainer.id} />
 
         <LogoutButton />
@@ -198,7 +205,7 @@ function AvatarEditor({ trainer }: { trainer: TrainerResponse }) {
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={busy}
-        className="text-[12px] font-semibold text-accent disabled:opacity-50"
+        className="text-[12px] font-semibold text-accent-text disabled:opacity-50"
       >
         {busy ? 'Загрузка…' : 'Изменить фото'}
       </button>
@@ -246,7 +253,7 @@ function IdRow({ id }: { id: string }) {
             {id}
           </span>
           {copied ? (
-            <Check size={16} className="shrink-0 text-accent" />
+            <Check size={16} className="shrink-0 text-accent-text" />
           ) : (
             <Copy size={16} className="shrink-0 text-ink-muted" />
           )}
@@ -273,6 +280,56 @@ function IdRow({ id }: { id: string }) {
         )}
       </div>
     </Section>
+  );
+}
+
+/** Переключатель светлой/тёмной темы. */
+function ThemeToggle() {
+  const [theme, setLocal] = useState<Theme>(() => getTheme());
+  const choose = (t: Theme) => {
+    setTheme(t);
+    setLocal(t);
+  };
+  return (
+    <div className="flex gap-2 rounded-2xl bg-card p-1.5">
+      <ThemeOption
+        label="Светлая"
+        active={theme === 'light'}
+        onClick={() => choose('light')}
+        Icon={Sun}
+      />
+      <ThemeOption
+        label="Тёмная"
+        active={theme === 'dark'}
+        onClick={() => choose('dark')}
+        Icon={Moon}
+      />
+    </div>
+  );
+}
+
+function ThemeOption({
+  label,
+  active,
+  onClick,
+  Icon,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  Icon: typeof Sun;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-[14px] font-semibold transition-colors ${
+        active ? 'bg-accent text-accent-on' : 'text-ink-muted active:bg-card-elevated'
+      }`}
+    >
+      <Icon size={16} strokeWidth={2} />
+      {label}
+    </button>
   );
 }
 
@@ -447,14 +504,14 @@ function ProfileEdit({ trainer, onClose }: { trainer: TrainerResponse; onClose: 
             type="button"
             onClick={save}
             disabled={update.isPending}
-            className="px-1 text-[14px] font-semibold text-accent disabled:opacity-40"
+            className="px-1 text-[14px] font-semibold text-accent-text disabled:opacity-40"
           >
             {update.isPending ? '…' : 'Сохранить'}
           </button>
         }
       />
 
-      <div className="flex flex-1 flex-col gap-4 px-4 pb-10 pt-1">
+      <div className="flex flex-1 flex-col gap-4 px-2 pb-10 pt-1">
         {/* Смена фото — только в режиме редактирования. */}
         <div className="flex justify-center pt-1">
           <AvatarEditor trainer={trainer} />

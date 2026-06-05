@@ -93,7 +93,7 @@ export function NotificationsPage() {
         }
       />
 
-      <div className="px-4 pt-1">
+      <div className="px-2 pt-1">
         <div className="flex gap-1 rounded-xl bg-chip p-1">
           <TabButton active={tab === 'events'} onClick={() => setTab('events')}>
             События
@@ -109,7 +109,7 @@ export function NotificationsPage() {
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 px-4 pb-10 pt-3">
+      <div className="flex flex-1 flex-col gap-2 px-2 pb-10 pt-3">
         {loading && <p className="py-6 text-center text-[13px] text-ink-muted">Загрузка…</p>}
 
         {!loading && tab === 'events' && (
@@ -175,9 +175,9 @@ function eventIcon(kind: EventKind): { Icon: typeof Cake; color: string } {
     case 'birthday':
       return { Icon: Cake, color: 'var(--color-coral)' };
     case 'completed':
-      return { Icon: CheckCircle2, color: 'var(--color-accent)' };
+      return { Icon: CheckCircle2, color: 'var(--color-accent-text)' };
     case 'confirmed':
-      return { Icon: CalendarCheck, color: 'var(--color-accent)' };
+      return { Icon: CalendarCheck, color: 'var(--color-accent-text)' };
     default:
       return { Icon: CalendarPlus, color: 'var(--color-ink)' };
   }

@@ -213,7 +213,7 @@ export function KnowledgeBasePage() {
 
   return (
     <div className="flex min-h-full flex-col">
-      <header className="px-5 pt-3">
+      <header className="px-2 pt-3">
         <h1 className="text-[32px] font-bold leading-none tracking-[-0.02em] text-ink">
           База знаний
         </h1>
@@ -270,7 +270,7 @@ export function KnowledgeBasePage() {
         )}
       </header>
 
-      <div className="flex-1 overflow-y-auto px-5 pb-6 pt-3">
+      <div className="flex-1 overflow-y-auto px-2 pb-6 pt-3">
         {(exercises.isPending || templates.isPending) && (
           <p className="text-sm text-ink-muted">Загрузка…</p>
         )}
@@ -344,7 +344,7 @@ export function KnowledgeBasePage() {
       </div>
 
       {/* FAB: создать тренировку (на вкладке «Тренировки») или упражнение. */}
-      <div className="pointer-events-none sticky bottom-4 z-10 mt-auto flex justify-end px-5">
+      <div className="pointer-events-none sticky bottom-4 z-10 mt-auto flex justify-end px-2">
         <button
           type="button"
           onClick={() =>

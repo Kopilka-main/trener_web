@@ -70,7 +70,7 @@ export function ClientCalendarPage() {
       <ScreenHeader title={title} back={`/clients/${id}`} />
 
       {sessions.isError ? (
-        <p className="px-5 pt-4 text-sm text-ink-muted" role="alert">
+        <p className="px-2 pt-4 text-sm text-ink-muted" role="alert">
           Не удалось загрузить занятия. Попробуйте обновить страницу.
         </p>
       ) : (
@@ -386,7 +386,7 @@ function SessionSheet({
                   />
                   <span className="text-sm text-ink-muted">мин</span>
                 </div>
-                <span className="ml-auto text-[13px] font-semibold text-accent">
+                <span className="ml-auto text-[13px] font-semibold text-accent-text">
                   {formatDuration(Math.max(5, durationMin))}
                 </span>
               </div>

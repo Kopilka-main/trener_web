@@ -68,7 +68,7 @@ export function ExerciseDetailPage() {
   const params = entry ? paramRows(entry) : [];
 
   return (
-    <div className="flex flex-1 flex-col gap-4 px-4 pb-6 pt-5">
+    <div className="flex flex-1 flex-col gap-4 px-2 pb-6 pt-5">
       {isLoading && <p className="text-sm text-ink-muted">Загрузка…</p>}
 
       {!isLoading && (

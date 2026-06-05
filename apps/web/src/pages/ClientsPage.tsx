@@ -140,7 +140,7 @@ export function ClientsPage() {
     <div className="flex min-h-full flex-col">
       <ScreenHeader title="Клиенты" back="/" />
 
-      <div className="flex flex-1 flex-col gap-4 px-5 pb-28 pt-2">
+      <div className="flex flex-1 flex-col gap-4 px-2 pb-28 pt-2">
         <div className="relative">
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-muted" />
           <input
@@ -219,7 +219,7 @@ export function ClientsPage() {
       </div>
 
       {/* Нижняя панель: сортировка (слева) + FAB добавления (справа). */}
-      <div className="pointer-events-none sticky bottom-4 z-10 mt-auto flex items-end justify-between gap-3 px-5">
+      <div className="pointer-events-none sticky bottom-4 z-10 mt-auto flex items-end justify-between gap-3 px-2">
         <button
           type="button"
           onClick={() => setSort((s) => (s === 'alpha' ? 'session' : 'alpha'))}

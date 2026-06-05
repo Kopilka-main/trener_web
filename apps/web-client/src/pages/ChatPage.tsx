@@ -55,9 +55,9 @@ export function ChatPage() {
 
   if (!linked) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+      <div className="flex h-full flex-col items-center justify-center gap-3 px-2 text-center">
         <p className="text-sm text-ink-muted">Подключите тренера, чтобы написать ему.</p>
-        <Link to="/connect" className="text-sm font-semibold text-accent">
+        <Link to="/connect" className="text-sm font-semibold text-accent-text">
           Подключить тренера
         </Link>
       </div>
@@ -70,7 +70,7 @@ export function ChatPage() {
   return (
     <div className="flex h-full flex-col">
       {/* Шапка: аватар тренера + имя */}
-      <div className="flex items-center gap-3 border-b border-line px-4 py-2.5">
+      <div className="flex items-center gap-3 border-b border-line px-2 py-2.5">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-card-elevated">
           {t?.avatarFileId ? (
             <img
@@ -91,7 +91,7 @@ export function ChatPage() {
       </div>
 
       {/* Лента сообщений */}
-      <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-4 pb-3 pt-3">
+      <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-2 pb-3 pt-3">
         {count === 0 && (
           <p className="pt-10 text-center text-sm text-ink-muted">
             Сообщений пока нет. Напишите первым.

@@ -48,11 +48,11 @@ export function NotificationsPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <h1 className="px-4 pt-5 font-[family-name:var(--font-display)] text-[24px] text-ink">
+      <h1 className="px-2 pt-5 font-[family-name:var(--font-display)] text-[24px] text-ink">
         Уведомления
       </h1>
 
-      <div className="flex flex-1 flex-col gap-2 px-4 pb-6 pt-3">
+      <div className="flex flex-1 flex-col gap-2 px-2 pb-6 pt-3">
         {items.length === 0 ? (
           <p className="m-auto text-sm text-ink-muted">Уведомлений нет.</p>
         ) : (
@@ -65,7 +65,7 @@ export function NotificationsPage() {
                   onClick={() => void navigate(n.to)}
                   className="flex min-w-0 flex-1 items-center gap-3 text-left active:opacity-80"
                 >
-                  <Icon size={18} strokeWidth={2} className="shrink-0 text-accent" />
+                  <Icon size={18} strokeWidth={2} className="shrink-0 text-accent-text" />
                   <span className="min-w-0 flex-1 text-[14px] text-ink">{n.text}</span>
                 </button>
                 <HoldToDelete

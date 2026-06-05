@@ -87,7 +87,7 @@ export function CalendarPage() {
       <ScreenHeader title="Календарь" back="/" />
 
       {sessions.isError ? (
-        <p className="px-5 pt-4 text-sm text-ink-muted" role="alert">
+        <p className="px-2 pt-4 text-sm text-ink-muted" role="alert">
           Не удалось загрузить занятия. Попробуйте обновить страницу.
         </p>
       ) : (
@@ -424,7 +424,7 @@ function TrainerSessionSheet({
                   />
                   <span className="text-sm text-ink-muted">мин</span>
                 </div>
-                <span className="ml-auto text-[13px] font-semibold text-accent">
+                <span className="ml-auto text-[13px] font-semibold text-accent-text">
                   {formatDuration(Math.max(5, durationMin))}
                 </span>
               </div>
@@ -575,7 +575,7 @@ function ClientSearchSelect({
           placeholder="Поиск клиента по имени или контакту"
           className="min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-ink-mutedxl"
         />
-        {selected && !open && <Check size={16} className="shrink-0 text-accent" />}
+        {selected && !open && <Check size={16} className="shrink-0 text-accent-text" />}
       </div>
 
       {open && (

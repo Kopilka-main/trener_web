@@ -24,7 +24,7 @@ export function StubPage({ title, back = '/' }: { title: string; back?: string }
   return (
     <div className="flex min-h-full flex-col">
       <ScreenHeader title={title} back={back} />
-      <div className="flex flex-col gap-2 px-5 pb-6 pt-2">
+      <div className="flex flex-col gap-2 px-2 pb-6 pt-2">
         <p className="text-sm text-ink-muted">Скоро</p>
       </div>
     </div>

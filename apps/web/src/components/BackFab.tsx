@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 
 const STORAGE_KEY = 'backfab.y';
-const FAB = 36; // диаметр кнопки, px (на ~30% меньше исходных 52)
+const FAB = 47; // диаметр кнопки, px
 const MARGIN = 16; // отступ от краёв по вертикали
 const DRAG_THRESHOLD = 6; // сдвиг, после которого жест считается перетаскиванием
 
@@ -22,9 +22,23 @@ function initialY(): number {
 }
 
 /**
+ * Родитель текущего экрана по ИЕРАРХИИ страниц (а не по истории браузера):
+ * главная → разделы 1-го уровня → 2-го и т.д. По умолчанию — на сегмент вверх по URL.
+ * Особые случаи, где промежуточный путь не является маршрутом:
+ *  • всё под /knowledge/** ведёт на /knowledge (страниц /knowledge/exercises и т.п. нет).
+ */
+function parentPath(pathname: string): string {
+  const segs = pathname.replace(/\/+$/, '').split('/').filter(Boolean);
+  if (segs.length <= 1) return '/'; // раздел 1-го уровня или главная → главная
+  if (segs[0] === 'knowledge') return '/knowledge';
+  segs.pop();
+  return '/' + segs.join('/');
+}
+
+/**
  * Плавающая круглая кнопка «назад»: видна на всех внутренних экранах,
  * прижата к правому краю каркаса и перетаскивается вдоль него по вертикали.
- * Короткий тап — шаг назад по истории; позиция запоминается в localStorage.
+ * Короткий тап — на родительский экран по иерархии; позиция в localStorage.
  */
 export function BackFab() {
   const navigate = useNavigate();
@@ -57,7 +71,9 @@ export function BackFab() {
     if (!dragging.current) return;
     dragging.current = false;
     localStorage.setItem(STORAGE_KEY, String(y));
-    if (!moved.current) void navigate(-1);
+    if (moved.current) return;
+    // Всегда поднимаемся по ИЕРАРХИИ страниц (родитель по уровню), не по истории.
+    void navigate(parentPath(location.pathname));
   }
 
   return (
@@ -71,7 +87,7 @@ export function BackFab() {
       style={{ top: y, width: FAB, height: FAB }}
       className="absolute right-3 z-40 flex touch-none select-none items-center justify-center rounded-full bg-card-elevated/55 text-ink opacity-65 shadow-[0_4px_14px_-2px_rgba(0,0,0,0.45)] backdrop-blur-sm transition-opacity active:bg-chip/70 active:opacity-100"
     >
-      <ChevronLeft size={20} strokeWidth={2} />
+      <ChevronLeft size={26} strokeWidth={2} />
     </button>
   );
 }

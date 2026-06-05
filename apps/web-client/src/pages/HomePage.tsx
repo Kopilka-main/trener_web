@@ -186,7 +186,7 @@ export function HomePage() {
 
   return (
     <div className="flex min-h-[100dvh] flex-col">
-      <div className="relative flex flex-1 flex-col overflow-hidden px-5 pb-5 pt-2">
+      <div className="relative flex flex-1 flex-col overflow-hidden px-2 pb-5 pt-2">
         <div className="font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--color-ink-mutedxl)]">
           {dateLabel}
         </div>
@@ -195,7 +195,7 @@ export function HomePage() {
           type="button"
           onClick={() => void navigate('/profile')}
           aria-label="Профиль"
-          className="absolute right-5 top-2 z-10 flex items-center justify-center transition-transform active:scale-95"
+          className="absolute right-2 top-2 z-10 flex items-center justify-center transition-transform active:scale-95"
         >
           <Settings size={20} strokeWidth={1.8} className="text-[var(--color-ink-muted)]" />
         </button>
@@ -211,7 +211,7 @@ export function HomePage() {
               >
                 <span
                   className="font-[family-name:var(--font-display)] text-[64px] leading-none tracking-[-0.03em]"
-                  style={{ color: 'var(--color-accent-text)' }}
+                  style={{ color: 'var(--color-accent)' }}
                 >
                   {pad2(todayCount)}
                 </span>
@@ -237,7 +237,7 @@ export function HomePage() {
                   <ArrowRight
                     size={18}
                     strokeWidth={2.4}
-                    style={{ color: 'var(--color-accent)' }}
+                    style={{ color: 'var(--color-accent-text)' }}
                     className="shrink-0"
                   />
                 </button>
@@ -258,13 +258,17 @@ export function HomePage() {
               </span>
               <span className="flex items-center gap-1.5 text-[13px] font-medium text-[var(--color-ink-muted)]">
                 чтобы видеть занятия и прогресс
-                <ArrowRight size={15} strokeWidth={2.2} style={{ color: 'var(--color-accent)' }} />
+                <ArrowRight
+                  size={15}
+                  strokeWidth={2.2}
+                  style={{ color: 'var(--color-accent-text)' }}
+                />
               </span>
             </button>
           )}
         </div>
 
-        <div className="mt-4 grid min-h-0 flex-1 grid-cols-2 grid-rows-3 gap-2.5">
+        <div className="mt-4 grid min-h-0 flex-1 grid-cols-2 grid-rows-3 gap-2">
           {tiles.map((tile) => {
             const { key, ...rest } = tile;
             return <Tile key={key} {...rest} isPrimary={primaryKey === key} />;

@@ -76,7 +76,7 @@ export function ClientStatsPage() {
     <div className="flex min-h-full flex-col">
       <ScreenHeader title={title} back={`/clients/${id}`} />
 
-      <div className="px-5 pt-1">
+      <div className="px-2 pt-1">
         <div className="flex gap-1 rounded-xl bg-chip p-1">
           <TabButton active={tab === 'exercises'} onClick={() => setTab('exercises')}>
             Упражнения
@@ -90,7 +90,7 @@ export function ClientStatsPage() {
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col px-5 pb-8 pt-4">
+      <div className="flex flex-1 flex-col px-2 pb-8 pt-4">
         {tab === 'exercises' && <ExercisesTab clientId={id} />}
         {tab === 'measurements' && <MeasurementsTab clientId={id} />}
         {tab === 'photos' && <PhotosTab clientId={id} />}
@@ -268,7 +268,7 @@ function ExerciseRow({ ex, onOpen }: { ex: ExerciseOverview; onOpen: () => void 
         <TrendIcon
           size={18}
           strokeWidth={2.4}
-          className={ex.lastIsRecord ? 'shrink-0 text-accent' : 'shrink-0 text-ink-mutedxl'}
+          className={ex.lastIsRecord ? 'shrink-0 text-accent-text' : 'shrink-0 text-ink-mutedxl'}
           aria-label={ex.lastIsRecord ? 'Рекорд в последней сессии' : 'Без рекорда'}
         />
         <ChevronRight size={18} className="shrink-0 text-ink-mutedxl" />

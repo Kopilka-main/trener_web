@@ -236,7 +236,7 @@ export function KnowledgePage() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="px-4 pt-5">
+      <header className="px-2 pt-5">
         <h1 className="font-[family-name:var(--font-display)] text-[28px] text-ink">База знаний</h1>
 
         <div className="relative mt-4">
@@ -291,7 +291,7 @@ export function KnowledgePage() {
         )}
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-6 pt-3">
+      <div className="flex-1 overflow-y-auto px-2 pb-6 pt-3">
         {isLoading && <p className="text-sm text-ink-muted">Загрузка…</p>}
         {isError && (
           <p className="text-sm text-ink-muted" role="alert">

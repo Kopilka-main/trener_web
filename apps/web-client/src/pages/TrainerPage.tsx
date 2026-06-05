@@ -40,7 +40,7 @@ export function TrainerPage() {
   const t = trainer.data;
 
   return (
-    <div className="flex h-full flex-col px-4 pb-8 pt-5">
+    <div className="flex h-full flex-col px-2 pb-8 pt-5">
       <h1 className="font-[family-name:var(--font-display)] text-[24px] text-ink">Тренер</h1>
 
       {trainer.isLoading && <p className="pt-6 text-sm text-ink-muted">Загрузка…</p>}

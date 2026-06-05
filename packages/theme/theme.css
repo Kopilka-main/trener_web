@@ -1,36 +1,67 @@
-/* GYM Acid Flow — токены темы, общие для тренерского и клиентского фронтов. */
+/* GYM Acid Flow — тема. По умолчанию СВЕТЛАЯ (оттенки белого + оранжевый акцент);
+   тёмная включается через <html data-theme="dark">. Токены общие для обоих фронтов. */
 @theme {
-  /* layout */
-  --color-canvas: #000000; /* «обои» вокруг моб-каркаса */
-  --color-bg: #0b0c10; /* фон приложения */
-  --color-card: #15171d; /* panel — основные карточки */
-  --color-card-elevated: #1d2029; /* panel2 — приподнятые блоки/иконки */
-  --color-chip: #1f2128; /* мелкие плашки/чипы */
-  --color-line: rgba(255, 255, 255, 0.1);
-  --color-line-strong: rgba(255, 255, 255, 0.2);
+  /* layout — оттенки белого */
+  --color-canvas: #e7e8ec; /* «обои» вокруг моб-каркаса — мягкий серый */
+  --color-bg: #f5f5f4; /* фон приложения — тёплый белый */
+  --color-card: #ffffff; /* panel — основные карточки (чистый белый) */
+  --color-card-elevated: #eceef1; /* panel2 — приподнятые блоки/иконки (светло-серый) */
+  --color-chip: #e9ebef; /* мелкие плашки/чипы */
+  --color-line: rgba(0, 0, 0, 0.1);
+  --color-line-strong: rgba(0, 0, 0, 0.16);
 
-  /* текст: ink → text2 → text3 */
-  --color-ink: #eeeee8; /* основной (НЕ чисто белый — кремовый по спеке) */
-  --color-ink-muted: #9a9da6; /* вторичный */
-  --color-ink-mutedxl: #5e626b; /* третичный (мелкие sub, captions) */
+  /* текст: ink → text2 → text3 (тёмный на светлом) */
+  --color-ink: #16181d; /* основной — почти чёрный */
+  --color-ink-muted: #5b606b; /* вторичный */
+  --color-ink-mutedxl: #949aa4; /* третичный (мелкие sub, captions) */
 
-  /* акценты */
-  --color-accent: #d4ff3d; /* лайм */
-  --color-accent-on: #0b0c10; /* текст на лайме (всегда чёрный) */
-  --color-accent-text: #d4ff3d; /* акцент в тексте — на тёмном лайм светится */
-  --color-accent-2: #5c7a0e;
+  /* акцент светлой темы — неоновый розовый (один цвет) */
+  --color-accent: #f72585;
+  --color-accent-on: #ffffff; /* контрастный текст ПОВЕРХ акцента (белый) */
+  --color-accent-text: #f72585; /* тот же акцент для текста/иконок */
+  --color-accent-2: #f72585;
 
   /* семантика */
-  --color-success: #5c7a0e;
-  --color-success-soft: #1e2818;
-  --color-danger: #e04a2e;
-  --color-danger-soft: #3a1c15;
-  --color-coral: #ff6e4e;
-  --color-amber: #e8b255;
+  --color-success: #4e7a1e;
+  --color-success-soft: #e7f1d9;
+  --color-danger: #d83a1e;
+  --color-danger-soft: #fbe1da;
+  --color-coral: #f05638;
+  --color-amber: #d89a1c;
 
   --font-sans:
     'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui,
     sans-serif;
   --font-display: 'Bowlby One', 'Space Grotesk', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+}
+
+/* ─── ТЁМНАЯ тема: <html data-theme="dark"> переопределяет токены ─── */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-canvas: #000000;
+  --color-bg: #0b0c10;
+  --color-card: #15171d;
+  --color-card-elevated: #1d2029;
+  --color-chip: #1f2128;
+  --color-line: rgba(255, 255, 255, 0.1);
+  --color-line-strong: rgba(255, 255, 255, 0.2);
+
+  --color-ink: #eeeee8;
+  --color-ink-muted: #9a9da6;
+  --color-ink-mutedxl: #5e626b;
+
+  /* тёмная тема — один кислотный лайм (как в исходном дизайне) */
+  --color-accent: #d4ff3d;
+  --color-accent-on: #0b0c10;
+  --color-accent-text: #d4ff3d;
+  --color-accent-2: #d4ff3d;
+
+  --color-success: #5c7a0e;
+  --color-success-soft: #1e2818;
+  --color-danger: #e04a2e;
+  --color-danger-soft: #3a1c15;
+  --color-coral: #ff6e4e;
+  --color-amber: #e8b255;
 }

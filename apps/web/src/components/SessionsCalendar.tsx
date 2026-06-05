@@ -112,7 +112,7 @@ export function SessionsCalendar({
   return (
     <div className="flex min-h-0 flex-1 flex-col pb-16">
       {/* Шапка периода: ‹ / подпись / › + «Сегодня» */}
-      <div className="flex items-center gap-1 px-4 pb-2">
+      <div className="flex items-center gap-1 px-2 pb-2">
         <button
           type="button"
           onClick={() => shift(-1)}
@@ -233,7 +233,7 @@ interface StateInfo {
 /** Состояние подтверждения занятия клиентом — иконка, цвет и подпись. */
 function stateInfo(session: SessionResponse): StateInfo {
   if (session.clientConfirmation === 'confirmed') {
-    return { Icon: Check, color: 'var(--color-accent)', label: 'Клиент подтвердил' };
+    return { Icon: Check, color: 'var(--color-accent-text)', label: 'Клиент подтвердил' };
   }
   if (session.clientConfirmation === 'declined') {
     return { Icon: X, color: 'var(--color-danger)', label: 'Клиент отклонил' };
@@ -276,7 +276,7 @@ function MonthView({
   }, [sessions]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 pt-1">
+    <div className="flex-1 overflow-y-auto px-2 pt-1">
       <div className="grid grid-cols-7 gap-1 pb-1">
         {DAY_SHORT.map((d) => (
           <div key={d} className="text-center text-[10px] font-semibold text-ink-muted">
@@ -313,7 +313,7 @@ function MonthView({
               {c && c.pending + c.confirmed + c.declined > 0 ? (
                 <span className="flex items-center gap-1 font-[family-name:var(--font-mono)] text-[10px] font-bold leading-none tabular-nums">
                   {c.pending > 0 && <span className="text-ink-mutedxl">{c.pending}</span>}
-                  {c.confirmed > 0 && <span className="text-accent">{c.confirmed}</span>}
+                  {c.confirmed > 0 && <span className="text-accent-text">{c.confirmed}</span>}
                   {c.declined > 0 && <span className="text-danger">{c.declined}</span>}
                 </span>
               ) : (
@@ -380,7 +380,7 @@ function DayView({
 
   return (
     <ScrollableGrid hourHeight={DAY_HOUR_H}>
-      <div className="flex px-4 pt-3">
+      <div className="flex px-2 pt-3">
         <div className="relative w-10 shrink-0" style={{ height: gridH }}>
           {hours.map((h, i) => (
             <span

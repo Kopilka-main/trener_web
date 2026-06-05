@@ -283,7 +283,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
             </button>
           }
         />
-        <div className="flex flex-1 flex-col gap-5 px-5 pb-8 pt-1">
+        <div className="flex flex-1 flex-col gap-5 px-2 pb-8 pt-1">
           <p className="font-mono text-[11px] uppercase tracking-wide text-ink-muted">шаг 1 из 2</p>
 
           {catalog.isPending && <p className="text-sm text-ink-muted">Загрузка каталога…</p>}
@@ -422,7 +422,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
     return (
       <div className="flex flex-col">
         <ScreenHeader title="Тренировка" back="/knowledge" />
-        <p className="px-5 py-6 text-sm text-ink-muted">Загрузка…</p>
+        <p className="px-2 py-6 text-sm text-ink-muted">Загрузка…</p>
       </div>
     );
   }
@@ -443,7 +443,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
           </button>
         }
       />
-      <div className="flex flex-1 flex-col gap-5 px-5 pb-8 pt-1">
+      <div className="flex flex-1 flex-col gap-5 px-2 pb-8 pt-1">
         {!editing && (
           <p className="font-mono text-[11px] uppercase tracking-wide text-ink-muted">шаг 2 из 2</p>
         )}

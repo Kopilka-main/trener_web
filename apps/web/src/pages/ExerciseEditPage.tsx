@@ -104,7 +104,7 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
     return (
       <div className="flex flex-col">
         <ScreenHeader title="Упражнение" back="/knowledge" />
-        <p className="px-5 py-6 text-sm text-ink-muted">Загрузка…</p>
+        <p className="px-2 py-6 text-sm text-ink-muted">Загрузка…</p>
       </div>
     );
   }
@@ -126,7 +126,7 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
           </button>
         }
       />
-      <div className="flex flex-1 flex-col gap-5 px-5 pb-8 pt-1">
+      <div className="flex flex-1 flex-col gap-5 px-2 pb-8 pt-1">
         <section className="flex flex-col gap-2">
           <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
             Группа мышц
