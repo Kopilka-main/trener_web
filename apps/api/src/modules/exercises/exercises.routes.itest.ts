@@ -12,6 +12,10 @@ describe.skipIf(!url)('exercises routes (integration)', () => {
   let sid: string;
 
   beforeEach(async () => {
+    // Снимаем зависимые строки от других itest-файлов: client_workout_exercises
+    // ссылается на exercises (без cascade), поэтому сначала чистим client_workouts
+    // (каскад удалит упражнения тренировок), иначе DELETE FROM exercises упрётся в FK.
+    await db.execute(sql`DELETE FROM client_workouts`);
     await db.execute(sql`DELETE FROM workout_template_exercises`);
     await db.execute(sql`DELETE FROM workout_templates`);
     await db.execute(sql`DELETE FROM exercises`);
