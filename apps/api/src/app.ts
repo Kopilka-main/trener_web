@@ -9,7 +9,7 @@ import rateLimit from '@fastify/rate-limit';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { Db } from './db/client.js';
 import { realClock } from './core/app-deps.js';
-import { errorHandler } from './plugins/error-handler.js';
+import { makeErrorHandler } from './plugins/error-handler.js';
 import { tenantContext } from './plugins/tenant-context.js';
 import { healthRoutes } from './modules/health/health.routes.js';
 import { makeAuthRepo } from './modules/auth/auth.repo.js';
@@ -49,7 +49,6 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
-  app.setErrorHandler(errorHandler);
 
   await app.register(helmet);
   await app.register(cookie, { secret: deps.cookieSecret });
@@ -61,6 +60,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // Общий провайдер newId/now для auth и доменных модулей (детерминизм в тестах).
   const clock = realClock;
   const telemetry = makeTelemetry(deps.db, clock);
+  app.setErrorHandler(
+    makeErrorHandler({
+      recordError: (e) => {
+        void telemetry.recordApiError(e).catch(() => undefined);
+      },
+    }),
+  );
 
   // Общий files-repo: используется auth/client-auth/client-app-trainer для аватаров
   // (раздача + чистка прежних файлов), а также модулем files.
