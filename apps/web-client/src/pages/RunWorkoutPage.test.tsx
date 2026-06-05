@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RunWorkoutPage } from './RunWorkoutPage';
@@ -123,8 +123,7 @@ describe('RunWorkoutPage', () => {
     expect(arg.input.actualWeightKg).toBe(50);
   });
 
-  it('удержание «Завершить» вызывает useCompleteWorkout и навигацию на деталь', () => {
-    vi.useFakeTimers();
+  it('«Завершить» → подтверждение вызывает useCompleteWorkout и навигацию на деталь', () => {
     vi.mocked(workoutsApi.useClientWorkout).mockReturnValue({
       data: activeWorkout(),
       isLoading: false,
@@ -143,11 +142,9 @@ describe('RunWorkoutPage', () => {
 
     renderPage();
 
-    // Завершение — удержанием 1с (HoldComplete).
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Удерживайте, чтобы завершить' }));
-    act(() => {
-      vi.advanceTimersByTime(1000);
-    });
+    // Завершение — тап по «Завершить тренировку», затем подтверждение «Завершить».
+    fireEvent.click(screen.getByRole('button', { name: 'Завершить тренировку' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Завершить' }));
 
     expect(completeMutate).toHaveBeenCalledTimes(1);
     const [vars] = completeMutate.mock.calls[0] as [
@@ -155,7 +152,6 @@ describe('RunWorkoutPage', () => {
     ];
     expect(vars.wid).toBe('w1');
     expect(navigate).toHaveBeenCalledWith('/workouts/w1');
-    vi.useRealTimers();
   });
 
   it('завершённая → редирект на итоги, без промежуточного экрана', () => {

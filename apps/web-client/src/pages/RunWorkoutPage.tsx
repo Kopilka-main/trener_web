@@ -26,6 +26,7 @@ import {
 import { aggregateExerciseOverview } from '../lib/workout-stats';
 import { useBackClose } from '../lib/backStack';
 import { HoldToDelete } from '../components/HoldToDelete';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { SortableList } from '../components/SortableList';
 
 /** Запускает обновление DOM внутри View Transition (плавный морфинг), где доступно. */
@@ -168,7 +169,7 @@ export function RunWorkoutPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4 px-4 pb-28 pt-4">
+    <div className="flex flex-1 flex-col gap-4 px-2 pb-28 pt-4">
       <Link
         to="/workouts"
         className="flex items-center gap-1 text-[14px] font-medium text-ink-muted"
@@ -180,7 +181,7 @@ export function RunWorkoutPage() {
       {q.isError && (
         <div className="flex flex-col gap-3">
           <p className="text-sm text-ink-muted">Тренировка не найдена.</p>
-          <Link to="/workouts" className="text-sm font-medium text-accent">
+          <Link to="/workouts" className="text-sm font-medium text-accent-text">
             К списку
           </Link>
         </div>
@@ -807,9 +808,7 @@ function RestTimer({
   );
 }
 
-/* ---------- Завершение удержанием ---------- */
-
-const HOLD_COMPLETE_MS = 1000;
+/* ---------- Завершение тренировки (тап → подтверждение) ---------- */
 
 function HoldComplete({
   pending,
@@ -820,54 +819,34 @@ function HoldComplete({
   onComplete: () => void;
   variant?: 'pill' | 'block';
 }) {
-  const [holding, setHolding] = useState(false);
-  const timer = useRef<number | null>(null);
-
-  function clear() {
-    if (timer.current !== null) {
-      window.clearTimeout(timer.current);
-      timer.current = null;
-    }
-  }
-  function start() {
-    if (pending) return;
-    setHolding(true);
-    clear();
-    timer.current = window.setTimeout(() => {
-      setHolding(false);
-      timer.current = null;
-      onComplete();
-    }, HOLD_COMPLETE_MS);
-  }
-  function cancel() {
-    clear();
-    setHolding(false);
-  }
-
+  const [open, setOpen] = useState(false);
   return (
-    <button
-      type="button"
-      aria-label="Удерживайте, чтобы завершить"
-      disabled={pending}
-      onPointerDown={start}
-      onPointerUp={cancel}
-      onPointerLeave={cancel}
-      onPointerCancel={cancel}
-      onContextMenu={(e) => e.preventDefault()}
-      style={{
-        ['--hold-p' as string]: holding ? '100%' : '0%',
-        transition: holding
-          ? `--hold-p ${String(HOLD_COMPLETE_MS)}ms linear`
-          : '--hold-p 160ms linear',
-      }}
-      className={`hold-ring relative flex touch-none select-none items-center justify-center disabled:opacity-50 ${
-        variant === 'block'
-          ? 'h-12 w-full rounded-2xl bg-accent text-accent-on'
-          : 'h-10 rounded-full bg-black/10 px-5 text-accent-on'
-      }`}
-    >
-      <span className="text-[14px] font-medium">Завершить</span>
-    </button>
+    <>
+      <button
+        type="button"
+        aria-label="Завершить тренировку"
+        disabled={pending}
+        onClick={() => setOpen(true)}
+        className={`flex select-none items-center justify-center active:opacity-90 disabled:opacity-50 ${
+          variant === 'block'
+            ? 'h-12 w-full rounded-2xl bg-accent text-accent-on'
+            : 'h-10 rounded-full bg-black/10 px-5 text-accent-on'
+        }`}
+      >
+        <span className="text-[14px] font-medium">Завершить</span>
+      </button>
+      {open && (
+        <ConfirmDialog
+          message="Завершить тренировку?"
+          confirmLabel="Завершить"
+          onConfirm={() => {
+            setOpen(false);
+            onComplete();
+          }}
+          onCancel={() => setOpen(false)}
+        />
+      )}
+    </>
   );
 }
 
