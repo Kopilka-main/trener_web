@@ -87,6 +87,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { Button } from '../components/Button';
 import { HoldToDelete } from '../components/HoldToDelete';
 import { SortableList } from '../components/SortableList';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 function formatDuration(totalSec: number): string {
   const s = Math.max(0, Math.floor(totalSec));
@@ -121,7 +122,7 @@ export function ActiveWorkoutPage() {
     return (
       <div className="flex min-h-full flex-col">
         <ScreenHeader title="Тренировка" back={backTo} />
-        <p className="px-5 py-6 text-sm text-ink-muted">Загрузка…</p>
+        <p className="px-2 py-6 text-sm text-ink-muted">Загрузка…</p>
       </div>
     );
   }
@@ -130,7 +131,7 @@ export function ActiveWorkoutPage() {
     return (
       <div className="flex min-h-full flex-col">
         <ScreenHeader title="Тренировка" back={backTo} />
-        <p className="px-5 py-6 text-sm text-ink-muted" role="alert">
+        <p className="px-2 py-6 text-sm text-ink-muted" role="alert">
           Не удалось загрузить тренировку.
         </p>
       </div>
@@ -215,9 +216,7 @@ function DraftView({
         }
       />
 
-      <div className="flex flex-1 flex-col gap-4 px-5 pb-28 pt-2">
-        <p className="text-sm text-ink-muted">План тренировки. Нажмите «Начать», чтобы провести.</p>
-
+      <div className="flex flex-1 flex-col gap-4 px-2 pb-28 pt-2">
         <SortableList
           items={items}
           onReorder={(next) => {
@@ -268,7 +267,7 @@ function DraftView({
         <AddExerciseButton onClick={() => setAdding(true)} />
       </div>
 
-      <div className="sticky bottom-0 mt-auto bg-bg px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+      <div className="sticky bottom-0 mt-auto bg-bg px-2 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
         <Button
           className="w-full"
           disabled={start.isPending || workout.exercises.length === 0}
@@ -467,7 +466,7 @@ function ActiveView({
     <div className="flex min-h-full flex-col">
       <ScreenHeader title={workout.name} back={backTo} />
 
-      <div className="flex flex-1 flex-col gap-3 px-5 pb-28 pt-2">
+      <div className="flex flex-1 flex-col gap-3 px-2 pb-28 pt-2">
         {/* Сводка: слева — прошедшее время; справа — отдых либо завершение удержанием. */}
         <div className="tile-shadow-primary flex items-center justify-between gap-3 rounded-2xl px-4 py-3">
           <span className="flex shrink-0 flex-col">
@@ -573,7 +572,7 @@ function SummaryView({ workout, backTo }: { workout: WorkoutResponse; backTo: st
     <div className="flex min-h-full flex-col">
       <ScreenHeader title={workout.name} back={backTo} />
 
-      <div className="flex flex-1 flex-col gap-4 px-5 pb-8 pt-2">
+      <div className="flex flex-1 flex-col gap-4 px-2 pb-8 pt-2">
         <div className="grid grid-cols-3 gap-2">
           <Stat label="Подходов" value={`${String(done)}/${String(total)}`} />
           <Stat
@@ -609,7 +608,7 @@ function SummaryView({ workout, backTo }: { workout: WorkoutResponse; backTo: st
                   <span className="flex items-center gap-3 tabular-nums">
                     <span className="text-ink-muted">{plannedText(set)}</span>
                     <span className="text-ink-mutedxl">→</span>
-                    <span className={set.done ? 'text-accent' : 'text-ink-muted'}>
+                    <span className={set.done ? 'text-accent-text' : 'text-ink-muted'}>
                       {actualText(set)}
                     </span>
                   </span>
@@ -994,9 +993,7 @@ function NumBox({
   );
 }
 
-/* ---------- Завершение удержанием ---------- */
-
-const HOLD_COMPLETE_MS = 1000;
+/* ---------- Завершение тренировки ---------- */
 
 function HoldComplete({
   pending,
@@ -1007,55 +1004,35 @@ function HoldComplete({
   onComplete: () => void;
   variant?: 'pill' | 'block';
 }) {
-  const [holding, setHolding] = useState(false);
-  const timer = useRef<number | null>(null);
-
-  function clear() {
-    if (timer.current !== null) {
-      window.clearTimeout(timer.current);
-      timer.current = null;
-    }
-  }
-  function start() {
-    if (pending) return;
-    setHolding(true);
-    clear();
-    timer.current = window.setTimeout(() => {
-      setHolding(false);
-      timer.current = null;
-      onComplete();
-    }, HOLD_COMPLETE_MS);
-  }
-  function cancel() {
-    clear();
-    setHolding(false);
-  }
+  const [open, setOpen] = useState(false);
 
   return (
-    <button
-      type="button"
-      aria-label="Удерживайте, чтобы завершить"
-      disabled={pending}
-      onPointerDown={start}
-      onPointerUp={cancel}
-      onPointerLeave={cancel}
-      onPointerCancel={cancel}
-      onContextMenu={(e) => e.preventDefault()}
-      style={{
-        // Заполнение рамки-прогресса по периметру за время удержания.
-        ['--hold-p' as string]: holding ? '100%' : '0%',
-        transition: holding
-          ? `--hold-p ${String(HOLD_COMPLETE_MS)}ms linear`
-          : '--hold-p 160ms linear',
-      }}
-      className={`hold-ring relative flex touch-none select-none items-center justify-center disabled:opacity-50 ${
-        variant === 'block'
-          ? 'h-12 w-full rounded-2xl bg-accent text-accent-on'
-          : 'h-10 rounded-full bg-black/10 px-5 text-accent-on'
-      }`}
-    >
-      <span className="text-[14px] font-medium">Завершить</span>
-    </button>
+    <>
+      <button
+        type="button"
+        aria-label="Завершить тренировку"
+        disabled={pending}
+        onClick={() => setOpen(true)}
+        className={`flex items-center justify-center disabled:opacity-50 ${
+          variant === 'block'
+            ? 'h-12 w-full rounded-2xl bg-accent text-accent-on'
+            : 'h-10 rounded-full bg-black/10 px-5 text-accent-on'
+        }`}
+      >
+        <span className="text-[14px] font-medium">Завершить</span>
+      </button>
+      {open && (
+        <ConfirmDialog
+          message="Завершить тренировку?"
+          confirmLabel="Завершить"
+          onConfirm={() => {
+            setOpen(false);
+            onComplete();
+          }}
+          onCancel={() => setOpen(false)}
+        />
+      )}
+    </>
   );
 }
 
