@@ -1,4 +1,5 @@
 import type { ZodType } from 'zod';
+import { markOffline, markOnline } from '../lib/connectivity';
 
 /** Базовый префикс API. Dev: Vite-прокси `/api`→:3001; prod: nginx раздаёт `/api`. */
 const API_BASE = '/api';
@@ -46,7 +47,18 @@ export async function apiFetch<T = unknown>(
     init.body = JSON.stringify(body);
   }
 
-  const res = await fetch(`${API_BASE}${path}`, init);
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, init);
+  } catch (err) {
+    // Отмена запроса (навигация) — не сетевой сбой, статус связи не трогаем.
+    if (err instanceof DOMException && err.name === 'AbortError') throw err;
+    // fetch отклонился — нет интернета или сервер недоступен.
+    markOffline();
+    throw err;
+  }
+  // Ответ получен (даже если это 4xx/5xx) — сервер достижим, связь есть.
+  markOnline();
 
   if (!res.ok) {
     let code = 'UNKNOWN';
