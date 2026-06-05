@@ -24,6 +24,10 @@ export function makeQueue<T>(opts: QueueOpts<T>): Queue<T> {
         try {
           await opts.send(batch);
         } catch {
+          // Сетевой сбой — возвращаем батч в начало буфера, чтобы повторить на
+          // следующем flush (периодическом или на pagehide), а не терять данные.
+          buf = [...batch, ...buf];
+          if (buf.length > opts.max) buf = buf.slice(buf.length - opts.max);
           return;
         }
       }

@@ -89,7 +89,7 @@ export function makeTelemetryService(repo: TelemetryRepo, deps: TelemetryDeps) {
         level: 'error',
         name: input.name ?? null,
         message: input.message.slice(0, 2000),
-        stack: input.stack ?? null,
+        stack: input.stack ? input.stack.slice(0, 8000) : null,
         path: input.path ?? null,
         method: input.method ?? null,
         statusCode: input.statusCode ?? null,

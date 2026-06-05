@@ -1,0 +1,1 @@
+CREATE INDEX "analytics_events_session_idx" ON "analytics_events" USING btree ("session_id");

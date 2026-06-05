@@ -232,6 +232,13 @@
       "when": 1780646490131,
       "tag": "0032_yellow_blonde_phantom",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1780650115032,
+      "tag": "0033_luxuriant_shape",
+      "breakpoints": true
     }
   ]
 }

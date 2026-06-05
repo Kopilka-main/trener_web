@@ -544,6 +544,7 @@ export const analyticsEvents = pgTable(
     index('analytics_events_ts_idx').on(t.ts),
     index('analytics_events_actor_idx').on(t.actorId),
     index('analytics_events_name_idx').on(t.name),
+    index('analytics_events_session_idx').on(t.sessionId),
     check('analytics_events_source_chk', sql`${t.source} IN ('client', 'trainer')`),
     check('analytics_events_actor_type_chk', sql`${t.actorType} IN ('trainer', 'client', 'anon')`),
   ],

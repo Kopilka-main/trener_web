@@ -29,4 +29,12 @@ describe('makeQueue', () => {
     q.push({ n: 3 });
     expect(q.size()).toBe(2);
   });
+
+  it('при сбое send возвращает батч в буфер (не теряет)', async () => {
+    const send = vi.fn().mockRejectedValue(new Error('net'));
+    const q = makeQueue<{ n: number }>({ send, maxBatch: 10, max: 100 });
+    q.push({ n: 1 });
+    await q.flush();
+    expect(q.size()).toBe(1); // батч вернулся, не потерян
+  });
 });
