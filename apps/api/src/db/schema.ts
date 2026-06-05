@@ -524,3 +524,55 @@ export const medicalRecords = pgTable(
   },
   (t) => [index('idx_medical_records_trainer_client_date').on(t.trainerId, t.clientId, t.date)],
 );
+
+export const analyticsEvents = pgTable(
+  'analytics_events',
+  {
+    id: text('id').primaryKey(),
+    ts: timestamp('ts', { withTimezone: true }).notNull().defaultNow(),
+    source: text('source').$type<'client' | 'trainer'>().notNull(),
+    actorType: text('actor_type').$type<'trainer' | 'client' | 'anon'>().notNull(),
+    actorId: text('actor_id'),
+    sessionId: text('session_id').notNull(),
+    name: text('name').notNull(),
+    path: text('path'),
+    props: jsonb('props').$type<Record<string, unknown>>().notNull().default({}),
+    ua: text('ua'),
+    appVersion: text('app_version'),
+  },
+  (t) => [
+    index('analytics_events_ts_idx').on(t.ts),
+    index('analytics_events_actor_idx').on(t.actorId),
+    index('analytics_events_name_idx').on(t.name),
+    check('analytics_events_source_chk', sql`${t.source} IN ('client', 'trainer')`),
+    check('analytics_events_actor_type_chk', sql`${t.actorType} IN ('trainer', 'client', 'anon')`),
+  ],
+);
+
+export const errorLogs = pgTable(
+  'error_logs',
+  {
+    id: text('id').primaryKey(),
+    ts: timestamp('ts', { withTimezone: true }).notNull().defaultNow(),
+    source: text('source').$type<'api' | 'client' | 'trainer'>().notNull(),
+    level: text('level').$type<'error' | 'warn' | 'fatal'>().notNull(),
+    name: text('name'),
+    message: text('message').notNull(),
+    stack: text('stack'),
+    path: text('path'),
+    method: text('method'),
+    statusCode: integer('status_code'),
+    actorType: text('actor_type'),
+    actorId: text('actor_id'),
+    ua: text('ua'),
+    context: jsonb('context').$type<Record<string, unknown>>().notNull().default({}),
+    appVersion: text('app_version'),
+  },
+  (t) => [
+    index('error_logs_ts_idx').on(t.ts),
+    index('error_logs_level_idx').on(t.level),
+    index('error_logs_source_idx').on(t.source),
+    check('error_logs_source_chk', sql`${t.source} IN ('api', 'client', 'trainer')`),
+    check('error_logs_level_chk', sql`${t.level} IN ('error', 'warn', 'fatal')`),
+  ],
+);
