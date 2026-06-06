@@ -6,6 +6,7 @@ import { initTelemetry, ErrorBoundary } from '@trener/telemetry';
 import { App } from './App';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
 import { DevInspector } from './components/DevInspector';
+import { UpdateBanner } from './components/UpdateBanner';
 import { registerPushServiceWorker } from './lib/push';
 import './index.css';
 
@@ -37,6 +38,7 @@ createRoot(rootEl).render(
           <App />
         </ErrorBoundary>
         <ConnectivityBanner />
+        <UpdateBanner />
         {import.meta.env.DEV && <DevInspector />}
       </BrowserRouter>
     </QueryClientProvider>

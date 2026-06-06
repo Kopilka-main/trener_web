@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { initTelemetry, ErrorBoundary } from '@trener/telemetry';
 import { App } from './App';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
+import { UpdateBanner } from './components/UpdateBanner';
 import { registerPushServiceWorker } from './lib/push';
 import './index.css';
 
@@ -36,6 +37,7 @@ createRoot(rootEl).render(
           <App />
         </ErrorBoundary>
         <ConnectivityBanner />
+        <UpdateBanner />
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,
