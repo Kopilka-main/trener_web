@@ -18,8 +18,8 @@ my.fitbond.ru {
 	reverse_proxy web-client:80
 }
 
-# Мессенджер (отдельный compose-стек; web опубликован на хосте :8090).
-# web-контейнер мессенджера сам проксирует /api на свой api внутри своей сети.
-chat.fitbond.ru {
-	reverse_proxy host.docker.internal:8090
+# Мессенджер (отдельный compose-стек). Доступен через общую сеть proxy по алиасу
+# messenger-web; его web-контейнер сам проксирует /api на свой api.
+msg.fitbond.ru {
+	reverse_proxy messenger-web:80
 }

@@ -62,6 +62,11 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on: [nginx, web-client]
+    # default — для nginx/web-client Тренера; proxy — общая сеть, через неё Caddy
+    # достаёт web других стеков (мессенджер: messenger-web).
+    networks:
+      default: {}
+      proxy: {}
 
   backup:
     image: postgres:16
@@ -99,3 +104,9 @@ volumes:
   backups:
   caddy_data:
   caddy_config:
+
+networks:
+  # Общая сеть для маршрутизации Caddy на сторонние стеки (мессенджер и т.п.).
+  # Создаётся один раз вручную: docker network create proxy
+  proxy:
+    external: true
