@@ -16,7 +16,7 @@ export function registerClientAppChatModule(
     notifyTrainer?: (
       trainerId: string,
       clientId: string,
-      build: (clientName: string) => { title: string; body: string; url?: string },
+      build: (clientName: string) => { title: string; body: string; url?: string; badge?: number },
     ) => void;
   },
 ): void {

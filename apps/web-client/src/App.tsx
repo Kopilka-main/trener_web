@@ -3,6 +3,7 @@ import { TelemetryRouter } from '@trener/telemetry';
 import { useClientMe } from './api/auth';
 import { BackFab } from './components/BackFab';
 import { ConnectBanner } from './components/ConnectBanner';
+import { AppBadgeSync } from './components/AppBadgeSync';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { ConnectPage } from './pages/ConnectPage';
@@ -48,6 +49,7 @@ export function App() {
   return (
     <div className="mx-auto flex h-[100dvh] max-w-[430px] flex-col overflow-hidden bg-bg">
       <TelemetryRouter />
+      <AppBadgeSync />
       {!linked && <ConnectBanner />}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <Routes>

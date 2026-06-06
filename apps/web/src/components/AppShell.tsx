@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { BackFab } from './BackFab';
+import { AppBadgeSync } from './AppBadgeSync';
 
 /**
  * Мобильный каркас приложения: контент со скроллом без глобальной нижней
@@ -9,6 +10,7 @@ import { BackFab } from './BackFab';
 export function AppShell() {
   return (
     <div className="app-shell">
+      <AppBadgeSync />
       <main className="min-h-0 flex-1 overflow-y-auto">
         <Outlet />
       </main>

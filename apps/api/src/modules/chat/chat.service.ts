@@ -1,7 +1,7 @@
 import type { ChatRepo, ConversationRow, MessageRow, ListMessagesOptions } from './chat.repo.js';
 import type { ConversationResponse, MessageResponse, SendMessageRequest } from '@trener/shared';
 
-export type PushPayload = { title: string; body: string; url?: string };
+export type PushPayload = { title: string; body: string; url?: string; badge?: number };
 
 export type ChatDeps = {
   newId: () => string;
@@ -71,19 +71,24 @@ export function makeChatService(repo: ChatRepo, deps: ChatDeps) {
         deps.now(),
         senderRole,
       );
-      // Пуш получателю с именем отправителя в заголовке (как в мессенджерах).
+      // Пуш получателю с именем отправителя в заголовке (как в мессенджерах)
+      // и числом непрочитанного для бейджа на иконке приложения.
       const preview = input.body.length > 120 ? `${input.body.slice(0, 117)}…` : input.body;
       if (senderRole === 'trainer' && deps.notify) {
+        const badge = await repo.clientUnreadCount(trainerId, clientId);
         deps.notify(clientId, trainerId, (trainerName) => ({
           title: trainerName,
           body: preview,
           url: '/chat',
+          badge,
         }));
       } else if (senderRole === 'client' && deps.notifyTrainer) {
+        const badge = await repo.trainerUnreadConversationsCount(trainerId);
         deps.notifyTrainer(trainerId, clientId, (clientName) => ({
           title: clientName,
           body: preview,
           url: `/clients/${clientId}/chat`,
+          badge,
         }));
       }
       return toMessageResponse(row);

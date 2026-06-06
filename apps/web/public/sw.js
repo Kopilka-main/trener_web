@@ -18,6 +18,12 @@ self.addEventListener('push', (event) => {
     tag: data.tag || 'trener',
     data: { url: data.url || '/' },
   };
+  // Счётчик на иконке приложения (App Badging), если сервер прислал число.
+  if (typeof data.badge === 'number' && self.navigator && 'setAppBadge' in self.navigator) {
+    try {
+      self.navigator.setAppBadge(data.badge);
+    } catch (e) {}
+  }
   event.waitUntil(self.registration.showNotification(title, options));
 });
 

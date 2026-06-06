@@ -1,7 +1,7 @@
 import type { PushSubscriptionInput } from '@trener/shared';
 import type { PushRepo, StoredSubscription, SubOwner } from './push.repo.js';
 
-export type PushPayload = { title: string; body: string; url?: string };
+export type PushPayload = { title: string; body: string; url?: string; badge?: number };
 export type SendResult = { gone: boolean };
 // Отправка одного пуша. `gone: true` — подписка протухла (404/410), её надо удалить.
 export type PushSender = (sub: StoredSubscription, payload: string) => Promise<SendResult>;

@@ -19,7 +19,7 @@ export function registerChatModule(
     notifyNewMessage?: (
       clientId: string,
       trainerId: string,
-      build: (trainerName: string) => { title: string; body: string; url?: string },
+      build: (trainerName: string) => { title: string; body: string; url?: string; badge?: number },
     ) => void;
   },
 ): void {
