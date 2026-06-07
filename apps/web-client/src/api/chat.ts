@@ -47,7 +47,9 @@ export function useClientChatUnread() {
         throw err;
       }
     },
-    refetchInterval: 8000,
+    // Фолбэк-опрос (если push не включён). При push счётчик обновляется мгновенно
+    // через PushSync, не дожидаясь интервала.
+    refetchInterval: 4000,
   });
 }
 

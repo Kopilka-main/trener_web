@@ -24,7 +24,17 @@ self.addEventListener('push', (event) => {
       self.navigator.setAppBadge(data.badge);
     } catch (e) {}
   }
-  event.waitUntil(self.registration.showNotification(title, options));
+  // Показываем уведомление И сразу будим открытые окна приложения, чтобы они
+  // обновили счётчики/плитки (непрочитанные и т.п.) без ожидания опроса.
+  event.waitUntil(
+    (async () => {
+      await self.registration.showNotification(title, options);
+      const list = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const client of list) {
+        client.postMessage({ type: 'push', url: options.data.url });
+      }
+    })(),
+  );
 });
 
 self.addEventListener('notificationclick', (event) => {

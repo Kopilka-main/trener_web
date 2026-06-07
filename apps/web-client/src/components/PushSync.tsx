@@ -1,0 +1,26 @@
+import { useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+
+/**
+ * Мгновенное обновление по web push: service worker (sw.js) при получении пуша
+ * шлёт окнам postMessage({ type: 'push' }). Здесь ловим его и инвалидируем все
+ * клиентские запросы — счётчик непрочитанных, плитки и уведомления обновляются
+ * сразу (как бейдж на иконке), без ожидания периодического опроса.
+ */
+export function PushSync() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return undefined;
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data as { type?: string } | null;
+      if (data?.type === 'push') {
+        // Пуш — редкое событие; обновляем все активные запросы, чтобы счётчики,
+        // плитки и уведомления стали актуальны сразу.
+        void qc.invalidateQueries();
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, [qc]);
+  return null;
+}

@@ -101,7 +101,9 @@ export function useChatUnread() {
     queryKey: chatUnreadQueryKey,
     queryFn: () =>
       apiFetch('/chat/unread', { schema: chatUnreadResponseSchema }).then((r) => r.count),
-    refetchInterval: 8000,
+    // Фолбэк-опрос (если push не включён). При push счётчик обновляется мгновенно
+    // через PushSync, не дожидаясь интервала.
+    refetchInterval: 4000,
   });
 }
 
