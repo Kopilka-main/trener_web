@@ -21,5 +21,7 @@ RUN npm ci --omit=dev --ignore-scripts
 COPY --from=build /repo/packages/shared/dist packages/shared/dist
 COPY --from=build /repo/apps/api/dist apps/api/dist
 COPY --from=build /repo/apps/api/drizzle apps/api/drizzle
+# Данные сидов (catalog-300.json и т.п.) — нужны seed-скриптам в рантайме.
+COPY --from=build /repo/apps/api/src/data apps/api/dist/data
 EXPOSE 3001
 CMD ["node", "apps/api/dist/server.js"]
