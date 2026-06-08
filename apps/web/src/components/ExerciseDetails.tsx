@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import type { ExerciseResponse } from '@trener/shared';
-import { DemoVideo } from './DemoVideo';
+import { DemoVideo, MediaToggle, type MediaMode } from './DemoVideo';
 
 /**
  * Read-only детали упражнения: демонстрация (зацикленное видео или картинка),
@@ -14,24 +15,31 @@ export function ExerciseDetails({
   exercise: ExerciseResponse;
   showDescription?: boolean;
 }) {
-  const hasMedia = Boolean(exercise.videoUrl || exercise.imageUrl);
+  const hasVideo = Boolean(exercise.videoUrl);
+  const hasImage = Boolean(exercise.imageUrl);
+  const hasMedia = hasVideo || hasImage;
   const hasChars = Boolean(
     exercise.equipment || exercise.primaryMuscles || exercise.secondaryMuscles,
   );
   const hasDescription = showDescription && Boolean(exercise.description);
+  const [mode, setMode] = useState<MediaMode>(hasImage ? 'photo' : 'video');
   if (!hasMedia && !hasChars && !hasDescription) return null;
 
   return (
     <div className="flex flex-col gap-4">
       {hasMedia && (
         <section className="flex flex-col gap-2">
-          <h3 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-            Демонстрация
-          </h3>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+              Демонстрация
+            </h3>
+            {hasVideo && hasImage && <MediaToggle mode={mode} onChange={setMode} />}
+          </div>
           {exercise.videoUrl ? (
             <DemoVideo
               src={exercise.videoUrl}
               poster={exercise.imageUrl ?? undefined}
+              mode={mode}
               className="rounded-xl border border-line bg-card-elevated"
             />
           ) : (

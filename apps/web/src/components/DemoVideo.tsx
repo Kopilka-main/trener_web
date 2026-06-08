@@ -1,24 +1,69 @@
-import { useState } from 'react';
 import { ImageIcon, Video } from 'lucide-react';
 
+export type MediaMode = 'photo' | 'video';
+
 /**
- * Демонстрация упражнения с переключателем «фото / видео» в верхнем углу.
- * По умолчанию показывается фото (poster); видео подгружается и проигрывается
- * (зацикленно, без звука) только при переключении на режим «видео».
+ * Переключатель «фото / видео» для размещения В ЗАГОЛОВКЕ блока демонстрации
+ * (не поверх медиа). tone='on' — для тёмного/акцентного фона.
+ */
+export function MediaToggle({
+  mode,
+  onChange,
+  tone = 'light',
+}: {
+  mode: MediaMode;
+  onChange: (m: MediaMode) => void;
+  tone?: 'light' | 'on';
+}) {
+  const wrap = tone === 'on' ? 'bg-black/20' : 'bg-chip';
+  const active = tone === 'on' ? 'bg-white text-black' : 'bg-accent text-accent-on';
+  const idle = tone === 'on' ? 'text-white/75' : 'text-ink-muted';
+  return (
+    <div className={`flex shrink-0 rounded-full p-0.5 ${wrap}`}>
+      <button
+        type="button"
+        onClick={() => onChange('photo')}
+        aria-label="Фото"
+        aria-pressed={mode === 'photo'}
+        className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
+          mode === 'photo' ? active : idle
+        }`}
+      >
+        <ImageIcon size={15} strokeWidth={2} />
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange('video')}
+        aria-label="Видео"
+        aria-pressed={mode === 'video'}
+        className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
+          mode === 'video' ? active : idle
+        }`}
+      >
+        <Video size={15} strokeWidth={2} />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Медиа-демонстрация (управляемая режимом): фото (poster) либо зацикленное видео
+ * без звука. Видео монтируется только в режиме 'video' — до переключения не грузится.
+ * Переключатель режима выносится в заголовок через <MediaToggle/>.
  */
 export function DemoVideo({
   src,
   poster,
+  mode,
   className,
 }: {
   src: string;
   poster?: string | undefined;
+  mode: MediaMode;
   className?: string | undefined;
 }) {
-  const [mode, setMode] = useState<'photo' | 'video'>(poster ? 'photo' : 'video');
-
   return (
-    <div className={`relative overflow-hidden ${className ?? ''}`}>
+    <div className={`overflow-hidden ${className ?? ''}`}>
       {mode === 'video' ? (
         <video
           src={src}
@@ -32,34 +77,6 @@ export function DemoVideo({
         />
       ) : (
         <img src={poster} alt="" className="block w-full" />
-      )}
-
-      {/* Переключатель фото/видео в правом верхнем углу. */}
-      {poster && (
-        <div className="absolute right-2 top-2 flex rounded-full bg-black/45 p-0.5 backdrop-blur-sm">
-          <button
-            type="button"
-            onClick={() => setMode('photo')}
-            aria-label="Фото"
-            aria-pressed={mode === 'photo'}
-            className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
-              mode === 'photo' ? 'bg-white text-black' : 'text-white/75'
-            }`}
-          >
-            <ImageIcon size={15} strokeWidth={2} />
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('video')}
-            aria-label="Видео"
-            aria-pressed={mode === 'video'}
-            className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
-              mode === 'video' ? 'bg-white text-black' : 'text-white/75'
-            }`}
-          >
-            <Video size={15} strokeWidth={2} />
-          </button>
-        </div>
       )}
     </div>
   );

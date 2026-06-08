@@ -85,7 +85,7 @@ function withReordered(w: WorkoutResponse, order: number[]): WorkoutResponse {
 import { useExercises } from '../api/exercises';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Button } from '../components/Button';
-import { DemoVideo } from '../components/DemoVideo';
+import { DemoVideo, MediaToggle, type MediaMode } from '../components/DemoVideo';
 import { HoldToDelete } from '../components/HoldToDelete';
 import { SortableList } from '../components/SortableList';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -329,6 +329,7 @@ function ActiveView({
   const [adding, setAdding] = useState(false);
   const [doneExpanded, setDoneExpanded] = useState(false);
   const [showDemo, setShowDemo] = useState(true);
+  const [demoMode, setDemoMode] = useState<MediaMode>('photo');
 
   // Полные данные упражнений по id — для демонстрации следующего подхода в шапке.
   const catalog = useExercises();
@@ -507,25 +508,30 @@ function ActiveView({
           {/* Демонстрация следующего подхода: упражнение + зацикленное видео. */}
           {nextEx && nextHasMedia && (
             <div className="flex flex-col gap-2 border-t border-[color:var(--color-accent-on)]/20 pt-3">
-              <button
-                type="button"
-                onClick={() => setShowDemo((v) => !v)}
-                className="flex items-center justify-between gap-2 text-left"
-              >
-                <span className="flex min-w-0 flex-col">
-                  <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.06em] opacity-70">
-                    Следующий подход
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDemo((v) => !v)}
+                  className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
+                >
+                  <span className="flex min-w-0 flex-col">
+                    <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.06em] opacity-70">
+                      Следующий подход
+                    </span>
+                    <span className="truncate text-[15px] font-bold leading-tight">
+                      {labels.get(nextEx.position) ?? nextEx.exerciseName}
+                      {nextSet ? ` · ${plannedText(nextSet)}` : ''}
+                    </span>
                   </span>
-                  <span className="truncate text-[15px] font-bold leading-tight">
-                    {labels.get(nextEx.position) ?? nextEx.exerciseName}
-                    {nextSet ? ` · ${plannedText(nextSet)}` : ''}
-                  </span>
-                </span>
-                <ChevronDown
-                  size={20}
-                  className={`shrink-0 transition-transform ${showDemo ? 'rotate-180' : ''}`}
-                />
-              </button>
+                  <ChevronDown
+                    size={20}
+                    className={`shrink-0 transition-transform ${showDemo ? 'rotate-180' : ''}`}
+                  />
+                </button>
+                {showDemo && nextExData?.videoUrl && nextExData.imageUrl && (
+                  <MediaToggle mode={demoMode} onChange={setDemoMode} tone="on" />
+                )}
+              </div>
               {showDemo &&
                 nextExData &&
                 (nextExData.videoUrl ? (
@@ -533,6 +539,7 @@ function ActiveView({
                     key={nextExData.videoUrl}
                     src={nextExData.videoUrl}
                     poster={nextExData.imageUrl ?? undefined}
+                    mode={demoMode}
                     className="rounded-xl bg-black/20"
                   />
                 ) : (
