@@ -22,6 +22,11 @@ const exercises: ExerciseResponse[] = [
     defaultTimeSec: null,
     restSec: 90,
     note: null,
+    imageUrl: null,
+    videoUrl: null,
+    equipment: null,
+    primaryMuscles: null,
+    secondaryMuscles: null,
   },
 ];
 
@@ -110,6 +115,11 @@ describe('KnowledgeBasePage', () => {
         defaultTimeSec: null,
         restSec: 60,
         note: null,
+        imageUrl: null,
+        videoUrl: null,
+        equipment: null,
+        primaryMuscles: null,
+        secondaryMuscles: null,
       },
     ]);
     mockTemplates(templates);

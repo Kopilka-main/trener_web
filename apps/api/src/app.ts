@@ -35,6 +35,7 @@ import { registerAccountingModule } from './modules/accounting/accounting.module
 import { registerMeasurementsModule } from './modules/measurements/measurements.module.js';
 import { registerChatModule } from './modules/chat/chat.module.js';
 import { registerFilesModule } from './modules/files/files.module.js';
+import { catalogMediaRoutes } from './modules/catalog-media/catalog-media.routes.js';
 import { registerProgressPhotosModule } from './modules/progress-photos/progress-photos.module.js';
 import { registerMedicalModule } from './modules/medical-records/medical.module.js';
 import { makeTelemetry, registerTelemetryRoutes } from './modules/telemetry/telemetry.module.js';
@@ -59,6 +60,9 @@ export type AppDeps = {
   isProd: boolean;
   uploadsDir?: string;
   vapid?: VapidConfig;
+  // Каталог с глобальным медиа упражнений (картинки/видео). По умолчанию
+  // <cwd>/media/catalog. Раздаётся публично через /api/catalog-media/:file.
+  catalogMediaDir?: string;
 };
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
@@ -191,6 +195,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     },
   });
   registerFilesModule(app, { db: deps.db, storage });
+  catalogMediaRoutes(app, deps.catalogMediaDir ?? path.resolve(process.cwd(), 'media/catalog'));
   registerProgressPhotosModule(app, { db: deps.db, storage, clock });
   registerMedicalModule(app, { db: deps.db, storage, clock });
 

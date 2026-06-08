@@ -15,6 +15,11 @@ export type ExerciseRow = {
   defaultTimeSec: number | null;
   restSec: number;
   note: string | null;
+  imageUrl: string | null;
+  videoUrl: string | null;
+  equipment: string | null;
+  primaryMuscles: string | null;
+  secondaryMuscles: string | null;
   createdAt: Date;
 };
 
@@ -56,6 +61,11 @@ const cols = {
   defaultTimeSec: exercises.defaultTimeSec,
   restSec: exercises.restSec,
   note: exercises.note,
+  imageUrl: exercises.imageUrl,
+  videoUrl: exercises.videoUrl,
+  equipment: exercises.equipment,
+  primaryMuscles: exercises.primaryMuscles,
+  secondaryMuscles: exercises.secondaryMuscles,
   createdAt: exercises.createdAt,
 };
 
@@ -73,6 +83,11 @@ export function toResponse(r: ExerciseRow): ExerciseResponse {
     defaultTimeSec: r.defaultTimeSec,
     restSec: r.restSec,
     note: r.note,
+    imageUrl: r.imageUrl,
+    videoUrl: r.videoUrl,
+    equipment: r.equipment,
+    primaryMuscles: r.primaryMuscles,
+    secondaryMuscles: r.secondaryMuscles,
   };
 }
 

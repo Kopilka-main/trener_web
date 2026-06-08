@@ -148,6 +148,15 @@ export const exercises = pgTable('exercises', {
   defaultTimeSec: integer('default_time_sec'),
   restSec: integer('rest_sec').notNull().default(90),
   note: text('note'),
+  // Медиа каталога (глобальные записи): относительные URL раздачи через API.
+  // imageUrl — превью/картинка техники; videoUrl — короткое видео. NULL = нет медиа.
+  imageUrl: text('image_url'),
+  videoUrl: text('video_url'),
+  // Справочные характеристики каталога (текст, RU): оборудование, целевые и
+  // вспомогательные мышцы (синергисты), через запятую. NULL = не заданы.
+  equipment: text('equipment'),
+  primaryMuscles: text('primary_muscles'),
+  secondaryMuscles: text('secondary_muscles'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

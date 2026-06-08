@@ -33,6 +33,14 @@ export const exerciseResponseSchema = z.object({
   defaultTimeSec: z.number().nullable(),
   restSec: z.number(),
   note: z.string().nullable(),
+  // Медиа каталога: относительные URL раздачи (см. /api/catalog-media). NULL — нет.
+  imageUrl: z.string().nullable(),
+  videoUrl: z.string().nullable(),
+  // Справочные характеристики каталога (RU): оборудование, целевые мышцы,
+  // синергисты (через запятую). NULL — не заданы.
+  equipment: z.string().nullable(),
+  primaryMuscles: z.string().nullable(),
+  secondaryMuscles: z.string().nullable(),
 });
 export type ExerciseResponse = z.infer<typeof exerciseResponseSchema>;
 

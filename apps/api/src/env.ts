@@ -6,6 +6,8 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   COOKIE_SECRET: z.string().min(32, 'COOKIE_SECRET должен быть не короче 32 символов'),
   UPLOADS_DIR: z.string().default('/data/uploads'),
+  // Папка с глобальным медиа каталога упражнений (картинки/видео).
+  CATALOG_MEDIA_DIR: z.string().default('/data/catalog'),
   // Web Push (VAPID). Опциональны: без них push мягко отключается.
   VAPID_PUBLIC_KEY: z.string().default(''),
   VAPID_PRIVATE_KEY: z.string().default(''),

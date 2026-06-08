@@ -10,6 +10,7 @@ import {
 import { Button } from '../components/Button';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Stepper } from '../components/Stepper';
+import { ExerciseDetails } from '../components/ExerciseDetails';
 import { subgroupsFor } from '../lib/muscleGroups';
 
 interface ExerciseEditPageProps {
@@ -62,6 +63,9 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
       setRestSec(e.restSec);
     }
   }, [editing, existing.data]);
+
+  // Медиа упражнения (картинка/видео техники) — есть у записей каталога.
+  const media = editing ? existing.data : undefined;
 
   // Категория может прийти кастомная (не из списка) — покажем её тоже.
   const categoryChips = GROUP_ORDER.includes(category) ? GROUP_ORDER : [category, ...GROUP_ORDER];
@@ -189,6 +193,8 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
             className="w-full rounded-xl border border-line bg-card px-4 py-3 text-[15px] text-ink outline-none focus:border-accent"
           />
         </label>
+
+        {media && <ExerciseDetails exercise={media} showDescription={false} />}
 
         <label className="flex flex-col gap-1.5">
           <span className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">

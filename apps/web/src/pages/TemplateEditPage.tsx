@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Minus, Plus } from 'lucide-react';
+import { ChevronDown, Minus, Plus } from 'lucide-react';
 import type { CreateTemplateRequest, ExerciseResponse, TemplateExercise } from '@trener/shared';
 import { useExercises } from '../api/exercises';
 import {
@@ -13,6 +13,7 @@ import { Button } from '../components/Button';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SortableList } from '../components/SortableList';
 import { HoldToDelete } from '../components/HoldToDelete';
+import { ExerciseDetails } from '../components/ExerciseDetails';
 import { subgroupsFor } from '../lib/muscleGroups';
 
 interface TemplateEditPageProps {
@@ -114,6 +115,10 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
   const editing = mode === 'edit';
 
   const catalog = useExercises();
+  // Полные данные упражнений по id — для блока «Показать больше» в карточках.
+  const exById = useMemo(() => new Map((catalog.data ?? []).map((e) => [e.id, e])), [catalog.data]);
+  // Раскрытые карточки (по id позиции) — демонстрация/характеристики/описание.
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const existing = useTemplate(editing ? id : '');
   const createMutation = useCreateTemplate();
   const updateMutation = useUpdateTemplate(id);
@@ -556,6 +561,37 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                     onChange={(v) => updatePosition(p.id, { restSec: v })}
                   />
                 </div>
+
+                {(() => {
+                  const ex = exById.get(p.exerciseId);
+                  if (!ex) return null;
+                  const hasExtra = Boolean(
+                    ex.videoUrl ||
+                    ex.imageUrl ||
+                    ex.equipment ||
+                    ex.primaryMuscles ||
+                    ex.secondaryMuscles ||
+                    ex.description,
+                  );
+                  if (!hasExtra) return null;
+                  const open = expanded[p.id] ?? false;
+                  return (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setExpanded((s) => ({ ...s, [p.id]: !open }))}
+                        className="flex items-center gap-1 self-start text-[12px] font-medium text-ink-muted"
+                      >
+                        {open ? 'Скрыть' : 'Показать больше'}
+                        <ChevronDown
+                          size={14}
+                          className={`transition-transform ${open ? 'rotate-180' : ''}`}
+                        />
+                      </button>
+                      {open && <ExerciseDetails exercise={ex} />}
+                    </>
+                  );
+                })()}
               </div>
             )}
           />

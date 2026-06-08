@@ -12,6 +12,7 @@ buildApp({
   cookieSecret: env.COOKIE_SECRET,
   isProd: env.NODE_ENV === 'production',
   uploadsDir: env.UPLOADS_DIR,
+  catalogMediaDir: env.CATALOG_MEDIA_DIR,
   vapid: {
     publicKey: env.VAPID_PUBLIC_KEY,
     privateKey: env.VAPID_PRIVATE_KEY,

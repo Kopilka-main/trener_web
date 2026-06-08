@@ -16,6 +16,9 @@ data/
 *.db
 *.sqlite
 
+# Медиа каталога упражнений (бинарь ~200 МБ, кладётся локально/в volume, не в git)
+apps/api/media/
+
 # Логи
 *.log
 npm-debug.log*

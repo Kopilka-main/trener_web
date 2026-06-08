@@ -260,6 +260,20 @@
       "when": 1780671777360,
       "tag": "0036_odd_eddie_brock",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1780896287111,
+      "tag": "0037_bored_doorman",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1780897850874,
+      "tag": "0038_fuzzy_mesmero",
+      "breakpoints": true
     }
   ]
 }

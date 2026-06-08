@@ -30,10 +30,13 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@fitbond.ru}
+      # Папка глобального медиа каталога упражнений (картинки/видео).
+      CATALOG_MEDIA_DIR: /data/catalog
     depends_on:
       postgres: { condition: service_healthy }
     volumes:
       - uploads:/data/uploads
+      - catalog:/data/catalog
 
   nginx:
     image: ${WEB_IMAGE:-trener-web:local}
@@ -82,6 +85,7 @@ services:
       # подключить отдельный HDD и заменить на bind-mount /mnt/backups:/backups.
       - backups:/backups
       - uploads:/data/uploads:ro
+      - catalog:/data/catalog:ro
     entrypoint: ['/bin/sh', '-c']
     command:
       - |
@@ -90,17 +94,20 @@ services:
           echo "[backup] dump $$ts"
           pg_dump -h postgres -U postgres -d trener -F c -f "/backups/db-$$ts.dump" \
             && tar czf "/backups/uploads-$$ts.tar.gz" -C /data uploads \
+            && tar czf "/backups/catalog-$$ts.tar.gz" -C /data catalog \
             && echo "[backup] ok $$ts" \
             || echo "[backup] FAILED $$ts"
           # Ротация: удаляем дампы и архивы старше BACKUP_RETENTION_DAYS суток.
           find /backups -name 'db-*.dump' -mtime +$$BACKUP_RETENTION_DAYS -delete
           find /backups -name 'uploads-*.tar.gz' -mtime +$$BACKUP_RETENTION_DAYS -delete
+          find /backups -name 'catalog-*.tar.gz' -mtime +$$BACKUP_RETENTION_DAYS -delete
           sleep 86400
         done
 
 volumes:
   pgdata:
   uploads:
+  catalog:
   backups:
   caddy_data:
   caddy_config:

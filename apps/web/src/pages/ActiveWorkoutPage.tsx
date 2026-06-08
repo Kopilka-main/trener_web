@@ -85,6 +85,7 @@ function withReordered(w: WorkoutResponse, order: number[]): WorkoutResponse {
 import { useExercises } from '../api/exercises';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Button } from '../components/Button';
+import { DemoVideo } from '../components/DemoVideo';
 import { HoldToDelete } from '../components/HoldToDelete';
 import { SortableList } from '../components/SortableList';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -327,6 +328,11 @@ function ActiveView({
   const [rest, setRest] = useState<{ key: string; sec: number } | null>(null);
   const [adding, setAdding] = useState(false);
   const [doneExpanded, setDoneExpanded] = useState(false);
+  const [showDemo, setShowDemo] = useState(true);
+
+  // Полные данные упражнений по id — для демонстрации следующего подхода в шапке.
+  const catalog = useExercises();
+  const exById = useMemo(() => new Map((catalog.data ?? []).map((e) => [e.id, e])), [catalog.data]);
 
   const counters = useMemo(() => {
     const all = workout.exercises.flatMap((e) => e.sets);
@@ -339,6 +345,11 @@ function ActiveView({
   const completed = workout.exercises.filter(isDoneEx);
   const pending = workout.exercises.filter((ex) => !isDoneEx(ex));
   const pendingItems = pending.map((ex) => ({ ...ex, id: `ex-${String(ex.position)}` }));
+  // Следующий подход = первый невыполненный подход первого незавершённого упражнения.
+  const nextEx = pending[0];
+  const nextExData = nextEx ? exById.get(nextEx.exerciseId) : undefined;
+  const nextSet = nextEx?.sets.find((s) => !s.done);
+  const nextHasMedia = Boolean(nextExData && (nextExData.videoUrl || nextExData.imageUrl));
   // Свёрнуто коллектор пуст (виден только заголовок-счётчик); развёрнуто — все завершённые.
   const visibleCompleted = doneExpanded ? completed : [];
 
@@ -467,28 +478,71 @@ function ActiveView({
       <ScreenHeader title={workout.name} back={backTo} />
 
       <div className="flex flex-1 flex-col gap-3 px-2 pb-28 pt-2">
-        {/* Сводка: слева — прошедшее время; справа — отдых либо завершение удержанием. */}
-        <div className="tile-shadow-primary flex items-center justify-between gap-3 rounded-2xl px-4 py-3">
-          <span className="flex shrink-0 flex-col">
-            <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.06em] opacity-70">
-              Прошло
+        {/* Сводка: время + отдых/завершение, плюс демонстрация следующего подхода. */}
+        <div className="tile-shadow-primary flex flex-col gap-3 rounded-2xl px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="flex shrink-0 flex-col">
+              <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.06em] opacity-70">
+                Прошло
+              </span>
+              <span className="text-2xl font-bold tabular-nums leading-tight">
+                {formatDuration(elapsed)}
+              </span>
             </span>
-            <span className="text-2xl font-bold tabular-nums leading-tight">
-              {formatDuration(elapsed)}
-            </span>
-          </span>
 
-          {rest ? (
-            // key по подходу: новый отдых перемонтирует таймер и сбрасывает отсчёт,
-            // даже если длительность та же (иначе useEffect[seconds] не сработает).
-            <RestTimer
-              key={rest.key}
-              seconds={rest.sec}
-              onDone={() => setRest(null)}
-              onSkip={() => setRest(null)}
-            />
-          ) : (
-            <HoldComplete pending={complete.isPending} onComplete={finishWorkout} />
+            {rest ? (
+              // key по подходу: новый отдых перемонтирует таймер и сбрасывает отсчёт,
+              // даже если длительность та же (иначе useEffect[seconds] не сработает).
+              <RestTimer
+                key={rest.key}
+                seconds={rest.sec}
+                onDone={() => setRest(null)}
+                onSkip={() => setRest(null)}
+              />
+            ) : (
+              <HoldComplete pending={complete.isPending} onComplete={finishWorkout} />
+            )}
+          </div>
+
+          {/* Демонстрация следующего подхода: упражнение + зацикленное видео. */}
+          {nextEx && nextHasMedia && (
+            <div className="flex flex-col gap-2 border-t border-[color:var(--color-accent-on)]/20 pt-3">
+              <button
+                type="button"
+                onClick={() => setShowDemo((v) => !v)}
+                className="flex items-center justify-between gap-2 text-left"
+              >
+                <span className="flex min-w-0 flex-col">
+                  <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.06em] opacity-70">
+                    Следующий подход
+                  </span>
+                  <span className="truncate text-[15px] font-bold leading-tight">
+                    {labels.get(nextEx.position) ?? nextEx.exerciseName}
+                    {nextSet ? ` · ${plannedText(nextSet)}` : ''}
+                  </span>
+                </span>
+                <ChevronDown
+                  size={20}
+                  className={`shrink-0 transition-transform ${showDemo ? 'rotate-180' : ''}`}
+                />
+              </button>
+              {showDemo &&
+                nextExData &&
+                (nextExData.videoUrl ? (
+                  <DemoVideo
+                    key={nextExData.videoUrl}
+                    src={nextExData.videoUrl}
+                    poster={nextExData.imageUrl ?? undefined}
+                    className="rounded-xl bg-black/20"
+                  />
+                ) : (
+                  <img
+                    src={nextExData.imageUrl ?? undefined}
+                    alt={nextExData.name}
+                    className="w-full rounded-xl bg-black/20 object-contain"
+                  />
+                ))}
+            </div>
           )}
         </div>
 
