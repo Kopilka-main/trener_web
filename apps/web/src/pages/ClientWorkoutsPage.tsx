@@ -71,6 +71,16 @@ export function ClientWorkoutsPage() {
     [list],
   );
 
+  function createEmpty() {
+    const body: CreateWorkoutRequest = { name: 'Новая тренировка', exercises: [] };
+    createWorkout.mutate(body, {
+      onSuccess: (workout) => {
+        setPicker('none');
+        void navigate(`/clients/${id}/workouts/${workout.id}`);
+      },
+    });
+  }
+
   function assignTemplate(template: TemplateResponse) {
     // Плоская модель: каждый подход — отдельное упражнение с одним подходом
     // (sets:N в шаблоне разворачиваем в N отдельных записей).
@@ -179,6 +189,7 @@ export function ClientWorkoutsPage() {
         <TemplatePickerSheet
           onClose={() => setPicker('none')}
           onPick={assignTemplate}
+          onCreateEmpty={createEmpty}
           pending={createWorkout.isPending}
         />
       )}
@@ -264,18 +275,12 @@ function EmptyCurrent({
   );
 }
 
-/** Заголовок группы истории: Сегодня / Вчера / «5 июня». */
+/** Заголовок группы истории: дата в формате ДД/ММ/ГГГГ. */
 function formatGroupDate(dateKey: string): string {
   if (dateKey === 'unknown') return 'Без даты';
   const m = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(dateKey);
   if (!m) return dateKey;
-  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  const today = new Date();
-  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const diffDays = Math.round((startOfDay(today) - startOfDay(d)) / 86_400_000);
-  if (diffDays === 0) return 'Сегодня';
-  if (diffDays === 1) return 'Вчера';
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+  return `${m[3]}/${m[2]}/${m[1]}`;
 }
 
 function formatDuration(sec: number): string {
@@ -386,10 +391,12 @@ function HistoryRow({
 function TemplatePickerSheet({
   onClose,
   onPick,
+  onCreateEmpty,
   pending,
 }: {
   onClose: () => void;
   onPick: (template: TemplateResponse) => void;
+  onCreateEmpty: () => void;
   pending: boolean;
 }) {
   const templates = useTemplates();
@@ -418,14 +425,30 @@ function TemplatePickerSheet({
         <h2 className="px-5 pb-2 pt-4 text-[16px] font-bold text-ink">Выберите шаблон</h2>
 
         <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-5 pt-1">
+          {/* Пустая тренировка — создаём черновик без упражнений, заполняем вручную. */}
+          <button
+            type="button"
+            disabled={pending}
+            onClick={onCreateEmpty}
+            className="flex items-center gap-3 rounded-2xl border-2 border-dashed border-line px-4 py-3 text-left transition-colors active:bg-card-elevated disabled:opacity-50"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chip text-ink">
+              <Plus size={18} strokeWidth={2.2} />
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="truncate text-[15px] font-semibold text-ink">Пустая тренировка</span>
+              <span className="font-[family-name:var(--font-mono)] text-[12px] text-ink-muted">
+                Создать с нуля и добавить упражнения
+              </span>
+            </span>
+            <ChevronRight size={16} className="tile-chevron shrink-0" />
+          </button>
+
           {templates.isPending && <p className="text-sm text-ink-muted">Загрузка…</p>}
           {templates.isError && (
             <p className="text-sm text-ink-muted" role="alert">
               Не удалось загрузить шаблоны.
             </p>
-          )}
-          {templates.isSuccess && list.length === 0 && (
-            <p className="text-sm text-ink-muted">Нет шаблонов. Создайте шаблон в Базе знаний.</p>
           )}
           {list.map((t) => (
             <button

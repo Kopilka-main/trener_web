@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Square } from 'lucide-react';
 
 const STORAGE_KEY = 'backfab.y';
-const FAB = 47; // диаметр кнопки, px
+const FAB = 47; // диаметр кнопки «назад», px
+const HOME = Math.round(FAB * 0.7); // кнопка «домой» — на 30% меньше
 const MARGIN = 16; // отступ от краёв по вертикали
 const DRAG_THRESHOLD = 6; // сдвиг, после которого жест считается перетаскиванием
 
@@ -76,18 +77,34 @@ export function BackFab() {
     void navigate(parentPath(location.pathname));
   }
 
+  const fabClass =
+    'absolute right-5 z-40 flex touch-none select-none items-center justify-center rounded-full bg-card-elevated/55 text-ink opacity-65 shadow-[0_4px_14px_-2px_rgba(0,0,0,0.45)] backdrop-blur-sm transition-opacity active:bg-chip/70 active:opacity-100';
+
   return (
-    <button
-      type="button"
-      aria-label="Назад"
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={() => (dragging.current = false)}
-      style={{ top: y, width: FAB, height: FAB }}
-      className="absolute right-3 z-40 flex touch-none select-none items-center justify-center rounded-full bg-card-elevated/55 text-ink opacity-65 shadow-[0_4px_14px_-2px_rgba(0,0,0,0.45)] backdrop-blur-sm transition-opacity active:bg-chip/70 active:opacity-100"
-    >
-      <ChevronLeft size={26} strokeWidth={2} />
-    </button>
+    <>
+      {/* Кнопка «Домой» — над кнопкой «назад», ведёт на главный экран. */}
+      <button
+        type="button"
+        aria-label="На главную"
+        onClick={() => void navigate('/')}
+        style={{ top: Math.max(MARGIN, y - HOME - 10), width: HOME, height: HOME }}
+        className={fabClass}
+      >
+        <Square size={16} strokeWidth={2.2} />
+      </button>
+
+      <button
+        type="button"
+        aria-label="Назад"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={() => (dragging.current = false)}
+        style={{ top: y, width: FAB, height: FAB }}
+        className={fabClass}
+      >
+        <ChevronLeft size={26} strokeWidth={2} />
+      </button>
+    </>
   );
 }

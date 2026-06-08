@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ChevronRight, Plus, Search } from 'lucide-react';
 import type { ExerciseResponse, TemplateResponse } from '@trener/shared';
@@ -7,6 +7,29 @@ import { useTemplates } from '../api/workout-templates';
 import { orderSubgroups, subgroupsFor } from '../lib/muscleGroups';
 
 type Tab = 'templates' | 'exercises';
+
+// Сохранённое состояние экрана (вкладка/фильтры/скролл) — чтобы при возврате из
+// упражнения попадать на ту же вкладку и в то же место списка. sessionStorage:
+// живёт в рамках сессии вкладки браузера, не засоряет localStorage.
+const VIEW_KEY = 'knowledge.view';
+type SavedView = {
+  tab: Tab;
+  query: string;
+  category: string;
+  templateGroup: string;
+  subgroup: string;
+  scrollTop: number;
+};
+function loadView(): Partial<SavedView> {
+  try {
+    return JSON.parse(sessionStorage.getItem(VIEW_KEY) ?? '{}') as Partial<SavedView>;
+  } catch {
+    return {};
+  }
+}
+function saveView(patch: Partial<SavedView>): void {
+  sessionStorage.setItem(VIEW_KEY, JSON.stringify({ ...loadView(), ...patch }));
+}
 
 /** Предпочтительный порядок групп мышц для чипов (остальные категории — следом). */
 const GROUP_ORDER = [
@@ -87,14 +110,55 @@ function ExerciseRow({ exercise }: { exercise: ExerciseResponse }) {
 
 export function KnowledgeBasePage() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>('templates');
-  const [query, setQuery] = useState('');
-  const [category, setCategory] = useState('');
-  const [templateGroup, setTemplateGroup] = useState('');
-  const [subgroup, setSubgroup] = useState('');
+  const saved = useMemo(loadView, []);
+  const [tab, setTab] = useState<Tab>(saved.tab ?? 'templates');
+  const [query, setQuery] = useState(saved.query ?? '');
+  const [category, setCategory] = useState(saved.category ?? '');
+  const [templateGroup, setTemplateGroup] = useState(saved.templateGroup ?? '');
+  const [subgroup, setSubgroup] = useState(saved.subgroup ?? '');
 
   const exercises = useExercises();
   const templates = useTemplates();
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  // Сохраняем вкладку и фильтры при каждом изменении.
+  useEffect(() => {
+    saveView({ tab, query, category, templateGroup, subgroup });
+  }, [tab, query, category, templateGroup, subgroup]);
+
+  // Сохраняем позицию скролла списка по мере прокрутки (надёжнее размонтирования).
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => saveView({ scrollTop: el.scrollTop }));
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  // Восстанавливаем позицию, когда данные готовы (с ретраями — список тянется по высоте).
+  const dataReady = !exercises.isPending && !templates.isPending;
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || !dataReady) return;
+    restored.current = true;
+    const top = loadView().scrollTop ?? 0;
+    const el = listRef.current;
+    if (!el || top <= 0) return;
+    let tries = 0;
+    const apply = () => {
+      el.scrollTop = top;
+      tries += 1;
+      if (Math.abs(el.scrollTop - top) > 2 && tries < 20) requestAnimationFrame(apply);
+    };
+    requestAnimationFrame(apply);
+  }, [dataReady]);
 
   const allExercises = useMemo(() => exercises.data ?? [], [exercises.data]);
   const allTemplates = useMemo(() => templates.data ?? [], [templates.data]);
@@ -270,7 +334,7 @@ export function KnowledgeBasePage() {
         )}
       </header>
 
-      <div className="flex-1 overflow-y-auto px-2 pb-6 pt-3">
+      <div ref={listRef} className="flex-1 overflow-y-auto px-2 pb-6 pt-3">
         {(exercises.isPending || templates.isPending) && (
           <p className="text-sm text-ink-muted">Загрузка…</p>
         )}

@@ -140,8 +140,9 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
               <button
                 key={c}
                 type="button"
+                disabled={isGlobalEdit}
                 onClick={() => selectCategory(c)}
-                className={`rounded-full px-4 py-2 text-[14px] font-semibold transition-colors ${
+                className={`rounded-full px-4 py-2 text-[14px] font-semibold transition-colors disabled:cursor-default ${
                   c === category ? 'bg-accent text-accent-on' : 'bg-chip text-ink'
                 }`}
               >
@@ -159,8 +160,9 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
+                disabled={isGlobalEdit}
                 onClick={() => setSubgroup('')}
-                className={`rounded-full px-4 py-2 text-[13px] font-semibold transition-colors ${
+                className={`rounded-full px-4 py-2 text-[13px] font-semibold transition-colors disabled:cursor-default ${
                   subgroup === '' ? 'bg-accent text-accent-on' : 'bg-chip text-ink'
                 }`}
               >
@@ -170,8 +172,9 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
                 <button
                   key={s}
                   type="button"
+                  disabled={isGlobalEdit}
                   onClick={() => setSubgroup(s)}
-                  className={`rounded-full px-4 py-2 text-[13px] font-semibold transition-colors ${
+                  className={`rounded-full px-4 py-2 text-[13px] font-semibold transition-colors disabled:cursor-default ${
                     subgroup === s ? 'bg-accent text-accent-on' : 'bg-chip text-ink'
                   }`}
                 >
@@ -189,8 +192,11 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
+            readOnly={isGlobalEdit}
             placeholder="Жим ногами под углом 45°"
-            className="w-full rounded-xl border border-line bg-card px-4 py-3 text-[15px] text-ink outline-none focus:border-accent"
+            className={`w-full rounded-xl border border-line bg-card px-4 py-3 text-[15px] outline-none focus:border-accent ${
+              isGlobalEdit ? 'cursor-default text-ink-muted' : 'text-ink'
+            }`}
           />
         </label>
 
@@ -204,8 +210,11 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
             rows={3}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Техника, цель упражнения…"
-            className="w-full resize-none rounded-xl border border-line bg-card px-4 py-3 text-[15px] text-ink outline-none focus:border-accent"
+            readOnly={isGlobalEdit}
+            placeholder={isGlobalEdit ? 'Описание из каталога' : 'Техника, цель упражнения…'}
+            className={`w-full resize-none rounded-xl border border-line bg-card px-4 py-3 text-[15px] outline-none focus:border-accent ${
+              isGlobalEdit ? 'cursor-default text-ink-muted' : 'text-ink'
+            }`}
           />
         </label>
 
@@ -235,7 +244,8 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
 
         {isGlobalEdit && (
           <p className="text-xs text-ink-muted">
-            Упражнение из общего каталога — изменения сохранятся как ваша копия.
+            Системное упражнение из каталога: название, группа и описание изменить нельзя — можно
+            настроить только параметры подхода. Сохранится как ваша копия.
           </p>
         )}
 

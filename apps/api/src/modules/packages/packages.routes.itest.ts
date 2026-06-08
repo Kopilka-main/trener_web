@@ -134,7 +134,8 @@ describe.skipIf(!url)('packages routes (integration)', () => {
       method: 'POST',
       url: `/api/clients/${cid}/packages`,
       cookies: { sid },
-      payload: { lessonsPaid: 0, pricePerLesson: 1, totalPaid: 1, startsAt: '2026-06-01' },
+      // totalPaid: 0 недопустимо (должно быть > 0).
+      payload: { lessonsPaid: 5, pricePerLesson: 1, totalPaid: 0, startsAt: '2026-06-01' },
     });
     expect(res.statusCode).toBe(400);
   });

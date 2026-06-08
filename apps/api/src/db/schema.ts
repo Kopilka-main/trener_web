@@ -74,6 +74,8 @@ export const clients = pgTable('clients', {
   contacts: jsonb('contacts').$type<{ type: string; value: string }[]>().notNull().default([]),
   // Свободные теги клиента.
   tags: jsonb('tags').$type<string[]>().notNull().default([]),
+  // Формат работы с клиентом: 1 = онлайн, 0 = спортзал (очно). По умолчанию очно.
+  isOnline: integer('is_online').notNull().default(0),
   // Аватар клиента: ссылка на files. NULL = нет фото, удаление файла → set null.
   // FK-колбэк ленивый (files объявлена ниже). Тип колонки аннотируем как AnyPgColumn,
   // чтобы разорвать циклическую инференцию типов (files↔clients) — иначе типы схлопываются в any.
@@ -335,12 +337,17 @@ export const paymentPackages = pgTable(
     clientId: text('client_id')
       .notNull()
       .references(() => clients.id, { onDelete: 'cascade' }),
+    // Вид оплаты: 'package' — пакет тренировок (по количеству), 'subscription' —
+    // абонемент (доступ на период, без счётчика тренировок).
+    kind: text('kind').$type<'package' | 'subscription'>().notNull().default('package'),
     lessonsPaid: integer('lessons_paid').notNull(),
     lessonsUsed: integer('lessons_used').notNull().default(0),
     pricePerLesson: doublePrecision('price_per_lesson').notNull(),
     totalPaid: doublePrecision('total_paid').notNull(),
     workoutType: text('workout_type'),
-    startsAt: text('starts_at').notNull(), // YYYY-MM-DD
+    paidAt: text('paid_at'), // дата оплаты, YYYY-MM-DD
+    startsAt: text('starts_at').notNull(), // дата начала, YYYY-MM-DD
+    endsAt: text('ends_at'), // дата окончания, YYYY-MM-DD (период абонемента / срок пакета)
     status: text('status').$type<'active' | 'closed' | 'cancelled'>().notNull().default('active'),
     note: text('note'),
     tags: text('tags').array().notNull().default([]),

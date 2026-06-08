@@ -1,0 +1,1 @@
+ALTER TABLE "clients" ADD COLUMN "is_online" integer DEFAULT 0 NOT NULL;

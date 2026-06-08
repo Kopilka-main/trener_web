@@ -48,6 +48,7 @@ function toResponse(r: ClientRow): ClientResponse {
     status: r.status,
     contacts: r.contacts ?? [],
     tags: r.tags ?? [],
+    isOnline: r.isOnline === 1,
     avatarFileId: r.avatarFileId,
     createdAt: r.createdAt.toISOString(),
   };
@@ -79,6 +80,7 @@ export function makeClientsService(
         notes: input.notes ?? null,
         contacts: input.contacts ?? [],
         tags: input.tags ?? [],
+        isOnline: input.isOnline,
       });
       return toResponse(row);
     },
@@ -141,6 +143,7 @@ export function makeClientsService(
       if (patch.status !== undefined) repoPatch.status = patch.status;
       if (patch.contacts !== undefined) repoPatch.contacts = patch.contacts;
       if (patch.tags !== undefined) repoPatch.tags = patch.tags;
+      if (patch.isOnline !== undefined) repoPatch.isOnline = patch.isOnline;
       const row = await repo.update(trainerId, clientId, repoPatch);
       if (!row) throw notFound('Клиент не найден');
       return toResponse(row);

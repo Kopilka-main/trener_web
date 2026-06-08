@@ -14,6 +14,7 @@ export type ClientRow = {
   status: ClientStatus;
   contacts: Contact[];
   tags: string[];
+  isOnline: number; // 0/1 в БД
   avatarFileId: string | null;
   createdAt: Date;
 };
@@ -29,6 +30,7 @@ export type CreateClientInput = {
   notes?: string | null;
   contacts?: Contact[];
   tags?: string[];
+  isOnline?: boolean;
 };
 
 export type UpdateClientInput = {
@@ -41,6 +43,7 @@ export type UpdateClientInput = {
   status?: ClientStatus;
   contacts?: Contact[];
   tags?: string[];
+  isOnline?: boolean;
 };
 
 export function makeClientsRepo(db: Db) {
@@ -56,6 +59,7 @@ export function makeClientsRepo(db: Db) {
         birthDate: clients.birthDate,
         contacts: clients.contacts,
         tags: clients.tags,
+        isOnline: clients.isOnline,
         avatarFileId: clients.avatarFileId,
         notes: trainerClients.notes,
         status: trainerClients.status,
@@ -92,6 +96,7 @@ export function makeClientsRepo(db: Db) {
           birthDate: input.birthDate ?? null,
           contacts: input.contacts ?? [],
           tags: input.tags ?? [],
+          isOnline: input.isOnline ? 1 : 0,
         });
         await tx.insert(trainerClients).values({
           trainerId: input.trainerId,
@@ -116,6 +121,7 @@ export function makeClientsRepo(db: Db) {
           birthDate: clients.birthDate,
           contacts: clients.contacts,
           tags: clients.tags,
+          isOnline: clients.isOnline,
           avatarFileId: clients.avatarFileId,
           notes: trainerClients.notes,
           status: trainerClients.status,
@@ -142,6 +148,7 @@ export function makeClientsRepo(db: Db) {
         birthDate: string | null;
         contacts: Contact[];
         tags: string[];
+        isOnline: number;
       }> = {};
       if (patch.firstName !== undefined) personPatch.firstName = patch.firstName;
       if (patch.lastName !== undefined) personPatch.lastName = patch.lastName;
@@ -150,6 +157,7 @@ export function makeClientsRepo(db: Db) {
       if (patch.birthDate !== undefined) personPatch.birthDate = patch.birthDate;
       if (patch.contacts !== undefined) personPatch.contacts = patch.contacts;
       if (patch.tags !== undefined) personPatch.tags = patch.tags;
+      if (patch.isOnline !== undefined) personPatch.isOnline = patch.isOnline ? 1 : 0;
       const linkPatch: Partial<{ notes: string | null; status: ClientStatus }> = {};
       if (patch.notes !== undefined) linkPatch.notes = patch.notes;
       if (patch.status !== undefined) linkPatch.status = patch.status;

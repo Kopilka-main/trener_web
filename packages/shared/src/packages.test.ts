@@ -39,10 +39,20 @@ describe('packages schemas', () => {
     expect(r.note).toBe('оплата наличными');
   });
 
-  it('create отклоняет неположительные числа', () => {
+  it('create отклоняет отрицательные числа и нулевой totalPaid', () => {
+    // totalPaid должен быть > 0 (0 недопустим даже для абонемента).
     expect(() =>
       createPackageRequestSchema.parse({
-        lessonsPaid: 0,
+        lessonsPaid: 5,
+        pricePerLesson: 1000,
+        totalPaid: 0,
+        startsAt: '2026-06-01',
+      }),
+    ).toThrow();
+    // Отрицательные lessonsPaid/pricePerLesson недопустимы (0 разрешён для абонемента).
+    expect(() =>
+      createPackageRequestSchema.parse({
+        lessonsPaid: -1,
         pricePerLesson: 1000,
         totalPaid: 5000,
         startsAt: '2026-06-01',

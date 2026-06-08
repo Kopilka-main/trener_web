@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Camera, ChevronRight, Download, QrCode, Trash2, X } from 'lucide-react';
+import {
+  AtSign,
+  Camera,
+  ChevronRight,
+  Download,
+  Mail,
+  MessageCircle,
+  Phone,
+  QrCode,
+  Trash2,
+  X,
+} from 'lucide-react';
 import type { Contact } from '@trener/shared';
 import {
   getAccountProfile,
@@ -21,7 +32,16 @@ interface ClientEditPageProps {
   mode: 'create' | 'edit';
 }
 
-const CONTACT_TYPES = ['Телефон', 'WhatsApp', 'Telegram', 'MAX', 'Instagram', 'Прочее'] as const;
+const CONTACT_TYPES = [
+  'Телефон',
+  'Email',
+  'WhatsApp',
+  'Telegram',
+  'MAX',
+  'Instagram',
+  'ВКонтакте',
+  'Прочее',
+] as const;
 
 export function ClientEditPage({ mode }: ClientEditPageProps) {
   const navigate = useNavigate();
@@ -45,6 +65,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
   const [tagDraft, setTagDraft] = useState('');
   const [accountId, setAccountId] = useState('');
   const [birthDate, setBirthDate] = useState('');
+  const [isOnline, setIsOnline] = useState(false);
   const [connectOpen, setConnectOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
@@ -63,6 +84,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
       setTags(c.tags);
       setAccountId(c.accountId ?? '');
       setBirthDate(c.birthDate ?? '');
+      setIsOnline(c.isOnline);
     }
   }, [editing, existing.data]);
 
@@ -81,13 +103,12 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
 
   const errors = {
     firstName: firstName.trim() === '' ? 'Обязательно к заполнению' : '',
-    lastName: lastName.trim() === '' ? 'Обязательно к заполнению' : '',
     birthDate: birthDateError(birthDate),
   };
-  const hasErrors = errors.firstName !== '' || errors.lastName !== '' || errors.birthDate !== '';
+  const hasErrors = errors.firstName !== '' || errors.birthDate !== '';
 
-  function addContact() {
-    setContacts((prev) => [...prev, { type: 'Телефон', value: '' }]);
+  function addContact(type = 'Телефон') {
+    setContacts((prev) => [...prev, { type, value: '' }]);
   }
 
   function setContact(index: number, patch: Partial<Contact>) {
@@ -162,6 +183,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
         .filter((c) => c.value.trim() !== '')
         .map((c) => ({ type: c.type, value: c.value.trim() })),
       tags,
+      isOnline,
     };
     if (editing) {
       updateMutation.mutate(payload, {
@@ -211,8 +233,18 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
     <div className="flex flex-col">
       <ScreenHeader
         title={title}
-        back={() => void navigate(-1)}
-        closeIcon={!editing}
+        sticky
+        left={
+          !editing ? (
+            <button
+              type="button"
+              onClick={() => void navigate(-1)}
+              className="text-[14px] font-medium text-ink-muted active:opacity-70"
+            >
+              Отмена
+            </button>
+          ) : undefined
+        }
         right={
           <button
             type="submit"
@@ -346,15 +378,16 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
           )}
         </Section>
 
-        {/* Имя / Фамилия — 2 колонки. */}
+        {/* Имя / Фамилия — 2 колонки, подписи в плейсхолдерах. Фамилия необязательна. */}
         <div className="grid grid-cols-2 gap-3">
-          <label htmlFor="firstName" className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-ink-muted">Имя</span>
+          <div className="flex flex-col gap-1.5">
             <input
               id="firstName"
               name="firstName"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
+              placeholder="Имя"
+              aria-label="Имя"
               aria-invalid={showErrors && errors.firstName !== ''}
               className={`rounded-xl border bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent ${
                 showErrors && errors.firstName ? 'border-danger' : 'border-line'
@@ -363,24 +396,38 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
             {showErrors && errors.firstName && (
               <span className="text-[12px] text-danger">{errors.firstName}</span>
             )}
-          </label>
-          <label htmlFor="lastName" className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-ink-muted">Фамилия</span>
-            <input
-              id="lastName"
-              name="lastName"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              aria-invalid={showErrors && errors.lastName !== ''}
-              className={`rounded-xl border bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent ${
-                showErrors && errors.lastName ? 'border-danger' : 'border-line'
-              }`}
-            />
-            {showErrors && errors.lastName && (
-              <span className="text-[12px] text-danger">{errors.lastName}</span>
-            )}
-          </label>
+          </div>
+          <input
+            id="lastName"
+            name="lastName"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            placeholder="Фамилия"
+            aria-label="Фамилия"
+            className="h-[46px] rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
+          />
         </div>
+
+        {/* Формат работы с клиентом. */}
+        <Section title="Формат">
+          <div className="flex gap-2">
+            {[
+              { value: false, label: 'Спортзал' },
+              { value: true, label: 'Онлайн' },
+            ].map((opt) => (
+              <button
+                key={opt.label}
+                type="button"
+                onClick={() => setIsOnline(opt.value)}
+                className={`flex-1 rounded-xl px-4 py-2.5 text-[14px] font-semibold transition-colors ${
+                  isOnline === opt.value ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </Section>
 
         {/* Связь: типизированный список контактов. */}
         <Section title="Связь">
@@ -436,13 +483,23 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
                 </div>
               );
             })}
-            <button
-              type="button"
-              onClick={addContact}
-              className="w-full rounded-2xl border-2 border-dashed border-line py-3.5 text-sm font-medium text-ink-muted transition-colors active:border-accent"
-            >
-              Добавить контакт
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { type: 'Телефон', label: 'Телефон', Icon: Phone },
+                { type: 'Email', label: 'Email', Icon: Mail },
+                { type: 'Telegram', label: 'Мессенджер', Icon: MessageCircle },
+                { type: 'Instagram', label: 'Соцсети', Icon: AtSign },
+              ].map(({ type, label, Icon }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => addContact(type)}
+                  className="flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line py-3 text-[13px] font-medium text-ink-muted transition-colors active:border-accent"
+                >
+                  <Icon size={16} strokeWidth={1.9} /> {label}
+                </button>
+              ))}
+            </div>
           </div>
         </Section>
 

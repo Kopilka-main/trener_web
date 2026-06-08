@@ -8,12 +8,15 @@ export type PackageRow = {
   id: string;
   trainerId: string;
   clientId: string;
+  kind: 'package' | 'subscription';
   lessonsPaid: number;
   lessonsUsed: number;
   pricePerLesson: number;
   totalPaid: number;
   workoutType: string | null;
+  paidAt: string | null;
   startsAt: string;
+  endsAt: string | null;
   status: PackageStatus;
   note: string | null;
   tags: string[];
@@ -22,11 +25,14 @@ export type PackageRow = {
 
 export type CreatePackageInput = {
   id: string;
+  kind: 'package' | 'subscription';
   lessonsPaid: number;
   pricePerLesson: number;
   totalPaid: number;
   workoutType?: string | null;
+  paidAt?: string | null;
   startsAt: string;
+  endsAt?: string | null;
   note?: string | null;
   tags?: string[];
 };
@@ -47,12 +53,15 @@ const columns = {
   id: paymentPackages.id,
   trainerId: paymentPackages.trainerId,
   clientId: paymentPackages.clientId,
+  kind: paymentPackages.kind,
   lessonsPaid: paymentPackages.lessonsPaid,
   lessonsUsed: paymentPackages.lessonsUsed,
   pricePerLesson: paymentPackages.pricePerLesson,
   totalPaid: paymentPackages.totalPaid,
   workoutType: paymentPackages.workoutType,
+  paidAt: paymentPackages.paidAt,
   startsAt: paymentPackages.startsAt,
+  endsAt: paymentPackages.endsAt,
   status: paymentPackages.status,
   note: paymentPackages.note,
   tags: paymentPackages.tags,
@@ -81,12 +90,15 @@ export function makePackagesRepo(db: Db) {
           id: input.id,
           trainerId,
           clientId,
+          kind: input.kind,
           lessonsPaid: input.lessonsPaid,
           lessonsUsed: 0,
           pricePerLesson: input.pricePerLesson,
           totalPaid: input.totalPaid,
           workoutType: input.workoutType ?? null,
+          paidAt: input.paidAt ?? null,
           startsAt: input.startsAt,
+          endsAt: input.endsAt ?? null,
           note: input.note ?? null,
           tags: input.tags ?? [],
         })

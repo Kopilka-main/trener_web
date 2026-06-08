@@ -13,12 +13,15 @@ function toResponse(r: PackageRow): PackageResponse {
   return {
     id: r.id,
     clientId: r.clientId,
+    kind: r.kind,
     lessonsPaid: r.lessonsPaid,
     lessonsUsed: r.lessonsUsed,
     pricePerLesson: r.pricePerLesson,
     totalPaid: r.totalPaid,
     workoutType: r.workoutType,
+    paidAt: r.paidAt,
     startsAt: r.startsAt,
+    endsAt: r.endsAt,
     status: r.status,
     note: r.note,
     tags: r.tags,
@@ -36,12 +39,15 @@ export function makePackagesService(repo: PackagesRepo, deps: PackagesDeps) {
       // exactOptionalPropertyTypes: только заданные nullish-поля.
       const data: CreatePackageInput = {
         id: deps.newId(),
+        kind: input.kind,
         lessonsPaid: input.lessonsPaid,
         pricePerLesson: input.pricePerLesson,
         totalPaid: input.totalPaid,
         startsAt: input.startsAt,
       };
       if (input.workoutType !== undefined) data.workoutType = input.workoutType ?? null;
+      if (input.paidAt !== undefined) data.paidAt = input.paidAt ?? null;
+      if (input.endsAt !== undefined) data.endsAt = input.endsAt ?? null;
       if (input.note !== undefined) data.note = input.note ?? null;
       if (input.tags !== undefined) data.tags = input.tags;
 

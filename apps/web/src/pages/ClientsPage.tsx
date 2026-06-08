@@ -66,6 +66,7 @@ export function ClientsPage() {
   const sessions = useSessions(todayStr);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortMode>('alpha');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'online' | 'gym'>('all');
 
   const list = clients.data ?? [];
 
@@ -86,6 +87,8 @@ export function ClientsPage() {
     const q = query.trim().toLowerCase();
     return list
       .filter((c) => {
+        if (typeFilter === 'online' && !c.isOnline) return false;
+        if (typeFilter === 'gym' && c.isOnline) return false;
         if (q.length === 0) return true;
         const hay =
           `${c.firstName} ${c.lastName} ${c.phone ?? ''} ${c.tags.join(' ')}`.toLowerCase();
@@ -94,19 +97,7 @@ export function ClientsPage() {
       .sort((a, b) =>
         `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`, 'ru'),
       );
-  }, [list, query]);
-
-  // Алфавитные секции по первой букве имени.
-  const groups = useMemo(() => {
-    const map = new Map<string, ClientResponse[]>();
-    for (const c of filtered) {
-      const letter = (c.firstName.trim()[0] ?? '#').toUpperCase();
-      const arr = map.get(letter);
-      if (arr) arr.push(c);
-      else map.set(letter, [c]);
-    }
-    return [...map.entries()];
-  }, [filtered]);
+  }, [list, query, typeFilter]);
 
   // Группировка по дате ближайшего занятия (по возрастанию); без занятий — отдельно.
   const sessionGroups = useMemo(() => {
@@ -169,19 +160,13 @@ export function ClientsPage() {
           </p>
         )}
 
-        {sort === 'alpha' &&
-          groups.map(([letter, items]) => (
-            <div key={letter} className="flex flex-col gap-2">
-              <div className="px-1 pt-1 font-mono text-[12px] uppercase tracking-wide text-ink-muted">
-                {letter}
-              </div>
-              <ul className="flex flex-col gap-2">
-                {items.map((c) => (
-                  <ClientRow key={c.id} client={c} nearest={nearestByClient.get(c.id) ?? null} />
-                ))}
-              </ul>
-            </div>
-          ))}
+        {sort === 'alpha' && (
+          <ul className="flex flex-col gap-2">
+            {filtered.map((c) => (
+              <ClientRow key={c.id} client={c} nearest={nearestByClient.get(c.id) ?? null} />
+            ))}
+          </ul>
+        )}
 
         {sort === 'session' && (
           <>
@@ -218,25 +203,48 @@ export function ClientsPage() {
         )}
       </div>
 
-      {/* Нижняя панель: сортировка (слева) + FAB добавления (справа). */}
-      <div className="pointer-events-none sticky bottom-4 z-10 mt-auto flex items-end justify-between gap-3 px-2">
-        <button
-          type="button"
-          onClick={() => setSort((s) => (s === 'alpha' ? 'session' : 'alpha'))}
-          aria-label={
-            sort === 'alpha'
-              ? 'Переключить на сортировку по занятию'
-              : 'Переключить на сортировку по алфавиту'
-          }
-          className="pointer-events-auto flex h-11 items-center gap-2 rounded-full bg-card px-4 text-[13px] font-semibold text-ink shadow-[0_0_0_1px_var(--color-line)] active:scale-95"
-        >
-          {sort === 'alpha' ? (
-            <CalendarClock size={18} strokeWidth={1.9} />
-          ) : (
-            <ArrowDownAZ size={18} strokeWidth={1.9} />
-          )}
-          {sort === 'alpha' ? 'По занятию' : 'По алфавиту'}
-        </button>
+      {/* Нижняя панель: слева сортировка + фильтр по типу, справа FAB добавления. */}
+      <div className="pointer-events-none sticky bottom-4 z-10 mt-auto flex items-end justify-between gap-2 px-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSort((s) => (s === 'alpha' ? 'session' : 'alpha'))}
+            aria-label={
+              sort === 'alpha'
+                ? 'Переключить на сортировку по занятию'
+                : 'Переключить на сортировку по алфавиту'
+            }
+            className="pointer-events-auto flex h-11 items-center gap-2 rounded-full bg-card px-4 text-[13px] font-semibold text-ink shadow-[0_0_0_1px_var(--color-line)] active:scale-95"
+          >
+            {sort === 'alpha' ? (
+              <CalendarClock size={18} strokeWidth={1.9} />
+            ) : (
+              <ArrowDownAZ size={18} strokeWidth={1.9} />
+            )}
+            {sort === 'alpha' ? 'По занятию' : 'По алфавиту'}
+          </button>
+
+          <div className="pointer-events-auto flex rounded-full bg-card p-1 shadow-[0_0_0_1px_var(--color-line)]">
+            {(
+              [
+                { value: 'all', label: 'Все' },
+                { value: 'online', label: 'Онлайн' },
+                { value: 'gym', label: 'Спортзал' },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setTypeFilter(opt.value)}
+                className={`rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition-colors ${
+                  typeFilter === opt.value ? 'bg-accent text-accent-on' : 'text-ink-muted'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <Link
           to="/clients/new"

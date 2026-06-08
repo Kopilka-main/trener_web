@@ -4,6 +4,8 @@ export const clientStatusSchema = z.enum(['active', 'archived']);
 export type ClientStatus = z.infer<typeof clientStatusSchema>;
 
 const name = z.string().trim().min(1).max(100);
+// Фамилия необязательна: пустую строку допускаем и нормализуем в ''.
+const lastName = z.string().trim().max(100).default('');
 const phone = z.string().trim().max(30).nullish();
 const notes = z.string().trim().max(2000).nullish();
 const accountId = z.string().trim().max(100).nullish();
@@ -24,20 +26,22 @@ const tags = z.array(z.string().trim().min(1).max(40)).max(30).default([]);
 
 export const createClientRequestSchema = z.object({
   firstName: name,
-  lastName: name,
+  lastName,
   phone,
   notes,
   accountId,
   birthDate,
   contacts,
   tags,
+  // Формат: онлайн (true) либо очно/спортзал (false). По умолчанию очно.
+  isOnline: z.boolean().default(false),
 });
 export type CreateClientRequest = z.infer<typeof createClientRequestSchema>;
 
 export const updateClientRequestSchema = z
   .object({
     firstName: name,
-    lastName: name,
+    lastName,
     phone,
     notes,
     accountId,
@@ -45,6 +49,7 @@ export const updateClientRequestSchema = z
     status: clientStatusSchema,
     contacts,
     tags,
+    isOnline: z.boolean(),
   })
   .partial();
 export type UpdateClientRequest = z.infer<typeof updateClientRequestSchema>;
@@ -60,6 +65,8 @@ export const clientResponseSchema = z.object({
   status: clientStatusSchema,
   contacts: z.array(contactSchema),
   tags: z.array(z.string()),
+  // Формат работы: онлайн либо очно (спортзал).
+  isOnline: z.boolean(),
   // id файла-аватара (раздаётся через GET /api/files/:id) либо null.
   avatarFileId: z.string().nullable(),
   createdAt: z.string(),

@@ -21,6 +21,7 @@ function client(over: Partial<ClientResponse> = {}): ClientResponse {
     status: 'active',
     contacts: [],
     tags: [],
+    isOnline: false,
     avatarFileId: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     ...over,
@@ -55,6 +56,7 @@ describe('clients api', () => {
       notes: null,
       contacts: [],
       tags: [],
+      isOnline: false,
     });
     expect(mockedApiFetch).toHaveBeenCalledWith(
       '/clients',
