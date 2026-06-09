@@ -23,3 +23,20 @@ my.fitbond.ru {
 msg.fitbond.ru {
 	reverse_proxy messenger-web:80
 }
+
+# SmartSpend — reverse proxy на другой сервер Selectel (kopilka_test, 212.92.101.184)
+# по HTTPS с SNI smartspend.ru (на бэкенде валидный серт для этого домена).
+# Сертификат LE для smartspend.ru Caddy выпустит, когда домен зарезолвится сюда.
+# Трафик между серверами идёт по сети Selectel (проверено: ping ~8.7мс, HTTP 200).
+smartspend.ru, www.smartspend.ru {
+	reverse_proxy 212.92.101.184:443 {
+		header_up Host smartspend.ru
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-Proto https
+
+		transport http {
+			tls
+			tls_server_name smartspend.ru
+		}
+	}
+}
