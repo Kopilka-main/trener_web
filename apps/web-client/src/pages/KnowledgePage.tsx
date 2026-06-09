@@ -61,6 +61,7 @@ interface KnowledgeExercise {
   category: string | null;
   subgroup: string | null;
   imageUrl: string | null;
+  thumbUrl: string | null;
   overview: ExerciseOverview;
 }
 
@@ -214,6 +215,7 @@ export function KnowledgePage() {
         category: entry?.category ?? null,
         subgroup: entry?.subgroup ?? null,
         imageUrl: entry?.imageUrl ?? null,
+        thumbUrl: entry?.thumbUrl ?? null,
         overview: ov,
       };
     });
@@ -380,7 +382,7 @@ export function KnowledgePage() {
                     onClick={() => void navigate('/knowledge/' + it.id)}
                     className="flex min-h-[84px] w-full items-stretch overflow-hidden rounded-2xl bg-card text-left active:bg-card-elevated"
                   >
-                    <ExerciseThumb url={it.imageUrl} alt={it.name} />
+                    <ExerciseThumb url={it.thumbUrl ?? it.imageUrl} alt={it.name} />
                     <span className="flex min-w-0 flex-1 flex-col justify-center gap-1 px-3 py-3">
                       <span className="line-clamp-2 text-[15px] font-semibold leading-snug text-ink">
                         {it.name}

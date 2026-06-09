@@ -14,7 +14,8 @@
     "seed:catalog-300": "tsx src/seed-catalog-300.ts",
     "seed:catalog-300:prod": "node -e \"const fs=require('fs');fs.mkdirSync('dist/data',{recursive:true});fs.copyFileSync('src/data/catalog-300.json','dist/data/catalog-300.json')\" && node dist/seed-catalog-300.js",
     "seed:templates": "tsx src/seed-templates.ts",
-    "seed:templates:prod": "node dist/seed-templates.js"
+    "seed:templates:prod": "node dist/seed-templates.js",
+    "seed:thumbs": "node scripts/crop-thumbs.mjs"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
@@ -36,6 +37,7 @@
     "@types/node": "^22.10.2",
     "@types/web-push": "^3.6.4",
     "drizzle-kit": "^0.30.0",
+    "sharp": "^0.34.5",
     "tsx": "^4.19.2"
   }
 }

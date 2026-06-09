@@ -1,0 +1,1 @@
+ALTER TABLE "exercises" ADD COLUMN "thumb_url" text;

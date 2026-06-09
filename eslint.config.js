@@ -4,7 +4,16 @@ import prettier from 'eslint-config-prettier';
 import globals from 'globals';
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/build/**', '**/coverage/**', '**/*.tsbuildinfo'] },
+  {
+    ignores: [
+      '**/dist/**',
+      '**/build/**',
+      '**/coverage/**',
+      '**/*.tsbuildinfo',
+      // Offline-скрипты обслуживания (запуск через node), вне tsconfig-проектов.
+      'apps/*/scripts/**',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {

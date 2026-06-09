@@ -26,6 +26,7 @@ const sample: ExerciseResponse = {
   restSec: 90,
   note: null,
   imageUrl: null,
+  thumbUrl: null,
   videoUrl: null,
   equipment: null,
   primaryMuscles: null,

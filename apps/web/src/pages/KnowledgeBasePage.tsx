@@ -132,7 +132,7 @@ function ExerciseRow({ exercise }: { exercise: ExerciseResponse }) {
       to={`/knowledge/exercises/${exercise.id}/edit`}
       className="shelf row-glow flex min-h-[84px] items-stretch overflow-hidden rounded-2xl"
     >
-      <ExerciseThumb url={exercise.imageUrl} alt={exercise.name} />
+      <ExerciseThumb url={exercise.thumbUrl ?? exercise.imageUrl} alt={exercise.name} />
       <span className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 px-3 py-3">
         <span className="line-clamp-2 text-base font-semibold leading-snug text-ink">
           {exercise.name}

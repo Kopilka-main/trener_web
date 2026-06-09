@@ -35,6 +35,8 @@ export const exerciseResponseSchema = z.object({
   note: z.string().nullable(),
   // Медиа каталога: относительные URL раздачи (см. /api/catalog-media). NULL — нет.
   imageUrl: z.string().nullable(),
+  // Уменьшенная миниатюра (часто одна поза, сжатый WebP) для строк списка. NULL — нет.
+  thumbUrl: z.string().nullable(),
   videoUrl: z.string().nullable(),
   // Справочные характеристики каталога (RU): оборудование, целевые мышцы,
   // синергисты (через запятую). NULL — не заданы.

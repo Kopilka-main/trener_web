@@ -16,6 +16,7 @@ export type ExerciseRow = {
   restSec: number;
   note: string | null;
   imageUrl: string | null;
+  thumbUrl: string | null;
   videoUrl: string | null;
   equipment: string | null;
   primaryMuscles: string | null;
@@ -62,6 +63,7 @@ const cols = {
   restSec: exercises.restSec,
   note: exercises.note,
   imageUrl: exercises.imageUrl,
+  thumbUrl: exercises.thumbUrl,
   videoUrl: exercises.videoUrl,
   equipment: exercises.equipment,
   primaryMuscles: exercises.primaryMuscles,
@@ -84,6 +86,7 @@ export function toResponse(r: ExerciseRow): ExerciseResponse {
     restSec: r.restSec,
     note: r.note,
     imageUrl: r.imageUrl,
+    thumbUrl: r.thumbUrl,
     videoUrl: r.videoUrl,
     equipment: r.equipment,
     primaryMuscles: r.primaryMuscles,
