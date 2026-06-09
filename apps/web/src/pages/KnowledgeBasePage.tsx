@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronRight, Plus, Search } from 'lucide-react';
+import { ChevronRight, Dumbbell, Plus, Search } from 'lucide-react';
 import type { ExerciseResponse, TemplateResponse } from '@trener/shared';
 import { useExercises } from '../api/exercises';
 import { useTemplates } from '../api/workout-templates';
 import { orderSubgroups, subgroupsFor } from '../lib/muscleGroups';
+import { rankBySearch } from '../lib/search';
 
 type Tab = 'templates' | 'exercises';
 
@@ -91,19 +92,40 @@ function CategoryChip({
   );
 }
 
+/** Превью упражнения 16:9: вписываем любой формат через object-cover, иначе плейсхолдер. */
+function ExerciseThumb({ url, alt }: { url: string | null; alt: string }) {
+  const [failed, setFailed] = useState(false);
+  const box = 'aspect-[16/9] w-[72px] shrink-0 rounded-lg bg-chip';
+  if (url && !failed) {
+    return (
+      <img
+        src={url}
+        alt={alt}
+        loading="lazy"
+        onError={() => setFailed(true)}
+        className={`${box} object-cover`}
+      />
+    );
+  }
+  return (
+    <span className={`${box} flex items-center justify-center text-ink-muted`}>
+      <Dumbbell size={18} strokeWidth={1.8} />
+    </span>
+  );
+}
+
 function ExerciseRow({ exercise }: { exercise: ExerciseResponse }) {
   return (
     <Link
       to={`/knowledge/exercises/${exercise.id}/edit`}
-      className="shelf row-glow flex items-center justify-between gap-3 rounded-2xl px-4 py-3"
+      className="shelf row-glow flex items-center gap-3 rounded-2xl px-3 py-3"
     >
-      <span className="flex min-w-0 flex-col gap-0.5">
+      <ExerciseThumb url={exercise.imageUrl} alt={exercise.name} />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="truncate text-base font-semibold text-ink">{exercise.name}</span>
         <span className="truncate font-mono text-xs text-ink-muted">{exercise.category}</span>
       </span>
-      <span className="flex shrink-0 items-center gap-2">
-        <ChevronRight size={16} className="tile-chevron" />
-      </span>
+      <ChevronRight size={16} className="tile-chevron shrink-0" />
     </Link>
   );
 }
@@ -203,19 +225,18 @@ export function KnowledgeBasePage() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'));
   }, [tabExercises]);
 
-  const q = query.trim().toLowerCase();
-
   // Подгруппы вкладки «Упражнения»: полный список из таксономии выбранной группы.
   const exerciseSubgroups = category === '' ? [] : subgroupsFor(category);
 
   const filteredExercises = useMemo(() => {
-    return tabExercises.filter((e) => {
+    const base = tabExercises.filter((e) => {
       if (category && e.category !== category) return false;
       if (subgroup && e.subgroup !== subgroup) return false;
-      if (q.length > 0 && !e.name.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [tabExercises, category, subgroup, q]);
+    // Поиск по словам с нормализацией (ё/е), префиксами и опечатками + ранжирование.
+    return rankBySearch(base, query, (e) => e.name);
+  }, [tabExercises, category, subgroup, query]);
 
   // Подгруппы вкладки «Тренировки»: из подгрупп упражнений выбранной группы,
   // встречающихся в шаблонах, упорядочены по таксономии.
@@ -233,24 +254,20 @@ export function KnowledgeBasePage() {
   }, [allTemplates, templateGroup, groupByExerciseId, subgroupByExerciseId]);
 
   const filteredTemplates = useMemo(() => {
-    return allTemplates.filter((t) => {
-      if (templateGroup) {
-        // Шаблон проходит, если есть упражнение выбранной группы И (подгруппа не
-        // выбрана, или у упражнения нет подгруппы, или она совпадает с выбранной).
-        const inGroup = t.exercises.some((ex) => {
-          if (groupByExerciseId.get(ex.exerciseId) !== templateGroup) return false;
-          if (subgroup === '') return true;
-          const sg = subgroupByExerciseId.get(ex.exerciseId);
-          return !sg || sg === subgroup;
-        });
-        if (!inGroup) return false;
-      }
-      if (q.length === 0) return true;
-      const inName = t.name.toLowerCase().includes(q);
-      const inTag = (t.categoryTag ?? '').toLowerCase().includes(q);
-      return inName || inTag;
+    const base = allTemplates.filter((t) => {
+      if (!templateGroup) return true;
+      // Шаблон проходит, если есть упражнение выбранной группы И (подгруппа не
+      // выбрана, или у упражнения нет подгруппы, или она совпадает с выбранной).
+      return t.exercises.some((ex) => {
+        if (groupByExerciseId.get(ex.exerciseId) !== templateGroup) return false;
+        if (subgroup === '') return true;
+        const sg = subgroupByExerciseId.get(ex.exerciseId);
+        return !sg || sg === subgroup;
+      });
     });
-  }, [allTemplates, q, templateGroup, subgroup, groupByExerciseId, subgroupByExerciseId]);
+    // Поиск по названию и тегу типа с нормализацией/опечатками + ранжирование.
+    return rankBySearch(base, query, (t) => `${t.name} ${t.categoryTag ?? ''}`);
+  }, [allTemplates, query, templateGroup, subgroup, groupByExerciseId, subgroupByExerciseId]);
 
   function selectTab(next: Tab) {
     setTab(next);

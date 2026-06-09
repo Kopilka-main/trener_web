@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Search } from 'lucide-react';
+import { ChevronRight, Dumbbell, Search } from 'lucide-react';
 import type { ExerciseResponse } from '@trener/shared';
 import { useClientMe } from '../api/auth';
 import { useClientWorkouts } from '../api/workouts';
@@ -60,7 +60,30 @@ interface KnowledgeExercise {
   name: string;
   category: string | null;
   subgroup: string | null;
+  imageUrl: string | null;
   overview: ExerciseOverview;
+}
+
+/** Превью упражнения 16:9: вписываем любой формат через object-cover, иначе плейсхолдер. */
+function ExerciseThumb({ url, alt }: { url: string | null; alt: string }) {
+  const [failed, setFailed] = useState(false);
+  const box = 'aspect-[16/9] w-[72px] shrink-0 rounded-lg bg-chip';
+  if (url && !failed) {
+    return (
+      <img
+        src={url}
+        alt={alt}
+        loading="lazy"
+        onError={() => setFailed(true)}
+        className={`${box} object-cover`}
+      />
+    );
+  }
+  return (
+    <span className={`${box} flex items-center justify-center text-ink-mutedxl`}>
+      <Dumbbell size={18} strokeWidth={1.8} />
+    </span>
+  );
 }
 
 function SegmentTab({
@@ -189,6 +212,7 @@ export function KnowledgePage() {
         name: entry?.name ?? ov.name,
         category: entry?.category ?? null,
         subgroup: entry?.subgroup ?? null,
+        imageUrl: entry?.imageUrl ?? null,
         overview: ov,
       };
     });
@@ -353,28 +377,33 @@ export function KnowledgePage() {
                   <button
                     type="button"
                     onClick={() => void navigate('/knowledge/' + it.id)}
-                    className="flex w-full flex-col gap-1 rounded-2xl bg-card px-4 py-3 text-left active:bg-card-elevated"
+                    className="flex w-full items-center gap-3 rounded-2xl bg-card px-3 py-3 text-left active:bg-card-elevated"
                   >
-                    <span className="text-[15px] font-semibold text-ink">{it.name}</span>
-                    {(it.category ?? it.subgroup) && (
-                      <span className="text-[12px] text-ink-muted">
-                        {[it.category, it.subgroup].filter(Boolean).join(' · ')}
+                    <ExerciseThumb url={it.imageUrl} alt={it.name} />
+                    <span className="flex min-w-0 flex-1 flex-col gap-1">
+                      <span className="truncate text-[15px] font-semibold text-ink">{it.name}</span>
+                      {(it.category ?? it.subgroup) && (
+                        <span className="truncate text-[12px] text-ink-muted">
+                          {[it.category, it.subgroup].filter(Boolean).join(' · ')}
+                        </span>
+                      )}
+                      <span className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 font-[family-name:var(--font-mono)] text-[12px] text-ink-muted">
+                        {it.overview.isTimeBased
+                          ? it.overview.maxTimeSec !== null && (
+                              <span>
+                                PR <b className="tabular-nums text-ink">{it.overview.maxTimeSec}</b>{' '}
+                                с
+                              </span>
+                            )
+                          : it.overview.maxWeightKg !== null && (
+                              <span>
+                                PR{' '}
+                                <b className="tabular-nums text-ink">{it.overview.maxWeightKg}</b>{' '}
+                                кг
+                              </span>
+                            )}
+                        {it.overview.lastDate && <span>· {shortDate(it.overview.lastDate)}</span>}
                       </span>
-                    )}
-                    <span className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 font-[family-name:var(--font-mono)] text-[12px] text-ink-muted">
-                      {it.overview.isTimeBased
-                        ? it.overview.maxTimeSec !== null && (
-                            <span>
-                              PR <b className="tabular-nums text-ink">{it.overview.maxTimeSec}</b> с
-                            </span>
-                          )
-                        : it.overview.maxWeightKg !== null && (
-                            <span>
-                              PR <b className="tabular-nums text-ink">{it.overview.maxWeightKg}</b>{' '}
-                              кг
-                            </span>
-                          )}
-                      {it.overview.lastDate && <span>· {shortDate(it.overview.lastDate)}</span>}
                     </span>
                   </button>
                 </li>
