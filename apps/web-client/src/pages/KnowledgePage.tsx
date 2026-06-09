@@ -68,7 +68,7 @@ interface KnowledgeExercise {
  * без отступов; любой формат вписывается. Нет картинки — плейсхолдер. */
 function ExerciseThumb({ url, alt }: { url: string | null; alt: string }) {
   const [failed, setFailed] = useState(false);
-  const box = 'w-24 shrink-0 self-stretch bg-chip';
+  const box = 'w-28 shrink-0 self-stretch bg-chip';
   if (url && !failed) {
     return (
       <img
