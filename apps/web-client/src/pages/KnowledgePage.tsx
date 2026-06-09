@@ -64,10 +64,11 @@ interface KnowledgeExercise {
   overview: ExerciseOverview;
 }
 
-/** Превью упражнения 16:9: вписываем любой формат через object-cover, иначе плейсхолдер. */
+/** Превью упражнения: заполняет левую часть карточки во всю высоту (object-cover),
+ * без отступов; любой формат вписывается. Нет картинки — плейсхолдер. */
 function ExerciseThumb({ url, alt }: { url: string | null; alt: string }) {
   const [failed, setFailed] = useState(false);
-  const box = 'aspect-[16/9] w-[72px] shrink-0 rounded-lg bg-chip';
+  const box = 'w-24 shrink-0 self-stretch bg-chip';
   if (url && !failed) {
     return (
       <img
@@ -81,7 +82,7 @@ function ExerciseThumb({ url, alt }: { url: string | null; alt: string }) {
   }
   return (
     <span className={`${box} flex items-center justify-center text-ink-mutedxl`}>
-      <Dumbbell size={18} strokeWidth={1.8} />
+      <Dumbbell size={20} strokeWidth={1.8} />
     </span>
   );
 }
@@ -377,11 +378,13 @@ export function KnowledgePage() {
                   <button
                     type="button"
                     onClick={() => void navigate('/knowledge/' + it.id)}
-                    className="flex w-full items-center gap-3 rounded-2xl bg-card px-3 py-3 text-left active:bg-card-elevated"
+                    className="flex min-h-[84px] w-full items-stretch overflow-hidden rounded-2xl bg-card text-left active:bg-card-elevated"
                   >
                     <ExerciseThumb url={it.imageUrl} alt={it.name} />
-                    <span className="flex min-w-0 flex-1 flex-col gap-1">
-                      <span className="truncate text-[15px] font-semibold text-ink">{it.name}</span>
+                    <span className="flex min-w-0 flex-1 flex-col justify-center gap-1 px-3 py-3">
+                      <span className="line-clamp-2 text-[15px] font-semibold leading-snug text-ink">
+                        {it.name}
+                      </span>
                       {(it.category ?? it.subgroup) && (
                         <span className="truncate text-[12px] text-ink-muted">
                           {[it.category, it.subgroup].filter(Boolean).join(' · ')}

@@ -31,6 +31,17 @@ function loadView(): Partial<SavedView> {
 function saveView(patch: Partial<SavedView>): void {
   sessionStorage.setItem(VIEW_KEY, JSON.stringify({ ...loadView(), ...patch }));
 }
+/**
+ * Кандидаты на скролл-контейнер: внутренний список и каркасный <main>. В зависимости
+ * от раскладки реально скроллится один из них — сохраняем/восстанавливаем оба.
+ */
+function scrollEls(listEl: HTMLElement | null): HTMLElement[] {
+  const els: HTMLElement[] = [];
+  if (listEl) els.push(listEl);
+  const main = document.querySelector('main');
+  if (main instanceof HTMLElement && main !== listEl) els.push(main);
+  return els;
+}
 
 /** Предпочтительный порядок групп мышц для чипов (остальные категории — следом). */
 const GROUP_ORDER = [
@@ -92,10 +103,11 @@ function CategoryChip({
   );
 }
 
-/** Превью упражнения 16:9: вписываем любой формат через object-cover, иначе плейсхолдер. */
+/** Превью упражнения: заполняет левую часть карточки во всю высоту (object-cover),
+ * без отступов; любой формат вписывается. Нет картинки — плейсхолдер. */
 function ExerciseThumb({ url, alt }: { url: string | null; alt: string }) {
   const [failed, setFailed] = useState(false);
-  const box = 'aspect-[16/9] w-[72px] shrink-0 rounded-lg bg-chip';
+  const box = 'w-24 shrink-0 self-stretch bg-chip';
   if (url && !failed) {
     return (
       <img
@@ -109,7 +121,7 @@ function ExerciseThumb({ url, alt }: { url: string | null; alt: string }) {
   }
   return (
     <span className={`${box} flex items-center justify-center text-ink-muted`}>
-      <Dumbbell size={18} strokeWidth={1.8} />
+      <Dumbbell size={20} strokeWidth={1.8} />
     </span>
   );
 }
@@ -118,14 +130,18 @@ function ExerciseRow({ exercise }: { exercise: ExerciseResponse }) {
   return (
     <Link
       to={`/knowledge/exercises/${exercise.id}/edit`}
-      className="shelf row-glow flex items-center gap-3 rounded-2xl px-3 py-3"
+      className="shelf row-glow flex min-h-[84px] items-stretch overflow-hidden rounded-2xl"
     >
       <ExerciseThumb url={exercise.imageUrl} alt={exercise.name} />
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-base font-semibold text-ink">{exercise.name}</span>
+      <span className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 px-3 py-3">
+        <span className="line-clamp-2 text-base font-semibold leading-snug text-ink">
+          {exercise.name}
+        </span>
         <span className="truncate font-mono text-xs text-ink-muted">{exercise.category}</span>
       </span>
-      <ChevronRight size={16} className="tile-chevron shrink-0" />
+      <span className="flex shrink-0 items-center pr-3">
+        <ChevronRight size={16} className="tile-chevron" />
+      </span>
     </Link>
   );
 }
@@ -148,18 +164,21 @@ export function KnowledgeBasePage() {
     saveView({ tab, query, category, templateGroup, subgroup });
   }, [tab, query, category, templateGroup, subgroup]);
 
-  // Сохраняем позицию скролла списка по мере прокрутки (надёжнее размонтирования).
+  // Сохраняем позицию скролла по мере прокрутки (того контейнера, что реально скроллится).
   useEffect(() => {
-    const el = listRef.current;
-    if (!el) return;
+    const els = scrollEls(listRef.current);
+    if (els.length === 0) return;
     let raf = 0;
     const onScroll = () => {
       cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => saveView({ scrollTop: el.scrollTop }));
+      raf = requestAnimationFrame(() => {
+        const top = Math.max(...els.map((e) => e.scrollTop));
+        saveView({ scrollTop: top });
+      });
     };
-    el.addEventListener('scroll', onScroll, { passive: true });
+    els.forEach((e) => e.addEventListener('scroll', onScroll, { passive: true }));
     return () => {
-      el.removeEventListener('scroll', onScroll);
+      els.forEach((e) => e.removeEventListener('scroll', onScroll));
       cancelAnimationFrame(raf);
     };
   }, []);
@@ -171,13 +190,14 @@ export function KnowledgeBasePage() {
     if (restored.current || !dataReady) return;
     restored.current = true;
     const top = loadView().scrollTop ?? 0;
-    const el = listRef.current;
-    if (!el || top <= 0) return;
+    if (top <= 0) return;
     let tries = 0;
     const apply = () => {
-      el.scrollTop = top;
+      const els = scrollEls(listRef.current);
+      els.forEach((e) => (e.scrollTop = top));
       tries += 1;
-      if (Math.abs(el.scrollTop - top) > 2 && tries < 20) requestAnimationFrame(apply);
+      const reached = els.some((e) => Math.abs(e.scrollTop - top) <= 2);
+      if (!reached && tries < 30) requestAnimationFrame(apply);
     };
     requestAnimationFrame(apply);
   }, [dataReady]);
