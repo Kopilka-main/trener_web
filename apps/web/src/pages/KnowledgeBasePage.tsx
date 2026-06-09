@@ -103,20 +103,22 @@ function CategoryChip({
   );
 }
 
-/** Превью упражнения: заполняет левую часть карточки во всю высоту (object-cover),
- * без отступов; любой формат вписывается. Нет картинки — плейсхолдер. */
+/** Превью упражнения: фикс-бокс слева; картинка вписывается внутрь (object-contain),
+ * не растягивая строку — вокруг остаётся свободное место. Нет картинки — плейсхолдер. */
 function ExerciseThumb({ url, alt }: { url: string | null; alt: string }) {
   const [failed, setFailed] = useState(false);
   const box = 'w-28 shrink-0 self-stretch bg-chip';
   if (url && !failed) {
     return (
-      <img
-        src={url}
-        alt={alt}
-        loading="lazy"
-        onError={() => setFailed(true)}
-        className={`${box} object-cover`}
-      />
+      <span className={`${box} block overflow-hidden`}>
+        <img
+          src={url}
+          alt={alt}
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className="h-full w-full object-contain"
+        />
+      </span>
     );
   }
   return (
