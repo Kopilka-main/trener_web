@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronDown, Minus, Plus } from 'lucide-react';
+import { ChevronDown, Dumbbell, Minus, Plus, Search } from 'lucide-react';
 import type { CreateTemplateRequest, ExerciseResponse, TemplateExercise } from '@trener/shared';
 import { useExercises } from '../api/exercises';
 import {
@@ -15,6 +15,7 @@ import { SortableList } from '../components/SortableList';
 import { HoldToDelete } from '../components/HoldToDelete';
 import { ExerciseDetails } from '../components/ExerciseDetails';
 import { subgroupsFor } from '../lib/muscleGroups';
+import { rankBySearch } from '../lib/search';
 
 interface TemplateEditPageProps {
   mode: 'create' | 'edit';
@@ -64,6 +65,28 @@ const MUSCLES_BY_CATEGORY: Record<string, string[]> = {
 function musclesFor(category: string): string {
   const m = MUSCLES_BY_CATEGORY[category];
   return m ? m.slice(0, 3).join(', ') : category;
+}
+
+/** Квадратная миниатюра упражнения (как в «Базе знаний»): фото или плейсхолдер. */
+function ExerciseThumb({ url, alt }: { url: string | null; alt: string }) {
+  const [failed, setFailed] = useState(false);
+  const box = 'h-12 w-12 shrink-0 rounded-lg bg-chip';
+  if (url && !failed) {
+    return (
+      <img
+        src={url}
+        alt={alt}
+        loading="lazy"
+        onError={() => setFailed(true)}
+        className={`${box} object-cover`}
+      />
+    );
+  }
+  return (
+    <span className={`${box} flex items-center justify-center text-ink-muted`}>
+      <Dumbbell size={18} strokeWidth={1.8} />
+    </span>
+  );
 }
 
 let entrySeq = 0;
@@ -131,6 +154,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
   const [categoryTag, setCategoryTag] = useState<string | null>(null);
   const [group, setGroup] = useState<string | null>(null);
   const [subgroup, setSubgroup] = useState('');
+  const [exerciseQuery, setExerciseQuery] = useState('');
   const [positions, setPositions] = useState<Draft[]>([]);
 
   // Группы мышц — из реальных категорий каталога, в предпочтительном порядке.
@@ -187,12 +211,12 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
   // Подгруппы — полный список из таксономии выбранной группы.
   const subgroupChips = group ? subgroupsFor(group) : [];
 
-  // Отфильтрованный по подгруппе список для отображения.
-  const visibleExercises = useMemo(
-    () =>
-      subgroup === '' ? groupExercises : groupExercises.filter((e) => e.subgroup === subgroup),
-    [groupExercises, subgroup],
-  );
+  // Отфильтрованный по подгруппе список, плюс поиск по названию (ё/е, слова, опечатки).
+  const visibleExercises = useMemo(() => {
+    const base =
+      subgroup === '' ? groupExercises : groupExercises.filter((e) => e.subgroup === subgroup);
+    return rankBySearch(base, exerciseQuery, (e) => e.name);
+  }, [groupExercises, subgroup, exerciseQuery]);
 
   function selectGroup(g: string) {
     setGroup(g);
@@ -351,6 +375,23 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
               <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
                 Упражнения «{group}»
               </h2>
+              <div className="relative">
+                <Search
+                  size={16}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted"
+                />
+                <input
+                  type="search"
+                  value={exerciseQuery}
+                  onChange={(e) => setExerciseQuery(e.target.value)}
+                  placeholder="Поиск упражнения"
+                  aria-label="Поиск упражнения"
+                  className="shelf w-full rounded-2xl py-2.5 pl-9 pr-3 text-sm text-ink outline-none placeholder:text-ink-muted"
+                />
+              </div>
+              {visibleExercises.length === 0 && (
+                <p className="px-1 py-2 text-sm text-ink-muted">Ничего не найдено.</p>
+              )}
               <ul className="flex flex-col gap-2">
                 {visibleExercises.map((ex) => {
                   const count = countByExercise.get(ex.id) ?? 0;
@@ -374,6 +415,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                         >
                           {picked && <Check />}
                         </span>
+                        <ExerciseThumb url={ex.thumbUrl ?? ex.imageUrl} alt={ex.name} />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[15px] font-semibold text-ink">
                             {ex.name}

@@ -83,6 +83,7 @@ function withReordered(w: WorkoutResponse, order: number[]): WorkoutResponse {
   return { ...w, exercises };
 }
 import { useExercises } from '../api/exercises';
+import { rankBySearch } from '../lib/search';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Button } from '../components/Button';
 import { DemoVideo, MediaToggle, type MediaMode } from '../components/DemoVideo';
@@ -722,11 +723,7 @@ function ExercisePickerSheet({
   const exercises = useExercises();
   const [query, setQuery] = useState('');
   const list = exercises.data ?? [];
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (q === '') return list;
-    return list.filter((e) => e.name.toLowerCase().includes(q));
-  }, [list, query]);
+  const filtered = useMemo(() => rankBySearch(list, query, (e) => e.name), [list, query]);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col">
