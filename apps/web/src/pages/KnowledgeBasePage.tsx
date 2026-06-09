@@ -110,13 +110,13 @@ function ExerciseThumb({ url, alt }: { url: string | null; alt: string }) {
   const box = 'w-28 shrink-0 self-stretch bg-chip';
   if (url && !failed) {
     return (
-      <span className={`${box} block overflow-hidden`}>
+      <span className={`${box} relative block overflow-hidden`}>
         <img
           src={url}
           alt={alt}
           loading="lazy"
           onError={() => setFailed(true)}
-          className="h-full w-full object-contain"
+          className="absolute inset-0 h-full w-full object-contain"
         />
       </span>
     );
