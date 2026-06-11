@@ -29,6 +29,15 @@ export function ClientChatPage() {
 
   const [draft, setDraft] = useState('');
   const listEndRef = useRef<HTMLDivElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // Авто-рост поля ввода до 3 строк (80px), далее — внутренняя прокрутка.
+  useEffect(() => {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = `${Math.min(ta.scrollHeight, 80)}px`;
+  }, [draft]);
 
   const list = messages.data?.messages ?? [];
   const clientReadAt = messages.data?.clientLastReadAt ?? null;
@@ -105,27 +114,30 @@ export function ClientChatPage() {
           e.preventDefault();
           submit();
         }}
-        className="flex items-end gap-2 border-t border-line bg-bg px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+        className="border-t border-line bg-bg px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
       >
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          rows={1}
-          maxLength={4000}
-          placeholder="Сообщение…"
-          aria-label="Текст сообщения"
-          className="max-h-32 min-h-[40px] flex-1 resize-none rounded-2xl bg-chip px-4 py-2.5 text-[14px] text-ink placeholder:text-ink-muted outline-none focus:ring-2 focus:ring-accent/30"
-        />
-        {draft.trim().length > 0 && (
-          <button
-            type="submit"
-            disabled={send.isPending}
-            aria-label="Отправить"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-on transition-opacity active:scale-[0.95] disabled:opacity-30"
-          >
-            <ArrowUp size={18} strokeWidth={2.5} />
-          </button>
-        )}
+        <div className="relative">
+          <textarea
+            ref={taRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={1}
+            maxLength={4000}
+            placeholder="Сообщение…"
+            aria-label="Текст сообщения"
+            className="block max-h-20 min-h-[40px] w-full resize-none overflow-y-auto rounded-2xl bg-chip py-2.5 pl-4 pr-12 text-[14px] leading-5 text-ink placeholder:text-ink-muted outline-none focus:ring-2 focus:ring-accent/30"
+          />
+          {draft.trim().length > 0 && (
+            <button
+              type="submit"
+              disabled={send.isPending}
+              aria-label="Отправить"
+              className="absolute bottom-1.5 right-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-on transition-opacity active:scale-[0.95] disabled:opacity-30"
+            >
+              <ArrowUp size={18} strokeWidth={2.5} />
+            </button>
+          )}
+        </div>
       </form>
     </div>
   );
