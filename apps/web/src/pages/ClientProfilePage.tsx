@@ -5,7 +5,6 @@ import {
   Link2,
   Mail,
   MessageCircle,
-  Pencil,
   Phone,
   type LucideIcon,
 } from 'lucide-react';
@@ -112,9 +111,9 @@ export function ClientProfilePage() {
           <button
             type="button"
             onClick={() => void navigate(`/clients/${id}/edit`)}
-            className="flex items-center gap-1.5 rounded-full bg-card px-4 py-1.5 text-[14px] font-semibold text-accent-text active:bg-card-elevated"
+            className="rounded-full bg-card px-4 py-1.5 text-[14px] font-semibold text-accent-text active:bg-card-elevated"
           >
-            <Pencil size={14} strokeWidth={2} /> Редактировать
+            Править
           </button>
         </div>
 
