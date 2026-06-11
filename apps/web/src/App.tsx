@@ -26,10 +26,8 @@ import { AccountingPage } from './pages/AccountingPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { ClientSectionPage } from './pages/StubPage';
-import { useViewportHeightVar } from './lib/useViewportHeight';
 
 export function App() {
-  useViewportHeightVar();
   return (
     <>
       <TelemetryRouter />

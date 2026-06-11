@@ -1,7 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { TelemetryRouter } from '@trener/telemetry';
 import { useClientMe } from './api/auth';
-import { useViewportHeightVar } from './lib/useViewportHeight';
 import { BackFab } from './components/BackFab';
 import { ConnectBanner } from './components/ConnectBanner';
 import { AppBadgeSync } from './components/AppBadgeSync';
@@ -24,7 +23,6 @@ import { ExerciseDetailPage } from './pages/ExerciseDetailPage';
 
 export function App() {
   const me = useClientMe();
-  useViewportHeightVar();
 
   if (me.isLoading) {
     return (
@@ -50,7 +48,7 @@ export function App() {
   // данными мягко показывают приглашение подключиться.
   const linked = me.data.link !== null;
   return (
-    <div className="mx-auto flex h-[var(--app-vh,100dvh)] max-w-[430px] flex-col overflow-hidden bg-bg">
+    <div className="mx-auto flex h-[100dvh] max-w-[430px] flex-col overflow-hidden bg-bg">
       <TelemetryRouter />
       <AppBadgeSync />
       <PushSync />
