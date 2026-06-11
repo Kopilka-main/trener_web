@@ -3,15 +3,18 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   AtSign,
   Camera,
+  Check,
   ChevronRight,
   Download,
   Mail,
   MessageCircle,
   Phone,
+  Plus,
   QrCode,
   Trash2,
   X,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { Contact } from '@trener/shared';
 import {
   getAccountProfile,
@@ -32,16 +35,84 @@ interface ClientEditPageProps {
   mode: 'create' | 'edit';
 }
 
-const CONTACT_TYPES = [
-  'Телефон',
-  'Email',
-  'WhatsApp',
-  'Telegram',
-  'MAX',
-  'Instagram',
-  'ВКонтакте',
-  'Прочее',
+// Контакты добавляются отдельными строками «+ добавить …» с ФИКСИРОВАННЫМ типом —
+// в самом поле выбора типа нет (телефон = только телефон и т.д.).
+const CONTACT_ADD = [
+  { type: 'Телефон', label: 'добавить телефон' },
+  { type: 'Email', label: 'добавить e-mail' },
+  { type: 'Telegram', label: 'добавить Telegram' },
+  { type: 'WhatsApp', label: 'добавить WhatsApp' },
+  { type: 'MAX', label: 'добавить MAX' },
+  { type: 'Instagram', label: 'добавить Instagram' },
+  { type: 'ВКонтакте', label: 'добавить ВКонтакте' },
 ] as const;
+
+function contactIcon(type: string): LucideIcon {
+  if (type === 'Телефон' || type === 'WhatsApp') return Phone;
+  if (type === 'Email') return Mail;
+  if (type === 'Instagram' || type === 'ВКонтакте') return AtSign;
+  return MessageCircle;
+}
+function contactPlaceholder(type: string): string {
+  switch (type) {
+    case 'Телефон':
+    case 'WhatsApp':
+      return '+7 900 000-00-00';
+    case 'Email':
+      return 'name@mail.ru';
+    case 'Telegram':
+    case 'Instagram':
+      return '@username';
+    case 'ВКонтакте':
+      return 'vk.com/id…';
+    default:
+      return 'Значение';
+  }
+}
+function contactInputMode(type: string): 'tel' | 'email' | 'text' {
+  if (type === 'Телефон' || type === 'WhatsApp') return 'tel';
+  if (type === 'Email') return 'email';
+  return 'text';
+}
+
+/** ISO «1990-06-11» → отображение «11.06.1990». Пусто → ''. */
+function isoToBirthDisplay(iso: string | null): string {
+  const m = iso ? /^(\d{4})-(\d{2})-(\d{2})$/u.exec(iso) : null;
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : '';
+}
+
+/** Отображение «11.06.1990» → ISO «1990-06-11». Неполный ввод → ''. */
+function birthDisplayToIso(display: string): string {
+  const d = display.replace(/\D/g, '');
+  return d.length === 8 ? `${d.slice(4)}-${d.slice(2, 4)}-${d.slice(0, 2)}` : '';
+}
+
+/** Авто-формат ввода даты: цифры → ДД.ММ.ГГГГ (точки расставляются сами). */
+function formatBirthInput(raw: string): string {
+  const d = raw.replace(/\D/g, '').slice(0, 8);
+  let out = d.slice(0, 2);
+  if (d.length > 2) out += `.${d.slice(2, 4)}`;
+  if (d.length > 4) out += `.${d.slice(4, 8)}`;
+  return out;
+}
+
+/** Проверка введённой даты рождения (текст ДД.ММ.ГГГГ). '' = ок (поле необязательное). */
+function birthDateError(display: string): string {
+  if (display.trim() === '') return '';
+  const d = display.replace(/\D/g, '');
+  if (d.length !== 8) return 'Дата в формате ДД.ММ.ГГГГ';
+  const day = Number(d.slice(0, 2));
+  const month = Number(d.slice(2, 4));
+  const year = Number(d.slice(4, 8));
+  const nowYear = new Date().getFullYear();
+  if (month < 1 || month > 12) return 'Некорректный месяц';
+  if (year < 1900 || year > nowYear) return 'Некорректный год';
+  // Реальный день месяца (учитывает високосные годы): new Date(year, month, 0) = последний день.
+  const lastDay = new Date(year, month, 0).getDate();
+  if (day < 1 || day > lastDay) return 'Некорректный день';
+  if (new Date(year, month - 1, day).getTime() > Date.now()) return 'Дата в будущем';
+  return '';
+}
 
 export function ClientEditPage({ mode }: ClientEditPageProps) {
   const navigate = useNavigate();
@@ -83,23 +154,12 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
       );
       setTags(c.tags);
       setAccountId(c.accountId ?? '');
-      setBirthDate(c.birthDate ?? '');
+      setBirthDate(isoToBirthDisplay(c.birthDate));
       setIsOnline(c.isOnline);
     }
   }, [editing, existing.data]);
 
   const mutation = editing ? updateMutation : createMutation;
-
-  function birthDateError(value: string): string {
-    if (value === '') return '';
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return 'Некорректная дата';
-    if (d.getTime() > Date.now()) return 'Дата в будущем';
-    if (d.getFullYear() < 1900) return 'Некорректная дата';
-    return '';
-  }
-
-  const todayStr = new Date().toISOString().slice(0, 10);
 
   const errors = {
     firstName: firstName.trim() === '' ? 'Обязательно к заполнению' : '',
@@ -129,7 +189,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
       const p = await getAccountProfile(id);
       if (p.firstName) setFirstName(p.firstName);
       if (p.lastName) setLastName(p.lastName);
-      if (p.birthDate) setBirthDate(p.birthDate);
+      if (p.birthDate) setBirthDate(isoToBirthDisplay(p.birthDate));
       // Контакты: добавляем недостающие из аккаунта (по паре тип+значение), не дублируя.
       const incoming = [...p.contacts];
       setContacts((prev) => {
@@ -178,7 +238,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
       phone: phone === '' ? null : phone,
       notes: notes.trim() === '' ? null : notes.trim(),
       accountId: accountId.trim() === '' ? null : accountId.trim(),
-      birthDate: birthDate === '' ? null : birthDate,
+      birthDate: birthDisplayToIso(birthDate) || null,
       contacts: contacts
         .filter((c) => c.value.trim() !== '')
         .map((c) => ({ type: c.type, value: c.value.trim() })),
@@ -231,31 +291,27 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
 
   return (
     <div className="flex flex-col">
-      <ScreenHeader
-        title={title}
-        sticky
-        left={
-          !editing ? (
-            <button
-              type="button"
-              onClick={() => void navigate(-1)}
-              className="text-[14px] font-medium text-ink-muted active:opacity-70"
-            >
-              Отмена
-            </button>
-          ) : undefined
-        }
-        right={
-          <button
-            type="submit"
-            form="client-edit-form"
-            disabled={mutation.isPending}
-            className="text-[14px] font-semibold text-accent-text disabled:opacity-50"
-          >
-            {mutation.isPending ? '…' : 'Сохранить'}
-          </button>
-        }
-      />
+      {/* Шапка в стиле iOS: круглые «отмена» (X) и «сохранить» (✓). */}
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-line bg-bg/95 px-3 py-2.5 backdrop-blur">
+        <button
+          type="button"
+          onClick={() => void navigate(-1)}
+          aria-label="Отмена"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-card text-ink active:bg-card-elevated"
+        >
+          <X size={18} strokeWidth={2} />
+        </button>
+        <h1 className="text-[16px] font-semibold text-ink">{title}</h1>
+        <button
+          type="submit"
+          form="client-edit-form"
+          disabled={mutation.isPending}
+          aria-label="Сохранить"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-accent-on active:opacity-90 disabled:opacity-50"
+        >
+          <Check size={18} strokeWidth={2.5} />
+        </button>
+      </header>
 
       <form
         id="client-edit-form"
@@ -276,7 +332,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
               <Avatar
                 firstName={firstName || 'И'}
                 lastName={lastName || 'Ф'}
-                size={88}
+                size={96}
                 src={avatarFileId ? `/api/files/${avatarFileId}` : null}
               />
               <span className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full bg-accent text-accent-on">
@@ -284,7 +340,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
               </span>
             </button>
           ) : (
-            <Avatar firstName={firstName || 'И'} lastName={lastName || 'Ф'} size={88} />
+            <Avatar firstName={firstName || 'И'} lastName={lastName || 'Ф'} size={96} />
           )}
 
           {editing && (
@@ -378,25 +434,19 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
           )}
         </Section>
 
-        {/* Имя / Фамилия — 2 колонки, подписи в плейсхолдерах. Фамилия необязательна. */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1.5">
-            <input
-              id="firstName"
-              name="firstName"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              placeholder="Имя"
-              aria-label="Имя"
-              aria-invalid={showErrors && errors.firstName !== ''}
-              className={`rounded-xl border bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent ${
-                showErrors && errors.firstName ? 'border-danger' : 'border-line'
-              }`}
-            />
-            {showErrors && errors.firstName && (
-              <span className="text-[12px] text-danger">{errors.firstName}</span>
-            )}
-          </div>
+        {/* Имя / Фамилия — сгруппированная белая карточка с разделителем (как в iOS). */}
+        <div className="overflow-hidden rounded-2xl bg-card">
+          <input
+            id="firstName"
+            name="firstName"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            placeholder="Имя"
+            aria-label="Имя"
+            aria-invalid={showErrors && errors.firstName !== ''}
+            className="w-full bg-transparent px-4 py-3.5 text-[16px] text-ink outline-none placeholder:text-ink-mutedxl"
+          />
+          <div className="mx-4 h-px bg-line" />
           <input
             id="lastName"
             name="lastName"
@@ -404,9 +454,12 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
             onChange={(e) => setLastName(e.target.value)}
             placeholder="Фамилия"
             aria-label="Фамилия"
-            className="h-[46px] rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
+            className="w-full bg-transparent px-4 py-3.5 text-[16px] text-ink outline-none placeholder:text-ink-mutedxl"
           />
         </div>
+        {showErrors && errors.firstName && (
+          <p className="-mt-2 px-1 text-[12px] text-danger">{errors.firstName}</p>
+        )}
 
         {/* Формат работы с клиентом. */}
         <Section title="Формат">
@@ -429,100 +482,65 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
           </div>
         </Section>
 
-        {/* Связь: типизированный список контактов. */}
+        {/* Связь: показываем только ДОБАВЛЕННЫЕ контакты — чистой строкой
+            (иконка + тип + значение), тип фиксирован. Добавление — строками ниже. */}
         <Section title="Связь">
           <div className="flex flex-col gap-2">
             {contacts.map((c, i) => {
-              const activeType = CONTACT_TYPES.includes(c.type as (typeof CONTACT_TYPES)[number])
-                ? c.type
-                : 'Прочее';
+              const Icon = contactIcon(c.type);
               return (
-                <div key={i} className="flex flex-col gap-2 rounded-2xl bg-card p-2.5">
-                  <div className="flex items-start gap-2">
-                    <div className="flex flex-1 flex-wrap gap-1.5">
-                      {CONTACT_TYPES.map((t) => (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => setContact(i, { type: t })}
-                          className={`rounded-full px-3 py-1 text-[12px] font-semibold transition-colors ${
-                            activeType === t ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
-                          }`}
-                        >
-                          {t}
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeContact(i)}
-                      aria-label="Удалить контакт"
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-muted active:bg-card-elevated"
-                    >
-                      <X size={16} strokeWidth={1.8} />
-                    </button>
-                  </div>
-                  {activeType === 'Прочее' && (
+                <div key={i} className="flex items-center gap-3 rounded-2xl bg-card px-4 py-2.5">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chip text-ink-muted">
+                    <Icon size={16} strokeWidth={1.9} />
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-[12px] text-ink-muted">{c.type}</span>
                     <input
-                      value={c.type === 'Прочее' ? '' : c.type}
-                      onChange={(e) =>
-                        setContact(i, { type: e.target.value === '' ? 'Прочее' : e.target.value })
-                      }
-                      placeholder="Название типа (напр. Email)"
-                      aria-label="Название типа контакта"
-                      className="w-full rounded-lg border border-line bg-chip px-3 py-2 text-sm text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
+                      value={c.value}
+                      onChange={(e) => setContact(i, { value: e.target.value })}
+                      placeholder={contactPlaceholder(c.type)}
+                      inputMode={contactInputMode(c.type)}
+                      aria-label={c.type}
+                      autoFocus={c.value === ''}
+                      className="w-full bg-transparent text-[16px] text-ink outline-none placeholder:text-ink-mutedxl"
                     />
-                  )}
-                  <input
-                    value={c.value}
-                    onChange={(e) => setContact(i, { value: e.target.value })}
-                    placeholder="Значение"
-                    aria-label="Значение контакта"
-                    className="w-full rounded-lg border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
-                  />
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeContact(i)}
+                    aria-label="Удалить контакт"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-muted active:bg-card-elevated"
+                  >
+                    <X size={16} strokeWidth={1.8} />
+                  </button>
                 </div>
               );
             })}
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { type: 'Телефон', label: 'Телефон', Icon: Phone },
-                { type: 'Email', label: 'Email', Icon: Mail },
-                { type: 'Telegram', label: 'Мессенджер', Icon: MessageCircle },
-                { type: 'Instagram', label: 'Соцсети', Icon: AtSign },
-              ].map(({ type, label, Icon }) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => addContact(type)}
-                  className="flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line py-3 text-[13px] font-medium text-ink-muted transition-colors active:border-accent"
-                >
-                  <Icon size={16} strokeWidth={1.9} /> {label}
-                </button>
-              ))}
-            </div>
+            {CONTACT_ADD.map(({ type, label }) => (
+              <AddRow key={type} label={label} onClick={() => addContact(type)} />
+            ))}
           </div>
         </Section>
 
         {/* Личное. */}
         <Section title="Личное">
-          <label htmlFor="birthDate" className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-ink-muted">Дата рождения</span>
-            <input
-              id="birthDate"
-              type="date"
-              value={birthDate}
-              min="1900-01-01"
-              max={todayStr}
-              onChange={(e) => setBirthDate(e.target.value)}
-              aria-invalid={errors.birthDate !== ''}
-              className={`w-full rounded-xl border bg-chip px-3 py-2.5 text-base text-ink outline-none focus:border-accent [color-scheme:dark] ${
-                errors.birthDate ? 'border-danger' : 'border-line'
-              }`}
-            />
-            {errors.birthDate && (
-              <span className="text-[12px] text-danger">{errors.birthDate}</span>
-            )}
-          </label>
+          <div className="rounded-2xl bg-card px-4 py-2">
+            <label htmlFor="birthDate" className="flex flex-col">
+              <span className="text-[12px] text-ink-muted">Дата рождения</span>
+              <input
+                id="birthDate"
+                type="text"
+                inputMode="numeric"
+                value={birthDate}
+                onChange={(e) => setBirthDate(formatBirthInput(e.target.value))}
+                placeholder="ДД.ММ.ГГГГ"
+                maxLength={10}
+                aria-invalid={errors.birthDate !== ''}
+                className="w-full bg-transparent text-[16px] text-ink outline-none placeholder:text-ink-mutedxl"
+              />
+            </label>
+          </div>
+          {errors.birthDate && <p className="px-1 text-[12px] text-danger">{errors.birthDate}</p>}
         </Section>
 
         {/* Заметки. */}
@@ -534,7 +552,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Заметка о клиенте…"
-            className="rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent"
+            className="rounded-2xl bg-card px-4 py-3 text-[16px] text-ink outline-none placeholder:text-ink-mutedxl"
           />
         </Section>
 
@@ -825,6 +843,22 @@ function ConnectDialog({
         </div>
       </div>
     </div>
+  );
+}
+
+/** Строка «+ добавить …» в стиле iOS-контактов: зелёный круглый плюс + подпись. */
+function AddRow({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-3 rounded-2xl bg-card px-4 py-3 text-left active:bg-card-elevated"
+    >
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#34c759] text-white">
+        <Plus size={18} strokeWidth={2.5} />
+      </span>
+      <span className="text-[15px] text-ink">{label}</span>
+    </button>
   );
 }
 
