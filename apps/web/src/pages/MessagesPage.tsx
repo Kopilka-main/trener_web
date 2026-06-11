@@ -21,16 +21,30 @@ function clientMatches(c: ClientResponse, q: string): boolean {
   return c.tags.some((t) => t.toLowerCase().includes(ql));
 }
 
-/** Относительное время последней активности диалога. */
-function relativeTime(iso: string | null): string {
-  if (!iso) return 'нет сообщений';
+const MONTHS_GEN = [
+  'января',
+  'февраля',
+  'марта',
+  'апреля',
+  'мая',
+  'июня',
+  'июля',
+  'августа',
+  'сентября',
+  'октября',
+  'ноября',
+  'декабря',
+];
+
+/** Дата и время последнего сообщения: «11 июня, 8:24» (с годом, если не текущий). */
+function formatStamp(iso: string | null): string {
+  if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
-  if (days <= 0) return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-  if (days === 1) return 'вчера';
-  if (days < 7) return `${String(days)} дн назад`;
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+  const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  const datePart = `${String(d.getDate())} ${MONTHS_GEN[d.getMonth()] ?? ''}`;
+  const year = d.getFullYear() === new Date().getFullYear() ? '' : ` ${String(d.getFullYear())}`;
+  return `${datePart}${year}, ${time}`;
 }
 
 /** «новое сообщение / новых сообщения / новых сообщений» по числу. */
@@ -177,9 +191,10 @@ export function MessagesPage() {
                         unread ? 'font-semibold text-ink' : 'text-ink-muted'
                       }`}
                     >
+                      {conv.lastMessageAt ? formatStamp(conv.lastMessageAt) : 'нет сообщений'}
                       {unread
-                        ? `${String(conv.unreadCount)} ${pluralMessages(conv.unreadCount)}`
-                        : relativeTime(conv.lastMessageAt)}
+                        ? ` · ${String(conv.unreadCount)} ${pluralMessages(conv.unreadCount)}`
+                        : ''}
                     </span>
                   </span>
                   {unread ? (

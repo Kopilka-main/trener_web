@@ -7,6 +7,8 @@ interface HoldToDeleteProps {
   /** Оставлено для совместимости вызовов — больше не используется. */
   durationMs?: number;
   label?: string;
+  /** Пояснение под вопросом в диалоге (последствия действия). Нейтральный цвет. */
+  hint?: string;
   /** Иконка внутри: крестик (по умолчанию) или корзинка. */
   icon?: 'x' | 'trash';
   /** Размер кнопки: sm (h-8, по умолчанию) или md (h-10). */
@@ -27,6 +29,7 @@ function parseLabel(label: string): { question: string; confirm: string } {
 export function HoldToDelete({
   onDelete,
   label = 'Удерживайте, чтобы убрать',
+  hint,
   icon = 'x',
   size = 'sm',
 }: HoldToDeleteProps) {
@@ -48,6 +51,7 @@ export function HoldToDelete({
       {open && (
         <ConfirmDialog
           message={question}
+          hint={hint}
           confirmLabel={confirm}
           danger
           onConfirm={() => {

@@ -1,6 +1,7 @@
 /** Всплывающее подтверждение действия: затемнение + карточка с вопросом и двумя кнопками. */
 export function ConfirmDialog({
   message,
+  hint,
   confirmLabel = 'Подтвердить',
   cancelLabel = 'Отмена',
   danger = false,
@@ -8,6 +9,8 @@ export function ConfirmDialog({
   onCancel,
 }: {
   message: string;
+  /** Пояснение под вопросом (последствия действия). Нейтральный цвет. */
+  hint?: string | undefined;
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
@@ -24,6 +27,7 @@ export function ConfirmDialog({
       />
       <div className="relative z-10 w-full max-w-[320px] rounded-2xl bg-card p-5 text-center shadow-[0_12px_40px_-8px_rgba(0,0,0,0.6)]">
         <p className="text-[15px] font-semibold leading-snug text-ink">{message}</p>
+        {hint && <p className="mt-1.5 text-[13px] leading-snug text-ink-muted">{hint}</p>}
         <div className="mt-4 flex gap-2">
           <button
             type="button"
