@@ -16,14 +16,25 @@ body,
   height: 100%;
 }
 
+/* Блокируем «оттяжку»/прокрутку всего документа (iOS rubber-band): скроллятся
+   только внутренние контейнеры с overflow. Иначе при потягивании за ленту или
+   шапку весь fixed-каркас дёргается. */
+html {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
   margin: 0;
   font-family: var(--font-sans);
   background: var(--color-canvas);
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
-  overscroll-behavior-y: contain;
 }
 
 input,
@@ -76,7 +87,7 @@ input[type='number'] {
      когда iOS смещает visual viewport под клавиатуру. */
   height: var(--app-height, 100dvh);
   position: fixed;
-  top: var(--app-offset, 0px);
+  top: 0;
   left: 0;
   right: 0;
   margin-inline: auto;

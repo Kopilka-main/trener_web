@@ -6,29 +6,21 @@ import { PushSync } from './PushSync';
 
 /**
  * Привязывает высоту каркаса к visual viewport: при открытии экранной клавиатуры
- * (особенно iOS Safari) layout-вьюпорт НЕ уменьшается, и браузер прокручивает
- * страницу, чтобы показать поле ввода, — из-за чего шапка уезжает за экран.
- * Подгоняя высоту под видимую область, держим шапку сверху, а ввод — над клавиатурой.
+ * (особенно iOS Safari) layout-вьюпорт НЕ уменьшается. Подгоняя высоту каркаса под
+ * видимую область, держим шапку сверху, а поле ввода — прямо над клавиатурой.
+ * Документ зафиксирован (см. body в index.css), поэтому смещать каркас не нужно.
  */
 function useVisualViewportHeight(): void {
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return undefined;
     const root = document.documentElement;
-    const apply = () => {
-      // Высота видимой области + её смещение от верха layout-вьюпорта (iOS при
-      // клавиатуре сдвигает visual viewport — каркас прижимаем к видимой области).
-      root.style.setProperty('--app-height', `${String(vv.height)}px`);
-      root.style.setProperty('--app-offset', `${String(vv.offsetTop)}px`);
-    };
+    const apply = () => root.style.setProperty('--app-height', `${String(vv.height)}px`);
     apply();
     vv.addEventListener('resize', apply);
-    vv.addEventListener('scroll', apply);
     return () => {
       vv.removeEventListener('resize', apply);
-      vv.removeEventListener('scroll', apply);
       root.style.removeProperty('--app-height');
-      root.style.removeProperty('--app-offset');
     };
   }, []);
 }

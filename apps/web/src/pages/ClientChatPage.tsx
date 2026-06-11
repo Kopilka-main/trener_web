@@ -28,7 +28,7 @@ export function ClientChatPage() {
   const removeChat = useDeleteConversation(id);
 
   const [draft, setDraft] = useState('');
-  const listEndRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   // Авто-рост поля ввода до 3 строк (80px), далее — внутренняя прокрутка.
@@ -45,7 +45,8 @@ export function ClientChatPage() {
 
   // Автоскролл вниз при появлении новых сообщений.
   useEffect(() => {
-    listEndRef.current?.scrollIntoView({ block: 'end' });
+    const el = scrollRef.current;
+    if (el) requestAnimationFrame(() => (el.scrollTop = el.scrollHeight));
   }, [list.length]);
 
   // Отметить диалог прочитанным при открытии И при каждом новом входящем от клиента
@@ -69,13 +70,19 @@ export function ClientChatPage() {
   }
 
   function scrollToBottom() {
-    listEndRef.current?.scrollIntoView({ block: 'end' });
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }
 
-  // При фокусе на поле клавиатура ужимает область сообщений и сбивает скролл —
-  // после её появления (с запасом по времени) возвращаемся к последнему сообщению.
+  // При фокусе клавиатура анимированно ужимает область сообщений. Чтобы лента не
+  // «дёргалась», непрерывно прижимаем её к низу каждый кадр, пока идёт анимация (~500мс).
   function onInputFocus() {
-    [50, 250, 450].forEach((d) => window.setTimeout(scrollToBottom, d));
+    const start = Date.now();
+    const tick = () => {
+      scrollToBottom();
+      if (Date.now() - start < 500) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
   }
 
   return (
@@ -97,7 +104,10 @@ export function ClientChatPage() {
         }
       />
 
-      <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-2 pb-3 pt-2">
+      <div
+        ref={scrollRef}
+        className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto overscroll-contain px-2 pb-3 pt-2"
+      >
         {messages.isPending && (
           <p className="pt-10 text-center text-sm text-ink-muted">Загрузка…</p>
         )}
@@ -121,7 +131,6 @@ export function ClientChatPage() {
         {list.map((m) => (
           <Bubble key={m.id} message={m} clientReadAt={clientReadAt} />
         ))}
-        <div ref={listEndRef} />
       </div>
 
       <form
