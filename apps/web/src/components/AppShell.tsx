@@ -1,7 +1,29 @@
+import { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { BackFab } from './BackFab';
 import { AppBadgeSync } from './AppBadgeSync';
 import { PushSync } from './PushSync';
+
+/**
+ * Привязывает высоту каркаса к visual viewport: при открытии экранной клавиатуры
+ * (особенно iOS Safari) layout-вьюпорт НЕ уменьшается, и браузер прокручивает
+ * страницу, чтобы показать поле ввода, — из-за чего шапка уезжает за экран.
+ * Подгоняя высоту под видимую область, держим шапку сверху, а ввод — над клавиатурой.
+ */
+function useVisualViewportHeight(): void {
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return undefined;
+    const root = document.documentElement;
+    const apply = () => root.style.setProperty('--app-height', `${String(vv.height)}px`);
+    apply();
+    vv.addEventListener('resize', apply);
+    return () => {
+      vv.removeEventListener('resize', apply);
+      root.style.removeProperty('--app-height');
+    };
+  }, []);
+}
 
 /**
  * Мобильный каркас приложения: контент со скроллом без глобальной нижней
@@ -9,6 +31,8 @@ import { PushSync } from './PushSync';
  * кроме главной), вперёд — через плитки на главной (HomePage).
  */
 export function AppShell() {
+  useVisualViewportHeight();
+
   return (
     <div className="app-shell">
       <AppBadgeSync />

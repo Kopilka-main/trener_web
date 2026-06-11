@@ -70,6 +70,9 @@ input[type='number'] {
   width: 100%;
   height: 100vh;
   height: 100dvh;
+  /* JS подставляет высоту visual viewport (см. useVisualViewportHeight): при
+     открытии клавиатуры каркас сжимается до видимой области, шапка не уезжает. */
+  height: var(--app-height, 100dvh);
   margin-inline: auto;
   background: var(--color-bg);
   display: flex;
