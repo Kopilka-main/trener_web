@@ -47,30 +47,76 @@ function contactIcon(type: string): LucideIcon {
   return MessageCircle;
 }
 
-/** Строка «подпись + значение» с иконкой — read-only ячейка карточки данных. */
+/** Действие по тапу на контакт: звонок (tel:), WhatsApp (wa.me), почта (mailto:),
+ * мессенджеры/соцсети — на их сайт/приложение. null — значение не кликабельно. */
+function contactHref(type: string, value: string): string | null {
+  const v = value.trim();
+  if (v === '') return null;
+  const digits = v.replace(/\D/g, '');
+  const phone = v.replace(/[^\d+]/g, '');
+  const handle = v.replace(/^@/, '');
+  const isUrl = /^https?:\/\//iu.test(v);
+  switch (type) {
+    case 'Телефон':
+      return phone ? `tel:${phone}` : null;
+    case 'WhatsApp':
+      return digits ? `https://wa.me/${digits}` : null;
+    case 'Email':
+      return `mailto:${v}`;
+    case 'Telegram':
+      return isUrl ? v : `https://t.me/${handle}`;
+    case 'Instagram':
+      return isUrl ? v : `https://instagram.com/${handle}`;
+    case 'ВКонтакте':
+      return isUrl ? v : `https://vk.com/${handle}`;
+    default:
+      return null;
+  }
+}
+
+/** Строка «подпись + значение» с иконкой. Если задан href — вся строка кликабельна
+ * (звонок/WhatsApp/почта и т.п.); внешние ссылки открываются в новой вкладке. */
 function DataRow({
   icon: Icon,
   label,
   value,
+  href,
   first,
 }: {
   icon: LucideIcon;
   label: string;
   value: string;
+  href?: string | null;
   first: boolean;
 }) {
+  const external = href ? /^https?:\/\//iu.test(href) : false;
+  const inner = (
+    <div className="flex items-center gap-3 px-4 py-2.5">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chip text-ink-muted">
+        <Icon size={16} strokeWidth={1.9} />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-[12px] text-ink-muted">{label}</span>
+        <span className={`truncate text-[15px] ${href ? 'text-accent-text' : 'text-ink'}`}>
+          {value}
+        </span>
+      </span>
+    </div>
+  );
   return (
     <div>
       {!first && <div className="mx-4 h-px bg-line" />}
-      <div className="flex items-center gap-3 px-4 py-2.5">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chip text-ink-muted">
-          <Icon size={16} strokeWidth={1.9} />
-        </span>
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="text-[12px] text-ink-muted">{label}</span>
-          <span className="truncate text-[15px] text-ink">{value}</span>
-        </span>
-      </div>
+      {href ? (
+        <a
+          href={href}
+          {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+          className="block active:bg-card-elevated"
+        >
+          {inner}
+        </a>
+      ) : (
+        inner
+      )}
     </div>
   );
 }
@@ -153,6 +199,7 @@ export function ClientProfilePage() {
                   icon={contactIcon(ct.type)}
                   label={ct.type}
                   value={ct.value}
+                  href={contactHref(ct.type, ct.value)}
                   first={rowIndex++ === 0}
                 />
               ))}
