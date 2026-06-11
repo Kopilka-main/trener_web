@@ -61,6 +61,8 @@ export function ClientChatPage() {
     const body = draft.trim();
     if (body.length === 0 || send.isPending) return;
     setDraft('');
+    // Оставляем фокус в поле, чтобы клавиатура не закрывалась после отправки.
+    taRef.current?.focus();
     send.mutate(body, {
       onError: () => {
         // Возвращаем текст в поле, чтобы тренер не потерял сообщение.
@@ -106,6 +108,7 @@ export function ClientChatPage() {
 
       <div
         ref={scrollRef}
+        onClick={() => taRef.current?.blur()}
         className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto overscroll-contain px-2 pb-3 pt-2"
       >
         {messages.isPending && (
@@ -157,6 +160,8 @@ export function ClientChatPage() {
               type="submit"
               disabled={send.isPending}
               aria-label="Отправить"
+              // Не уводим фокус с поля при тапе по кнопке — клавиатура остаётся открытой.
+              onPointerDown={(e) => e.preventDefault()}
               className="absolute bottom-1.5 right-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-on transition-opacity active:scale-[0.95] disabled:opacity-30"
             >
               <ArrowUp size={18} strokeWidth={2.5} />

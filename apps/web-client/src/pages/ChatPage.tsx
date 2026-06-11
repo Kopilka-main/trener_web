@@ -58,6 +58,8 @@ export function ChatPage() {
     const body = draft.trim();
     if (body === '' || send.isPending) return;
     setDraft('');
+    // Оставляем фокус в поле, чтобы клавиатура не закрывалась после отправки.
+    taRef.current?.focus();
     send.mutate({ body }, { onError: () => setDraft((cur) => (cur === '' ? body : cur)) });
   }
 
@@ -98,8 +100,11 @@ export function ChatPage() {
         </span>
       </div>
 
-      {/* Лента сообщений */}
-      <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-2 pb-3 pt-3">
+      {/* Лента сообщений. Тап по ленте убирает клавиатуру (снимаем фокус с поля). */}
+      <div
+        onClick={() => taRef.current?.blur()}
+        className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-2 pb-3 pt-3"
+      >
         {count === 0 && (
           <p className="pt-10 text-center text-sm text-ink-muted">
             Сообщений пока нет. Напишите первым.
@@ -205,6 +210,8 @@ export function ChatPage() {
               type="submit"
               disabled={send.isPending}
               aria-label="Отправить"
+              // Не уводим фокус с поля при тапе по кнопке — клавиатура остаётся открытой.
+              onPointerDown={(e) => e.preventDefault()}
               className="absolute bottom-1.5 right-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-on transition-opacity active:scale-[0.95] disabled:opacity-30"
             >
               <ArrowUp size={18} strokeWidth={2.5} />
