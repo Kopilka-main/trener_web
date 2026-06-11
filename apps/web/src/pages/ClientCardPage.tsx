@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
+  AtSign,
   BarChart3,
   CalendarDays,
   ChevronRight,
   Dumbbell,
   FileText,
+  Mail,
+  MessageCircle,
   MessageSquare,
   Pencil,
+  Phone,
   TrendingUp,
   Unlink,
   Wallet,
@@ -57,14 +61,28 @@ interface Tile {
   Icon: LucideIcon;
 }
 
+// «Профиль» (редактирование) убран в кнопку «Правка» сверху справа — здесь только разделы.
 const TILES: Tile[] = [
   { key: 'calendar', label: 'Календарь', sub: 'занятия клиента', Icon: CalendarDays },
   { key: 'chat', label: 'Написать', sub: 'чат с клиентом', Icon: MessageSquare },
   { key: 'stats', label: 'Статистика', sub: 'прогресс и история', Icon: BarChart3 },
   { key: 'payments', label: 'Оплата', sub: 'пакеты и расходы', Icon: Wallet },
   { key: 'medcard', label: 'Медкарта', sub: 'файлы и заметки', Icon: FileText },
-  { key: 'edit', label: 'Профиль', sub: 'контакты и данные', Icon: Pencil },
 ];
+
+/** Иконка по типу контакта. */
+function contactIcon(type: string): LucideIcon {
+  if (type === 'Телефон' || type === 'WhatsApp') return Phone;
+  if (type === 'Email') return Mail;
+  if (type === 'Instagram' || type === 'ВКонтакте') return AtSign;
+  return MessageCircle;
+}
+
+/** ISO «1990-06-11» → «11.06.1990». Пусто → ''. */
+function birthDisplay(iso: string | null): string {
+  const m = iso ? /^(\d{4})-(\d{2})-(\d{2})$/u.exec(iso) : null;
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : '';
+}
 
 export function ClientCardPage() {
   const navigate = useNavigate();
@@ -98,6 +116,12 @@ export function ClientCardPage() {
     (o) => o.lastIsRecord,
   ).length;
   const connected = (c.accountId ?? '').trim() !== '';
+  // Профиль показывает только ЗАПОЛНЕННЫЕ данные. Контакты — непустые; если их нет,
+  // но есть legacy-телефон, показываем его. Дата рождения — если задана.
+  const filled = c.contacts.filter((ct) => ct.value.trim() !== '');
+  const displayContacts =
+    filled.length > 0 ? filled : c.phone ? [{ type: 'Телефон', value: c.phone }] : [];
+  const birth = birthDisplay(c.birthDate);
   // Баланс оплаченных занятий = оплачено (по активным пакетам) − проведено (завершённые
   // тренировки). Может быть отрицательным — клиент должен за проведённые занятия.
   const paidLessons = (packages.data ?? [])
@@ -113,6 +137,17 @@ export function ClientCardPage() {
   return (
     <div className="flex min-h-full flex-col">
       <div className="flex flex-col gap-5 px-2 pb-8 pt-4">
+        {/* Правка профиля — в правом верхнем углу (как «Править» в iOS-контакте). */}
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => void navigate(`/clients/${id}/edit`)}
+            className="flex items-center gap-1.5 rounded-full bg-card px-4 py-1.5 text-[14px] font-semibold text-accent-text active:bg-card-elevated"
+          >
+            <Pencil size={14} strokeWidth={2} /> Правка
+          </button>
+        </div>
+
         {/* Шапка профиля: аватар + имя + возраст + связь (цвет по подключению). */}
         <div className="flex items-center gap-4">
           <Avatar
@@ -245,6 +280,48 @@ export function ClientCardPage() {
             );
           })}
         </div>
+
+        {/* Данные: показываем только ЗАПОЛНЕННЫЕ (контакты + день рождения). */}
+        {(displayContacts.length > 0 || birth) && (
+          <section className="flex flex-col gap-1.5">
+            <h2 className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.06em] text-ink-mutedxl">
+              Данные
+            </h2>
+            <div className="overflow-hidden rounded-2xl bg-card">
+              {displayContacts.map((ct, i) => {
+                const Icon = contactIcon(ct.type);
+                return (
+                  <div key={`${ct.type}-${String(i)}`}>
+                    {i > 0 && <div className="mx-4 h-px bg-line" />}
+                    <div className="flex items-center gap-3 px-4 py-2.5">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chip text-ink-muted">
+                        <Icon size={16} strokeWidth={1.9} />
+                      </span>
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="text-[12px] text-ink-muted">{ct.type}</span>
+                        <span className="truncate text-[15px] text-ink">{ct.value}</span>
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+              {birth && (
+                <div>
+                  {displayContacts.length > 0 && <div className="mx-4 h-px bg-line" />}
+                  <div className="flex items-center gap-3 px-4 py-2.5">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chip text-ink-muted">
+                      <CalendarDays size={16} strokeWidth={1.9} />
+                    </span>
+                    <span className="flex flex-col">
+                      <span className="text-[12px] text-ink-muted">День рождения</span>
+                      <span className="text-[15px] text-ink">{birth}</span>
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* Заметки. */}
         {c.notes && (

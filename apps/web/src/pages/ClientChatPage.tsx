@@ -87,7 +87,7 @@ export function ClientChatPage() {
         }
       />
 
-      <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-2 pb-3 pt-2">
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-2 pb-3 pt-2">
         {messages.isPending && (
           <p className="pt-10 text-center text-sm text-ink-muted">Загрузка…</p>
         )}
@@ -119,7 +119,7 @@ export function ClientChatPage() {
           e.preventDefault();
           submit();
         }}
-        className="border-t border-line bg-bg px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+        className="shrink-0 border-t border-line bg-bg px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
       >
         <div className="relative">
           <textarea
