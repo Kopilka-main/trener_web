@@ -124,7 +124,7 @@ export function ClientChatPage() {
             onChange={(e) => setDraft(e.target.value)}
             rows={1}
             maxLength={4000}
-            placeholder="Сообщение…"
+            placeholder="Сообщение… или /task для задачи"
             aria-label="Текст сообщения"
             className="block max-h-20 min-h-[40px] w-full resize-none overflow-y-auto rounded-2xl bg-chip py-2.5 pl-4 pr-12 text-[14px] leading-5 text-ink placeholder:text-ink-muted outline-none focus:ring-2 focus:ring-accent/30"
           />
