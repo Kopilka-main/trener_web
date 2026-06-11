@@ -99,9 +99,13 @@ export function ClientChatPage() {
         )}
 
         {messages.isSuccess && list.length === 0 && (
-          <p className="pt-10 text-center text-sm text-ink-muted">
-            Сообщений пока нет. Напишите первым.
-          </p>
+          <div className="flex flex-col items-center gap-2 pt-10 text-center">
+            <p className="text-sm text-ink-muted">Сообщений пока нет. Напишите первым.</p>
+            <p className="max-w-[260px] text-xs leading-relaxed text-ink-muted">
+              Подсказка: начните сообщение с <span className="font-mono">/task</span> — и оно станет
+              задачей с чекбоксом для клиента.
+            </p>
+          </div>
         )}
 
         {list.map((m) => (
@@ -124,7 +128,7 @@ export function ClientChatPage() {
             onChange={(e) => setDraft(e.target.value)}
             rows={1}
             maxLength={4000}
-            placeholder="Сообщение или /task для задачи"
+            placeholder="Сообщение"
             aria-label="Текст сообщения"
             className="block max-h-20 min-h-[40px] w-full resize-none overflow-y-auto rounded-2xl bg-chip py-2.5 pl-4 pr-12 text-[14px] leading-5 text-ink placeholder:text-ink-muted outline-none focus:ring-2 focus:ring-accent/30"
           />
