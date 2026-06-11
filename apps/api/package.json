@@ -15,7 +15,8 @@
     "seed:catalog-300:prod": "node -e \"const fs=require('fs');fs.mkdirSync('dist/data',{recursive:true});fs.copyFileSync('src/data/catalog-300.json','dist/data/catalog-300.json')\" && node dist/seed-catalog-300.js",
     "seed:templates": "tsx src/seed-templates.ts",
     "seed:templates:prod": "node dist/seed-templates.js",
-    "seed:thumbs": "node scripts/crop-thumbs.mjs"
+    "seed:thumbs": "node scripts/crop-thumbs.mjs",
+    "seed:thumbs:small": "node scripts/use-small-thumbs.mjs"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
