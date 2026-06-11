@@ -144,6 +144,48 @@ export function ClientsPage() {
           />
         </div>
 
+        {/* Сортировка + фильтр по типу — под поиском. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSort((s) => (s === 'alpha' ? 'session' : 'alpha'))}
+            aria-label={
+              sort === 'alpha'
+                ? 'Переключить на сортировку по занятию'
+                : 'Переключить на сортировку по алфавиту'
+            }
+            className="flex h-10 items-center gap-2 rounded-full bg-card px-4 text-[13px] font-semibold text-ink shadow-[0_0_0_1px_var(--color-line)] active:scale-95"
+          >
+            {sort === 'alpha' ? (
+              <CalendarClock size={18} strokeWidth={1.9} />
+            ) : (
+              <ArrowDownAZ size={18} strokeWidth={1.9} />
+            )}
+            {sort === 'alpha' ? 'По занятию' : 'По алфавиту'}
+          </button>
+
+          <div className="flex rounded-full bg-card p-1 shadow-[0_0_0_1px_var(--color-line)]">
+            {(
+              [
+                { value: 'all', label: 'Все' },
+                { value: 'online', label: 'Онлайн' },
+                { value: 'gym', label: 'Спортзал' },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setTypeFilter(opt.value)}
+                className={`rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition-colors ${
+                  typeFilter === opt.value ? 'bg-accent text-accent-on' : 'text-ink-muted'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {clients.isPending && <p className="text-sm text-ink-muted">Загрузка…</p>}
 
         {clients.isError && (
@@ -203,49 +245,8 @@ export function ClientsPage() {
         )}
       </div>
 
-      {/* Нижняя панель: слева сортировка + фильтр по типу, справа FAB добавления. */}
-      <div className="pointer-events-none sticky bottom-4 z-10 mt-auto flex items-end justify-between gap-2 px-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setSort((s) => (s === 'alpha' ? 'session' : 'alpha'))}
-            aria-label={
-              sort === 'alpha'
-                ? 'Переключить на сортировку по занятию'
-                : 'Переключить на сортировку по алфавиту'
-            }
-            className="pointer-events-auto flex h-11 items-center gap-2 rounded-full bg-card px-4 text-[13px] font-semibold text-ink shadow-[0_0_0_1px_var(--color-line)] active:scale-95"
-          >
-            {sort === 'alpha' ? (
-              <CalendarClock size={18} strokeWidth={1.9} />
-            ) : (
-              <ArrowDownAZ size={18} strokeWidth={1.9} />
-            )}
-            {sort === 'alpha' ? 'По занятию' : 'По алфавиту'}
-          </button>
-
-          <div className="pointer-events-auto flex rounded-full bg-card p-1 shadow-[0_0_0_1px_var(--color-line)]">
-            {(
-              [
-                { value: 'all', label: 'Все' },
-                { value: 'online', label: 'Онлайн' },
-                { value: 'gym', label: 'Спортзал' },
-              ] as const
-            ).map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setTypeFilter(opt.value)}
-                className={`rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition-colors ${
-                  typeFilter === opt.value ? 'bg-accent text-accent-on' : 'text-ink-muted'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
+      {/* FAB добавления клиента — внизу справа. */}
+      <div className="pointer-events-none sticky bottom-4 z-10 mt-auto flex justify-end px-2">
         <Link
           to="/clients/new"
           aria-label="Добавить клиента"
