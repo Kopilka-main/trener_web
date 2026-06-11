@@ -248,7 +248,8 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
     if (editing) {
       updateMutation.mutate(payload, {
         onSuccess: () => {
-          void navigate(`/clients/${id}`, { replace: true });
+          // Возврат туда же, откуда вошли в правку (как крестик ✕) — обычно карточка клиента.
+          void navigate(-1);
         },
       });
     } else {
@@ -854,7 +855,7 @@ function AddRow({ label, onClick }: { label: string; onClick: () => void }) {
       onClick={onClick}
       className="flex w-full items-center gap-3 rounded-2xl bg-card px-4 py-3 text-left active:bg-card-elevated"
     >
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#34c759] text-white">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-accent-on">
         <Plus size={18} strokeWidth={2.5} />
       </span>
       <span className="text-[15px] text-ink">{label}</span>
