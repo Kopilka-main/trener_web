@@ -15,12 +15,20 @@ function useVisualViewportHeight(): void {
     const vv = window.visualViewport;
     if (!vv) return undefined;
     const root = document.documentElement;
-    const apply = () => root.style.setProperty('--app-height', `${String(vv.height)}px`);
+    const apply = () => {
+      // Высота видимой области + её смещение от верха layout-вьюпорта (iOS при
+      // клавиатуре сдвигает visual viewport — каркас прижимаем к видимой области).
+      root.style.setProperty('--app-height', `${String(vv.height)}px`);
+      root.style.setProperty('--app-offset', `${String(vv.offsetTop)}px`);
+    };
     apply();
     vv.addEventListener('resize', apply);
+    vv.addEventListener('scroll', apply);
     return () => {
       vv.removeEventListener('resize', apply);
+      vv.removeEventListener('scroll', apply);
       root.style.removeProperty('--app-height');
+      root.style.removeProperty('--app-offset');
     };
   }, []);
 }

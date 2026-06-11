@@ -71,13 +71,18 @@ input[type='number'] {
   height: 100vh;
   height: 100dvh;
   /* JS подставляет высоту visual viewport (см. useVisualViewportHeight): при
-     открытии клавиатуры каркас сжимается до видимой области, шапка не уезжает. */
+     открытии клавиатуры каркас сжимается до видимой области, шапка не уезжает.
+     position:fixed + сдвиг на offsetTop прижимают каркас к видимой области, даже
+     когда iOS смещает visual viewport под клавиатуру. */
   height: var(--app-height, 100dvh);
+  position: fixed;
+  top: var(--app-offset, 0px);
+  left: 0;
+  right: 0;
   margin-inline: auto;
   background: var(--color-bg);
   display: flex;
   flex-direction: column;
-  position: relative;
   overflow: hidden;
 }
 
