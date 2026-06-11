@@ -31,6 +31,10 @@ export function useClientMessages() {
       }
     },
     refetchInterval: 4000,
+    // Освежать сразу при возврате к приложению и продолжать опрос даже когда
+    // вкладка/PWA в фоне — чтобы плитки/счётчики «загорались» без ручного рефреша.
+    refetchOnWindowFocus: true,
+    refetchIntervalInBackground: true,
   });
 }
 
@@ -50,6 +54,10 @@ export function useClientChatUnread() {
     // Фолбэк-опрос (если push не включён). При push счётчик обновляется мгновенно
     // через PushSync, не дожидаясь интервала.
     refetchInterval: 4000,
+    // Освежать сразу при возврате к приложению и продолжать опрос даже когда
+    // вкладка/PWA в фоне — чтобы плитки/счётчики «загорались» без ручного рефреша.
+    refetchOnWindowFocus: true,
+    refetchIntervalInBackground: true,
   });
 }
 

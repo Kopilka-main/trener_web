@@ -60,6 +60,8 @@ export function useChatMessages(clientId: string) {
     queryFn: () => listClientMessages(clientId),
     enabled: clientId.length > 0,
     refetchInterval: MESSAGES_REFETCH_MS,
+    refetchOnWindowFocus: true,
+    refetchIntervalInBackground: true,
   });
 }
 
@@ -88,6 +90,8 @@ export function useConversations() {
     queryKey: conversationsQueryKey,
     queryFn: listConversations,
     refetchInterval: 8000,
+    refetchOnWindowFocus: true,
+    refetchIntervalInBackground: true,
   });
 }
 
@@ -102,8 +106,11 @@ export function useChatUnread() {
     queryFn: () =>
       apiFetch('/chat/unread', { schema: chatUnreadResponseSchema }).then((r) => r.count),
     // Фолбэк-опрос (если push не включён). При push счётчик обновляется мгновенно
-    // через PushSync, не дожидаясь интервала.
+    // через PushSync, не дожидаясь интервала. Освежаем и при возврате фокуса,
+    // и в фоне — чтобы плитка «Сообщения» загоралась без ручного рефреша.
     refetchInterval: 4000,
+    refetchOnWindowFocus: true,
+    refetchIntervalInBackground: true,
   });
 }
 
