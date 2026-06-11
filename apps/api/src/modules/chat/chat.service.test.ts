@@ -24,6 +24,8 @@ function msgRow(over: Partial<MessageRow> = {}): MessageRow {
     conversationId: 'conv1',
     senderRole: 'trainer',
     body: 'привет',
+    kind: 'text',
+    taskDone: null,
     createdAt: new Date(0),
     ...over,
   };
@@ -35,6 +37,7 @@ function fakeRepo(over: Partial<ChatRepo> = {}): ChatRepo {
     listConversations: vi.fn(() => Promise.resolve([])),
     listMessages: vi.fn(() => Promise.resolve([])),
     addMessage: vi.fn(() => Promise.resolve(msgRow())),
+    completeTask: vi.fn(() => Promise.resolve(null)),
     deleteConversation: vi.fn(() => Promise.resolve(true)),
     markRead: vi.fn(() => Promise.resolve()),
     markReadByClient: vi.fn(() => Promise.resolve()),
@@ -79,7 +82,82 @@ describe('chat.service', () => {
     expect(res.body).toBe('хай');
     expect(res.senderRole).toBe('trainer');
     expect(res.createdAt).toBe(new Date(0).toISOString());
-    expect(addMessage).toHaveBeenCalledWith('A', 'c1', 'newid', 'хай', new Date(0), 'trainer');
+    expect(addMessage).toHaveBeenCalledWith(
+      'A',
+      'c1',
+      'newid',
+      'хай',
+      new Date(0),
+      'trainer',
+      'text',
+      null,
+    );
+  });
+
+  it('/task создаёт задачу (kind=task, taskDone=false), текст без префикса', async () => {
+    const addMessage = vi.fn(() =>
+      Promise.resolve(msgRow({ kind: 'task', taskDone: false, body: 'сдать анализы' })),
+    );
+    const svc = makeChatService(fakeRepo({ addMessage }), deps);
+    const res = await svc.sendMessage('A', 'c1', { body: '/task сдать анализы' });
+    expect(res.kind).toBe('task');
+    expect(res.taskDone).toBe(false);
+    expect(addMessage).toHaveBeenCalledWith(
+      'A',
+      'c1',
+      'newid',
+      'сдать анализы',
+      new Date(0),
+      'trainer',
+      'task',
+      false,
+    );
+  });
+
+  it('/task от клиента — обычный текст (не задача)', async () => {
+    const addMessage = vi.fn(() => Promise.resolve(msgRow()));
+    const svc = makeChatService(fakeRepo({ addMessage }), deps);
+    await svc.sendMessage('A', 'c1', { body: '/task что-то' }, 'client');
+    expect(addMessage).toHaveBeenCalledWith(
+      'A',
+      'c1',
+      'newid',
+      '/task что-то',
+      new Date(0),
+      'client',
+      'text',
+      null,
+    );
+  });
+
+  it('completeTask закрывает задачу и пишет системное сообщение', async () => {
+    const completeTask = vi.fn(() => Promise.resolve('сдать анализы'));
+    const addMessage = vi.fn(() =>
+      Promise.resolve(msgRow({ kind: 'system', senderRole: 'client', body: 'done' })),
+    );
+    const svc = makeChatService(fakeRepo({ completeTask, addMessage }), deps);
+    const res = await svc.completeTask('A', 'c1', 'm1');
+    expect(res?.kind).toBe('system');
+    expect(completeTask).toHaveBeenCalledWith('A', 'c1', 'm1', new Date(0));
+    expect(addMessage).toHaveBeenCalledWith(
+      'A',
+      'c1',
+      'newid',
+      '✓ Задача выполнена: сдать анализы',
+      new Date(0),
+      'client',
+      'system',
+      null,
+    );
+  });
+
+  it('completeTask на отсутствующую/закрытую задачу → null, без сообщения', async () => {
+    const completeTask = vi.fn(() => Promise.resolve(null));
+    const addMessage = vi.fn(() => Promise.resolve(msgRow()));
+    const svc = makeChatService(fakeRepo({ completeTask, addMessage }), deps);
+    const res = await svc.completeTask('A', 'c1', 'nope');
+    expect(res).toBeNull();
+    expect(addMessage).not.toHaveBeenCalled();
   });
 
   it('trainerUnread прокидывает trainerId и резолвит число', async () => {
@@ -103,6 +181,8 @@ describe('chat.service', () => {
         conversationId: 'cv',
         senderRole: role ?? 'trainer',
         body,
+        kind: 'text',
+        taskDone: null,
         createdAt: new Date(0),
       } satisfies import('./chat.repo.js').MessageRow),
     );

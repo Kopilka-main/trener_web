@@ -9,11 +9,13 @@ import {
 import type { ChatService } from '../chat/chat.service.js';
 import { requireClient } from '../../plugins/client-context.js';
 import { makeClientScope, type ResolveScope } from '../../core/client-scope.js';
+import { notFound } from '../../errors.js';
 
 const messageWrap = z.object({ message: messageResponseSchema });
 const unreadResponse = z.object({ count: z.number() });
 const okResponse = z.object({ ok: z.literal(true) });
 const messagesQuery = z.object({ sinceId: z.string().optional() });
+const taskParams = z.object({ id: z.string() });
 
 export function clientAppChatRoutes(
   app: FastifyInstance,
@@ -49,6 +51,20 @@ export function clientAppChatRoutes(
     async (req) => {
       const { trainerId, clientId } = await scope(req);
       return { message: await svc.sendMessage(trainerId, clientId, req.body, 'client') };
+    },
+  );
+
+  typed.post(
+    '/api/client/chat/tasks/:id/complete',
+    {
+      preHandler: requireClient,
+      schema: { params: taskParams, response: { 200: messageWrap } },
+    },
+    async (req) => {
+      const { trainerId, clientId } = await scope(req);
+      const message = await svc.completeTask(trainerId, clientId, req.params.id);
+      if (!message) throw notFound('Задача не найдена или уже закрыта');
+      return { message };
     },
   );
 

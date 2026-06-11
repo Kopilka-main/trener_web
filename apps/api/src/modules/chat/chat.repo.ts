@@ -12,11 +12,15 @@ export type ConversationRow = {
   createdAt: Date;
 };
 
+export type MessageKindRow = 'text' | 'task' | 'system';
+
 export type MessageRow = {
   id: string;
   conversationId: string;
   senderRole: 'trainer' | 'client';
   body: string;
+  kind: MessageKindRow;
+  taskDone: boolean | null;
   createdAt: Date;
 };
 
@@ -39,6 +43,8 @@ const messageColumns = {
   conversationId: messages.conversationId,
   senderRole: messages.senderRole,
   body: messages.body,
+  kind: messages.kind,
+  taskDone: messages.taskDone,
   createdAt: messages.createdAt,
 };
 
@@ -173,6 +179,7 @@ export function makeChatRepo(db: Db) {
     },
 
     // Создать диалог при отсутствии, вставить сообщение, обновить lastMessageAt.
+    // kind/taskDone: для задач (kind='task', taskDone=false) и системных плашек (kind='system').
     async addMessage(
       trainerId: string,
       clientId: string,
@@ -180,6 +187,8 @@ export function makeChatRepo(db: Db) {
       body: string,
       now: Date,
       senderRole: 'trainer' | 'client' = 'trainer',
+      kind: MessageKindRow = 'text',
+      taskDone: boolean | null = null,
     ): Promise<MessageRow> {
       const conversation = await getOrCreateConversation(trainerId, clientId, now);
       // insert сообщения + обновление lastMessageAt атомарны: иначе при сбое между ними
@@ -192,6 +201,8 @@ export function makeChatRepo(db: Db) {
             conversationId: conversation.id,
             senderRole,
             body,
+            kind,
+            taskDone,
             createdAt: now,
           })
           .returning(messageColumns);
@@ -203,6 +214,31 @@ export function makeChatRepo(db: Db) {
       });
       // returning по PK всегда возвращает строку.
       return row!;
+    },
+
+    // Закрыть задачу (kind='task') в диалоге пары. Идемпотентно: уже закрытая или
+    // не-задача → null. Возвращает текст задачи (для системного сообщения) при успехе.
+    async completeTask(
+      trainerId: string,
+      clientId: string,
+      messageId: string,
+      now: Date,
+    ): Promise<string | null> {
+      const conversation = await findConversation(trainerId, clientId);
+      if (!conversation) return null;
+      const res = await db
+        .update(messages)
+        .set({ taskDone: true, taskCompletedAt: now })
+        .where(
+          and(
+            eq(messages.id, messageId),
+            eq(messages.conversationId, conversation.id),
+            eq(messages.kind, 'task'),
+            or(isNull(messages.taskDone), eq(messages.taskDone, false)),
+          ),
+        )
+        .returning({ body: messages.body });
+      return res[0]?.body ?? null;
     },
 
     // Отметить диалог прочитанным тренером (getOrCreate при отсутствии).

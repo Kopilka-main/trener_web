@@ -514,11 +514,17 @@ export const messages = pgTable(
       .references(() => conversations.id, { onDelete: 'cascade' }),
     senderRole: text('sender_role').$type<'trainer' | 'client'>().notNull(),
     body: text('body').notNull(),
+    // Вид сообщения: text (обычное), task (задача с чекбоксом), system (плашка).
+    kind: text('kind').$type<'text' | 'task' | 'system'>().notNull().default('text'),
+    // Только для kind='task': статус выполнения (NULL для остальных).
+    taskDone: boolean('task_done'),
+    taskCompletedAt: timestamp('task_completed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index('idx_messages_conversation_created').on(t.conversationId, t.createdAt),
     check('messages_sender_role_chk', sql`${t.senderRole} IN ('trainer', 'client')`),
+    check('messages_kind_chk', sql`${t.kind} IN ('text', 'task', 'system')`),
   ],
 );
 

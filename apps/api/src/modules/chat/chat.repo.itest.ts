@@ -131,6 +131,32 @@ describe.skipIf(!url)('chat.repo (integration)', () => {
     expect(await repo.clientUnreadCount(t, c)).toBe(1);
   });
 
+  it('completeTask: задача (kind=task) закрывается один раз, повтор → null; не-задача → null', async () => {
+    const now = new Date('2026-06-01T10:00:00Z');
+    await repo.addMessage('A', 'c1', 'taskMsg', 'сдать анализы', now, 'trainer', 'task', false);
+    await repo.addMessage('A', 'c1', 'textMsg', 'обычное', now, 'trainer', 'text', null);
+
+    // Первое закрытие возвращает текст задачи.
+    expect(await repo.completeTask('A', 'c1', 'taskMsg', new Date(now.getTime() + 1000))).toBe(
+      'сдать анализы',
+    );
+    // Статус отражается в ленте.
+    const after = await repo.listMessages('A', 'c1');
+    expect(after.find((m) => m.id === 'taskMsg')?.taskDone).toBe(true);
+    // Повторное закрытие — null (уже закрыта).
+    expect(
+      await repo.completeTask('A', 'c1', 'taskMsg', new Date(now.getTime() + 2000)),
+    ).toBeNull();
+    // Обычное сообщение — не задача → null.
+    expect(
+      await repo.completeTask('A', 'c1', 'textMsg', new Date(now.getTime() + 3000)),
+    ).toBeNull();
+    // Чужой scope не закрывает.
+    expect(
+      await repo.completeTask('B', 'c2', 'taskMsg', new Date(now.getTime() + 4000)),
+    ).toBeNull();
+  });
+
   it('trainerReadAt: null без диалога, дата после markRead тренером', async () => {
     expect(await repo.trainerReadAt('tNo', 'cNo')).toBeNull();
     const t = 'chatRT';

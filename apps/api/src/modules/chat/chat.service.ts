@@ -38,7 +38,18 @@ function toMessageResponse(r: MessageRow): MessageResponse {
     senderRole: r.senderRole,
     body: r.body,
     createdAt: r.createdAt.toISOString(),
+    kind: r.kind,
+    taskDone: r.taskDone,
   };
+}
+
+// «/task сдать анализы» → текст задачи «сдать анализы». Только для сообщений тренера;
+// без текста после команды — не задача. Возвращает null, если это не задача.
+function parseTaskBody(body: string, senderRole: 'trainer' | 'client'): string | null {
+  if (senderRole !== 'trainer') return null;
+  const m = /^\/task\s+([\s\S]+)/.exec(body);
+  const text = (m?.[1] ?? '').trim();
+  return text.length > 0 ? text : null;
 }
 
 export function makeChatService(repo: ChatRepo, deps: ChatDeps) {
@@ -63,23 +74,29 @@ export function makeChatService(repo: ChatRepo, deps: ChatDeps) {
       input: SendMessageRequest,
       senderRole: 'trainer' | 'client' = 'trainer',
     ): Promise<MessageResponse> {
+      // Команда тренера «/task …» создаёт задачу с чекбоксом, а не обычное сообщение.
+      const taskBody = parseTaskBody(input.body, senderRole);
+      const isTask = taskBody !== null;
+      const body = taskBody ?? input.body;
       const row = await repo.addMessage(
         trainerId,
         clientId,
         deps.newId(),
-        input.body,
+        body,
         deps.now(),
         senderRole,
+        isTask ? 'task' : 'text',
+        isTask ? false : null,
       );
       // Пуш получателю с именем отправителя в заголовке (как в мессенджерах)
       // и числом непрочитанного для бейджа на иконке приложения.
-      const preview = input.body.length > 120 ? `${input.body.slice(0, 117)}…` : input.body;
+      const preview = body.length > 120 ? `${body.slice(0, 117)}…` : body;
       if (senderRole === 'trainer' && deps.notify) {
         const badge = await repo.clientUnreadCount(trainerId, clientId);
         deps.notify(clientId, trainerId, (trainerName) => ({
           title: trainerName,
-          body: preview,
-          url: '/chat',
+          body: isTask ? `Новая задача: ${preview}` : preview,
+          url: isTask ? '/notifications' : '/chat',
           badge,
         }));
       } else if (senderRole === 'client' && deps.notifyTrainer) {
@@ -92,6 +109,38 @@ export function makeChatService(repo: ChatRepo, deps: ChatDeps) {
         }));
       }
       return toMessageResponse(row);
+    },
+
+    // Клиент закрывает задачу. Идемпотентно: уже закрытая/не-задача → null. При успехе —
+    // системное сообщение «выполнена» в чат (видно обоим) + пуш тренеру.
+    async completeTask(
+      trainerId: string,
+      clientId: string,
+      messageId: string,
+    ): Promise<MessageResponse | null> {
+      const taskBody = await repo.completeTask(trainerId, clientId, messageId, deps.now());
+      if (taskBody === null) return null;
+      const sysRow = await repo.addMessage(
+        trainerId,
+        clientId,
+        deps.newId(),
+        `✓ Задача выполнена: ${taskBody}`,
+        deps.now(),
+        'client',
+        'system',
+        null,
+      );
+      if (deps.notifyTrainer) {
+        const badge = await repo.trainerUnreadConversationsCount(trainerId);
+        const short = taskBody.length > 100 ? `${taskBody.slice(0, 97)}…` : taskBody;
+        deps.notifyTrainer(trainerId, clientId, (clientName) => ({
+          title: clientName,
+          body: `Задача выполнена: ${short}`,
+          url: `/clients/${clientId}/chat`,
+          badge,
+        }));
+      }
+      return toMessageResponse(sysRow);
     },
 
     async markRead(trainerId: string, clientId: string): Promise<void> {

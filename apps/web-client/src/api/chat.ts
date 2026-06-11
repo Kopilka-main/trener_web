@@ -65,6 +65,19 @@ export function useSendClientMessage() {
   });
 }
 
+/** Клиент закрывает задачу (из чата или из уведомлений). Обновляет ленту и счётчики. */
+export function useCompleteTask() {
+  const qc = useQueryClient();
+  return useMutation<{ message: MessageResponse }, ApiError, string>({
+    mutationFn: (taskId) =>
+      apiFetch(`/client/chat/tasks/${taskId}/complete`, { method: 'POST', schema: messageWrap }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: clientMessagesQueryKey });
+      void qc.invalidateQueries({ queryKey: clientChatUnreadQueryKey });
+    },
+  });
+}
+
 export function useMarkChatRead() {
   const qc = useQueryClient();
   return useMutation({

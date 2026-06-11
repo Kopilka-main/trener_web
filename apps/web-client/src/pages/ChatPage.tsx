@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUp, Check, CheckCheck } from 'lucide-react';
 import { useClientMe } from '../api/auth';
-import { useClientMessages, useMarkChatRead, useSendClientMessage } from '../api/chat';
+import {
+  useClientMessages,
+  useCompleteTask,
+  useMarkChatRead,
+  useSendClientMessage,
+} from '../api/chat';
 import { useClientTrainer } from '../api/trainer';
 
 function formatTime(iso: string): string {
@@ -22,6 +27,7 @@ export function ChatPage() {
   const messages = useClientMessages();
   const send = useSendClientMessage();
   const markRead = useMarkChatRead();
+  const completeTask = useCompleteTask();
   const [draft, setDraft] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -100,8 +106,55 @@ export function ChatPage() {
           </p>
         )}
         {items.map((m) => {
-          const mine = m.senderRole === 'client';
           const time = formatTime(m.createdAt);
+
+          // Системная плашка (например «задача выполнена») — по центру, без пузыря.
+          if (m.kind === 'system') {
+            return (
+              <div key={m.id} className="flex justify-center">
+                <div className="rounded-full bg-chip px-3 py-1 text-center text-[11px] text-ink-muted">
+                  {m.body}
+                </div>
+              </div>
+            );
+          }
+
+          // Задача с чекбоксом — клиент отмечает выполнение (однократно).
+          if (m.kind === 'task') {
+            const done = m.taskDone === true;
+            return (
+              <div key={m.id} className="flex justify-start">
+                <div className="flex max-w-[85%] items-start gap-2.5 rounded-2xl border border-accent/40 bg-card px-3 py-2.5">
+                  <button
+                    type="button"
+                    disabled={done || completeTask.isPending}
+                    onClick={() => completeTask.mutate(m.id)}
+                    aria-label={done ? 'Задача выполнена' : 'Отметить задачу выполненной'}
+                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${
+                      done ? 'border-accent bg-accent text-accent-on' : 'border-ink-muted'
+                    }`}
+                  >
+                    {done && <Check size={14} strokeWidth={3} />}
+                  </button>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-accent">
+                      Задача
+                    </div>
+                    <div
+                      className={`whitespace-pre-wrap break-words text-[14px] ${
+                        done ? 'text-ink-muted line-through' : 'text-ink'
+                      }`}
+                    >
+                      {m.body}
+                    </div>
+                    {time && <div className="mt-0.5 text-[10px] text-ink-muted">{time}</div>}
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          const mine = m.senderRole === 'client';
           const read = readAt !== null && m.createdAt <= readAt;
           return (
             <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>

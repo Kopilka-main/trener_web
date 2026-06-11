@@ -77,6 +77,7 @@ export function ClientChatPage() {
           <HoldToDelete
             icon="trash"
             label="Удерживайте, чтобы удалить переписку"
+            hint="История сотрётся и у вас, и у клиента. Восстановить нельзя."
             onDelete={() =>
               removeChat.mutate(undefined, {
                 onSuccess: () => void navigate('/messages'),
@@ -150,8 +151,51 @@ function Bubble({
   message: MessageResponse;
   clientReadAt: string | null;
 }) {
-  const mine = message.senderRole === 'trainer';
   const time = formatTime(message.createdAt);
+
+  // Системная плашка (например «задача выполнена») — по центру.
+  if (message.kind === 'system') {
+    return (
+      <div className="flex justify-center">
+        <div className="rounded-full bg-chip px-3 py-1 text-center text-[11px] text-ink-muted">
+          {message.body}
+        </div>
+      </div>
+    );
+  }
+
+  // Задача: тренер видит статус (чекбокс только для отображения, закрывает клиент).
+  if (message.kind === 'task') {
+    const done = message.taskDone === true;
+    return (
+      <div className="flex justify-end">
+        <div className="flex max-w-[85%] items-start gap-2.5 rounded-2xl border border-accent/40 bg-card px-3 py-2.5">
+          <span
+            className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 ${
+              done ? 'border-accent bg-accent text-accent-on' : 'border-ink-muted'
+            }`}
+          >
+            {done && <Check size={14} strokeWidth={3} />}
+          </span>
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-accent">
+              Задача{done ? ' · выполнена' : ''}
+            </div>
+            <div
+              className={`whitespace-pre-wrap break-words text-[14px] ${
+                done ? 'text-ink-muted line-through' : 'text-ink'
+              }`}
+            >
+              {message.body}
+            </div>
+            {time && <div className="mt-0.5 text-[10px] text-ink-muted">{time}</div>}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const mine = message.senderRole === 'trainer';
   // Статус только на своих (тренерских) сообщениях: прочитано клиентом, если
   // клиент читал диалог не раньше времени сообщения.
   const read = clientReadAt !== null && message.createdAt <= clientReadAt;

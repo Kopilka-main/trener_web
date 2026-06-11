@@ -3,7 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { CalendarPlus, Clock, Dumbbell, MessageSquare, Wallet } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useClientSessions } from '../api/calendar';
-import { useClientChatUnread, useMarkChatRead } from '../api/chat';
+import {
+  useClientChatUnread,
+  useClientMessages,
+  useCompleteTask,
+  useMarkChatRead,
+} from '../api/chat';
 import { useClientPackages } from '../api/packages';
 import { useClientWorkouts } from '../api/workouts';
 import { HoldToDelete } from '../components/HoldToDelete';
@@ -37,6 +42,12 @@ export function NotificationsPage() {
 
   const items = buildClientNotifications({ sessions, unread, now, dismissed, packages, workouts });
 
+  // Открытые задачи от тренера (требуют внимания): берём из ленты сообщений и
+  // показываем с чекбоксом — клиент закрывает их прямо отсюда.
+  const messages = useClientMessages().data?.messages ?? [];
+  const openTasks = messages.filter((m) => m.kind === 'task' && m.taskDone !== true);
+  const completeTask = useCompleteTask();
+
   // Уход со страницы уведомлений = «увидел» новые сообщения → отмечаем чат прочитанным,
   // чтобы счётчик непрочитанных (плитка «Уведомления» на главной) сбросился. Карточка
   // остаётся видимой и кликабельной всё время просмотра — отметка происходит при размонтировании.
@@ -56,9 +67,36 @@ export function NotificationsPage() {
       </h1>
 
       <div className="flex flex-1 flex-col gap-2 px-2 pb-6 pt-3">
-        {items.length === 0 ? (
+        {items.length === 0 && openTasks.length === 0 && (
           <p className="m-auto text-sm text-ink-muted">Уведомлений нет.</p>
-        ) : (
+        )}
+
+        {openTasks.map((t) => (
+          <div
+            key={t.id}
+            className="flex items-center gap-3 rounded-2xl border border-accent/40 bg-card px-4 py-3"
+          >
+            <button
+              type="button"
+              disabled={completeTask.isPending}
+              onClick={() => completeTask.mutate(t.id)}
+              aria-label="Отметить задачу выполненной"
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 border-ink-muted disabled:opacity-50"
+            />
+            <button
+              type="button"
+              onClick={() => void navigate('/chat')}
+              className="flex min-w-0 flex-1 flex-col text-left active:opacity-80"
+            >
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-accent">
+                Задача
+              </span>
+              <span className="min-w-0 text-[14px] text-ink">{t.body}</span>
+            </button>
+          </div>
+        ))}
+
+        {items.length > 0 &&
           items.map((n) => {
             const Icon = ICONS[n.kind];
             return (
@@ -77,8 +115,7 @@ export function NotificationsPage() {
                 />
               </div>
             );
-          })
-        )}
+          })}
       </div>
     </div>
   );

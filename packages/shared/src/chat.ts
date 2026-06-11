@@ -9,11 +9,19 @@ export type SendMessageRequest = z.infer<typeof sendMessageRequestSchema>;
 
 // --- Ответы ---
 
+// Вид сообщения: обычный текст, задача (с чекбоксом) или системная плашка
+// (например «задача выполнена»). По умолчанию — text.
+export const messageKindSchema = z.enum(['text', 'task', 'system']);
+export type MessageKind = z.infer<typeof messageKindSchema>;
+
 export const messageResponseSchema = z.object({
   id: z.string(),
   senderRole: z.enum(['trainer', 'client']),
   body: z.string(),
   createdAt: z.string(),
+  kind: messageKindSchema,
+  // Для kind='task' — текущий статус выполнения (true=закрыта). Иначе null.
+  taskDone: z.boolean().nullable(),
 });
 export type MessageResponse = z.infer<typeof messageResponseSchema>;
 
