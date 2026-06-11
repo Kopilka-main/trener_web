@@ -1,0 +1,210 @@
+import { useNavigate, useParams } from 'react-router-dom';
+import {
+  AtSign,
+  CalendarDays,
+  Link2,
+  Mail,
+  MessageCircle,
+  Pencil,
+  Phone,
+  type LucideIcon,
+} from 'lucide-react';
+import { useClient } from '../api/clients';
+import { Avatar } from '../components/Avatar';
+
+/** Полных лет по дате рождения (YYYY-MM-DD); null, если пусто/некорректно. */
+function ageFromBirthDate(birthDate: string | null): number | null {
+  if (!birthDate) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(birthDate);
+  if (!m) return null;
+  const by = Number(m[1]);
+  const bm = Number(m[2]);
+  const bd = Number(m[3]);
+  const now = new Date();
+  let age = now.getFullYear() - by;
+  if (now.getMonth() + 1 < bm || (now.getMonth() + 1 === bm && now.getDate() < bd)) age -= 1;
+  return age >= 0 && age < 150 ? age : null;
+}
+
+function pluralizeYears(age: number): string {
+  const mod100 = age % 100;
+  const mod10 = age % 10;
+  if (mod100 >= 11 && mod100 <= 14) return 'лет';
+  if (mod10 === 1) return 'год';
+  if (mod10 >= 2 && mod10 <= 4) return 'года';
+  return 'лет';
+}
+
+/** ISO «1990-06-11» → «11.06.1990». Пусто → ''. */
+function birthDisplay(iso: string | null): string {
+  const m = iso ? /^(\d{4})-(\d{2})-(\d{2})$/u.exec(iso) : null;
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : '';
+}
+
+function contactIcon(type: string): LucideIcon {
+  if (type === 'Телефон' || type === 'WhatsApp') return Phone;
+  if (type === 'Email') return Mail;
+  if (type === 'Instagram' || type === 'ВКонтакте') return AtSign;
+  return MessageCircle;
+}
+
+/** Строка «подпись + значение» с иконкой — read-only ячейка карточки данных. */
+function DataRow({
+  icon: Icon,
+  label,
+  value,
+  first,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  first: boolean;
+}) {
+  return (
+    <div>
+      {!first && <div className="mx-4 h-px bg-line" />}
+      <div className="flex items-center gap-3 px-4 py-2.5">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chip text-ink-muted">
+          <Icon size={16} strokeWidth={1.9} />
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="text-[12px] text-ink-muted">{label}</span>
+          <span className="truncate text-[15px] text-ink">{value}</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Просмотр профиля клиента: показывает только ЗАПОЛНЕННЫЕ поля. Изменения — по
+ * кнопке «Редактировать» (→ форма). Открывается из плитки «Профиль» карточки клиента. */
+export function ClientProfilePage() {
+  const navigate = useNavigate();
+  const { id = '' } = useParams<{ id: string }>();
+  const client = useClient(id);
+
+  if (client.isPending) {
+    return <p className="px-2 py-6 text-sm text-ink-muted">Загрузка…</p>;
+  }
+  if (client.isError || !client.data) {
+    return (
+      <p className="px-2 py-6 text-sm text-ink-muted" role="alert">
+        Не удалось загрузить клиента.
+      </p>
+    );
+  }
+
+  const c = client.data;
+  const age = ageFromBirthDate(c.birthDate);
+  const birth = birthDisplay(c.birthDate);
+  const filled = c.contacts.filter((ct) => ct.value.trim() !== '');
+  const displayContacts =
+    filled.length > 0 ? filled : c.phone ? [{ type: 'Телефон', value: c.phone }] : [];
+  const accountId = (c.accountId ?? '').trim();
+  // Индекс строки в карточке «Данные» (для разделителей): контакты, затем дата, затем связь.
+  let rowIndex = 0;
+
+  return (
+    <div className="flex min-h-full flex-col">
+      <div className="flex flex-col gap-5 px-2 pb-8 pt-4">
+        {/* Редактировать — в правом верхнем углу (→ форма). */}
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => void navigate(`/clients/${id}/edit`)}
+            className="flex items-center gap-1.5 rounded-full bg-card px-4 py-1.5 text-[14px] font-semibold text-accent-text active:bg-card-elevated"
+          >
+            <Pencil size={14} strokeWidth={2} /> Редактировать
+          </button>
+        </div>
+
+        {/* Аватар + имя + возраст по центру. */}
+        <div className="flex flex-col items-center gap-2 text-center">
+          <Avatar
+            firstName={c.firstName}
+            lastName={c.lastName}
+            size={96}
+            src={c.avatarFileId ? `/api/files/${c.avatarFileId}` : null}
+          />
+          <h1 className="text-[24px] font-bold leading-tight text-ink">
+            {c.firstName} {c.lastName}
+          </h1>
+          <div className="flex flex-wrap items-center justify-center gap-2 text-[13px] text-ink-muted">
+            <span className="rounded-full bg-chip px-3 py-1">
+              {c.isOnline ? 'Онлайн' : 'Спортзал'}
+            </span>
+            {age !== null && (
+              <span>
+                {age} {pluralizeYears(age)}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Данные: только заполненные (контакты + дата рождения + связь). */}
+        {(displayContacts.length > 0 || birth || accountId !== '') && (
+          <section className="flex flex-col gap-1.5">
+            <h2 className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.06em] text-ink-mutedxl">
+              Данные
+            </h2>
+            <div className="overflow-hidden rounded-2xl bg-card">
+              {displayContacts.map((ct, i) => (
+                <DataRow
+                  key={`${ct.type}-${String(i)}`}
+                  icon={contactIcon(ct.type)}
+                  label={ct.type}
+                  value={ct.value}
+                  first={rowIndex++ === 0}
+                />
+              ))}
+              {birth && (
+                <DataRow
+                  icon={CalendarDays}
+                  label="День рождения"
+                  value={birth}
+                  first={rowIndex++ === 0}
+                />
+              )}
+              {accountId !== '' && (
+                <DataRow
+                  icon={Link2}
+                  label="Клиентский ID"
+                  value={accountId}
+                  first={rowIndex++ === 0}
+                />
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* Теги. */}
+        {c.tags.length > 0 && (
+          <section className="flex flex-col gap-1.5">
+            <h2 className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.06em] text-ink-mutedxl">
+              Теги
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {c.tags.map((tag) => (
+                <span key={tag} className="rounded-full bg-chip px-3 py-1 text-[13px] text-ink">
+                  {tag.startsWith('#') ? tag : `#${tag}`}
+                </span>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Заметки. */}
+        {c.notes && (
+          <section className="flex flex-col gap-1.5">
+            <h2 className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.06em] text-ink-mutedxl">
+              Заметки
+            </h2>
+            <p className="whitespace-pre-wrap rounded-2xl bg-card px-4 py-3 text-[15px] leading-relaxed text-ink">
+              {c.notes}
+            </p>
+          </section>
+        )}
+      </div>
+    </div>
+  );
+}

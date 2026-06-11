@@ -63,7 +63,7 @@ const TILES: Tile[] = [
   { key: 'stats', label: 'Статистика', sub: 'прогресс и история', Icon: BarChart3 },
   { key: 'payments', label: 'Оплата', sub: 'пакеты и расходы', Icon: Wallet },
   { key: 'medcard', label: 'Медкарта', sub: 'файлы и заметки', Icon: FileText },
-  { key: 'edit', label: 'Профиль', sub: 'контакты и данные', Icon: Pencil },
+  { key: 'profile', label: 'Профиль', sub: 'контакты и данные', Icon: Pencil },
 ];
 
 export function ClientCardPage() {

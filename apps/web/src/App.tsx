@@ -15,6 +15,7 @@ import { TemplateEditPage } from './pages/TemplateEditPage';
 import { ClientWorkoutsPage } from './pages/ClientWorkoutsPage';
 import { ClientCalendarPage } from './pages/ClientCalendarPage';
 import { ClientChatPage } from './pages/ClientChatPage';
+import { ClientProfilePage } from './pages/ClientProfilePage';
 import { ActiveWorkoutPage } from './pages/ActiveWorkoutPage';
 import { ClientStatsPage } from './pages/ClientStatsPage';
 import { ClientPaymentsPage } from './pages/ClientPaymentsPage';
@@ -54,6 +55,7 @@ export function App() {
           <Route path="/clients/:id/stats" element={<ClientStatsPage />} />
           <Route path="/clients/:id/payments" element={<ClientPaymentsPage />} />
           <Route path="/clients/:id/medcard" element={<ClientMedicalPage />} />
+          <Route path="/clients/:id/profile" element={<ClientProfilePage />} />
           <Route path="/clients/:id/:section" element={<ClientSectionPage />} />
           <Route path="/knowledge" element={<KnowledgeBasePage />} />
           <Route path="/knowledge/exercises/new" element={<ExerciseEditPage mode="create" />} />
