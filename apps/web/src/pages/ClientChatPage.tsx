@@ -68,6 +68,16 @@ export function ClientChatPage() {
     });
   }
 
+  function scrollToBottom() {
+    listEndRef.current?.scrollIntoView({ block: 'end' });
+  }
+
+  // При фокусе на поле клавиатура ужимает область сообщений и сбивает скролл —
+  // после её появления (с запасом по времени) возвращаемся к последнему сообщению.
+  function onInputFocus() {
+    [50, 250, 450].forEach((d) => window.setTimeout(scrollToBottom, d));
+  }
+
   return (
     <div className="flex h-full flex-col">
       <ScreenHeader
@@ -126,6 +136,7 @@ export function ClientChatPage() {
             ref={taRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onFocus={onInputFocus}
             rows={1}
             maxLength={4000}
             placeholder="Сообщение"
