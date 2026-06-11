@@ -15,7 +15,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useClientMe } from '../api/auth';
 import { useClientSessions } from '../api/calendar';
 import { useClientWorkouts } from '../api/workouts';
-import { useClientChatUnread } from '../api/chat';
+import { useClientChatUnread, useClientMessages } from '../api/chat';
 import { useClientPackages } from '../api/packages';
 import { aggregateExerciseOverview } from '../lib/workout-stats';
 import { buildClientNotifications, loadDismissed } from '../lib/notifications';
@@ -83,6 +83,9 @@ export function HomePage() {
   const workouts = useClientWorkouts().data ?? [];
   const unread = useClientChatUnread().data ?? 0;
   const packages = useClientPackages().data ?? [];
+  const chatMessages = useClientMessages().data?.messages ?? [];
+  // Открытые задачи от тренера — тоже «требуют внимания» в плитке уведомлений.
+  const openTasks = chatMessages.filter((m) => m.kind === 'task' && m.taskDone !== true).length;
   // Обзор упражнений из проведённых тренировок: для «Базы знаний» (кол-во упражнений)
   // и «Прогресса» (кол-во поставленных рекордов в последних сессиях).
   const exerciseOverview = aggregateExerciseOverview(workouts);
@@ -122,8 +125,9 @@ export function HomePage() {
   const dateLabel = `СЕГОДНЯ · ${DAY_SHORT[now.getDay()]} ${now.getDate()} ${MONTH_FULL[now.getMonth()]}`;
   // Один acid-fill на экран. Непрочитанные в чате → акцент на «Чат»; иначе прочие
   // уведомления (подтверждения/скоро) → «Уведомления»; иначе без акцента.
-  const primaryKey: TileKey | null =
-    unread > 0 ? 'chat' : notifications.length > 0 ? 'notifications' : null;
+  // Уведомления, требующие внимания = прочие уведомления + открытые задачи.
+  const attention = notifications.length + openTasks;
+  const primaryKey: TileKey | null = unread > 0 ? 'chat' : attention > 0 ? 'notifications' : null;
 
   const tiles: Array<{
     key: TileKey;
@@ -177,9 +181,9 @@ export function HomePage() {
     {
       key: 'notifications',
       title: 'Уведомления',
-      sub: notifications.length > 0 ? 'требуют внимания' : 'нет открытых задач',
-      metrics: notifications.length > 0 ? [{ v: pad2(notifications.length), s: 'новых' }] : [],
-      kicker: notifications.length > 0 ? 'НОВЫЕ' : 'ВСЁ ТИХО',
+      sub: attention > 0 ? 'требуют внимания' : 'нет открытых задач',
+      metrics: attention > 0 ? [{ v: pad2(attention), s: 'новых' }] : [],
+      kicker: attention > 0 ? 'НОВЫЕ' : 'ВСЁ ТИХО',
       Icon: Bell,
       onClick: () => void navigate('/notifications'),
     },
