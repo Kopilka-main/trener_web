@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   AtSign,
@@ -82,16 +83,45 @@ function DataRow({
   value,
   href,
   first,
+  onCopy,
 }: {
   icon: LucideIcon;
   label: string;
   value: string;
   href?: string | null;
   first: boolean;
+  onCopy: (value: string) => void;
 }) {
   const external = href ? /^https?:\/\//iu.test(href) : false;
+  const timer = useRef<number | null>(null);
+  const longPressed = useRef(false);
+
+  // Долгое нажатие (~0.6с) → копируем значение поля; короткий тап работает как раньше
+  // (звонок/ссылка). Флаг longPressed гасит переход по href после удержания.
+  function startPress() {
+    longPressed.current = false;
+    timer.current = window.setTimeout(() => {
+      longPressed.current = true;
+      onCopy(value);
+    }, 600);
+  }
+  function cancelPress() {
+    if (timer.current !== null) {
+      window.clearTimeout(timer.current);
+      timer.current = null;
+    }
+  }
+
+  const pressProps = {
+    onPointerDown: startPress,
+    onPointerUp: cancelPress,
+    onPointerLeave: cancelPress,
+    onPointerCancel: cancelPress,
+    onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+  };
+
   const inner = (
-    <div className="flex items-center gap-3 px-4 py-2.5">
+    <div className="flex select-none items-center gap-3 px-4 py-2.5">
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chip text-ink-muted">
         <Icon size={16} strokeWidth={1.9} />
       </span>
@@ -110,12 +140,21 @@ function DataRow({
         <a
           href={href}
           {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+          onClick={(e) => {
+            if (longPressed.current) {
+              e.preventDefault();
+              longPressed.current = false;
+            }
+          }}
+          {...pressProps}
           className="block active:bg-card-elevated"
         >
           {inner}
         </a>
       ) : (
-        inner
+        <div {...pressProps} className="active:bg-card-elevated">
+          {inner}
+        </div>
       )}
     </div>
   );
@@ -127,6 +166,15 @@ export function ClientProfilePage() {
   const navigate = useNavigate();
   const { id = '' } = useParams<{ id: string }>();
   const client = useClient(id);
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<number | null>(null);
+
+  function copyValue(value: string) {
+    void navigator.clipboard?.writeText(value).catch(() => undefined);
+    setCopied(true);
+    if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
+    copyTimer.current = window.setTimeout(() => setCopied(false), 1500);
+  }
 
   if (client.isPending) {
     return <p className="px-2 py-6 text-sm text-ink-muted">Загрузка…</p>;
@@ -201,6 +249,7 @@ export function ClientProfilePage() {
                   value={ct.value}
                   href={contactHref(ct.type, ct.value)}
                   first={rowIndex++ === 0}
+                  onCopy={copyValue}
                 />
               ))}
               {birth && (
@@ -209,6 +258,7 @@ export function ClientProfilePage() {
                   label="День рождения"
                   value={birth}
                   first={rowIndex++ === 0}
+                  onCopy={copyValue}
                 />
               )}
               {accountId !== '' && (
@@ -217,6 +267,7 @@ export function ClientProfilePage() {
                   label="Клиентский ID"
                   value={accountId}
                   first={rowIndex++ === 0}
+                  onCopy={copyValue}
                 />
               )}
             </div>
@@ -251,6 +302,18 @@ export function ClientProfilePage() {
           </section>
         )}
       </div>
+
+      {/* Тост «Скопировано» при долгом нажатии на поле. */}
+      {copied && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-10 z-50 flex justify-center px-6">
+          <div
+            className="rounded-full px-4 py-2 text-[13px] font-medium shadow-lg"
+            style={{ background: 'var(--color-ink)', color: 'var(--color-card)' }}
+          >
+            Скопировано
+          </div>
+        </div>
+      )}
     </div>
   );
 }

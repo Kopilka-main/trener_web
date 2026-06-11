@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   BarChart3,
+  Cake,
   CalendarDays,
   ChevronRight,
   Dumbbell,
   FileText,
   MessageSquare,
   Pencil,
+  Phone,
   TrendingUp,
   Unlink,
   Wallet,
@@ -48,6 +50,28 @@ function pluralizeYears(age: number): string {
   if (mod10 === 1) return 'год';
   if (mod10 >= 2 && mod10 <= 4) return 'года';
   return 'лет';
+}
+
+const MONTHS_GEN = [
+  'января',
+  'февраля',
+  'марта',
+  'апреля',
+  'мая',
+  'июня',
+  'июля',
+  'августа',
+  'сентября',
+  'октября',
+  'ноября',
+  'декабря',
+];
+
+/** Дата рождения «11 июня 1990» из ISO YYYY-MM-DD. Пусто/некорректно → ''. */
+function formatBirthDate(iso: string | null): string {
+  const m = iso ? /^(\d{4})-(\d{2})-(\d{2})$/u.exec(iso) : null;
+  if (!m) return '';
+  return `${String(Number(m[3]))} ${MONTHS_GEN[Number(m[2]) - 1] ?? ''} ${m[1]}`;
 }
 
 interface Tile {
@@ -113,7 +137,7 @@ export function ClientCardPage() {
   return (
     <div className="flex min-h-full flex-col">
       <div className="flex flex-col gap-5 px-2 pb-8 pt-4">
-        {/* Шапка профиля: аватар + имя + возраст + связь (цвет по подключению). */}
+        {/* Шапка профиля: аватар + имя (возраст убран — он ниже у даты рождения). */}
         <div className="flex items-center gap-4">
           <Avatar
             firstName={c.firstName}
@@ -133,11 +157,6 @@ export function ClientCardPage() {
                 </span>
               )}
             </div>
-            {age !== null && (
-              <span className="text-[14px] text-ink-muted">
-                {age} {pluralizeYears(age)}
-              </span>
-            )}
           </div>
         </div>
 
@@ -245,6 +264,35 @@ export function ClientCardPage() {
             );
           })}
         </div>
+
+        {/* Контакты — отдельными полями (шаг как между плитками): телефон + дата рождения. */}
+        {(c.phone || c.birthDate) && (
+          <div className="flex flex-col gap-3">
+            {c.phone && (
+              <a
+                href={`tel:${c.phone}`}
+                className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3 active:opacity-70"
+              >
+                <Phone size={18} strokeWidth={1.9} className="shrink-0 text-accent-text" />
+                <span className="text-[15px] font-medium text-ink">{c.phone}</span>
+              </a>
+            )}
+            {c.birthDate && (
+              <div className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3">
+                <Cake size={18} strokeWidth={1.9} className="shrink-0 text-ink-muted" />
+                <span className="text-[15px] text-ink">
+                  {formatBirthDate(c.birthDate)}
+                  {age !== null && (
+                    <span className="text-ink-muted">
+                      {' · '}
+                      {age} {pluralizeYears(age)}
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Заметки. */}
         {c.notes && (
