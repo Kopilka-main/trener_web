@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Send, Check, CheckCheck } from 'lucide-react';
+import { ArrowUp, Check, CheckCheck } from 'lucide-react';
 import type { MessageResponse } from '@trener/shared';
 import {
   useChatMessages,
@@ -59,13 +59,6 @@ export function ClientChatPage() {
     });
   }
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      submit();
-    }
-  }
-
   return (
     <div className="flex h-full flex-col">
       <ScreenHeader
@@ -117,21 +110,22 @@ export function ClientChatPage() {
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={handleKeyDown}
           rows={1}
           maxLength={4000}
           placeholder="Сообщение…"
           aria-label="Текст сообщения"
           className="max-h-32 min-h-[40px] flex-1 resize-none rounded-2xl bg-chip px-4 py-2.5 text-[14px] text-ink placeholder:text-ink-muted outline-none focus:ring-2 focus:ring-accent/30"
         />
-        <button
-          type="submit"
-          disabled={draft.trim().length === 0 || send.isPending}
-          aria-label="Отправить"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-on transition-opacity active:scale-[0.95] disabled:opacity-30"
-        >
-          <Send size={16} strokeWidth={2} />
-        </button>
+        {draft.trim().length > 0 && (
+          <button
+            type="submit"
+            disabled={send.isPending}
+            aria-label="Отправить"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-on transition-opacity active:scale-[0.95] disabled:opacity-30"
+          >
+            <ArrowUp size={18} strokeWidth={2.5} />
+          </button>
+        )}
       </form>
     </div>
   );

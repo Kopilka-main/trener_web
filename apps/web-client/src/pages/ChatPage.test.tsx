@@ -102,4 +102,21 @@ describe('ChatPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
     expect(sendMutate).toHaveBeenCalledWith({ body: 'Тест' }, expect.anything());
   });
+
+  it('кнопка отправки скрыта при пустом поле и появляется при вводе', () => {
+    mockMe(true);
+    renderPage();
+    expect(screen.queryByRole('button', { name: 'Отправить' })).toBeNull();
+    fireEvent.change(screen.getByPlaceholderText('Сообщение…'), { target: { value: 'А' } });
+    expect(screen.getByRole('button', { name: 'Отправить' })).toBeInTheDocument();
+  });
+
+  it('Enter не отправляет — только перенос строки', () => {
+    mockMe(true);
+    renderPage();
+    const input = screen.getByPlaceholderText('Сообщение…');
+    fireEvent.change(input, { target: { value: 'Привет' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(sendMutate).not.toHaveBeenCalled();
+  });
 });

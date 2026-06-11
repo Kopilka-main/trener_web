@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, CheckCheck, Send } from 'lucide-react';
+import { ArrowUp, Check, CheckCheck } from 'lucide-react';
 import { useClientMe } from '../api/auth';
 import { useClientMessages, useMarkChatRead, useSendClientMessage } from '../api/chat';
 import { useClientTrainer } from '../api/trainer';
@@ -44,13 +44,6 @@ export function ChatPage() {
     if (body === '' || send.isPending) return;
     setDraft('');
     send.mutate({ body }, { onError: () => setDraft((cur) => (cur === '' ? body : cur)) });
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      submit();
-    }
   }
 
   if (!linked) {
@@ -137,21 +130,22 @@ export function ChatPage() {
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={handleKeyDown}
           rows={1}
           maxLength={4000}
           placeholder="Сообщение…"
           aria-label="Текст сообщения"
           className="max-h-32 min-h-[40px] flex-1 resize-none rounded-2xl bg-chip px-4 py-2.5 text-[14px] text-ink outline-none placeholder:text-ink-muted focus:ring-2 focus:ring-accent/30"
         />
-        <button
-          type="submit"
-          disabled={draft.trim() === '' || send.isPending}
-          aria-label="Отправить"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-on transition-opacity active:scale-[0.95] disabled:opacity-30"
-        >
-          <Send size={16} strokeWidth={2} />
-        </button>
+        {draft.trim() !== '' && (
+          <button
+            type="submit"
+            disabled={send.isPending}
+            aria-label="Отправить"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-on transition-opacity active:scale-[0.95] disabled:opacity-30"
+          >
+            <ArrowUp size={18} strokeWidth={2.5} />
+          </button>
+        )}
       </form>
     </div>
   );
