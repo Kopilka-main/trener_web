@@ -26,6 +26,15 @@ export type ClientWorkoutsDeps = {
     trainerId: string,
     build: (trainerName: string) => { title: string; body: string; url?: string },
   ) => void;
+  // Тренировка завершена → связать с календарём (отметить занятие проведённым или
+  // создать его и попросить клиента согласовать). Best-effort.
+  onCompleted?: (
+    trainerId: string,
+    clientId: string,
+    workoutId: string,
+    workoutName: string,
+    completedAt: Date,
+  ) => Promise<void> | void;
 };
 
 const unknownExercise = () =>
@@ -203,6 +212,20 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
       if (res === 'bad_status') throw badStatus('Завершить можно только активную тренировку');
       const updated = await repo.getFull(trainerId, clientId, workoutId);
       if (!updated) throw notFound('Тренировка не найдена');
+      // Связка с календарём (best-effort): не роняем завершение при ошибке.
+      if (deps.onCompleted) {
+        try {
+          await deps.onCompleted(
+            trainerId,
+            clientId,
+            workoutId,
+            updated.name,
+            updated.completedAt ?? deps.now(),
+          );
+        } catch {
+          // отметка/создание занятия — побочный эффект, ошибка не критична
+        }
+      }
       return toResponse(updated);
     },
 

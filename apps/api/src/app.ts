@@ -170,19 +170,23 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerClientsModule(app, { db: deps.db, storage, clock });
   registerExercisesModule(app, { db: deps.db, clock });
   registerTemplatesModule(app, { db: deps.db, clock });
+  // Сессии регистрируем РАНЬШE тренировок: их сервис нужен client-workouts
+  // (onCompleted → reconcileFromWorkout: отметить/создать занятие при завершении).
+  const sessionsSvc = registerSessionsModule(app, {
+    db: deps.db,
+    clock,
+    notifyClientPending: (clientId, trainerId, build) => {
+      void pushSvc.notifyClientFrom(clientId, trainerId, build).catch(() => undefined);
+    },
+  });
   registerClientWorkoutsModule(app, {
     db: deps.db,
     clock,
     notify: (clientId, trainerId, build) => {
       void pushSvc.notifyClientFrom(clientId, trainerId, build).catch(() => undefined);
     },
-  });
-  registerSessionsModule(app, {
-    db: deps.db,
-    clock,
-    notifyClientPending: (clientId, trainerId, build) => {
-      void pushSvc.notifyClientFrom(clientId, trainerId, build).catch(() => undefined);
-    },
+    onCompleted: (trainerId, clientId, workoutId, workoutName, completedAt) =>
+      sessionsSvc.reconcileFromWorkout(trainerId, clientId, workoutId, workoutName, completedAt),
   });
   registerPackagesModule(app, { db: deps.db, clock });
   registerAccountingModule(app, { db: deps.db, clock });

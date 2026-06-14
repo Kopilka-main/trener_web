@@ -21,6 +21,14 @@ export function registerClientWorkoutsModule(
       trainerId: string,
       build: (trainerName: string) => { title: string; body: string; url?: string },
     ) => void;
+    // Тренировка завершена → связать с календарём (см. sessions.reconcileFromWorkout).
+    onCompleted?: (
+      trainerId: string,
+      clientId: string,
+      workoutId: string,
+      workoutName: string,
+      completedAt: Date,
+    ) => Promise<void> | void;
   },
 ): void {
   const repo = makeClientWorkoutsRepo(deps.db);
@@ -28,6 +36,7 @@ export function registerClientWorkoutsModule(
     newId: deps.clock.newId,
     now: deps.clock.now,
     ...(deps.notify ? { notify: deps.notify } : {}),
+    ...(deps.onCompleted ? { onCompleted: deps.onCompleted } : {}),
   });
   const requireClientAccess = makeRequireClientAccess(makeClientsRepo(deps.db));
   clientWorkoutsRoutes(app, svc, requireClientAccess);

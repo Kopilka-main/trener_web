@@ -45,6 +45,16 @@ function formatWhen(date: string, time: string): string {
   return `${String(d ?? '')} ${mo}, ${time}`;
 }
 
+const pad2 = (n: number): string => String(n).padStart(2, '0');
+// Дата/время из момента завершения (локальное время сервера). Для корректных дат
+// сервер должен идти в таймзоне тренера (или совпадать с ней).
+function dateOf(d: Date): string {
+  return `${String(d.getFullYear())}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+function timeOf(d: Date): string {
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
 export function makeSessionsService(repo: SessionsRepo, deps: SessionsDeps) {
   return {
     async create(trainerId: string, input: CreateSessionRequest): Promise<SessionResponse> {
@@ -72,6 +82,60 @@ export function makeSessionsService(repo: SessionsRepo, deps: SessionsDeps) {
       return toResponse(row);
     },
 
+    // Связать завершённую тренировку с календарём:
+    //  • если уже привязано к этой тренировке — отметить проведённым и выйти;
+    //  • если в этот день есть запланированное занятие — отметить самое раннее
+    //    проведённым (+ инфо-пуш клиенту);
+    //  • иначе создать проведённое занятие и попросить клиента согласовать (пуш).
+    // Best-effort: вызывается после завершения тренировки, ошибки не роняют ответ.
+    async reconcileFromWorkout(
+      trainerId: string,
+      clientId: string,
+      workoutId: string,
+      workoutName: string,
+      completedAt: Date,
+    ): Promise<void> {
+      const linked = await repo.findByWorkoutId(trainerId, clientId, workoutId);
+      if (linked) {
+        if (linked.status !== 'completed') {
+          await repo.update(trainerId, linked.id, { status: 'completed' });
+        }
+        return;
+      }
+
+      const date = dateOf(completedAt);
+      const planned = await repo.findEarliestPlanned(trainerId, clientId, date);
+      if (planned) {
+        await repo.update(trainerId, planned.id, { status: 'completed', workoutId });
+        if (deps.notifyClientPending) {
+          deps.notifyClientPending(clientId, trainerId, (trainerName) => ({
+            title: 'Тренировка проведена',
+            body: `${trainerName} отметил занятие ${formatWhen(planned.date, planned.startTime)} как проведённое`,
+            url: '/calendar',
+          }));
+        }
+        return;
+      }
+
+      const startTime = timeOf(completedAt);
+      await repo.createConducted({
+        id: deps.newId(),
+        trainerId,
+        clientId,
+        workoutId,
+        date,
+        startTime,
+        title: workoutName,
+      });
+      if (deps.notifyClientPending) {
+        deps.notifyClientPending(clientId, trainerId, (trainerName) => ({
+          title: 'Подтвердите тренировку',
+          body: `${trainerName} провёл тренировку ${formatWhen(date, startTime)} — согласуйте её`,
+          url: '/calendar',
+        }));
+      }
+    },
+
     async list(trainerId: string, range: ListRange = {}): Promise<SessionResponse[]> {
       const rows = await repo.listByTrainer(trainerId, range);
       return rows.map(toResponse);
@@ -92,6 +156,10 @@ export function makeSessionsService(repo: SessionsRepo, deps: SessionsDeps) {
       if (patch.clientId !== undefined && !(await repo.isClientLinked(trainerId, patch.clientId))) {
         throw clientNotLinked();
       }
+      // Текущее состояние нужно, чтобы понять, переносится ли согласованное занятие.
+      const current = await repo.getForTrainer(trainerId, id);
+      if (!current) throw notFound('Занятие не найдено');
+
       // exactOptionalPropertyTypes: задаём только определённые поля.
       const repoPatch: UpdateSessionInput = {};
       if (patch.clientId !== undefined) repoPatch.clientId = patch.clientId;
@@ -104,9 +172,31 @@ export function makeSessionsService(repo: SessionsRepo, deps: SessionsDeps) {
       if (patch.isOnline !== undefined) repoPatch.isOnline = patch.isOnline;
       if (patch.workoutId !== undefined) repoPatch.workoutId = patch.workoutId ?? null;
 
+      // Перенос = изменилась дата, время начала или клиент. Если занятие уже было
+      // согласовано клиентом — обнуляем согласование: прежняя договорённость
+      // отменяется, клиент подтверждает новое время заново.
+      const rescheduled =
+        (patch.date !== undefined && patch.date !== current.date) ||
+        (patch.startTime !== undefined && patch.startTime !== current.startTime) ||
+        (patch.clientId !== undefined && patch.clientId !== current.clientId);
+      const resetConfirmation = rescheduled && current.clientConfirmation === 'confirmed';
+      if (resetConfirmation) repoPatch.clientConfirmation = 'pending';
+
       const row = await repo.update(trainerId, id, repoPatch);
       if (!row) throw notFound('Занятие не найдено');
-      return toResponse(row);
+      const session = toResponse(row);
+
+      // Перенос согласованного → пуш клиенту: прежняя договорённость отменена,
+      // нужно подтвердить новое время (адресат — текущий владелец занятия).
+      if (resetConfirmation && deps.notifyClientPending) {
+        const when = formatWhen(session.date, session.startTime);
+        deps.notifyClientPending(session.clientId, trainerId, (trainerName) => ({
+          title: 'Занятие перенесено',
+          body: `${trainerName} перенёс занятие на ${when}. Прежняя договорённость отменена — подтвердите новое время`,
+          url: '/calendar',
+        }));
+      }
+      return session;
     },
 
     async remove(trainerId: string, id: string): Promise<void> {

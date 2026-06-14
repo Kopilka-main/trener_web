@@ -43,6 +43,8 @@ export type UpdateSessionInput = {
   status?: SessionStatus;
   isOnline?: boolean;
   workoutId?: string | null;
+  /** Сброс/смена согласования клиентом (например, при переносе занятия). */
+  clientConfirmation?: 'pending' | 'confirmed' | 'declined';
 };
 
 export type ListRange = { from?: string; to?: string };
@@ -129,6 +131,77 @@ export function makeSessionsRepo(db: Db) {
       return row;
     },
 
+    // Занятие, уже привязанное к этой тренировке (для идемпотентности при завершении).
+    async findByWorkoutId(
+      trainerId: string,
+      clientId: string,
+      workoutId: string,
+    ): Promise<SessionRow | null> {
+      const [row] = await db
+        .select(cols)
+        .from(sessions)
+        .where(
+          and(
+            eq(sessions.trainerId, trainerId),
+            eq(sessions.clientId, clientId),
+            eq(sessions.workoutId, workoutId),
+          ),
+        );
+      return row ?? null;
+    },
+
+    // Самое раннее по времени ЗАПЛАНИРОВАННОЕ занятие клиента в указанный день.
+    async findEarliestPlanned(
+      trainerId: string,
+      clientId: string,
+      date: string,
+    ): Promise<SessionRow | null> {
+      const [row] = await db
+        .select(cols)
+        .from(sessions)
+        .where(
+          and(
+            eq(sessions.trainerId, trainerId),
+            eq(sessions.clientId, clientId),
+            eq(sessions.date, date),
+            eq(sessions.status, 'planned'),
+          ),
+        )
+        .orderBy(asc(sessions.startTime))
+        .limit(1);
+      return row ?? null;
+    },
+
+    // Создать УЖЕ проведённое занятие (по факту завершённой тренировки без события).
+    // clientConfirmation остаётся 'pending' (дефолт) — клиент согласует постфактум.
+    async createConducted(input: {
+      id: string;
+      trainerId: string;
+      clientId: string;
+      workoutId: string;
+      date: string;
+      startTime: string;
+      title: string | null;
+    }): Promise<SessionRow> {
+      const [row] = await db
+        .insert(sessions)
+        .values({
+          id: input.id,
+          trainerId: input.trainerId,
+          clientId: input.clientId,
+          workoutId: input.workoutId,
+          date: input.date,
+          startTime: input.startTime,
+          durationMin: 60,
+          title: input.title,
+          isOnline: 0,
+          status: 'completed',
+        })
+        .returning(cols);
+      if (!row) throw new Error('insert failed');
+      return row;
+    },
+
     // Занятия тренера, опц. фильтр по диапазону дат [from..to], сорт по date, startTime.
     async listByTrainer(trainerId: string, range: ListRange = {}): Promise<SessionRow[]> {
       const conds = [eq(sessions.trainerId, trainerId)];
@@ -196,6 +269,7 @@ export function makeSessionsRepo(db: Db) {
         status: SessionStatus;
         isOnline: number;
         workoutId: string | null;
+        clientConfirmation: 'pending' | 'confirmed' | 'declined';
       }> = {};
       if (patch.clientId !== undefined) set.clientId = patch.clientId;
       if (patch.date !== undefined) set.date = patch.date;
@@ -206,6 +280,7 @@ export function makeSessionsRepo(db: Db) {
       if (patch.status !== undefined) set.status = patch.status;
       if (patch.isOnline !== undefined) set.isOnline = patch.isOnline ? 1 : 0;
       if (patch.workoutId !== undefined) set.workoutId = patch.workoutId;
+      if (patch.clientConfirmation !== undefined) set.clientConfirmation = patch.clientConfirmation;
 
       if (Object.keys(set).length === 0) {
         // Пустой патч — вернуть текущее занятие, если оно своё.

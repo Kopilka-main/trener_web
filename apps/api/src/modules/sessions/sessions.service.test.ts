@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { SessionsRepo, SessionRow } from './sessions.repo.js';
+import type { SessionsRepo, SessionRow, UpdateSessionInput } from './sessions.repo.js';
 import { makeSessionsService } from './sessions.service.js';
 
 function row(over: Partial<SessionRow> = {}): SessionRow {
@@ -32,6 +32,9 @@ function fakeRepo(over: Partial<SessionsRepo> = {}): SessionsRepo {
     delete: vi.fn(() => Promise.resolve(false)),
     listForClient: vi.fn(() => Promise.resolve([])),
     setClientConfirmation: vi.fn(() => Promise.resolve(null)),
+    findByWorkoutId: vi.fn(() => Promise.resolve(null)),
+    findEarliestPlanned: vi.fn(() => Promise.resolve(null)),
+    createConducted: vi.fn(() => Promise.resolve(row({ status: 'completed' }))),
     ...over,
   };
 }
@@ -106,11 +109,73 @@ describe('sessions.service', () => {
 
   it('update своего возвращает ответ', async () => {
     const svc = makeSessionsService(
-      fakeRepo({ update: vi.fn(() => Promise.resolve(row({ title: 'Новое' }))) }),
+      fakeRepo({
+        getForTrainer: vi.fn(() => Promise.resolve(row())),
+        update: vi.fn(() => Promise.resolve(row({ title: 'Новое' }))),
+      }),
       { newId: () => 'x' },
     );
     const res = await svc.update('A', 's1', { title: 'Новое' });
     expect(res.title).toBe('Новое');
+  });
+
+  it('перенос согласованного занятия обнуляет согласование и шлёт пуш клиенту', async () => {
+    const update = vi.fn(() =>
+      Promise.resolve(row({ date: '2026-06-05', clientConfirmation: 'pending' })),
+    );
+    const notifyClientPending = vi.fn();
+    const svc = makeSessionsService(
+      fakeRepo({
+        getForTrainer: vi.fn(() => Promise.resolve(row({ clientConfirmation: 'confirmed' }))),
+        update,
+      }),
+      { newId: () => 'x', notifyClientPending },
+    );
+    const res = await svc.update('A', 's1', { date: '2026-06-05' });
+    // repo получил сброс согласования в pending.
+    expect(update).toHaveBeenCalledWith(
+      'A',
+      's1',
+      expect.objectContaining({ date: '2026-06-05', clientConfirmation: 'pending' }),
+    );
+    expect(res.clientConfirmation).toBe('pending');
+    // Клиенту ушёл пуш о переносе.
+    expect(notifyClientPending).toHaveBeenCalledTimes(1);
+    expect(notifyClientPending).toHaveBeenCalledWith('c1', 'A', expect.any(Function));
+  });
+
+  it('перенос НЕсогласованного (pending) не трогает согласование и не шлёт пуш', async () => {
+    const update = vi.fn((_t: string, _id: string, _patch: UpdateSessionInput) =>
+      Promise.resolve(row({ date: '2026-06-05' })),
+    );
+    const notifyClientPending = vi.fn();
+    const svc = makeSessionsService(
+      fakeRepo({
+        getForTrainer: vi.fn(() => Promise.resolve(row({ clientConfirmation: 'pending' }))),
+        update,
+      }),
+      { newId: () => 'x', notifyClientPending },
+    );
+    await svc.update('A', 's1', { date: '2026-06-05' });
+    expect(update.mock.calls[0]?.[2]?.clientConfirmation).toBeUndefined();
+    expect(notifyClientPending).not.toHaveBeenCalled();
+  });
+
+  it('правка названия согласованного занятия (без переноса) не обнуляет согласование', async () => {
+    const update = vi.fn((_t: string, _id: string, _patch: UpdateSessionInput) =>
+      Promise.resolve(row({ title: 'X', clientConfirmation: 'confirmed' })),
+    );
+    const notifyClientPending = vi.fn();
+    const svc = makeSessionsService(
+      fakeRepo({
+        getForTrainer: vi.fn(() => Promise.resolve(row({ clientConfirmation: 'confirmed' }))),
+        update,
+      }),
+      { newId: () => 'x', notifyClientPending },
+    );
+    await svc.update('A', 's1', { title: 'X' });
+    expect(update.mock.calls[0]?.[2]?.clientConfirmation).toBeUndefined();
+    expect(notifyClientPending).not.toHaveBeenCalled();
   });
 
   it('remove бросает 404, если delete=false', async () => {
@@ -170,5 +235,72 @@ describe('sessions.service', () => {
     expect(res.clientConfirmation).toBe('confirmed');
     // confirmed-ветка не читает текущее состояние.
     expect(getForTrainer).not.toHaveBeenCalled();
+  });
+
+  describe('reconcileFromWorkout', () => {
+    const completedAt = new Date('2026-06-01T10:30:00');
+
+    it('уже привязанное к тренировке занятие → отметка проведённым, без создания/пуша', async () => {
+      const findByWorkoutId = vi.fn(() =>
+        Promise.resolve(row({ id: 'sLinked', workoutId: 'w1', status: 'planned' })),
+      );
+      const update = vi.fn(() => Promise.resolve(row({ id: 'sLinked', status: 'completed' })));
+      const createConducted = vi.fn(() => Promise.resolve(row()));
+      const notify = vi.fn();
+      const svc = makeSessionsService(fakeRepo({ findByWorkoutId, update, createConducted }), {
+        newId: () => 'x',
+        notifyClientPending: notify,
+      });
+      await svc.reconcileFromWorkout('A', 'c1', 'w1', 'Ноги', completedAt);
+      expect(update).toHaveBeenCalledWith('A', 'sLinked', { status: 'completed' });
+      expect(createConducted).not.toHaveBeenCalled();
+      expect(notify).not.toHaveBeenCalled();
+    });
+
+    it('есть запланированное в этот день → отметка проведённым + инфо-пуш', async () => {
+      const findEarliestPlanned = vi.fn(() =>
+        Promise.resolve(row({ id: 'sPlanned', date: '2026-06-01', startTime: '11:00' })),
+      );
+      const update = vi.fn(() => Promise.resolve(row({ id: 'sPlanned', status: 'completed' })));
+      const createConducted = vi.fn(() => Promise.resolve(row()));
+      const notify = vi.fn();
+      const svc = makeSessionsService(
+        fakeRepo({
+          findByWorkoutId: vi.fn(() => Promise.resolve(null)),
+          findEarliestPlanned,
+          update,
+          createConducted,
+        }),
+        { newId: () => 'x', notifyClientPending: notify },
+      );
+      await svc.reconcileFromWorkout('A', 'c1', 'w1', 'Ноги', completedAt);
+      expect(update).toHaveBeenCalledWith('A', 'sPlanned', {
+        status: 'completed',
+        workoutId: 'w1',
+      });
+      expect(createConducted).not.toHaveBeenCalled();
+      expect(notify).toHaveBeenCalledTimes(1);
+    });
+
+    it('нет события в этот день → создаёт проведённое занятие + пуш на согласование', async () => {
+      const createConducted = vi.fn(() => Promise.resolve(row({ status: 'completed' })));
+      const update = vi.fn(() => Promise.resolve(null));
+      const notify = vi.fn();
+      const svc = makeSessionsService(
+        fakeRepo({
+          findByWorkoutId: vi.fn(() => Promise.resolve(null)),
+          findEarliestPlanned: vi.fn(() => Promise.resolve(null)),
+          createConducted,
+          update,
+        }),
+        { newId: () => 'newid', notifyClientPending: notify },
+      );
+      await svc.reconcileFromWorkout('A', 'c1', 'w1', 'Ноги', completedAt);
+      expect(createConducted).toHaveBeenCalledWith(
+        expect.objectContaining({ trainerId: 'A', clientId: 'c1', workoutId: 'w1', title: 'Ноги' }),
+      );
+      expect(update).not.toHaveBeenCalled();
+      expect(notify).toHaveBeenCalledTimes(1);
+    });
   });
 });

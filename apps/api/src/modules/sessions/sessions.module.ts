@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Db } from '../../db/client.js';
 import type { Clock } from '../../core/app-deps.js';
 import { makeSessionsRepo } from './sessions.repo.js';
-import { makeSessionsService } from './sessions.service.js';
+import { makeSessionsService, type SessionsService } from './sessions.service.js';
 import { sessionsRoutes } from './sessions.routes.js';
 
 // Регистрация доменного модуля sessions в composition root: собирает repo+service
@@ -20,11 +20,12 @@ export function registerSessionsModule(
       build: (trainerName: string) => { title: string; body: string; url?: string },
     ) => void;
   },
-): void {
+): SessionsService {
   const repo = makeSessionsRepo(deps.db);
   const svc = makeSessionsService(repo, {
     newId: deps.clock.newId,
     ...(deps.notifyClientPending ? { notifyClientPending: deps.notifyClientPending } : {}),
   });
   sessionsRoutes(app, svc);
+  return svc;
 }
