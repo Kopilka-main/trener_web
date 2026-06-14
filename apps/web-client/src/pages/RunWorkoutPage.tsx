@@ -592,65 +592,48 @@ function SetEditor({
   onSave: (input: UpdateSetRequest) => void;
   onDelete: () => void;
 }) {
-  const showReps = set.plannedReps !== null || set.plannedWeightKg !== null;
-  const showWeight = set.plannedWeightKg !== null;
-  const showTime = set.plannedTimeSec !== null;
+  // Всегда показываем все поля факта (повторы/вес/время), а не только заполненные.
   const [reps, setReps] = useState(String(set.actualReps ?? set.plannedReps ?? ''));
   const [weight, setWeight] = useState(String(set.actualWeightKg ?? set.plannedWeightKg ?? ''));
   const [time, setTime] = useState(String(set.actualTimeSec ?? set.plannedTimeSec ?? ''));
-  const repsShown = showReps || (!showWeight && !showTime);
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex flex-1 items-center gap-2">
-        {repsShown && <NumBox value={reps} onChange={setReps} ariaLabel="повторы" />}
-        {showWeight && (
-          <>
-            <span className="font-[family-name:var(--font-mono)] text-[14px] text-ink-muted">
-              ×
-            </span>
-            <NumBox value={weight} onChange={setWeight} ariaLabel="вес" />
-          </>
-        )}
-        {showTime && (
-          <>
-            {repsShown && (
-              <span className="font-[family-name:var(--font-mono)] text-[14px] text-ink-muted">
-                ·
-              </span>
-            )}
-            <NumBox value={time} onChange={setTime} ariaLabel="секунды" />
-          </>
-        )}
+    <div className="flex flex-col gap-2.5">
+      <div className="grid grid-cols-3 gap-2">
+        <LabeledNum label="Повторы" value={reps} onChange={setReps} />
+        <LabeledNum label="Вес, кг" value={weight} onChange={setWeight} />
+        <LabeledNum label="Время, с" value={time} onChange={setTime} />
       </div>
-      <button
-        type="button"
-        aria-label="Сохранить подход"
-        onClick={() =>
-          onSave({
-            actualReps: repsShown ? num(reps) : null,
-            actualWeightKg: showWeight ? num(weight) : null,
-            actualTimeSec: showTime ? num(time) : null,
-          })
-        }
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-on active:scale-90"
-      >
-        <Check size={18} strokeWidth={2.8} />
-      </button>
-      <button
-        type="button"
-        aria-label="Отменить"
-        onClick={onCancel}
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-90"
-      >
-        <X size={18} strokeWidth={2.2} />
-      </button>
-      <HoldToDelete
-        icon="trash"
-        size="sm"
-        label="Удерживайте, чтобы удалить упражнение"
-        onDelete={onDelete}
-      />
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          aria-label="Сохранить подход"
+          onClick={() =>
+            onSave({
+              actualReps: num(reps),
+              actualWeightKg: num(weight),
+              actualTimeSec: num(time),
+            })
+          }
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-on active:scale-90"
+        >
+          <Check size={18} strokeWidth={2.8} />
+        </button>
+        <button
+          type="button"
+          aria-label="Отменить"
+          onClick={onCancel}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-90"
+        >
+          <X size={18} strokeWidth={2.2} />
+        </button>
+        <HoldToDelete
+          icon="trash"
+          size="sm"
+          label="Удерживайте, чтобы удалить упражнение"
+          onDelete={onDelete}
+        />
+      </div>
     </div>
   );
 }
@@ -666,81 +649,72 @@ function PlannedSetEditor({
   onCancel: () => void;
   onSave: (input: UpdateSetRequest) => void;
 }) {
-  const showReps = set.plannedReps !== null || set.plannedWeightKg !== null;
-  const showWeight = set.plannedWeightKg !== null;
-  const showTime = set.plannedTimeSec !== null;
+  // Всегда показываем все поля плана (повторы/вес/время/отдых), а не только заполненные.
   const [reps, setReps] = useState(String(set.plannedReps ?? ''));
   const [weight, setWeight] = useState(String(set.plannedWeightKg ?? ''));
   const [time, setTime] = useState(String(set.plannedTimeSec ?? ''));
-  const repsShown = showReps || (!showWeight && !showTime);
+  const [rest, setRest] = useState(String(set.plannedRestSec ?? ''));
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex flex-1 items-center gap-2">
-        {repsShown && <NumBox value={reps} onChange={setReps} ariaLabel="повторы" />}
-        {showWeight && (
-          <>
-            <span className="font-[family-name:var(--font-mono)] text-[14px] text-ink-muted">
-              ×
-            </span>
-            <NumBox value={weight} onChange={setWeight} ariaLabel="вес" />
-          </>
-        )}
-        {showTime && (
-          <>
-            {repsShown && (
-              <span className="font-[family-name:var(--font-mono)] text-[14px] text-ink-muted">
-                ·
-              </span>
-            )}
-            <NumBox value={time} onChange={setTime} ariaLabel="секунды" />
-          </>
-        )}
+    <div className="flex flex-col gap-2.5">
+      <div className="grid grid-cols-2 gap-2">
+        <LabeledNum label="Повторы" value={reps} onChange={setReps} />
+        <LabeledNum label="Вес, кг" value={weight} onChange={setWeight} />
+        <LabeledNum label="Время, с" value={time} onChange={setTime} />
+        <LabeledNum label="Отдых, с" value={rest} onChange={setRest} />
       </div>
-      <button
-        type="button"
-        aria-label="Сохранить подход"
-        onClick={() =>
-          onSave({
-            plannedReps: repsShown ? num(reps) : null,
-            plannedWeightKg: showWeight ? num(weight) : null,
-            plannedTimeSec: showTime ? num(time) : null,
-          })
-        }
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-on active:scale-90"
-      >
-        <Check size={18} strokeWidth={2.8} />
-      </button>
-      <button
-        type="button"
-        aria-label="Отменить"
-        onClick={onCancel}
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-90"
-      >
-        <X size={18} strokeWidth={2.2} />
-      </button>
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          aria-label="Сохранить подход"
+          onClick={() =>
+            onSave({
+              plannedReps: num(reps),
+              plannedWeightKg: num(weight),
+              plannedTimeSec: num(time),
+              plannedRestSec: num(rest),
+            })
+          }
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-on active:scale-90"
+        >
+          <Check size={18} strokeWidth={2.8} />
+        </button>
+        <button
+          type="button"
+          aria-label="Отменить"
+          onClick={onCancel}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-90"
+        >
+          <X size={18} strokeWidth={2.2} />
+        </button>
+      </div>
     </div>
   );
 }
 
-function NumBox({
+function LabeledNum({
+  label,
   value,
   onChange,
-  ariaLabel,
 }: {
+  label: string;
   value: string;
   onChange: (v: string) => void;
-  ariaLabel: string;
 }) {
   return (
-    <label className="flex h-10 min-w-0 flex-1 items-center rounded-lg border border-line bg-chip px-2 focus-within:border-accent">
-      <input
-        inputMode="decimal"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label={ariaLabel}
-        className="w-full min-w-0 bg-transparent text-center font-[family-name:var(--font-mono)] text-[15px] tabular-nums text-ink outline-none"
-      />
+    <label className="flex min-w-0 flex-col gap-1">
+      <span className="px-0.5 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.04em] text-ink-muted">
+        {label}
+      </span>
+      <span className="flex h-10 items-center rounded-lg border border-line bg-chip px-2 focus-within:border-accent">
+        <input
+          inputMode="decimal"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          aria-label={label}
+          className="w-full min-w-0 bg-transparent text-center font-[family-name:var(--font-mono)] text-[15px] tabular-nums text-ink outline-none"
+        />
+      </span>
     </label>
   );
 }
