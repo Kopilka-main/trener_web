@@ -230,16 +230,14 @@ export function HomePage() {
                 className="flex items-baseline gap-2.5 pb-2 text-left transition-transform active:scale-[0.98]"
               >
                 <span
-                  className="font-[family-name:var(--font-display)] text-[44px] leading-none tracking-[-0.02em]"
+                  className="font-[family-name:var(--font-display)] text-[64px] leading-none tracking-[-0.03em]"
                   style={{
                     color: paidBalance < 0 ? 'var(--color-danger)' : 'var(--color-accent-text)',
                   }}
                 >
                   {paidBalance < 0 ? String(paidBalance) : pad2(paidBalance)}
                 </span>
-                <span className="text-[19px] font-bold leading-[1.05] text-ink">
-                  оплаченных
-                  <br />
+                <span className="text-[22px] font-bold leading-tight tracking-[-0.01em] text-ink">
                   тренировок
                 </span>
               </button>
