@@ -17,30 +17,18 @@ import { useClientSessions } from '../api/calendar';
 import { useClientWorkouts } from '../api/workouts';
 import { useClientChatUnread, useClientMessages } from '../api/chat';
 import { useClientPackages } from '../api/packages';
+import { useClientTrainer } from '../api/trainer';
 import { aggregateExerciseOverview } from '../lib/workout-stats';
 import { buildClientNotifications, loadDismissed } from '../lib/notifications';
-
-const DAY_SHORT = ['ВС', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ'];
-const MONTH_FULL = [
-  'ЯНВАРЯ',
-  'ФЕВРАЛЯ',
-  'МАРТА',
-  'АПРЕЛЯ',
-  'МАЯ',
-  'ИЮНЯ',
-  'ИЮЛЯ',
-  'АВГУСТА',
-  'СЕНТЯБРЯ',
-  'ОКТЯБРЯ',
-  'НОЯБРЯ',
-  'ДЕКАБРЯ',
-];
 
 function isoDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 function pad2(n: number): string {
   return String(n).padStart(2, '0');
+}
+function initials(first: string, last: string): string {
+  return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase() || '?';
 }
 function timeToMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(':');
@@ -83,7 +71,13 @@ export function HomePage() {
   const workouts = useClientWorkouts().data ?? [];
   const unread = useClientChatUnread().data ?? 0;
   const packages = useClientPackages().data ?? [];
+  // Остаток оплаченных тренировок (ведёт тренер): сумма активных пакетов − завершённые.
+  const paidLessons = packages
+    .filter((p) => p.status === 'active')
+    .reduce((acc, p) => acc + p.lessonsPaid, 0);
+  const paidBalance = paidLessons - workouts.length;
   const chatMessages = useClientMessages().data?.messages ?? [];
+  const trainer = useClientTrainer().data;
   // Открытые задачи от тренера — тоже «требуют внимания» в плитке уведомлений.
   const openTasks = chatMessages.filter((m) => m.kind === 'task' && m.taskDone !== true).length;
   // Обзор упражнений из проведённых тренировок: для «Базы знаний» (кол-во упражнений)
@@ -93,10 +87,6 @@ export function HomePage() {
 
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
-  // Только ПРЕДСТОЯЩИЕ сегодня занятия (запланированные, время ещё не прошло).
-  const todayCount = sessions.filter(
-    (s) => s.date === today && s.status === 'planned' && timeToMinutes(s.startTime) >= nowMinutes,
-  ).length;
   // Не cancelled на 30 дней (диапазон запроса).
   const plannedNext30d = sessions.filter((s) => s.status !== 'cancelled').length;
 
@@ -122,7 +112,6 @@ export function HomePage() {
     workouts,
   });
 
-  const dateLabel = `СЕГОДНЯ · ${DAY_SHORT[now.getDay()]} ${now.getDate()} ${MONTH_FULL[now.getMonth()]}`;
   // Один acid-fill на экран. Непрочитанные в чате → акцент на «Чат»; иначе прочие
   // уведомления (подтверждения/скоро) → «Уведомления»; иначе без акцента.
   // Уведомления, требующие внимания = прочие уведомления + открытые задачи.
@@ -192,9 +181,35 @@ export function HomePage() {
   return (
     <div className="flex min-h-[100dvh] flex-col">
       <div className="relative flex flex-1 flex-col overflow-hidden px-2 pb-5 pt-2">
-        <div className="font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--color-ink-mutedxl)]">
-          {dateLabel}
-        </div>
+        {/* Тренер: аватар + имя (→ страница тренера). Справа в шапке — шестерёнка. */}
+        {linked && trainer && (
+          <button
+            type="button"
+            onClick={() => void navigate('/trainer')}
+            aria-label="Тренер"
+            className="mb-1 flex items-center gap-2.5 self-start pr-12 text-left active:opacity-70"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-card-elevated">
+              {trainer.avatarFileId ? (
+                <img
+                  src={`/api/client/trainer/avatar?v=${trainer.avatarFileId}`}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="text-[12px] font-bold text-ink">
+                  {initials(trainer.firstName, trainer.lastName)}
+                </span>
+              )}
+            </span>
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate text-[14px] font-semibold leading-tight text-ink">
+                {trainer.firstName} {trainer.lastName}
+              </span>
+              <span className="text-[11px] leading-tight text-ink-muted">тренер</span>
+            </span>
+          </button>
+        )}
 
         <button
           type="button"
@@ -210,27 +225,30 @@ export function HomePage() {
             <>
               <button
                 type="button"
-                onClick={() => void navigate('/calendar')}
-                className="flex flex-wrap items-baseline gap-3 text-left transition-transform active:scale-[0.98]"
-                aria-label="Открыть календарь на сегодня"
+                onClick={() => void navigate('/profile')}
+                aria-label="Оплаченные тренировки"
+                className="flex items-baseline gap-2.5 pb-2 text-left transition-transform active:scale-[0.98]"
               >
                 <span
-                  className="font-[family-name:var(--font-display)] text-[64px] leading-none tracking-[-0.03em]"
-                  style={{ color: 'var(--color-accent)' }}
+                  className="font-[family-name:var(--font-display)] text-[44px] leading-none tracking-[-0.02em]"
+                  style={{
+                    color: paidBalance < 0 ? 'var(--color-danger)' : 'var(--color-accent-text)',
+                  }}
                 >
-                  {pad2(todayCount)}
+                  {paidBalance < 0 ? String(paidBalance) : pad2(paidBalance)}
                 </span>
-                <span className="text-[22px] font-bold leading-tight tracking-[-0.01em]">
-                  {todayCount === 1 ? 'занятие сегодня' : 'занятий сегодня'}
+                <span className="text-[19px] font-bold leading-[1.05] text-ink">
+                  оплаченных
+                  <br />
+                  тренировок
                 </span>
               </button>
-
               {nextSession && nextSessionDate && (
                 <button
                   type="button"
                   onClick={() => void navigate('/calendar')}
                   aria-label="Открыть календарь"
-                  className="mt-3 flex w-full items-center gap-2.5 text-left transition-transform active:scale-[0.98]"
+                  className="flex w-full items-center gap-2.5 text-left transition-transform active:scale-[0.98]"
                 >
                   <div className="font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--color-ink-muted)]">
                     СЛЕД. · {nextSession.startTime}
