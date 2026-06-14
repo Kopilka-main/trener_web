@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronDown, Dumbbell, Minus, Plus, Search } from 'lucide-react';
+import { ChevronDown, Dumbbell, Minus, Plus, Search, X } from 'lucide-react';
 import type { CreateTemplateRequest, ExerciseResponse, TemplateExercise } from '@trener/shared';
 import { useExercises } from '../api/exercises';
 import {
@@ -386,8 +386,18 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                   onChange={(e) => setExerciseQuery(e.target.value)}
                   placeholder="Поиск упражнения"
                   aria-label="Поиск упражнения"
-                  className="shelf w-full rounded-2xl py-2.5 pl-9 pr-3 text-sm text-ink outline-none placeholder:text-ink-muted"
+                  className="shelf w-full rounded-2xl py-2.5 pl-9 pr-9 text-sm text-ink outline-none placeholder:text-ink-muted"
                 />
+                {exerciseQuery !== '' && (
+                  <button
+                    type="button"
+                    aria-label="Очистить"
+                    onClick={() => setExerciseQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted active:text-ink"
+                  >
+                    <X size={16} strokeWidth={2} />
+                  </button>
+                )}
               </div>
               {visibleExercises.length === 0 && (
                 <p className="px-1 py-2 text-sm text-ink-muted">Ничего не найдено.</p>

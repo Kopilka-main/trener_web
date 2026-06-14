@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowDownAZ, CalendarClock, ChevronRight, Plus, Search } from 'lucide-react';
+import { ArrowDownAZ, CalendarClock, ChevronRight, Plus, Search, X } from 'lucide-react';
 import type { ClientResponse } from '@trener/shared';
 import { useClients } from '../api/clients';
 import { useSessions } from '../api/sessions';
@@ -139,9 +139,19 @@ export function ClientsPage() {
             placeholder="Поиск по имени, тегу"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="shelf w-full rounded-2xl py-3 pl-10 pr-4 text-sm text-ink outline-none placeholder:text-ink-muted"
+            className="shelf w-full rounded-2xl py-3 pl-10 pr-10 text-sm text-ink outline-none placeholder:text-ink-muted"
             aria-label="Поиск по имени, тегу"
           />
+          {query !== '' && (
+            <button
+              type="button"
+              aria-label="Очистить"
+              onClick={() => setQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted active:text-ink"
+            >
+              <X size={16} strokeWidth={2} />
+            </button>
+          )}
         </div>
 
         {/* Сортировка + фильтр по типу — под поиском. */}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronRight, Dumbbell, Plus, Search } from 'lucide-react';
+import { ChevronRight, Dumbbell, Plus, Search, X } from 'lucide-react';
 import type { ExerciseResponse, TemplateResponse } from '@trener/shared';
 import { useExercises } from '../api/exercises';
 import { useTemplates } from '../api/workout-templates';
@@ -329,8 +329,18 @@ export function KnowledgeBasePage() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Поиск тренировок, упражнений, статей"
             aria-label="Поиск"
-            className="shelf w-full rounded-2xl py-3 pl-10 pr-4 text-sm text-ink outline-none placeholder:text-ink-muted"
+            className="shelf w-full rounded-2xl py-3 pl-10 pr-10 text-sm text-ink outline-none placeholder:text-ink-muted"
           />
+          {query !== '' && (
+            <button
+              type="button"
+              aria-label="Очистить"
+              onClick={() => setQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted active:text-ink"
+            >
+              <X size={16} strokeWidth={2} />
+            </button>
+          )}
         </div>
 
         <div

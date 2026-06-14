@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Dumbbell, Search } from 'lucide-react';
+import { ChevronRight, Dumbbell, Search, X } from 'lucide-react';
 import type { ExerciseResponse } from '@trener/shared';
 import { useClientMe } from '../api/auth';
 import { useClientWorkouts } from '../api/workouts';
@@ -276,8 +276,18 @@ export function KnowledgePage() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Поиск тренировок, упражнений"
             aria-label="Поиск"
-            className="w-full rounded-2xl bg-card py-3 pl-10 pr-4 text-sm text-ink outline-none placeholder:text-ink-muted focus:ring-2 focus:ring-accent/30"
+            className="w-full rounded-2xl bg-card py-3 pl-10 pr-10 text-sm text-ink outline-none placeholder:text-ink-muted focus:ring-2 focus:ring-accent/30"
           />
+          {query !== '' && (
+            <button
+              type="button"
+              aria-label="Очистить"
+              onClick={() => setQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted active:text-ink"
+            >
+              <X size={16} strokeWidth={2} />
+            </button>
+          )}
         </div>
 
         <div

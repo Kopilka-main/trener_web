@@ -748,12 +748,24 @@ function ExercisePickerSheet({
         <h2 className="px-5 pb-2 pt-4 text-[16px] font-bold text-ink">Добавить упражнение</h2>
 
         <div className="px-5 pb-2">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Поиск упражнения"
-            className="w-full rounded-2xl bg-card px-4 py-2.5 text-[14px] text-ink outline-none placeholder:text-ink-muted"
-          />
+          <div className="relative">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Поиск упражнения"
+              className="w-full rounded-2xl bg-card py-2.5 pl-4 pr-10 text-[14px] text-ink outline-none placeholder:text-ink-muted"
+            />
+            {query !== '' && (
+              <button
+                type="button"
+                aria-label="Очистить"
+                onClick={() => setQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted active:text-ink"
+              >
+                <X size={16} strokeWidth={2} />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-5 pt-1">
