@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, ChevronDown, ChevronLeft, ChevronRight, Pencil, Plus, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronLeft, Dumbbell, Info, Pencil, Plus, X } from 'lucide-react';
 import type {
   ExerciseResponse,
   UpdateSetRequest,
@@ -24,6 +24,7 @@ import {
   useUpdateWorkoutSet,
 } from '../api/workouts';
 import { aggregateExerciseOverview } from '../lib/workout-stats';
+import { orderSubgroups } from '../lib/muscleGroups';
 import { useBackClose } from '../lib/backStack';
 import { HoldToDelete } from '../components/HoldToDelete';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -310,14 +311,16 @@ function DraftView({ wid, workout }: { wid: string; workout: WorkoutResponse }) 
 
       {adding && (
         <ExercisePickerSheet
-          pending={addExercise.isPending}
+          workout={workout}
+          pending={addExercise.isPending || removeExercise.isPending}
           onClose={() => setAdding(false)}
-          onPick={(ex) =>
-            addExercise.mutate(
-              { wid, input: { exerciseId: ex.id, sets: [buildPlannedSet(ex)] } },
-              { onSuccess: () => setAdding(false) },
-            )
+          onAdd={(ex) =>
+            addExercise.mutate({ wid, input: { exerciseId: ex.id, sets: [buildPlannedSet(ex)] } })
           }
+          onRemove={(ex) => {
+            const pos = workout.exercises.find((w) => w.exerciseId === ex.id)?.position;
+            if (pos !== undefined) removeExercise.mutate({ wid, pos });
+          }}
         />
       )}
     </>
@@ -548,14 +551,16 @@ function ActiveView({ wid, workout }: { wid: string; workout: WorkoutResponse })
 
       {adding && (
         <ExercisePickerSheet
-          pending={addExercise.isPending}
+          workout={workout}
+          pending={addExercise.isPending || removeExercise.isPending}
           onClose={() => setAdding(false)}
-          onPick={(ex) =>
-            addExercise.mutate(
-              { wid, input: { exerciseId: ex.id, sets: [buildPlannedSet(ex)] } },
-              { onSuccess: () => setAdding(false) },
-            )
+          onAdd={(ex) =>
+            addExercise.mutate({ wid, input: { exerciseId: ex.id, sets: [buildPlannedSet(ex)] } })
           }
+          onRemove={(ex) => {
+            const pos = workout.exercises.find((w) => w.exerciseId === ex.id)?.position;
+            if (pos !== undefined) removeExercise.mutate({ wid, pos });
+          }}
         />
       )}
     </>
@@ -852,19 +857,177 @@ function HoldComplete({
 
 /* ---------- Лист выбора упражнения из каталога ---------- */
 
+const PICKER_GROUP_ORDER = [
+  'Грудь',
+  'Спина',
+  'Ноги',
+  'Плечи',
+  'Руки',
+  'Корпус',
+  'Пресс/Кор',
+  'Кардио',
+  'Растяжка',
+  'Йога',
+];
+
+function orderPickerGroups(present: Set<string>): string[] {
+  const ordered = PICKER_GROUP_ORDER.filter((g) => present.has(g));
+  const extras = [...present]
+    .filter((g) => !PICKER_GROUP_ORDER.includes(g))
+    .sort((a, b) => a.localeCompare(b, 'ru'));
+  return [...ordered, ...extras];
+}
+
+function PickerChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`shrink-0 rounded-full px-3 py-1.5 font-[family-name:var(--font-mono)] text-xs transition-colors ${
+        active ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function PickerThumb({ url, alt }: { url: string | null; alt: string }) {
+  const [failed, setFailed] = useState(false);
+  const box = 'h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-chip';
+  if (url && !failed) {
+    return (
+      <span className={`${box} relative block`}>
+        <img
+          src={url}
+          alt={alt}
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className="absolute inset-0 h-full w-full object-contain"
+        />
+      </span>
+    );
+  }
+  return (
+    <span className={`${box} flex items-center justify-center text-ink-muted`}>
+      <Dumbbell size={18} strokeWidth={1.8} />
+    </span>
+  );
+}
+
+/** Краткая информация об упражнении (кнопка «i»): фото, мышцы, описание. */
+function ExerciseInfoModal({
+  exercise,
+  onClose,
+}: {
+  exercise: ExerciseResponse;
+  onClose: () => void;
+}) {
+  useBackClose(onClose);
+  const muscles = [exercise.category, exercise.subgroup].filter(Boolean).join(' · ');
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-bg p-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={exercise.name}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-[18px] font-bold leading-tight text-ink">{exercise.name}</h2>
+            {muscles && <p className="mt-0.5 text-[13px] text-ink-muted">{muscles}</p>}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Закрыть"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-chip text-ink-muted active:scale-95"
+          >
+            <X size={18} strokeWidth={2} />
+          </button>
+        </div>
+        {exercise.imageUrl && (
+          <img
+            src={exercise.imageUrl}
+            alt={exercise.name}
+            className="mb-3 w-full rounded-xl bg-card object-contain"
+          />
+        )}
+        {(exercise.equipment || exercise.primaryMuscles || exercise.secondaryMuscles) && (
+          <dl className="mb-3 flex flex-col gap-1.5 rounded-xl bg-card px-4 py-3 text-[14px]">
+            {exercise.equipment && (
+              <div className="flex gap-3">
+                <dt className="w-28 shrink-0 text-ink-muted">Оборудование</dt>
+                <dd className="text-ink">{exercise.equipment}</dd>
+              </div>
+            )}
+            {exercise.primaryMuscles && (
+              <div className="flex gap-3">
+                <dt className="w-28 shrink-0 text-ink-muted">Целевые</dt>
+                <dd className="text-ink">{exercise.primaryMuscles}</dd>
+              </div>
+            )}
+            {exercise.secondaryMuscles && (
+              <div className="flex gap-3">
+                <dt className="w-28 shrink-0 text-ink-muted">Дополнительно</dt>
+                <dd className="text-ink">{exercise.secondaryMuscles}</dd>
+              </div>
+            )}
+          </dl>
+        )}
+        {exercise.description && (
+          <p className="whitespace-pre-line text-[14px] leading-relaxed text-ink">
+            {exercise.description}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Пикер упражнений как при создании тренировки: чипы групп мышц, миниатюры,
+// кнопка «i» и ЧЕКБОКС — тап добавляет упражнение, повторный тап убирает.
 function ExercisePickerSheet({
+  workout,
   pending,
   onClose,
-  onPick,
+  onAdd,
+  onRemove,
 }: {
+  workout: WorkoutResponse;
   pending: boolean;
   onClose: () => void;
-  onPick: (exercise: ExerciseResponse) => void;
+  onAdd: (exercise: ExerciseResponse) => void;
+  onRemove: (exercise: ExerciseResponse) => void;
 }) {
   useBackClose(onClose);
   const exercises = useClientExercises();
   const workouts = useClientWorkouts();
   const [query, setQuery] = useState('');
+  const [group, setGroup] = useState('');
+  const [subgroup, setSubgroup] = useState('');
+  const [infoEx, setInfoEx] = useState<ExerciseResponse | null>(null);
+
+  // Уже добавленные в эту тренировку — для отметки чекбокса.
+  const selected = useMemo(
+    () => new Set(workout.exercises.map((e) => e.exerciseId)),
+    [workout.exercises],
+  );
+
   // Доступны только упражнения из базы знаний — те, что были на проведённых тренировках.
   const kbIds = useMemo(() => {
     const ids = new Set<string>();
@@ -875,11 +1038,28 @@ function ExercisePickerSheet({
     () => (exercises.data ?? []).filter((e) => kbIds.has(e.id)),
     [exercises.data, kbIds],
   );
+
+  const groupChips = useMemo(() => {
+    const present = new Set<string>();
+    for (const e of list) if (e.category) present.add(e.category);
+    return orderPickerGroups(present);
+  }, [list]);
+  const subgroupChips = useMemo(() => {
+    if (group === '') return [];
+    const present = new Set<string>();
+    for (const e of list) if (e.category === group && e.subgroup) present.add(e.subgroup);
+    return orderSubgroups(group, present);
+  }, [list, group]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (q === '') return list;
-    return list.filter((e) => e.name.toLowerCase().includes(q));
-  }, [list, query]);
+    return list.filter((e) => {
+      if (group && e.category !== group) return false;
+      if (subgroup && e.subgroup !== subgroup) return false;
+      if (q && !e.name.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [list, group, subgroup, query]);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col">
@@ -914,6 +1094,44 @@ function ExercisePickerSheet({
           </div>
         </div>
 
+        {groupChips.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto px-5 pb-2">
+            <PickerChip
+              active={group === ''}
+              onClick={() => {
+                setGroup('');
+                setSubgroup('');
+              }}
+            >
+              Все
+            </PickerChip>
+            {groupChips.map((g) => (
+              <PickerChip
+                key={g}
+                active={group === g}
+                onClick={() => {
+                  setGroup(g);
+                  setSubgroup('');
+                }}
+              >
+                {g}
+              </PickerChip>
+            ))}
+          </div>
+        )}
+        {subgroupChips.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto px-5 pb-2">
+            <PickerChip active={subgroup === ''} onClick={() => setSubgroup('')}>
+              Все
+            </PickerChip>
+            {subgroupChips.map((s) => (
+              <PickerChip key={s} active={subgroup === s} onClick={() => setSubgroup(s)}>
+                {s}
+              </PickerChip>
+            ))}
+          </div>
+        )}
+
         <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-5 pt-1">
           {exercises.isLoading && <p className="text-sm text-ink-muted">Загрузка…</p>}
           {exercises.isError && (
@@ -924,27 +1142,48 @@ function ExercisePickerSheet({
           {exercises.isSuccess && filtered.length === 0 && (
             <p className="text-sm text-ink-muted">Ничего не найдено.</p>
           )}
-          {filtered.map((ex) => (
-            <button
-              key={ex.id}
-              type="button"
-              disabled={pending}
-              onClick={() => onPick(ex)}
-              className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3 text-left transition-colors active:bg-card-elevated disabled:opacity-50"
-            >
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="truncate text-[15px] font-semibold text-ink">{ex.name}</span>
-                {(ex.category || ex.subgroup) && (
-                  <span className="font-[family-name:var(--font-mono)] text-[12px] text-ink-muted">
-                    {[ex.category, ex.subgroup].filter(Boolean).join(' · ')}
+          {filtered.map((ex) => {
+            const picked = selected.has(ex.id);
+            return (
+              <div key={ex.id} className="flex items-center gap-3 rounded-2xl bg-card px-3.5 py-3">
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => (picked ? onRemove(ex) : onAdd(ex))}
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:opacity-50"
+                >
+                  <span
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+                      picked ? 'bg-accent text-accent-on' : 'border border-line bg-transparent'
+                    }`}
+                  >
+                    {picked && <Check size={16} strokeWidth={3} />}
                   </span>
-                )}
-              </span>
-              <ChevronRight size={16} className="shrink-0 text-ink-mutedxl" />
-            </button>
-          ))}
+                  <PickerThumb url={ex.thumbUrl ?? ex.imageUrl} alt={ex.name} />
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="truncate text-[15px] font-semibold text-ink">{ex.name}</span>
+                    {(ex.category || ex.subgroup) && (
+                      <span className="truncate font-[family-name:var(--font-mono)] text-[12px] text-ink-muted">
+                        {[ex.category, ex.subgroup].filter(Boolean).join(' · ')}
+                      </span>
+                    )}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  aria-label="Кратко об упражнении"
+                  onClick={() => setInfoEx(ex)}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-chip text-ink-muted active:scale-95"
+                >
+                  <Info size={16} strokeWidth={2} />
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
+
+      {infoEx && <ExerciseInfoModal exercise={infoEx} onClose={() => setInfoEx(null)} />}
     </div>
   );
 }
