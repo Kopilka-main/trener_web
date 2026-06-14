@@ -84,6 +84,7 @@ function DataRow({
   href,
   first,
   onCopy,
+  tapCopy,
 }: {
   icon: LucideIcon;
   label: string;
@@ -91,6 +92,7 @@ function DataRow({
   href?: string | null;
   first: boolean;
   onCopy: (value: string) => void;
+  tapCopy?: boolean;
 }) {
   const external = href ? /^https?:\/\//iu.test(href) : false;
   const timer = useRef<number | null>(null);
@@ -152,7 +154,11 @@ function DataRow({
           {inner}
         </a>
       ) : (
-        <div {...pressProps} className="active:bg-card-elevated">
+        <div
+          {...pressProps}
+          {...(tapCopy ? { onClick: () => onCopy(value) } : {})}
+          className={`active:bg-card-elevated ${tapCopy ? 'cursor-pointer' : ''}`}
+        >
           {inner}
         </div>
       )}
@@ -268,6 +274,7 @@ export function ClientProfilePage() {
                   value={accountId}
                   first={rowIndex++ === 0}
                   onCopy={copyValue}
+                  tapCopy
                 />
               )}
             </div>
