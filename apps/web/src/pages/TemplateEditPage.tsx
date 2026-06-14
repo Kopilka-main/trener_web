@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronDown, Dumbbell, Minus, Plus, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronLeft, Dumbbell, Info, Minus, Plus, Search, X } from 'lucide-react';
 import type { CreateTemplateRequest, ExerciseResponse, TemplateExercise } from '@trener/shared';
 import { useExercises } from '../api/exercises';
 import {
@@ -156,6 +156,8 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
   const [subgroup, setSubgroup] = useState('');
   const [exerciseQuery, setExerciseQuery] = useState('');
   const [positions, setPositions] = useState<Draft[]>([]);
+  // Упражнение для модалки «краткая информация» (кнопка «i» в строке пикера).
+  const [infoEx, setInfoEx] = useState<ExerciseResponse | null>(null);
 
   // Группы мышц — из реальных категорий каталога, в предпочтительном порядке.
   const groups = useMemo(() => {
@@ -435,6 +437,14 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                           </span>
                         </span>
                       </button>
+                      <button
+                        type="button"
+                        aria-label="Кратко об упражнении"
+                        onClick={() => setInfoEx(ex)}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-chip text-ink-muted active:scale-95"
+                      >
+                        <Info size={16} strokeWidth={2} />
+                      </button>
                       {picked && (
                         <div className="flex shrink-0 items-center gap-2">
                           <button
@@ -469,6 +479,40 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
               </ul>
             </section>
           )}
+
+          {infoEx && (
+            <div
+              className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50"
+              onClick={() => setInfoEx(null)}
+              role="presentation"
+            >
+              <div
+                className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-bg p-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-label={infoEx.name}
+              >
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-[18px] font-bold leading-tight text-ink">{infoEx.name}</h2>
+                    <p className="mt-0.5 text-[13px] text-ink-muted">
+                      {musclesFor(infoEx.category)}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setInfoEx(null)}
+                    aria-label="Закрыть"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-chip text-ink-muted active:scale-95"
+                  >
+                    <X size={18} strokeWidth={2} />
+                  </button>
+                </div>
+                <ExerciseDetails exercise={infoEx} />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -489,6 +533,18 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
       <ScreenHeader
         title={editing ? 'Тренировка' : 'Сборка тренировки'}
         back={editing ? '/knowledge' : () => setStep(1)}
+        left={
+          editing ? undefined : (
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              className="flex items-center gap-0.5 px-1 text-[14px] font-semibold text-ink active:opacity-60"
+            >
+              <ChevronLeft size={18} strokeWidth={2} />
+              Назад
+            </button>
+          )
+        }
         right={
           <button
             type="button"
