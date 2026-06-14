@@ -38,6 +38,12 @@ export function useClientRegister() {
     mutationFn: (input: ClientRegisterRequest) =>
       apiFetch('/client/auth/register', { method: 'POST', body: input, schema: accountEnvelope }),
     onSuccess: () => {
+      // После регистрации предложим включить пуш (см. PushPrompt).
+      try {
+        localStorage.setItem('push-prompt-pending', '1');
+      } catch {
+        // приватный режим / нет доступа к storage — не критично
+      }
       void qc.invalidateQueries({ queryKey: clientMeQueryKey });
     },
   });

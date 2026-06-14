@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { BackFab } from './BackFab';
 import { AppBadgeSync } from './AppBadgeSync';
 import { PushSync } from './PushSync';
+import { PushPrompt } from './PushPrompt';
 
 /**
  * Привязывает каркас к visual viewport: при открытии клавиатуры (особенно iOS
@@ -45,6 +46,7 @@ export function AppShell() {
     <div className="app-shell">
       <AppBadgeSync />
       <PushSync />
+      <PushPrompt />
       <main className="min-h-0 flex-1 overflow-y-auto">
         <Outlet />
       </main>

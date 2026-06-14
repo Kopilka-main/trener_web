@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { TelemetryRouter } from '@trener/telemetry';
 import { useClientMe } from './api/auth';
@@ -5,6 +6,7 @@ import { BackFab } from './components/BackFab';
 import { ConnectBanner } from './components/ConnectBanner';
 import { AppBadgeSync } from './components/AppBadgeSync';
 import { PushSync } from './components/PushSync';
+import { PushPrompt } from './components/PushPrompt';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { ConnectPage } from './pages/ConnectPage';
@@ -21,8 +23,36 @@ import { TrainerPage } from './pages/TrainerPage';
 import { KnowledgePage } from './pages/KnowledgePage';
 import { ExerciseDetailPage } from './pages/ExerciseDetailPage';
 
+/**
+ * Высота/верх каркаса по visual viewport: при открытии клавиатуры (особенно iOS
+ * Safari) layout-вьюпорт НЕ уменьшается — подгоняем под видимую область, чтобы
+ * шапка оставалась сверху, а поле ввода было над клавиатурой. Документ зафиксирован
+ * (body в index.css), поэтому offset меняется только от клавиатуры, а не от «оттяжки».
+ */
+function useVisualViewportHeight(): void {
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return undefined;
+    const root = document.documentElement;
+    const apply = () => {
+      root.style.setProperty('--app-height', `${String(vv.height)}px`);
+      root.style.setProperty('--app-offset', `${String(vv.offsetTop)}px`);
+    };
+    apply();
+    vv.addEventListener('resize', apply);
+    vv.addEventListener('scroll', apply);
+    return () => {
+      vv.removeEventListener('resize', apply);
+      vv.removeEventListener('scroll', apply);
+      root.style.removeProperty('--app-height');
+      root.style.removeProperty('--app-offset');
+    };
+  }, []);
+}
+
 export function App() {
   const me = useClientMe();
+  useVisualViewportHeight();
 
   if (me.isLoading) {
     return (
@@ -48,10 +78,11 @@ export function App() {
   // данными мягко показывают приглашение подключиться.
   const linked = me.data.link !== null;
   return (
-    <div className="mx-auto flex h-[100dvh] max-w-[430px] flex-col overflow-hidden bg-bg">
+    <div className="app-shell">
       <TelemetryRouter />
       <AppBadgeSync />
       <PushSync />
+      <PushPrompt />
       {!linked && <ConnectBanner />}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <Routes>
