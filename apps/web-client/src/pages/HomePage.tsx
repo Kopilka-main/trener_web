@@ -220,7 +220,7 @@ export function HomePage() {
           <Settings size={30} strokeWidth={1.8} className="text-[var(--color-ink-muted)]" />
         </button>
 
-        <div className="px-1 pb-1 pt-3">
+        <div className="pb-1 pt-1">
           {linked ? (
             <>
               <button
