@@ -1,7 +1,10 @@
+import { createPortal } from 'react-dom';
 import { useBackClose } from '../lib/backStack';
 
 /** Всплывающее подтверждение действия: затемнение + карточка с вопросом и двумя
- * кнопками. Закрыть можно тапом по фону или плавающей кнопкой «Назад». */
+ * кнопками. Закрыть можно тапом по фону или плавающей кнопкой «Назад».
+ * Рендерим через портал в body, чтобы fixed-позиция считалась от вьюпорта, а не от
+ * предка с transform (например, перетаскиваемой карточки dnd-kit). */
 export function ConfirmDialog({
   message,
   confirmLabel = 'Подтвердить',
@@ -18,7 +21,7 @@ export function ConfirmDialog({
   onCancel: () => void;
 }) {
   useBackClose(onCancel);
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
       <button
         type="button"
@@ -47,6 +50,7 @@ export function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

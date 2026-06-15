@@ -1,4 +1,8 @@
-/** Всплывающее подтверждение действия: затемнение + карточка с вопросом и двумя кнопками. */
+import { createPortal } from 'react-dom';
+
+/** Всплывающее подтверждение действия: затемнение + карточка с вопросом и двумя кнопками.
+ * Рендерим через портал в body, чтобы fixed-позиция считалась от вьюпорта, а не от
+ * предка с transform (например, перетаскиваемой карточки dnd-kit). */
 export function ConfirmDialog({
   message,
   hint,
@@ -17,7 +21,7 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
       <button
         type="button"
@@ -47,6 +51,7 @@ export function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
