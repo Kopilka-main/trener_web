@@ -48,6 +48,10 @@ export type SessionsCalendarProps = {
   /** Управляемый якорь периода (опц.). Если передан onAnchorChange — компонент управляемый. */
   anchor?: Date;
   onAnchorChange?: (d: Date) => void;
+  /** Показывать индикаторы занятий в ячейках месяца (уголок + счётчики). По умолчанию да. */
+  showDayBadges?: boolean;
+  /** Показывать строку статистики по статусам под календарём. По умолчанию нет. */
+  showStats?: boolean;
 };
 
 /**
@@ -64,6 +68,8 @@ export function SessionsCalendar({
   onRangeChange,
   anchor: anchorProp,
   onAnchorChange,
+  showDayBadges = true,
+  showStats = false,
 }: SessionsCalendarProps) {
   const [view, setView] = useState<CalendarView>(defaultView);
   const [anchorState, setAnchorState] = useState<Date>(() => anchorProp ?? new Date());
@@ -134,7 +140,14 @@ export function SessionsCalendar({
         </button>
       </div>
 
-      {view === 'month' && <MonthView anchor={anchor} sessions={sessions} onPickDay={pickDay} />}
+      {view === 'month' && (
+        <MonthView
+          anchor={anchor}
+          sessions={sessions}
+          onPickDay={pickDay}
+          showDayBadges={showDayBadges}
+        />
+      )}
       {view === 'week' && (
         <WeekView
           anchor={anchor}
@@ -156,6 +169,8 @@ export function SessionsCalendar({
           renderLabel={renderLabel}
         />
       )}
+
+      {showStats && <StatsBar sessions={sessions} />}
 
       {/* Нижний переключатель вида: зафиксирован по центру (как FAB «+») */}
       <div className="pointer-events-none fixed inset-x-0 bottom-4 z-20 flex justify-center px-5">
@@ -264,14 +279,71 @@ function layoutColumns(items: SessionResponse[]): Map<string, { col: number; col
   return res;
 }
 
+/** Статус занятия для статистики/легенды — те же приоритеты, что у цвета блока. */
+type StatusBucket = 'planned' | 'confirmed' | 'completed' | 'declined' | 'cancelled';
+function bucketOf(s: SessionResponse): StatusBucket {
+  if (s.status === 'cancelled') return 'cancelled';
+  if (s.clientConfirmation === 'confirmed') return 'confirmed';
+  if (s.status === 'completed') return 'completed';
+  if (s.clientConfirmation === 'declined') return 'declined';
+  return 'planned';
+}
+
+const STATS_ROWS: { key: StatusBucket; label: string; dot: string }[] = [
+  { key: 'planned', label: 'Запланировано', dot: '#ffab2e' },
+  { key: 'confirmed', label: 'Согласовано', dot: '#caff3a' },
+  { key: 'completed', label: 'Проведено', dot: '#46d4f0' },
+  { key: 'declined', label: 'Отклонено', dot: '#ff5a5a' },
+  { key: 'cancelled', label: 'Отменено', dot: '#6b7280' },
+];
+
+/** Строка статистики по статусам под календарём (служит и легендой цветов). */
+function StatsBar({ sessions }: { sessions: SessionResponse[] }) {
+  const counts = useMemo(() => {
+    const c: Record<StatusBucket, number> = {
+      planned: 0,
+      confirmed: 0,
+      completed: 0,
+      declined: 0,
+      cancelled: 0,
+    };
+    for (const s of sessions) c[bucketOf(s)] += 1;
+    return c;
+  }, [sessions]);
+  const shown = STATS_ROWS.filter((r) => counts[r.key] > 0);
+  return (
+    <div className="shrink-0 px-3 pb-1 pt-2">
+      {shown.length === 0 ? (
+        <p className="text-center text-[12px] text-ink-muted">Нет занятий</p>
+      ) : (
+        <div className="flex flex-wrap justify-center gap-x-4 gap-y-1">
+          {shown.map((r) => (
+            <span key={r.key} className="flex items-center gap-1.5 text-[12px]">
+              <span
+                aria-hidden
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ background: r.dot }}
+              />
+              <span className="text-ink-muted">{r.label}</span>
+              <span className="font-semibold tabular-nums text-ink">{counts[r.key]}</span>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MonthView({
   anchor,
   sessions,
   onPickDay,
+  showDayBadges,
 }: {
   anchor: Date;
   sessions: SessionResponse[];
   onPickDay: (d: Date) => void;
+  showDayBadges: boolean;
 }) {
   const cells = monthGrid(anchor);
   const month = anchor.getMonth();
@@ -316,7 +388,7 @@ function MonthView({
               } ${inMonth ? '' : 'opacity-40'}`}
             >
               {/* Есть занятия в этот день → четвертькруга акцентом в правом верхнем углу. */}
-              {hasSessions && (
+              {showDayBadges && hasSessions && (
                 <span
                   aria-hidden
                   className="absolute right-0 top-0 h-3 w-3 rounded-bl-full bg-accent"
@@ -325,15 +397,16 @@ function MonthView({
               <span className="font-[family-name:var(--font-mono)] text-[13px] font-semibold tabular-nums text-ink">
                 {d.getDate()}
               </span>
-              {c && c.pending + c.confirmed + c.declined > 0 ? (
-                <span className="flex items-center gap-1 font-[family-name:var(--font-mono)] text-[10px] font-bold leading-none tabular-nums">
-                  {c.pending > 0 && <span className="text-ink-mutedxl">{c.pending}</span>}
-                  {c.confirmed > 0 && <span className="text-accent-text">{c.confirmed}</span>}
-                  {c.declined > 0 && <span className="text-danger">{c.declined}</span>}
-                </span>
-              ) : (
-                <span className="h-2.5" aria-hidden />
-              )}
+              {showDayBadges &&
+                (c && c.pending + c.confirmed + c.declined > 0 ? (
+                  <span className="flex items-center gap-1 font-[family-name:var(--font-mono)] text-[10px] font-bold leading-none tabular-nums">
+                    {c.pending > 0 && <span className="text-ink-mutedxl">{c.pending}</span>}
+                    {c.confirmed > 0 && <span className="text-accent-text">{c.confirmed}</span>}
+                    {c.declined > 0 && <span className="text-danger">{c.declined}</span>}
+                  </span>
+                ) : (
+                  <span className="h-2.5" aria-hidden />
+                ))}
             </button>
           );
         })}
