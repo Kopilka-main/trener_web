@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Check, ChevronDown, ChevronRight, Dumbbell, Plus, Search, Trash2, X } from 'lucide-react';
+import { Check, ChevronRight, Dumbbell, Plus, Search, Trash2, X } from 'lucide-react';
 import type {
   ClientResponse,
   CreateWorkoutRequest,
@@ -16,6 +16,7 @@ import { useGyms } from '../api/gyms';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SessionsCalendar } from '../components/SessionsCalendar';
 import { addDays, startOfWeek, toISODate } from '../lib/calendar';
+import { rankBySearch } from '../lib/search';
 import { EMPTY_PREFS, loadLastPrefs, saveLastPrefs } from '../lib/sessionPrefs';
 
 /** Тренировка, выбранная для занятия: уже привязанная / из шаблона / из истории клиента. */
@@ -86,8 +87,6 @@ const STATUS_LABEL: Record<SessionStatus, string> = {
   completed: 'Проведено',
   cancelled: 'Отменено',
 };
-
-const DURATION_OPTIONS = [30, 45, 60, 90, 120] as const;
 
 function formatDuration(min: number): string {
   if (min < 60) return `${String(min)} мин`;
@@ -240,11 +239,6 @@ function TrainerSessionSheet({
   const [title, setTitle] = useState(session?.title ?? '');
   const [location, setLocation] = useState(session?.location ?? (usePrefs ? prefs.location : ''));
   const [durationMin, setDurationMin] = useState(initDuration);
-  const [customDuration, setCustomDuration] = useState(
-    !DURATION_OPTIONS.includes(initDuration as (typeof DURATION_OPTIONS)[number]),
-  );
-  // По умолчанию длительность свёрнута (показывает текущее значение); тап раскрывает выбор.
-  const [durationOpen, setDurationOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(
     session?.isOnline ?? (usePrefs ? prefs.isOnline : false),
   );
@@ -533,76 +527,28 @@ function TrainerSessionSheet({
 
           <div className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-ink-muted">Длительность</span>
-            {!durationOpen && (
-              <button
-                type="button"
-                onClick={() => setDurationOpen(true)}
-                className="flex items-center justify-between rounded-2xl bg-card px-4 py-2.5 text-left active:bg-card-elevated"
-              >
-                <span className="text-[15px] font-semibold text-ink">
-                  {formatDuration(durationMin)}
-                </span>
-                <ChevronDown size={18} className="text-ink-muted" />
-              </button>
-            )}
-            {durationOpen && (
-              <>
-                <div className="flex flex-wrap gap-1.5">
-                  {DURATION_OPTIONS.map((m) => {
-                    const active = !customDuration && durationMin === m;
-                    return (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => {
-                          setCustomDuration(false);
-                          setDurationMin(m);
-                          setDurationOpen(false);
-                        }}
-                        className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
-                          active ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
-                        }`}
-                      >
-                        {formatDuration(m)}
-                      </button>
-                    );
-                  })}
-                  <button
-                    type="button"
-                    onClick={() => setCustomDuration(true)}
-                    className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
-                      customDuration ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
-                    }`}
-                  >
-                    Другое
-                  </button>
-                </div>
-                {customDuration && (
-                  <div className="mt-1 flex items-center gap-3">
-                    {/* Нативный пикер времени: на iPhone — «барабан», на Android — часы.
-                        Значение ЧЧ:ММ трактуем как длительность (часы:минуты). */}
-                    <input
-                      type="time"
-                      step={300}
-                      value={`${String(Math.floor(durationMin / 60)).padStart(2, '0')}:${String(
-                        durationMin % 60,
-                      ).padStart(2, '0')}`}
-                      onChange={(e) => {
-                        const [h, m] = e.target.value.split(':').map(Number);
-                        const total = (h ?? 0) * 60 + (m ?? 0);
-                        setDurationMin(total > 0 ? total : 5);
-                      }}
-                      aria-label="Длительность (часы и минуты)"
-                      className="rounded-xl border border-line bg-card px-3 py-2 text-[15px] tabular-nums text-ink outline-none [color-scheme:dark] focus:border-accent"
-                    />
-                    <span className="text-[12px] text-ink-muted">часы : минуты</span>
-                    <span className="ml-auto text-[13px] font-semibold text-accent-text">
-                      {formatDuration(Math.max(5, durationMin))}
-                    </span>
-                  </div>
-                )}
-              </>
-            )}
+            {/* Нативный пикер времени: один тап = «барабан» на iPhone / часы на Android.
+                По умолчанию 1 ч; значение ЧЧ:ММ трактуем как длительность. */}
+            <div className="flex items-center gap-3">
+              <input
+                type="time"
+                step={300}
+                value={`${String(Math.floor(durationMin / 60)).padStart(2, '0')}:${String(
+                  durationMin % 60,
+                ).padStart(2, '0')}`}
+                onChange={(e) => {
+                  const [h, m] = e.target.value.split(':').map(Number);
+                  const total = (h ?? 0) * 60 + (m ?? 0);
+                  setDurationMin(total > 0 ? total : 5);
+                }}
+                aria-label="Длительность (часы и минуты)"
+                className="rounded-xl border border-line bg-card px-4 py-2.5 text-[15px] tabular-nums text-ink outline-none [color-scheme:dark] focus:border-accent"
+              />
+              <span className="text-[12px] text-ink-muted">часы : минуты</span>
+              <span className="ml-auto text-[13px] font-semibold text-accent-text">
+                {formatDuration(Math.max(5, durationMin))}
+              </span>
+            </div>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -732,6 +678,10 @@ function WorkoutPickerSheet({
   onPickHistory: (w: WorkoutResponse) => void;
   onClose: () => void;
 }) {
+  const [query, setQuery] = useState('');
+  const visibleTemplates = rankBySearch(templates, query, (t) => t.name);
+  const visibleHistory = rankBySearch(history, query, (w) => w.name);
+
   return (
     <div className="fixed inset-0 z-[60] flex flex-col justify-end">
       <button
@@ -753,6 +703,31 @@ function WorkoutPickerSheet({
           </button>
         </div>
 
+        {/* Поиск по названию (шаблоны + история). */}
+        <div className="px-5 pb-2 pt-1">
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Поиск тренировки"
+              aria-label="Поиск тренировки"
+              className="w-full rounded-2xl border border-line bg-chip py-2.5 pl-9 pr-9 text-sm text-ink outline-none placeholder:text-ink-muted focus:border-accent"
+            />
+            {query !== '' && (
+              <button
+                type="button"
+                aria-label="Очистить"
+                onClick={() => setQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted active:text-ink"
+              >
+                <X size={16} strokeWidth={2} />
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="flex flex-col gap-4 overflow-y-auto px-5 pb-2 pt-1">
           {/* Шаблоны — доступны всегда. */}
           <section className="flex flex-col gap-2">
@@ -763,9 +738,11 @@ function WorkoutPickerSheet({
               <p className="text-[13px] text-ink-muted">
                 Шаблонов пока нет — создайте их в базе знаний.
               </p>
+            ) : visibleTemplates.length === 0 ? (
+              <p className="text-[13px] text-ink-muted">Ничего не найдено.</p>
             ) : (
               <ul className="flex flex-col gap-2">
-                {templates.map((t) => (
+                {visibleTemplates.map((t) => (
                   <li key={t.id}>
                     <button
                       type="button"
@@ -798,9 +775,11 @@ function WorkoutPickerSheet({
                 <p className="text-[13px] text-ink-muted">
                   У клиента пока нет проведённых тренировок.
                 </p>
+              ) : visibleHistory.length === 0 ? (
+                <p className="text-[13px] text-ink-muted">Ничего не найдено.</p>
               ) : (
                 <ul className="flex flex-col gap-2">
-                  {history.map((w) => (
+                  {visibleHistory.map((w) => (
                     <li key={w.id}>
                       <button
                         type="button"
