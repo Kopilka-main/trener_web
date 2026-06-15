@@ -1,12 +1,12 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { Check, Plus, Search, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, Plus, Search, Trash2, X } from 'lucide-react';
 import type { ClientResponse, SessionResponse, SessionStatus } from '@trener/shared';
 import { useCreateSession, useDeleteSession, useSessions, useUpdateSession } from '../api/sessions';
 import { useClients } from '../api/clients';
 import { useGyms } from '../api/gyms';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SessionsCalendar } from '../components/SessionsCalendar';
-import { monthGrid, toISODate } from '../lib/calendar';
+import { addDays, startOfWeek, toISODate } from '../lib/calendar';
 import { EMPTY_PREFS, loadLastPrefs, saveLastPrefs } from '../lib/sessionPrefs';
 
 const STATUS_LABEL: Record<SessionStatus, string> = {
@@ -38,17 +38,19 @@ type CreateAt = { date: string; startTime: string };
 export function CalendarPage() {
   const [anchor, setAnchor] = useState<Date>(new Date());
 
-  // Загружаем занятия за диапазон, покрывающий месяц-сетку текущего якоря
-  // (42 дня) — этого достаточно для day/week/month видов вокруг якоря.
-  const { from, to } = useMemo(() => {
-    const grid = monthGrid(anchor);
-    const first = grid[0];
-    const last = grid[grid.length - 1];
-    return {
-      from: first ? toISODate(first) : undefined,
-      to: last ? toISODate(last) : undefined,
-    };
+  // Базовый диапазон вокруг опорной недели — для видов «День»/«Месяц» и стартовой недели.
+  const base = useMemo(() => {
+    const ws = startOfWeek(anchor);
+    return { from: toISODate(addDays(ws, -3 * 7)), to: toISODate(addDays(ws, 5 * 7)) };
   }, [anchor]);
+
+  // Диапазон скользящего окна недельной ленты (растёт/смещается при прокрутке).
+  // Сбрасывается при смене якоря (см. onAnchorChange) — лента строится вокруг новой недели.
+  const [weekRange, setWeekRange] = useState<{ from: string; to: string } | null>(null);
+
+  // Грузим объединение базового и недельного диапазонов (строки ISO сравнимы лексикографически).
+  const from = weekRange && weekRange.from < base.from ? weekRange.from : base.from;
+  const to = weekRange && weekRange.to > base.to ? weekRange.to : base.to;
 
   const sessions = useSessions(from, to);
   const clients = useClients();
@@ -95,11 +97,14 @@ export function CalendarPage() {
           sessions={list}
           defaultView="week"
           anchor={anchor}
-          onAnchorChange={setAnchor}
+          onAnchorChange={(d) => {
+            setWeekRange(null);
+            setAnchor(d);
+          }}
           onSlotClick={openSlot}
           onSessionClick={setEditing}
           renderLabel={renderLabel}
-          renderInitials={(s) => nameById.get(s.clientId) ?? ''}
+          onRangeChange={(f, t) => setWeekRange({ from: toISODate(f), to: toISODate(t) })}
         />
       )}
 
@@ -166,6 +171,8 @@ function TrainerSessionSheet({
   const [customDuration, setCustomDuration] = useState(
     !DURATION_OPTIONS.includes(initDuration as (typeof DURATION_OPTIONS)[number]),
   );
+  // По умолчанию длительность свёрнута (показывает текущее значение); тап раскрывает выбор.
+  const [durationOpen, setDurationOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(
     session?.isOnline ?? (usePrefs ? prefs.isOnline : false),
   );
@@ -362,72 +369,89 @@ function TrainerSessionSheet({
 
           <div className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-ink-muted">Длительность</span>
-            <div className="flex flex-wrap gap-1.5">
-              {DURATION_OPTIONS.map((m) => {
-                const active = !customDuration && durationMin === m;
-                return (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => {
-                      setCustomDuration(false);
-                      setDurationMin(m);
-                    }}
-                    className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
-                      active ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
-                    }`}
-                  >
-                    {formatDuration(m)}
-                  </button>
-                );
-              })}
+            {!durationOpen && (
               <button
                 type="button"
-                onClick={() => setCustomDuration(true)}
-                className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
-                  customDuration ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
-                }`}
+                onClick={() => setDurationOpen(true)}
+                className="flex items-center justify-between rounded-2xl bg-card px-4 py-2.5 text-left active:bg-card-elevated"
               >
-                Другое
-              </button>
-            </div>
-            {customDuration && (
-              <div className="mt-1 flex items-center gap-2">
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="number"
-                    min={0}
-                    max={12}
-                    inputMode="numeric"
-                    value={Math.floor(durationMin / 60)}
-                    onChange={(e) => {
-                      const h = Math.max(0, Math.min(12, Number(e.target.value) || 0));
-                      setDurationMin(h * 60 + (durationMin % 60));
-                    }}
-                    className="w-14 rounded-xl border border-line bg-card px-3 py-2 text-center text-[15px] tabular-nums text-ink outline-none focus:border-accent"
-                  />
-                  <span className="text-sm text-ink-muted">ч</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="number"
-                    min={0}
-                    max={59}
-                    step={5}
-                    inputMode="numeric"
-                    value={durationMin % 60}
-                    onChange={(e) => {
-                      const m = Math.max(0, Math.min(59, Number(e.target.value) || 0));
-                      setDurationMin(Math.floor(durationMin / 60) * 60 + m);
-                    }}
-                    className="w-14 rounded-xl border border-line bg-card px-3 py-2 text-center text-[15px] tabular-nums text-ink outline-none focus:border-accent"
-                  />
-                  <span className="text-sm text-ink-muted">мин</span>
-                </div>
-                <span className="ml-auto text-[13px] font-semibold text-accent-text">
-                  {formatDuration(Math.max(5, durationMin))}
+                <span className="text-[15px] font-semibold text-ink">
+                  {formatDuration(durationMin)}
                 </span>
-              </div>
+                <ChevronDown size={18} className="text-ink-muted" />
+              </button>
+            )}
+            {durationOpen && (
+              <>
+                <div className="flex flex-wrap gap-1.5">
+                  {DURATION_OPTIONS.map((m) => {
+                    const active = !customDuration && durationMin === m;
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => {
+                          setCustomDuration(false);
+                          setDurationMin(m);
+                          setDurationOpen(false);
+                        }}
+                        className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+                          active ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
+                        }`}
+                      >
+                        {formatDuration(m)}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setCustomDuration(true)}
+                    className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+                      customDuration ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
+                    }`}
+                  >
+                    Другое
+                  </button>
+                </div>
+                {customDuration && (
+                  <div className="mt-1 flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min={0}
+                        max={12}
+                        inputMode="numeric"
+                        value={Math.floor(durationMin / 60)}
+                        onChange={(e) => {
+                          const h = Math.max(0, Math.min(12, Number(e.target.value) || 0));
+                          setDurationMin(h * 60 + (durationMin % 60));
+                        }}
+                        className="w-14 rounded-xl border border-line bg-card px-3 py-2 text-center text-[15px] tabular-nums text-ink outline-none focus:border-accent"
+                      />
+                      <span className="text-sm text-ink-muted">ч</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min={0}
+                        max={59}
+                        step={5}
+                        inputMode="numeric"
+                        value={durationMin % 60}
+                        onChange={(e) => {
+                          const m = Math.max(0, Math.min(59, Number(e.target.value) || 0));
+                          setDurationMin(Math.floor(durationMin / 60) * 60 + m);
+                        }}
+                        className="w-14 rounded-xl border border-line bg-card px-3 py-2 text-center text-[15px] tabular-nums text-ink outline-none focus:border-accent"
+                      />
+                      <span className="text-sm text-ink-muted">мин</span>
+                    </div>
+                    <span className="ml-auto text-[13px] font-semibold text-accent-text">
+                      {formatDuration(Math.max(5, durationMin))}
+                    </span>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
