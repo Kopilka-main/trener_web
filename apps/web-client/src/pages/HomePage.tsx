@@ -238,6 +238,8 @@ export function HomePage() {
                   {paidBalance < 0 ? String(paidBalance) : pad2(paidBalance)}
                 </span>
                 <span className="text-[22px] font-bold leading-tight tracking-[-0.01em] text-ink">
+                  количество
+                  <br />
                   тренировок
                 </span>
               </button>
