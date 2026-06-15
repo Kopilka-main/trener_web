@@ -1,13 +1,85 @@
-import { useMemo, useState, type FormEvent } from 'react';
-import { Check, ChevronDown, Plus, Search, Trash2, X } from 'lucide-react';
-import type { ClientResponse, SessionResponse, SessionStatus } from '@trener/shared';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Check, ChevronDown, ChevronRight, Dumbbell, Plus, Search, Trash2, X } from 'lucide-react';
+import type {
+  ClientResponse,
+  CreateWorkoutRequest,
+  SessionResponse,
+  SessionStatus,
+  TemplateResponse,
+  WorkoutResponse,
+} from '@trener/shared';
 import { useCreateSession, useDeleteSession, useSessions, useUpdateSession } from '../api/sessions';
 import { useClients } from '../api/clients';
+import { useClientWorkouts, useCreateWorkout } from '../api/client-workouts';
+import { useTemplates } from '../api/workout-templates';
 import { useGyms } from '../api/gyms';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SessionsCalendar } from '../components/SessionsCalendar';
 import { addDays, startOfWeek, toISODate } from '../lib/calendar';
 import { EMPTY_PREFS, loadLastPrefs, saveLastPrefs } from '../lib/sessionPrefs';
+
+/** Тренировка, выбранная для занятия: уже привязанная / из шаблона / из истории клиента. */
+type PlannedWorkout =
+  | { kind: 'existing'; id: string; name: string }
+  | { kind: 'template'; template: TemplateResponse }
+  | { kind: 'history'; workout: WorkoutResponse };
+
+/** Текущая (ещё не проведённая) тренировка — черновик или активная. */
+function isCurrentWorkout(w: WorkoutResponse): boolean {
+  return w.status === 'active' || w.status === 'draft';
+}
+
+function workoutDateMs(w: WorkoutResponse): number {
+  const raw = w.completedAt ?? w.startedAt;
+  return raw ? Date.parse(raw) : 0;
+}
+
+/** План новой тренировки клиента из шаблона (разворачиваем подходы в плоские записи). */
+function bodyFromTemplate(t: TemplateResponse): CreateWorkoutRequest {
+  return {
+    name: t.name,
+    sourceTemplateId: t.id,
+    exercises: t.exercises.flatMap((ex) =>
+      Array.from({ length: Math.max(1, ex.sets) }, () => ({
+        exerciseId: ex.exerciseId,
+        sets: [
+          {
+            plannedReps: ex.reps,
+            plannedWeightKg: ex.weightKg,
+            plannedTimeSec: ex.timeSec,
+            plannedRestSec: ex.restSec,
+          },
+        ],
+      })),
+    ),
+  };
+}
+
+/** План новой тренировки из прошлой (повтор «как провели» — только выполненные подходы). */
+function bodyFromHistory(w: WorkoutResponse): CreateWorkoutRequest | null {
+  const exercises = w.exercises
+    .map((ex) => ({
+      exerciseId: ex.exerciseId,
+      sets: ex.sets
+        .filter((s) => s.done)
+        .map((s) => ({
+          plannedReps: s.actualReps ?? s.plannedReps,
+          plannedWeightKg: s.actualWeightKg ?? s.plannedWeightKg,
+          plannedTimeSec: s.actualTimeSec ?? s.plannedTimeSec,
+          plannedRestSec: s.plannedRestSec,
+        })),
+    }))
+    .filter((ex) => ex.sets.length > 0);
+  if (exercises.length === 0) return null;
+  return { name: w.name, exercises };
+}
+
+/** Подпись выбранной тренировки для поля формы. */
+function plannedWorkoutName(p: PlannedWorkout): string {
+  if (p.kind === 'existing') return p.name;
+  if (p.kind === 'template') return p.template.name;
+  return p.workout.name;
+}
 
 const STATUS_LABEL: Record<SessionStatus, string> = {
   planned: 'Запланировано',
@@ -179,6 +251,10 @@ function TrainerSessionSheet({
   const [status, setStatus] = useState<SessionStatus>(session?.status ?? 'planned');
   const [showErrors, setShowErrors] = useState(false);
 
+  // Запланированная тренировка для занятия (шаблон / история / уже привязанная).
+  const [plannedWorkout, setPlannedWorkout] = useState<PlannedWorkout | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
   // Переключение тумблера «запомнить»: сразу сохраняем флаг, чтобы следующее
   // открытие учитывало выбор (значения полей пишем при сохранении занятия).
   function toggleRemember() {
@@ -193,14 +269,55 @@ function TrainerSessionSheet({
   const createMutation = useCreateSession(mutationClientId);
   const updateMutation = useUpdateSession(mutationClientId);
   const deleteMutation = useDeleteSession(mutationClientId);
+  const createWorkout = useCreateWorkout(mutationClientId);
+
+  // Шаблоны (всегда) и история тренировок клиента (только если клиент выбран).
+  const templates = useTemplates().data ?? [];
+  const clientWorkouts = useClientWorkouts(mutationClientId).data ?? [];
+  const history = useMemo(
+    () =>
+      clientWorkouts
+        .filter((w) => !isCurrentWorkout(w))
+        .sort((a, b) => workoutDateMs(b) - workoutDateMs(a)),
+    [clientWorkouts],
+  );
+
+  // Уже привязанная к занятию тренировка: подтягиваем её имя из списка тренировок клиента.
+  useEffect(() => {
+    const wid = session?.workoutId;
+    if (!wid) return;
+    setPlannedWorkout((prev) => {
+      if (prev) return prev;
+      const w = clientWorkouts.find((x) => x.id === wid);
+      return { kind: 'existing', id: wid, name: w?.name ?? 'Тренировка' };
+    });
+  }, [session?.workoutId, clientWorkouts]);
 
   const clientError = isEdit || clientId !== '' ? '' : 'Выберите клиента';
   const dateError = /^\d{4}-\d{2}-\d{2}$/.test(date) ? '' : 'Укажите дату';
   const timeError = /^\d{2}:\d{2}$/.test(startTime) ? '' : 'Укажите время';
   const hasErrors = clientError !== '' || dateError !== '' || timeError !== '';
 
-  const pending = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const pending =
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    deleteMutation.isPending ||
+    createWorkout.isPending;
   const mutationError = createMutation.isError || updateMutation.isError || deleteMutation.isError;
+
+  // Если выбран шаблон/история — создаём клиенту черновик тренировки и возвращаем его id.
+  // Уже привязанная остаётся как есть; «без тренировки» → null (отвязать).
+  async function resolveWorkoutId(): Promise<string | null> {
+    if (!plannedWorkout) return null;
+    if (plannedWorkout.kind === 'existing') return plannedWorkout.id;
+    const body =
+      plannedWorkout.kind === 'template'
+        ? bodyFromTemplate(plannedWorkout.template)
+        : bodyFromHistory(plannedWorkout.workout);
+    if (!body) return null;
+    const workout = await createWorkout.mutateAsync(body);
+    return workout.id;
+  }
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -210,42 +327,52 @@ function TrainerSessionSheet({
     }
     const trimmedTitle = title.trim();
     const trimmedLocation = location.trim();
-    if (isEdit && session) {
-      updateMutation.mutate(
-        {
-          id: session.id,
-          patch: {
+    void (async () => {
+      let workoutId: string | null;
+      try {
+        workoutId = await resolveWorkoutId();
+      } catch {
+        return; // ошибка создания тренировки — состояние мутации покажет сбой
+      }
+      if (isEdit && session) {
+        updateMutation.mutate(
+          {
+            id: session.id,
+            patch: {
+              date,
+              startTime,
+              durationMin,
+              title: trimmedTitle === '' ? null : trimmedTitle,
+              location: trimmedLocation === '' ? null : trimmedLocation,
+              isOnline,
+              status,
+              workoutId,
+            },
+          },
+          { onSuccess: onClose },
+        );
+      } else {
+        // Запоминаем введённое для следующих занятий (если включён тумблер).
+        saveLastPrefs(
+          remember
+            ? { remember: true, clientId, durationMin, location: trimmedLocation, isOnline }
+            : { ...EMPTY_PREFS },
+        );
+        createMutation.mutate(
+          {
+            clientId,
             date,
             startTime,
             durationMin,
             title: trimmedTitle === '' ? null : trimmedTitle,
             location: trimmedLocation === '' ? null : trimmedLocation,
             isOnline,
-            status,
+            workoutId,
           },
-        },
-        { onSuccess: onClose },
-      );
-    } else {
-      // Запоминаем введённое для следующих занятий (если включён тумблер).
-      saveLastPrefs(
-        remember
-          ? { remember: true, clientId, durationMin, location: trimmedLocation, isOnline }
-          : { ...EMPTY_PREFS },
-      );
-      createMutation.mutate(
-        {
-          clientId,
-          date,
-          startTime,
-          durationMin,
-          title: trimmedTitle === '' ? null : trimmedTitle,
-          location: trimmedLocation === '' ? null : trimmedLocation,
-          isOnline,
-        },
-        { onSuccess: onClose },
-      );
-    }
+          { onSuccess: onClose },
+        );
+      }
+    })();
   }
 
   function handleDelete() {
@@ -367,6 +494,43 @@ function TrainerSessionSheet({
             />
           </label>
 
+          {/* Тренировка-план: шаблон (всегда) или история клиента (если клиент выбран). */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-ink-muted">Тренировка</span>
+            {plannedWorkout ? (
+              <div className="flex items-center gap-2 rounded-xl border border-line bg-chip px-3 py-2.5">
+                <Dumbbell size={16} className="shrink-0 text-ink-muted" />
+                <span className="min-w-0 flex-1 truncate text-base text-ink">
+                  {plannedWorkoutName(plannedWorkout)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen(true)}
+                  className="shrink-0 text-[13px] font-semibold text-accent-text"
+                >
+                  Изменить
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPlannedWorkout(null)}
+                  aria-label="Убрать тренировку"
+                  className="shrink-0 text-ink-muted active:text-ink"
+                >
+                  <X size={16} strokeWidth={2} />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setPickerOpen(true)}
+                className="flex items-center gap-2 rounded-xl border border-dashed border-line bg-chip px-3 py-2.5 text-left text-ink-muted active:bg-card-elevated"
+              >
+                <Plus size={16} strokeWidth={2.2} className="shrink-0" />
+                <span className="text-base">Выбрать тренировку</span>
+              </button>
+            )}
+          </div>
+
           <div className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-ink-muted">Длительность</span>
             {!durationOpen && (
@@ -414,38 +578,24 @@ function TrainerSessionSheet({
                   </button>
                 </div>
                 {customDuration && (
-                  <div className="mt-1 flex items-center gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="number"
-                        min={0}
-                        max={12}
-                        inputMode="numeric"
-                        value={Math.floor(durationMin / 60)}
-                        onChange={(e) => {
-                          const h = Math.max(0, Math.min(12, Number(e.target.value) || 0));
-                          setDurationMin(h * 60 + (durationMin % 60));
-                        }}
-                        className="w-14 rounded-xl border border-line bg-card px-3 py-2 text-center text-[15px] tabular-nums text-ink outline-none focus:border-accent"
-                      />
-                      <span className="text-sm text-ink-muted">ч</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="number"
-                        min={0}
-                        max={59}
-                        step={5}
-                        inputMode="numeric"
-                        value={durationMin % 60}
-                        onChange={(e) => {
-                          const m = Math.max(0, Math.min(59, Number(e.target.value) || 0));
-                          setDurationMin(Math.floor(durationMin / 60) * 60 + m);
-                        }}
-                        className="w-14 rounded-xl border border-line bg-card px-3 py-2 text-center text-[15px] tabular-nums text-ink outline-none focus:border-accent"
-                      />
-                      <span className="text-sm text-ink-muted">мин</span>
-                    </div>
+                  <div className="mt-1 flex items-center gap-3">
+                    {/* Нативный пикер времени: на iPhone — «барабан», на Android — часы.
+                        Значение ЧЧ:ММ трактуем как длительность (часы:минуты). */}
+                    <input
+                      type="time"
+                      step={300}
+                      value={`${String(Math.floor(durationMin / 60)).padStart(2, '0')}:${String(
+                        durationMin % 60,
+                      ).padStart(2, '0')}`}
+                      onChange={(e) => {
+                        const [h, m] = e.target.value.split(':').map(Number);
+                        const total = (h ?? 0) * 60 + (m ?? 0);
+                        setDurationMin(total > 0 ? total : 5);
+                      }}
+                      aria-label="Длительность (часы и минуты)"
+                      className="rounded-xl border border-line bg-card px-3 py-2 text-[15px] tabular-nums text-ink outline-none [color-scheme:dark] focus:border-accent"
+                    />
+                    <span className="text-[12px] text-ink-muted">часы : минуты</span>
                     <span className="ml-auto text-[13px] font-semibold text-accent-text">
                       {formatDuration(Math.max(5, durationMin))}
                     </span>
@@ -542,8 +692,149 @@ function TrainerSessionSheet({
           )}
         </form>
       </div>
+
+      {pickerOpen && (
+        <WorkoutPickerSheet
+          templates={templates}
+          history={history}
+          clientSelected={mutationClientId !== ''}
+          onPickTemplate={(t) => {
+            setPlannedWorkout({ kind: 'template', template: t });
+            setPickerOpen(false);
+          }}
+          onPickHistory={(w) => {
+            setPlannedWorkout({ kind: 'history', workout: w });
+            setPickerOpen(false);
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </div>
   );
+}
+
+/**
+ * Пикер тренировки для занятия: шаблоны (всегда) и история клиента (если выбран).
+ * Выбор не создаёт тренировку сразу — она создаётся клиенту при сохранении занятия.
+ */
+function WorkoutPickerSheet({
+  templates,
+  history,
+  clientSelected,
+  onPickTemplate,
+  onPickHistory,
+  onClose,
+}: {
+  templates: TemplateResponse[];
+  history: WorkoutResponse[];
+  clientSelected: boolean;
+  onPickTemplate: (t: TemplateResponse) => void;
+  onPickHistory: (w: WorkoutResponse) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] flex flex-col justify-end">
+      <button
+        type="button"
+        aria-label="Закрыть"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/60"
+      />
+      <div className="relative z-10 flex max-h-[88vh] flex-col rounded-t-3xl bg-bg pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="flex items-center justify-between gap-2 px-5 pb-2 pt-4">
+          <h2 className="text-[16px] font-bold text-ink">Тренировка для занятия</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Закрыть"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-ink active:bg-card-elevated"
+          >
+            <X size={20} strokeWidth={1.8} />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-4 overflow-y-auto px-5 pb-2 pt-1">
+          {/* Шаблоны — доступны всегда. */}
+          <section className="flex flex-col gap-2">
+            <h3 className="font-[family-name:var(--font-mono)] text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+              Шаблоны
+            </h3>
+            {templates.length === 0 ? (
+              <p className="text-[13px] text-ink-muted">
+                Шаблонов пока нет — создайте их в базе знаний.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {templates.map((t) => (
+                  <li key={t.id}>
+                    <button
+                      type="button"
+                      onClick={() => onPickTemplate(t)}
+                      className="flex w-full items-center gap-3 rounded-2xl bg-card px-4 py-3 text-left active:bg-card-elevated"
+                    >
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="truncate text-[15px] font-semibold text-ink">
+                          {t.name}
+                        </span>
+                        <span className="font-[family-name:var(--font-mono)] text-[12px] text-ink-muted">
+                          {t.exercises.length} упр.{t.categoryTag ? ` · ${t.categoryTag}` : ''}
+                        </span>
+                      </span>
+                      <ChevronRight size={16} className="shrink-0 text-ink-muted" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {/* История клиента — только если клиент выбран. */}
+          {clientSelected && (
+            <section className="flex flex-col gap-2">
+              <h3 className="font-[family-name:var(--font-mono)] text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+                История клиента
+              </h3>
+              {history.length === 0 ? (
+                <p className="text-[13px] text-ink-muted">
+                  У клиента пока нет проведённых тренировок.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {history.map((w) => (
+                    <li key={w.id}>
+                      <button
+                        type="button"
+                        disabled={w.exercises.length === 0}
+                        onClick={() => onPickHistory(w)}
+                        className="flex w-full items-center gap-3 rounded-2xl bg-card px-4 py-3 text-left active:bg-card-elevated disabled:opacity-40"
+                      >
+                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                          <span className="truncate text-[15px] font-semibold text-ink">
+                            {w.name}
+                          </span>
+                          <span className="font-[family-name:var(--font-mono)] text-[12px] text-ink-muted">
+                            {formatWorkoutDate(w)} · {w.exercises.length} упр.
+                          </span>
+                        </span>
+                        <ChevronRight size={16} className="shrink-0 text-ink-muted" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Дата проведённой тренировки для строки истории (ДД/ММ/ГГГГ). */
+function formatWorkoutDate(w: WorkoutResponse): string {
+  const iso = (w.completedAt ?? w.startedAt ?? '').slice(0, 10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(iso);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : 'без даты';
 }
 
 /** Поиск-выбор клиента по имени, контактам или тегам (вместо нативного select). */
