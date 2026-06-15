@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Timer, Wifi, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Wifi } from 'lucide-react';
 import type { SessionResponse } from '@trener/shared';
 import {
   CAL_HOURS,
@@ -211,35 +211,57 @@ function tileClasses(s: SessionResponse): string {
   return 'bg-[#ffab2e] text-[#1a1200]';
 }
 
-interface StateInfo {
-  Icon: typeof Timer;
-  color: string;
-  label: string;
-}
-
-/** Состояние подтверждения занятия — от лица клиента: иконка, цвет, подпись. */
-function stateInfo(session: SessionResponse): StateInfo {
-  if (session.clientConfirmation === 'confirmed') {
-    return { Icon: Check, color: 'var(--color-accent-text)', label: 'Вы подтвердили' };
-  }
-  if (session.clientConfirmation === 'declined') {
-    return { Icon: X, color: 'var(--color-danger)', label: 'Вы отклонили' };
-  }
-  return { Icon: Timer, color: '#000000', label: 'Ждём подтверждения' };
-}
-
-/** Текстовый статус занятия: отмена тренером важнее статуса подтверждения. */
-function clientStatusLabel(s: SessionResponse): string {
-  if (s.status === 'cancelled') return 'Отменено тренером';
-  return stateInfo(s).label;
-}
-
 /** Сессии конкретного дня, отсортированы по времени. */
 function sessionsOf(sessions: SessionResponse[], d: Date): SessionResponse[] {
   const iso = toISODate(d);
   return sessions
     .filter((s) => s.date === iso)
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
+}
+
+/**
+ * Раскладка пересекающихся по времени занятий по колонкам: каждое занятие получает
+ * индекс колонки и общее число колонок в своём кластере пересечений. Так несколько
+ * занятий на одно время раздвигаются по горизонтали, а не накладываются друг на друга.
+ */
+function layoutColumns(items: SessionResponse[]): Map<string, { col: number; cols: number }> {
+  const res = new Map<string, { col: number; cols: number }>();
+  const ivs = items
+    .map((s) => {
+      const start = timeToMin(s.startTime);
+      return { id: s.id, start, end: start + Math.max(s.durationMin, 1) };
+    })
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  let cluster: typeof ivs = [];
+  let clusterEnd = -1;
+  const flush = () => {
+    const colEnds: number[] = []; // время конца последнего занятия в каждой колонке
+    for (const iv of cluster) {
+      let placed = colEnds.findIndex((e) => e <= iv.start);
+      if (placed === -1) {
+        placed = colEnds.length;
+        colEnds.push(iv.end);
+      } else {
+        colEnds[placed] = iv.end;
+      }
+      res.set(iv.id, { col: placed, cols: 0 });
+    }
+    const cols = colEnds.length;
+    for (const iv of cluster) {
+      const cur = res.get(iv.id);
+      if (cur) cur.cols = cols;
+    }
+    cluster = [];
+    clusterEnd = -1;
+  };
+  for (const iv of ivs) {
+    if (cluster.length > 0 && iv.start >= clusterEnd) flush();
+    cluster.push(iv);
+    clusterEnd = Math.max(clusterEnd, iv.end);
+  }
+  flush();
+  return res;
 }
 
 function MonthView({
@@ -371,6 +393,7 @@ function DayView({
 }) {
   const hours = Array.from({ length: CAL_HOURS }, (_, i) => CAL_START_HOUR + i);
   const items = sessionsOf(sessions, date);
+  const layout = layoutColumns(items);
   const now = new Date();
   const gridH = CAL_HOURS * DAY_HOUR_H;
   const nowTop = ((now.getHours() * 60 + now.getMinutes() - CAL_START_HOUR * 60) / 60) * DAY_HOUR_H;
@@ -421,29 +444,29 @@ function DayView({
             const startMin = timeToMin(s.startTime);
             const top = ((startMin - CAL_START_HOUR * 60) / 60) * DAY_HOUR_H;
             const height = Math.max((s.durationMin / 60) * DAY_HOUR_H - 2, 18);
-            const state = stateInfo(s);
+            const { col, cols } = layout.get(s.id) ?? { col: 0, cols: 1 };
+            const widthPct = 100 / cols;
             return (
               <button
                 key={s.id}
                 ref={s.id === focus?.id ? focusRef : undefined}
                 type="button"
                 onClick={() => onPick(s)}
-                className={`absolute left-1.5 right-1.5 z-10 overflow-hidden rounded-xl px-2.5 py-1.5 text-left ${tileClasses(s)}`}
-                style={{ top, height }}
+                className={`absolute z-10 overflow-hidden rounded-xl px-2.5 py-1.5 text-left ${tileClasses(s)}`}
+                style={{
+                  top,
+                  height,
+                  left: `calc(${col * widthPct}% + 6px)`,
+                  width: `calc(${widthPct}% - 12px)`,
+                }}
               >
-                <div className="flex items-center gap-1.5 pr-4">
+                <div className="flex items-center gap-1.5">
                   {s.isOnline && <Wifi size={12} strokeWidth={2.2} className="shrink-0" />}
                   <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">
                     {renderLabel(s)}
                   </span>
                 </div>
-                {/* Описание статуса — сразу под названием. */}
-                {height >= 50 && (
-                  <div className="truncate pr-4 text-[10px] font-semibold opacity-90">
-                    {clientStatusLabel(s)}
-                  </div>
-                )}
-                <div className="truncate pr-5 font-[family-name:var(--font-mono)] text-[11px] opacity-80">
+                <div className="truncate font-[family-name:var(--font-mono)] text-[11px] opacity-80">
                   {[
                     `${s.startTime}–${endTime(s.startTime, s.durationMin)}`,
                     s.isOnline ? 'Online' : s.location,
@@ -451,15 +474,6 @@ function DayView({
                     .filter(Boolean)
                     .join(' · ')}
                 </div>
-                {/* Статус — иконка на белом четвертькруге с чёрной обводкой в правом нижнем углу. */}
-                <span
-                  aria-label={state.label}
-                  title={state.label}
-                  className="absolute bottom-0 right-0 flex h-[20px] w-[20px] items-end justify-end rounded-tl-full border-l border-t border-black bg-white pb-px pr-px"
-                  style={{ color: state.color }}
-                >
-                  <state.Icon size={12} strokeWidth={2.8} />
-                </span>
               </button>
             );
           })}
