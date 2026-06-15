@@ -242,7 +242,7 @@ export function HomePage() {
           <button
             type="button"
             onClick={() => void navigate('/calendar')}
-            className="flex flex-wrap items-baseline gap-3 text-left transition-transform active:scale-[0.98]"
+            className="flex flex-wrap items-center gap-3 text-left transition-transform active:scale-[0.98]"
             aria-label="Открыть календарь на сегодня"
           >
             <span
