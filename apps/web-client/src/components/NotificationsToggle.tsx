@@ -56,6 +56,8 @@ export function NotificationsToggle() {
         type="button"
         onClick={() => void toggle()}
         disabled={busy || denied}
+        role="switch"
+        aria-checked={on}
         className="flex items-center justify-between rounded-2xl bg-card px-4 py-3 active:bg-card-elevated disabled:opacity-60"
       >
         <span className="flex items-center gap-3">
@@ -63,9 +65,15 @@ export function NotificationsToggle() {
           <span className="text-[14px] text-ink">Push-уведомления</span>
         </span>
         <span
-          className={`text-[13px] font-semibold ${on ? 'text-accent-text' : 'text-ink-mutedxl'}`}
+          className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+            on ? 'bg-accent' : 'bg-chip'
+          } ${busy ? 'opacity-60' : ''}`}
         >
-          {busy ? '…' : on ? 'Вкл' : 'Выкл'}
+          <span
+            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+              on ? 'translate-x-[18px]' : 'translate-x-0.5'
+            }`}
+          />
         </span>
       </button>
       {denied && (
