@@ -252,7 +252,9 @@ export function HomePage() {
               {pad2(todayCount)}
             </span>
             <span className="text-[22px] font-bold leading-tight tracking-[-0.01em]">
-              {todayCount === 1 ? 'сессия в зале' : 'сессий в зале'}
+              тренировок
+              <br />
+              сегодня
             </span>
           </button>
 
