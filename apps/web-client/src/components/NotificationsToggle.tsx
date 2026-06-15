@@ -65,13 +65,13 @@ export function NotificationsToggle() {
           <span className="text-[14px] text-ink">Push-уведомления</span>
         </span>
         <span
-          className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+          className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full px-0.5 transition-colors ${
             on ? 'bg-accent' : 'bg-chip'
           } ${busy ? 'opacity-60' : ''}`}
         >
           <span
-            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
-              on ? 'translate-x-[18px]' : 'translate-x-0.5'
+            className={`h-4 w-4 rounded-full bg-white shadow transition-transform ${
+              on ? 'translate-x-4' : 'translate-x-0'
             }`}
           />
         </span>
