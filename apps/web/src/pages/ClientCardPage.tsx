@@ -233,10 +233,10 @@ export function ClientCardPage() {
                   )}
                   {key === 'calendar' && (plannedSessions > 0 || sessionList.length > 0) && (
                     <span className="flex items-baseline gap-0.5 text-[22px] font-bold leading-none">
-                      <span className="text-ink">{plannedSessions}</span>
+                      <span className="text-accent-text">{plannedSessions}</span>
                       <span className="text-[16px] text-ink-mutedxl">/</span>
-                      <span className={calBalance < 0 ? 'text-danger' : 'text-ink'}>
-                        {calBalance}
+                      <span className={calBalance < 0 ? 'text-danger' : 'text-accent-text'}>
+                        {calBalance > 0 ? `+${String(calBalance)}` : calBalance}
                       </span>
                     </span>
                   )}
@@ -249,7 +249,7 @@ export function ClientCardPage() {
                   {key === 'payments' && (
                     <span
                       className={`text-[22px] font-bold leading-none ${
-                        paidBalance < 0 ? 'text-danger' : 'text-ink'
+                        paidBalance < 0 ? 'text-danger' : 'text-accent-text'
                       }`}
                     >
                       {paidBalance > 0 ? `+${String(paidBalance)}` : String(paidBalance)}
