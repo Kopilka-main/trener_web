@@ -5,6 +5,15 @@
   color-scheme: light;
 }
 
+/* У полей поиска свой крестик очистки — прячем нативную кнопку браузера,
+   чтобы не было двух крестиков. */
+input[type='search']::-webkit-search-cancel-button,
+input[type='search']::-webkit-search-decoration {
+  display: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 /* Цвет свечения primary-плитки (светлая тема). */
 :root {
   --accent-glow: rgba(247, 37, 133, 0.45);
@@ -14,6 +23,14 @@ html,
 body,
 #root {
   height: 100%;
+}
+
+/* Блокируем «оттяжку»/прокрутку всего документа (iOS rubber-band): скроллятся
+   только внутренние контейнеры. Иначе при потягивании дёргается каркас. */
+html {
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: var(--color-canvas);
 }
 
 /* Скрываем полосы прокрутки — на мобильных они overlay, в десктоп-вебвью мешают. */
@@ -85,13 +102,33 @@ body,
 }
 
 body {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
   margin: 0;
   font-family: var(--font-sans);
   background: var(--color-canvas);
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
-  overscroll-behavior-y: contain;
+}
+
+/* Каркас клиентского приложения: высота/верх по visual viewport (клавиатура на
+   iOS не уменьшает layout-вьюпорт — подгоняем под видимую область). */
+.app-shell {
+  position: fixed;
+  top: var(--app-offset, 0px);
+  left: 0;
+  right: 0;
+  height: var(--app-height, 100dvh);
+  max-width: 430px;
+  margin-inline: auto;
+  padding-top: env(safe-area-inset-top, 0px);
+  background: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 /* Плитки на главном экране — material-like elevation и лайм-glow при нажатии.
