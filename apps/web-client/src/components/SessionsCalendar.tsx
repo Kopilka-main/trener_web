@@ -201,12 +201,12 @@ function ViewSwitcher({
 // --- Цвет блока занятия (кислотные тона) ---
 // Согласованное клиентом (confirmed) — зелёный (лайм), отдельный статус «Согласовано»:
 //   применяется и к запланированным, и к уже проведённым (клиент подтвердил факт).
-// cancelled — перечёркнут + opacity-50; проведённое без согласования — приглушённое;
+// cancelled — перечёркнут + opacity-50; проведённое без согласования — голубой;
 // отклонено клиентом — красный; ждёт ответа — оранжевый.
 function tileClasses(s: SessionResponse): string {
   if (s.status === 'cancelled') return 'bg-card-elevated text-ink-muted line-through opacity-50';
   if (s.clientConfirmation === 'confirmed') return 'bg-[#caff3a] text-[#0b0c10]';
-  if (s.status === 'completed') return 'bg-card-elevated text-ink';
+  if (s.status === 'completed') return 'bg-[#46d4f0] text-[#06222b]';
   if (s.clientConfirmation === 'declined') return 'bg-[#ff5a5a] text-[#1a0606]';
   return 'bg-[#ffab2e] text-[#1a1200]';
 }
