@@ -34,11 +34,12 @@ export function clientAppChatRoutes(
     async (req) => {
       const { trainerId, clientId } = await scope(req);
       const options = req.query.sinceId !== undefined ? { sinceId: req.query.sinceId } : {};
-      const [messages, trainerLastReadAt] = await Promise.all([
+      const [messages, trainerLastReadAt, pinnedMessages] = await Promise.all([
         svc.listMessages(trainerId, clientId, options),
         svc.trainerReadAt(trainerId, clientId),
+        svc.getPinned(trainerId, clientId),
       ]);
-      return { messages, trainerLastReadAt };
+      return { messages, trainerLastReadAt, pinnedMessages };
     },
   );
 

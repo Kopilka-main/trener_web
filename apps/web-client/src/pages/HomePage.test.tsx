@@ -43,6 +43,7 @@ function setup(opts: {
   vi.mocked(calendar.useClientSessions).mockReturnValue({ data: opts.sessions ?? [] } as never);
   vi.mocked(workouts.useClientWorkouts).mockReturnValue({ data: opts.workouts ?? [] } as never);
   vi.mocked(chat.useClientChatUnread).mockReturnValue({ data: opts.unread ?? 0 } as never);
+  vi.mocked(chat.useClientMessages).mockReturnValue({ data: { messages: [] } } as never);
   vi.mocked(measurements.useClientMeasurements).mockReturnValue({
     data: opts.measurements ?? [],
   } as never);

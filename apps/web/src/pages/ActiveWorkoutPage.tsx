@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, ChevronDown, ChevronRight, Pencil, Plus, X } from 'lucide-react';
+import { Check, ChevronDown, Pencil, Plus, X } from 'lucide-react';
 import type {
   ExerciseResponse,
   WorkoutExerciseResponse,
@@ -83,8 +83,8 @@ function withReordered(w: WorkoutResponse, order: number[]): WorkoutResponse {
   return { ...w, exercises };
 }
 import { useExercises } from '../api/exercises';
-import { rankBySearch } from '../lib/search';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { ExercisePicker } from '../components/ExercisePicker';
 import { Button } from '../components/Button';
 import { DemoVideo, MediaToggle, type MediaMode } from '../components/DemoVideo';
 import { HoldToDelete } from '../components/HoldToDelete';
@@ -720,11 +720,6 @@ function ExercisePickerSheet({
   onClose: () => void;
   onPick: (exercise: ExerciseResponse) => void;
 }) {
-  const exercises = useExercises();
-  const [query, setQuery] = useState('');
-  const list = exercises.data ?? [];
-  const filtered = useMemo(() => rankBySearch(list, query, (e) => e.name), [list, query]);
-
   return (
     <div className="fixed inset-0 z-50 flex flex-col">
       <button
@@ -746,57 +741,8 @@ function ExercisePickerSheet({
       </div>
       <div className="relative z-10 flex flex-1 flex-col overflow-hidden rounded-t-3xl bg-bg pb-[max(1rem,env(safe-area-inset-bottom))]">
         <h2 className="px-5 pb-2 pt-4 text-[16px] font-bold text-ink">Добавить упражнение</h2>
-
-        <div className="px-5 pb-2">
-          <div className="relative">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Поиск упражнения"
-              className="w-full rounded-2xl bg-card py-2.5 pl-4 pr-10 text-[14px] text-ink outline-none placeholder:text-ink-muted"
-            />
-            {query !== '' && (
-              <button
-                type="button"
-                aria-label="Очистить"
-                onClick={() => setQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted active:text-ink"
-              >
-                <X size={16} strokeWidth={2} />
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-5 pt-1">
-          {exercises.isPending && <p className="text-sm text-ink-muted">Загрузка…</p>}
-          {exercises.isError && (
-            <p className="text-sm text-ink-muted" role="alert">
-              Не удалось загрузить упражнения.
-            </p>
-          )}
-          {exercises.isSuccess && filtered.length === 0 && (
-            <p className="text-sm text-ink-muted">Ничего не найдено.</p>
-          )}
-          {filtered.map((ex) => (
-            <button
-              key={ex.id}
-              type="button"
-              disabled={pending}
-              onClick={() => onPick(ex)}
-              className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3 text-left transition-colors active:bg-card-elevated disabled:opacity-50"
-            >
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="truncate text-[15px] font-semibold text-ink">{ex.name}</span>
-                <span className="font-[family-name:var(--font-mono)] text-[12px] text-ink-muted">
-                  {ex.category}
-                  {ex.subgroup ? ` · ${ex.subgroup}` : ''}
-                </span>
-              </span>
-              <ChevronRight size={16} className="tile-chevron shrink-0" />
-            </button>
-          ))}
-        </div>
+        {/* Форма выбора как в «Сборке тренировки»: группы/подгруппы + миниатюры + ℹ. */}
+        <ExercisePicker onPick={onPick} pending={pending} />
       </div>
     </div>
   );

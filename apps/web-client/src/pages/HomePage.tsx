@@ -71,11 +71,16 @@ export function HomePage() {
   const workouts = useClientWorkouts().data ?? [];
   const unread = useClientChatUnread().data ?? 0;
   const packages = useClientPackages().data ?? [];
-  // Остаток оплаченных тренировок (ведёт тренер): сумма активных пакетов − завершённые.
+  // Остаток оплаченных тренировок — как у тренера: сумма активных пакетов (lessonsPaid)
+  // минус проведённые ТРЕНЕРСКИЕ тренировки (status='completed', не самостоятельные клиента).
+  // Черновики/самостоятельные тренировки в остаток не входят.
   const paidLessons = packages
     .filter((p) => p.status === 'active')
     .reduce((acc, p) => acc + p.lessonsPaid, 0);
-  const paidBalance = paidLessons - workouts.length;
+  const completedTrainerWorkouts = workouts.filter(
+    (w) => w.status === 'completed' && !w.createdByClient,
+  ).length;
+  const paidBalance = paidLessons - completedTrainerWorkouts;
   const chatMessages = useClientMessages().data?.messages ?? [];
   const trainer = useClientTrainer().data;
   // Открытые задачи от тренера — тоже «требуют внимания» в плитке уведомлений.
@@ -227,7 +232,7 @@ export function HomePage() {
                 type="button"
                 onClick={() => void navigate('/profile')}
                 aria-label="Оплаченные тренировки"
-                className="flex items-baseline gap-2.5 pb-2 text-left transition-transform active:scale-[0.98]"
+                className="flex items-center gap-2.5 pb-2 text-left transition-transform active:scale-[0.98]"
               >
                 <span
                   className="font-[family-name:var(--font-display)] text-[64px] leading-none tracking-[-0.03em]"

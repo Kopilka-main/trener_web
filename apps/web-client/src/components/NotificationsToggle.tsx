@@ -31,9 +31,11 @@ export function NotificationsToggle() {
   }
 
   const denied = perm === 'denied';
+  const [note, setNote] = useState('');
 
   async function toggle() {
     setBusy(true);
+    setNote('');
     try {
       if (on) {
         await disablePush();
@@ -42,9 +44,12 @@ export function NotificationsToggle() {
         const res = await enablePush();
         setPerm(notificationPermission());
         if (res === 'enabled') setOn(true);
+        else if (res === 'no-key') setNote('Push не настроен на сервере.');
+        else if (res === 'denied' && notificationPermission() !== 'denied')
+          setNote('Разрешение не выдано — нажмите ещё раз и подтвердите запрос.');
       }
     } catch {
-      // молча: статус не меняем, пользователь может повторить
+      setNote('Не удалось включить уведомления. Попробуйте ещё раз.');
     } finally {
       setBusy(false);
     }
@@ -81,6 +86,7 @@ export function NotificationsToggle() {
           Уведомления запрещены — разрешите их для сайта в настройках браузера.
         </p>
       )}
+      {note && !denied && <p className="px-1 text-[12px] text-ink-muted">{note}</p>}
     </div>
   );
 }

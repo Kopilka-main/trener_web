@@ -65,6 +65,24 @@ export function useChatMessages(clientId: string) {
   });
 }
 
+/** Снять закреп с конкретного сообщения (тренер). */
+export function unpinMessage(clientId: string, messageId: string): Promise<void> {
+  return apiFetch(`/clients/${clientId}/messages/${messageId}/pin`, {
+    method: 'DELETE',
+    schema: z.object({ ok: z.literal(true) }),
+  }).then(() => undefined);
+}
+
+export function useUnpinMessage(clientId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (messageId: string) => unpinMessage(clientId, messageId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: clientMessagesQueryKey(clientId) });
+    },
+  });
+}
+
 /** Отправка сообщения тренером с инвалидацией ленты. */
 export function useSendMessage(clientId: string) {
   const qc = useQueryClient();

@@ -82,6 +82,42 @@ function plannedWorkoutName(p: PlannedWorkout): string {
   return p.workout.name;
 }
 
+// Дата занятия: ручной ввод ДД.ММ.ГГГГ ↔ хранение ISO YYYY-MM-DD.
+function isoToDmy(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : '';
+}
+function maskDmy(input: string): string {
+  const digits = input.replace(/\D/g, '').slice(0, 8);
+  return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean).join('.');
+}
+function dmyToIso(display: string): string | null {
+  const digits = display.replace(/\D/g, '');
+  if (digits.length !== 8) return null;
+  const dd = digits.slice(0, 2);
+  const mm = digits.slice(2, 4);
+  const yyyy = digits.slice(4, 8);
+  const y = Number(yyyy);
+  if (y < 1900 || y > 2100) return null;
+  const dt = new Date(y, Number(mm) - 1, Number(dd));
+  if (dt.getFullYear() !== y || dt.getMonth() !== Number(mm) - 1 || dt.getDate() !== Number(dd)) {
+    return null;
+  }
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// Время — ручной ввод ЧЧ:ММ (24ч). Нативный <input type="time"> в 12ч-локали мешает
+// набрать, например, 15:00 — поэтому маскируем текстом сами.
+function maskTime(input: string): string {
+  const d = input.replace(/\D/g, '').slice(0, 4);
+  return d.length <= 2 ? d : `${d.slice(0, 2)}:${d.slice(2, 4)}`;
+}
+function isValidTime(t: string): boolean {
+  const m = /^(\d{2}):(\d{2})$/.exec(t);
+  if (!m) return false;
+  return Number(m[1]) <= 23 && Number(m[2]) <= 59;
+}
+
 const STATUS_LABEL: Record<SessionStatus, string> = {
   planned: 'Запланировано',
   completed: 'Проведено',
@@ -153,7 +189,8 @@ export function CalendarPage() {
   };
   const formOpen = editing !== null || createAt !== null;
 
-  const renderLabel = (s: SessionResponse): string => nameById.get(s.clientId) ?? 'Занятие';
+  const renderLabel = (s: SessionResponse): string =>
+    nameById.get(s.clientId) ?? s.title ?? 'Занятие';
 
   return (
     <div className="flex h-full flex-col">
@@ -205,14 +242,17 @@ export function CalendarPage() {
   );
 }
 
-function TrainerSessionSheet({
+export function TrainerSessionSheet({
   clients,
+  fixedClient,
   session,
   defaultDate,
   defaultStartTime,
   onClose,
 }: {
   clients: ClientResponse[];
+  /** Зафиксированный клиент (календарь конкретного клиента) — поле не редактируется. */
+  fixedClient?: { id: string; name: string };
   session: SessionResponse | null;
   defaultDate: string;
   defaultStartTime: string | undefined;
@@ -233,8 +273,9 @@ function TrainerSessionSheet({
   const initDuration = session?.durationMin ?? (usePrefs ? prefs.durationMin : 60);
 
   const [remember, setRemember] = useState(prefs.remember);
-  const [clientId, setClientId] = useState(session?.clientId ?? prefClientId);
-  const [date, setDate] = useState(session?.date ?? defaultDate);
+  const [clientId, setClientId] = useState(session?.clientId ?? fixedClient?.id ?? prefClientId);
+  // Дата — текстом ДД.ММ.ГГГГ; ISO для API считаем из неё (dmyToIso).
+  const [dateInput, setDateInput] = useState(() => isoToDmy(session?.date ?? defaultDate));
   const [startTime, setStartTime] = useState(session?.startTime ?? defaultStartTime ?? '12:00');
   const [title, setTitle] = useState(session?.title ?? '');
   const [location, setLocation] = useState(session?.location ?? (usePrefs ? prefs.location : ''));
@@ -259,7 +300,7 @@ function TrainerSessionSheet({
 
   // clientId для инвалидации кэша: при редактировании — клиент занятия,
   // при создании — выбранный (запасной вариант — первый активный).
-  const mutationClientId = session?.clientId ?? clientId;
+  const mutationClientId = fixedClient?.id ?? session?.clientId ?? clientId;
   const createMutation = useCreateSession(mutationClientId);
   const updateMutation = useUpdateSession(mutationClientId);
   const deleteMutation = useDeleteSession(mutationClientId);
@@ -287,9 +328,11 @@ function TrainerSessionSheet({
     });
   }, [session?.workoutId, clientWorkouts]);
 
-  const clientError = isEdit || clientId !== '' ? '' : 'Выберите клиента';
-  const dateError = /^\d{4}-\d{2}-\d{2}$/.test(date) ? '' : 'Укажите дату';
-  const timeError = /^\d{2}:\d{2}$/.test(startTime) ? '' : 'Укажите время';
+  const dateIso = dmyToIso(dateInput);
+  // Клиент необязателен — можно запланировать занятие без него.
+  const clientError = '';
+  const dateError = dateIso ? '' : 'Дата в формате ДД.ММ.ГГГГ';
+  const timeError = isValidTime(startTime) ? '' : 'Время в формате ЧЧ:ММ';
   const hasErrors = clientError !== '' || dateError !== '' || timeError !== '';
 
   const pending =
@@ -304,6 +347,8 @@ function TrainerSessionSheet({
   async function resolveWorkoutId(): Promise<string | null> {
     if (!plannedWorkout) return null;
     if (plannedWorkout.kind === 'existing') return plannedWorkout.id;
+    // Создать тренировку из шаблона/истории можно только когда выбран клиент.
+    if (mutationClientId === '') return null;
     const body =
       plannedWorkout.kind === 'template'
         ? bodyFromTemplate(plannedWorkout.template)
@@ -321,6 +366,7 @@ function TrainerSessionSheet({
     }
     const trimmedTitle = title.trim();
     const trimmedLocation = location.trim();
+    if (!dateIso) return; // подстраховка типов — выше hasErrors уже это проверил
     void (async () => {
       let workoutId: string | null;
       try {
@@ -333,7 +379,7 @@ function TrainerSessionSheet({
           {
             id: session.id,
             patch: {
-              date,
+              date: dateIso,
               startTime,
               durationMin,
               title: trimmedTitle === '' ? null : trimmedTitle,
@@ -354,8 +400,8 @@ function TrainerSessionSheet({
         );
         createMutation.mutate(
           {
-            clientId,
-            date,
+            clientId: mutationClientId,
+            date: dateIso,
             startTime,
             durationMin,
             title: trimmedTitle === '' ? null : trimmedTitle,
@@ -376,7 +422,7 @@ function TrainerSessionSheet({
   }
 
   const editClient = session ? clients.find((c) => c.id === session.clientId) : undefined;
-  const editClientLabel = editClient ? clientName(editClient) : 'Клиент';
+  const editClientLabel = editClient ? clientName(editClient) : 'Без клиента';
 
   const inputClass =
     'w-full rounded-xl border border-line bg-chip px-3 py-2.5 text-base text-ink outline-none placeholder:text-ink-mutedxl focus:border-accent';
@@ -397,12 +443,23 @@ function TrainerSessionSheet({
               <button
                 type="button"
                 onClick={toggleRemember}
-                aria-pressed={remember}
-                className={`rounded-full px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                  remember ? 'bg-accent text-accent-on' : 'bg-chip text-ink-muted'
-                }`}
+                role="switch"
+                aria-checked={remember}
+                aria-label="Запомнить параметры занятия"
+                className="flex items-center gap-2"
               >
-                Запомнить
+                <span className="text-[12px] font-semibold text-ink-muted">Запомнить</span>
+                <span
+                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full px-0.5 transition-colors ${
+                    remember ? 'bg-accent' : 'bg-chip'
+                  }`}
+                >
+                  <span
+                    className={`h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                      remember ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </span>
               </button>
             )}
             <button
@@ -421,14 +478,16 @@ function TrainerSessionSheet({
           onSubmit={handleSubmit}
           className="flex flex-col gap-4 overflow-y-auto px-5 pt-1"
         >
-          {isEdit ? (
+          {fixedClient || isEdit ? (
             <div className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-ink-muted">Клиент</span>
-              <span className="text-base font-semibold text-ink">{editClientLabel}</span>
+              <span className="text-base font-semibold text-ink">
+                {fixedClient?.name ?? editClientLabel}
+              </span>
             </div>
           ) : (
             <div className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-ink-muted">Клиент</span>
+              <span className="text-sm font-medium text-ink-muted">Клиент · необязательно</span>
               <ClientSearchSelect
                 clients={activeClients}
                 value={clientId}
@@ -446,13 +505,13 @@ function TrainerSessionSheet({
               <span className="text-sm font-medium text-ink-muted">Дата</span>
               <input
                 id="session-date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
+                type="text"
+                inputMode="numeric"
+                value={dateInput}
+                onChange={(e) => setDateInput(maskDmy(e.target.value))}
+                placeholder="ДД.ММ.ГГГГ"
                 aria-invalid={showErrors && dateError !== ''}
-                className={`${inputClass} [color-scheme:dark] ${
-                  showErrors && dateError ? 'border-danger' : ''
-                }`}
+                className={`${inputClass} ${showErrors && dateError ? 'border-danger' : ''}`}
               />
               {showErrors && dateError && (
                 <span className="text-[12px] text-danger">{dateError}</span>
@@ -462,13 +521,13 @@ function TrainerSessionSheet({
               <span className="text-sm font-medium text-ink-muted">Время</span>
               <input
                 id="session-time"
-                type="time"
+                type="text"
+                inputMode="numeric"
                 value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
+                onChange={(e) => setStartTime(maskTime(e.target.value))}
+                placeholder="ЧЧ:ММ"
                 aria-invalid={showErrors && timeError !== ''}
-                className={`${inputClass} [color-scheme:dark] ${
-                  showErrors && timeError ? 'border-danger' : ''
-                }`}
+                className={`${inputClass} ${showErrors && timeError ? 'border-danger' : ''}`}
               />
               {showErrors && timeError && (
                 <span className="text-[12px] text-danger">{timeError}</span>

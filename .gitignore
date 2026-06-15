@@ -11,6 +11,9 @@ build/
 .env.*
 !.env.example
 
+# Локальный docker-оверрайд (публикует порт API для dev-Vite) — не в git/прод
+docker-compose.override.yml
+
 # Данные и аплоады
 data/
 *.db

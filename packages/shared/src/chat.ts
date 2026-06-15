@@ -48,6 +48,9 @@ export type MessageListResponse = z.infer<typeof messageListResponseSchema>;
 export const clientChatMessagesResponseSchema = z.object({
   messages: z.array(messageResponseSchema),
   trainerLastReadAt: z.string().nullable(),
+  /** Закреплённые сообщения диалога (видно обоим), по возрастанию времени. Опционально:
+   * пока старый API не отдаёт поле, фронт не должен падать на валидации. */
+  pinnedMessages: z.array(messageResponseSchema).optional(),
 });
 export type ClientChatMessagesResponse = z.infer<typeof clientChatMessagesResponseSchema>;
 
@@ -55,5 +58,8 @@ export type ClientChatMessagesResponse = z.infer<typeof clientChatMessagesRespon
 export const trainerChatMessagesResponseSchema = z.object({
   messages: z.array(messageResponseSchema),
   clientLastReadAt: z.string().nullable(),
+  /** Закреплённые сообщения диалога (видно обоим), по возрастанию времени. Опционально:
+   * пока старый API не отдаёт поле, фронт не должен падать на валидации. */
+  pinnedMessages: z.array(messageResponseSchema).optional(),
 });
 export type TrainerChatMessagesResponse = z.infer<typeof trainerChatMessagesResponseSchema>;

@@ -1,4 +1,4 @@
-import { and, eq, gte, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, isNotNull, lte, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import {
   sessions,
@@ -47,7 +47,8 @@ export function makeRemindersRepo(db: Db) {
 
     // Запланированные занятия в диапазоне дат (точную 24ч-границу считает планировщик).
     async upcomingSessions(fromDate: string, toDate: string): Promise<UpcomingSession[]> {
-      return db
+      // Занятия без клиента (личные блоки) исключаем — некому слать напоминание.
+      const rows = await db
         .select({
           id: sessions.id,
           trainerId: sessions.trainerId,
@@ -63,8 +64,10 @@ export function makeRemindersRepo(db: Db) {
             eq(sessions.status, 'planned'),
             gte(sessions.date, fromDate),
             lte(sessions.date, toDate),
+            isNotNull(sessions.clientId),
           ),
         );
+      return rows.flatMap((r) => (r.clientId === null ? [] : [{ ...r, clientId: r.clientId }]));
     },
 
     // Остаток по активным пакетам на клиента (+ имя). Для «пакет заканчивается» и «нет занятий».
@@ -93,7 +96,7 @@ export function makeRemindersRepo(db: Db) {
       fromDate: string,
       toDate: string,
     ): Promise<{ trainerId: string; clientId: string }[]> {
-      return db
+      const rows = await db
         .selectDistinct({ trainerId: sessions.trainerId, clientId: sessions.clientId })
         .from(sessions)
         .where(
@@ -101,8 +104,10 @@ export function makeRemindersRepo(db: Db) {
             eq(sessions.status, 'planned'),
             gte(sessions.date, fromDate),
             lte(sessions.date, toDate),
+            isNotNull(sessions.clientId),
           ),
         );
+      return rows.flatMap((r) => (r.clientId === null ? [] : [{ ...r, clientId: r.clientId }]));
     },
 
     // Активные клиенты с днём рождения сегодня (mmdd = 'MM-DD'), с их тренером.

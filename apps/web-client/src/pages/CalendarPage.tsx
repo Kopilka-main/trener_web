@@ -5,7 +5,15 @@ import { useClientMe } from '../api/auth';
 import { useClientTrainer } from '../api/trainer';
 import { useClientSessions, useConfirmSession } from '../api/calendar';
 import { SessionsCalendar } from '../components/SessionsCalendar';
-import { MONTH_GEN, endTime, humanDuration, monthGrid, parseISO, toISODate } from '../lib/calendar';
+import {
+  MONTH_GEN,
+  addDays,
+  endTime,
+  humanDuration,
+  parseISO,
+  startOfWeek,
+  toISODate,
+} from '../lib/calendar';
 
 const CONFIRM_LABEL: Record<SessionResponse['clientConfirmation'], string> = {
   pending: 'Ожидает ответа',
@@ -19,21 +27,24 @@ export function CalendarPage() {
   const linked = me.data?.link != null;
   const [anchor, setAnchor] = useState<Date>(new Date());
 
-  // Инициалы тренера для недельного вида (как у тренера — инициалы клиента).
+  // Имя тренера — подпись карточки занятия, когда у занятия нет своего названия.
   const trainerName = trainer.data
     ? `${trainer.data.firstName} ${trainer.data.lastName}`.trim()
     : '';
 
-  // Диапазон месяца-сетки текущего якоря (42 дня) — покрывает day/week/month.
-  const { from, to } = useMemo(() => {
-    const grid = monthGrid(anchor);
-    const first = grid[0];
-    const last = grid[grid.length - 1];
-    return {
-      from: first ? toISODate(first) : undefined,
-      to: last ? toISODate(last) : undefined,
-    };
+  // Базовый диапазон вокруг опорной недели — для видов «День»/«Месяц» и стартовой недели.
+  const base = useMemo(() => {
+    const ws = startOfWeek(anchor);
+    return { from: toISODate(addDays(ws, -3 * 7)), to: toISODate(addDays(ws, 5 * 7)) };
   }, [anchor]);
+
+  // Диапазон скользящего окна недельной ленты (растёт/смещается при прокрутке).
+  // Сбрасывается при смене якоря (см. onAnchorChange) — лента строится вокруг новой недели.
+  const [weekRange, setWeekRange] = useState<{ from: string; to: string } | null>(null);
+
+  // Грузим объединение базового и недельного диапазонов (строки ISO сравнимы лексикографически).
+  const from = weekRange && weekRange.from < base.from ? weekRange.from : base.from;
+  const to = weekRange && weekRange.to > base.to ? weekRange.to : base.to;
 
   const sessions = useClientSessions(from, to);
   const list = sessions.data ?? [];
@@ -60,9 +71,13 @@ export function CalendarPage() {
           sessions={list}
           defaultView="week"
           anchor={anchor}
-          onAnchorChange={setAnchor}
+          onAnchorChange={(d) => {
+            setWeekRange(null);
+            setAnchor(d);
+          }}
           onSessionClick={setSelected}
-          renderInitials={() => trainerName}
+          renderLabel={(s) => s.title ?? (trainerName || 'Занятие')}
+          onRangeChange={(f, t) => setWeekRange({ from: toISODate(f), to: toISODate(t) })}
         />
       )}
 

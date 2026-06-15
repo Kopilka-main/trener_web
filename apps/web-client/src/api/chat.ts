@@ -16,16 +16,23 @@ export const clientChatUnreadQueryKey = ['client', 'chat', 'unread'] as const;
 
 /** Лента сообщений (поллинг). 409 (нет тренера) → пустой список. */
 export function useClientMessages() {
-  return useQuery<{ messages: MessageResponse[]; trainerLastReadAt: string | null }>({
+  return useQuery<{
+    messages: MessageResponse[];
+    trainerLastReadAt: string | null;
+    pinnedMessages: MessageResponse[];
+  }>({
     queryKey: clientMessagesQueryKey,
     queryFn: async () => {
       try {
-        return await apiFetch('/client/chat/messages', {
+        const r = await apiFetch('/client/chat/messages', {
           schema: clientChatMessagesResponseSchema,
         });
+        // pinnedMessages пока опционально в контракте (старый API может не отдавать) —
+        // нормализуем к [], чтобы тип данных был стабильным.
+        return { ...r, pinnedMessages: r.pinnedMessages ?? [] };
       } catch (err) {
         if (err instanceof ApiError && err.status === 409) {
-          return { messages: [], trainerLastReadAt: null };
+          return { messages: [], trainerLastReadAt: null, pinnedMessages: [] };
         }
         throw err;
       }

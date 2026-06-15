@@ -297,9 +297,8 @@ export const sessions = pgTable(
     trainerId: text('trainer_id')
       .notNull()
       .references(() => trainers.id, { onDelete: 'cascade' }),
-    clientId: text('client_id')
-      .notNull()
-      .references(() => clients.id, { onDelete: 'cascade' }),
+    // Клиент необязателен: можно создать «личное» занятие/блок без клиента.
+    clientId: text('client_id').references(() => clients.id, { onDelete: 'cascade' }),
     workoutId: text('workout_id').references(() => clientWorkouts.id, { onDelete: 'set null' }),
     date: text('date').notNull(), // YYYY-MM-DD
     startTime: text('start_time').notNull(), // HH:MM
@@ -499,6 +498,10 @@ export const conversations = pgTable(
     lastMessageAt: timestamp('last_message_at', { withTimezone: true }),
     trainerLastReadAt: timestamp('trainer_last_read_at', { withTimezone: true }),
     clientLastReadAt: timestamp('client_last_read_at', { withTimezone: true }),
+    // Закреплённое сообщение диалога (видно обоим, как в Telegram). NULL — нет закрепа.
+    pinnedMessageId: text('pinned_message_id').references((): AnyPgColumn => messages.id, {
+      onDelete: 'set null',
+    }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('conversations_trainer_client_uq').on(t.trainerId, t.clientId)],
@@ -519,6 +522,8 @@ export const messages = pgTable(
     // Только для kind='task': статус выполнения (NULL для остальных).
     taskDone: boolean('task_done'),
     taskCompletedAt: timestamp('task_completed_at', { withTimezone: true }),
+    // Закреплено в диалоге (видно обоим). Несколько сообщений могут быть закреплены.
+    pinned: boolean('pinned').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

@@ -14,12 +14,16 @@ interface ScreenHeaderProps {
   left?: ReactNode;
   /** Опциональный слот действия справа (например, кнопка сохранения). */
   right?: ReactNode;
-  /** Закрепить шапку вверху экрана при прокрутке. */
+  /**
+   * Закрепить шапку вверху экрана при прокрутке (по умолчанию — да). Передайте
+   * `sticky={false}`, если экрану нужна обычная прокручиваемая шапка.
+   */
   sticky?: boolean;
 }
 
-/** Заголовок внутреннего экрана: центрированный title + опц. действия слева/справа. */
-export function ScreenHeader({ title, left, right, sticky = false }: ScreenHeaderProps) {
+/** Заголовок внутреннего экрана: центрированный title + опц. действия слева/справа.
+ *  По умолчанию закреплён вверху (функциональные клавиши всегда на виду). */
+export function ScreenHeader({ title, left, right, sticky = true }: ScreenHeaderProps) {
   return (
     <header
       className={`relative flex min-h-[56px] items-center px-14 py-3 ${

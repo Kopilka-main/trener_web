@@ -12,6 +12,7 @@ function convRow(
     lastMessageAt: null,
     trainerLastReadAt: null,
     clientLastReadAt: null,
+    pinnedMessageId: null,
     createdAt: new Date(0),
     unreadCount: 0,
     ...over,
@@ -26,6 +27,7 @@ function msgRow(over: Partial<MessageRow> = {}): MessageRow {
     body: 'привет',
     kind: 'text',
     taskDone: null,
+    pinned: false,
     createdAt: new Date(0),
     ...over,
   };
@@ -45,6 +47,9 @@ function fakeRepo(over: Partial<ChatRepo> = {}): ChatRepo {
     trainerUnreadConversationsCount: vi.fn(() => Promise.resolve(0)),
     trainerReadAt: vi.fn(() => Promise.resolve(null)),
     clientReadAt: vi.fn(() => Promise.resolve(null)),
+    pinMessage: vi.fn(() => Promise.resolve(true)),
+    unpinMessage: vi.fn(() => Promise.resolve()),
+    getPinnedMessages: vi.fn(() => Promise.resolve([])),
     ...over,
   };
 }
@@ -128,6 +133,68 @@ describe('chat.service', () => {
       'text',
       null,
     );
+  });
+
+  it('/pin создаёт обычное сообщение и закрепляет его', async () => {
+    const addMessage = vi.fn(() => Promise.resolve(msgRow({ id: 'pm', body: 'совет дня' })));
+    const pinMessage = vi.fn(() => Promise.resolve(true));
+    const svc = makeChatService(fakeRepo({ addMessage, pinMessage }), deps);
+    const res = await svc.sendMessage('A', 'c1', { body: '/pin совет дня' });
+    expect(res.kind).toBe('text');
+    expect(addMessage).toHaveBeenCalledWith(
+      'A',
+      'c1',
+      'newid',
+      'совет дня',
+      new Date(0),
+      'trainer',
+      'text',
+      null,
+    );
+    expect(pinMessage).toHaveBeenCalledWith('A', 'c1', 'pm', new Date(0));
+  });
+
+  it('/pin от клиента — обычный текст, без закрепа', async () => {
+    const pinMessage = vi.fn(() => Promise.resolve(true));
+    const addMessage = vi.fn(() => Promise.resolve(msgRow()));
+    const svc = makeChatService(fakeRepo({ addMessage, pinMessage }), deps);
+    await svc.sendMessage('A', 'c1', { body: '/pin совет' }, 'client');
+    expect(addMessage).toHaveBeenCalledWith(
+      'A',
+      'c1',
+      'newid',
+      '/pin совет',
+      new Date(0),
+      'client',
+      'text',
+      null,
+    );
+    expect(pinMessage).not.toHaveBeenCalled();
+  });
+
+  it('getPinned резолвит список закреплённых (или пусто)', async () => {
+    const withPin = makeChatService(
+      fakeRepo({
+        getPinnedMessages: vi.fn(() =>
+          Promise.resolve([
+            msgRow({ id: 'p1', body: 'совет 1' }),
+            msgRow({ id: 'p2', body: 'совет 2' }),
+          ]),
+        ),
+      }),
+      deps,
+    );
+    const res = await withPin.getPinned('A', 'c1');
+    expect(res.map((m) => m.body)).toEqual(['совет 1', 'совет 2']);
+    const noPin = makeChatService(fakeRepo(), deps);
+    await expect(noPin.getPinned('A', 'c1')).resolves.toEqual([]);
+  });
+
+  it('unpin снимает закреп с конкретного сообщения', async () => {
+    const unpinMessage = vi.fn(() => Promise.resolve());
+    const svc = makeChatService(fakeRepo({ unpinMessage }), deps);
+    await svc.unpin('A', 'c1', 'pm');
+    expect(unpinMessage).toHaveBeenCalledWith('A', 'c1', 'pm');
   });
 
   it('completeTask закрывает задачу и пишет системное сообщение', async () => {

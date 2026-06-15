@@ -86,11 +86,28 @@ export function chatRoutes(
       const options: { sinceId?: string } = {};
       if (req.query.sinceId !== undefined) options.sinceId = req.query.sinceId;
       const t = trainerId(req);
-      const [messages, clientLastReadAt] = await Promise.all([
+      const [messages, clientLastReadAt, pinnedMessages] = await Promise.all([
         svc.listMessages(t, req.params.id, options),
         svc.clientReadAt(t, req.params.id),
+        svc.getPinned(t, req.params.id),
       ]);
-      return { messages, clientLastReadAt };
+      return { messages, clientLastReadAt, pinnedMessages };
+    },
+  );
+
+  // Снять закреп с конкретного сообщения (тренер).
+  typed.delete(
+    '/api/clients/:id/messages/:messageId/pin',
+    {
+      preHandler: clientPreHandler,
+      schema: {
+        params: z.object({ id: z.string(), messageId: z.string() }),
+        response: { 200: z.object({ ok: z.literal(true) }) },
+      },
+    },
+    async (req) => {
+      await svc.unpin(trainerId(req), req.params.id, req.params.messageId);
+      return { ok: true as const };
     },
   );
 

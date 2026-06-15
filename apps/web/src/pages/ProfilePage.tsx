@@ -284,6 +284,18 @@ function IdRow({ id }: { id: string }) {
           </div>
         )}
       </div>
+
+      {/* Всплывающий тост «Скопировано» при копировании ID. */}
+      {copied && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-10 z-50 flex justify-center px-6">
+          <div
+            className="rounded-full px-4 py-2 text-[13px] font-medium shadow-lg"
+            style={{ background: 'var(--color-ink)', color: 'var(--color-card)' }}
+          >
+            Скопировано
+          </div>
+        </div>
+      )}
     </Section>
   );
 }

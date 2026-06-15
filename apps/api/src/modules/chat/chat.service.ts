@@ -52,6 +52,15 @@ function parseTaskBody(body: string, senderRole: 'trainer' | 'client'): string |
   return text.length > 0 ? text : null;
 }
 
+// «/pin совет дня» → текст «совет дня». Только тренер; создаёт обычное сообщение,
+// которое сразу закрепляется в диалоге. Без текста — не команда (вернёт null).
+function parsePinBody(body: string, senderRole: 'trainer' | 'client'): string | null {
+  if (senderRole !== 'trainer') return null;
+  const m = /^\/pin\s+([\s\S]+)/.exec(body);
+  const text = (m?.[1] ?? '').trim();
+  return text.length > 0 ? text : null;
+}
+
 export function makeChatService(repo: ChatRepo, deps: ChatDeps) {
   return {
     async listConversations(trainerId: string): Promise<ConversationResponse[]> {
@@ -74,10 +83,13 @@ export function makeChatService(repo: ChatRepo, deps: ChatDeps) {
       input: SendMessageRequest,
       senderRole: 'trainer' | 'client' = 'trainer',
     ): Promise<MessageResponse> {
-      // Команда тренера «/task …» создаёт задачу с чекбоксом, а не обычное сообщение.
+      // Команды тренера: «/task …» → задача с чекбоксом; «/pin …» → обычное сообщение,
+      // которое сразу закрепляется в диалоге (видно обоим).
       const taskBody = parseTaskBody(input.body, senderRole);
       const isTask = taskBody !== null;
-      const body = taskBody ?? input.body;
+      const pinBody = isTask ? null : parsePinBody(input.body, senderRole);
+      const isPin = pinBody !== null;
+      const body = taskBody ?? pinBody ?? input.body;
       const row = await repo.addMessage(
         trainerId,
         clientId,
@@ -88,6 +100,7 @@ export function makeChatService(repo: ChatRepo, deps: ChatDeps) {
         isTask ? 'task' : 'text',
         isTask ? false : null,
       );
+      if (isPin) await repo.pinMessage(trainerId, clientId, row.id, deps.now());
       // Пуш получателю с именем отправителя в заголовке (как в мессенджерах)
       // и числом непрочитанного для бейджа на иконке приложения.
       const preview = body.length > 120 ? `${body.slice(0, 117)}…` : body;
@@ -141,6 +154,17 @@ export function makeChatService(repo: ChatRepo, deps: ChatDeps) {
         }));
       }
       return toMessageResponse(sysRow);
+    },
+
+    // Все закреплённые сообщения диалога (по возрастанию времени).
+    async getPinned(trainerId: string, clientId: string): Promise<MessageResponse[]> {
+      const rows = await repo.getPinnedMessages(trainerId, clientId);
+      return rows.map(toMessageResponse);
+    },
+
+    // Снять закреп с конкретного сообщения (тренер).
+    async unpin(trainerId: string, clientId: string, messageId: string): Promise<void> {
+      await repo.unpinMessage(trainerId, clientId, messageId);
     },
 
     async markRead(trainerId: string, clientId: string): Promise<void> {

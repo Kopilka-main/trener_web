@@ -23,7 +23,9 @@
     <!-- iOS: запуск с экрана «Домой» на весь экран (без letterbox-прямоугольника). -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!-- Контент уходит под статус-бар; область заполняет тема (см. .app-shell
+         padding-top: safe-area). Иначе в тёмной теме сверху белая полоса. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Мой тренер" />
     <!-- iOS Safari: гасим зум по двойному тапу и авто-увеличение текста; пинч/фокус-зум — через viewport выше. -->
     <style>

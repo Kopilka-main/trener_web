@@ -58,11 +58,15 @@ function timeOf(d: Date): string {
 export function makeSessionsService(repo: SessionsRepo, deps: SessionsDeps) {
   return {
     async create(trainerId: string, input: CreateSessionRequest): Promise<SessionResponse> {
-      if (!(await repo.isClientLinked(trainerId, input.clientId))) throw clientNotLinked();
+      // Клиент необязателен. Если указан — проверяем связь с тренером.
+      const clientId = input.clientId && input.clientId.length > 0 ? input.clientId : null;
+      if (clientId !== null && !(await repo.isClientLinked(trainerId, clientId))) {
+        throw clientNotLinked();
+      }
       const row = await repo.create({
         id: deps.newId(),
         trainerId,
-        clientId: input.clientId,
+        clientId,
         date: input.date,
         startTime: input.startTime,
         durationMin: input.durationMin,
@@ -71,9 +75,9 @@ export function makeSessionsService(repo: SessionsRepo, deps: SessionsDeps) {
         isOnline: input.isOnline,
         workoutId: input.workoutId ?? null,
       });
-      // Назначили занятие → клиенту пуш с просьбой подтвердить (с именем тренера).
-      if (deps.notifyClientPending) {
-        deps.notifyClientPending(input.clientId, trainerId, (trainerName) => ({
+      // Назначили занятие клиенту → пуш с просьбой подтвердить (с именем тренера).
+      if (clientId !== null && deps.notifyClientPending) {
+        deps.notifyClientPending(clientId, trainerId, (trainerName) => ({
           title: 'Новое занятие',
           body: `${trainerName} назначил занятие ${formatWhen(input.date, input.startTime)} — подтвердите`,
           url: '/calendar',
@@ -152,8 +156,13 @@ export function makeSessionsService(repo: SessionsRepo, deps: SessionsDeps) {
       id: string,
       patch: UpdateSessionRequest,
     ): Promise<SessionResponse> {
-      // При смене клиента — проверяем связь нового клиента с тренером.
-      if (patch.clientId !== undefined && !(await repo.isClientLinked(trainerId, patch.clientId))) {
+      // При смене клиента на конкретного — проверяем связь с тренером (пустой = отвязать).
+      if (
+        patch.clientId !== undefined &&
+        patch.clientId !== null &&
+        patch.clientId !== '' &&
+        !(await repo.isClientLinked(trainerId, patch.clientId))
+      ) {
         throw clientNotLinked();
       }
       // Текущее состояние нужно, чтобы понять, переносится ли согласованное занятие.
@@ -162,7 +171,8 @@ export function makeSessionsService(repo: SessionsRepo, deps: SessionsDeps) {
 
       // exactOptionalPropertyTypes: задаём только определённые поля.
       const repoPatch: UpdateSessionInput = {};
-      if (patch.clientId !== undefined) repoPatch.clientId = patch.clientId;
+      if (patch.clientId !== undefined)
+        repoPatch.clientId = patch.clientId === '' ? null : patch.clientId;
       if (patch.date !== undefined) repoPatch.date = patch.date;
       if (patch.startTime !== undefined) repoPatch.startTime = patch.startTime;
       if (patch.durationMin !== undefined) repoPatch.durationMin = patch.durationMin;
@@ -188,7 +198,7 @@ export function makeSessionsService(repo: SessionsRepo, deps: SessionsDeps) {
 
       // Перенос согласованного → пуш клиенту: прежняя договорённость отменена,
       // нужно подтвердить новое время (адресат — текущий владелец занятия).
-      if (resetConfirmation && deps.notifyClientPending) {
+      if (resetConfirmation && session.clientId !== '' && deps.notifyClientPending) {
         const when = formatWhen(session.date, session.startTime);
         deps.notifyClientPending(session.clientId, trainerId, (trainerName) => ({
           title: 'Занятие перенесено',

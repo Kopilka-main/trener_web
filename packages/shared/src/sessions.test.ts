@@ -56,10 +56,15 @@ describe('sessions schemas', () => {
     ).toThrow();
   });
 
-  it('create отклоняет пустой clientId', () => {
-    expect(() =>
-      createSessionRequestSchema.parse({ clientId: '', date: '2026-06-01', startTime: '09:30' }),
-    ).toThrow();
+  it('create допускает занятие без клиента (clientId необязателен)', () => {
+    const r = createSessionRequestSchema.parse({ date: '2026-06-01', startTime: '09:30' });
+    expect(r.clientId == null).toBe(true);
+    const r2 = createSessionRequestSchema.parse({
+      clientId: '',
+      date: '2026-06-01',
+      startTime: '09:30',
+    });
+    expect(r2.clientId).toBe('');
   });
 
   it('update допускает частичные поля и status', () => {

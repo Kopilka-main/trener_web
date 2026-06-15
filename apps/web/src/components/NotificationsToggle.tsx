@@ -31,9 +31,11 @@ export function NotificationsToggle() {
   }
 
   const denied = perm === 'denied';
+  const [note, setNote] = useState('');
 
   async function toggle() {
     setBusy(true);
+    setNote('');
     try {
       if (on) {
         await disablePush();
@@ -42,9 +44,12 @@ export function NotificationsToggle() {
         const res = await enablePush();
         setPerm(notificationPermission());
         if (res === 'enabled') setOn(true);
+        else if (res === 'no-key') setNote('Push не настроен на сервере.');
+        else if (res === 'denied' && notificationPermission() !== 'denied')
+          setNote('Разрешение не выдано — нажмите ещё раз и подтвердите запрос.');
       }
     } catch {
-      // молча: статус не меняем, пользователь может повторить
+      setNote('Не удалось включить уведомления. Попробуйте ещё раз.');
     } finally {
       setBusy(false);
     }
@@ -56,6 +61,8 @@ export function NotificationsToggle() {
         type="button"
         onClick={() => void toggle()}
         disabled={busy || denied}
+        role="switch"
+        aria-checked={on}
         className="flex items-center justify-between rounded-2xl bg-card px-4 py-3 active:bg-card-elevated disabled:opacity-60"
       >
         <span className="flex items-center gap-3">
@@ -63,9 +70,15 @@ export function NotificationsToggle() {
           <span className="text-[14px] text-ink">Push-уведомления</span>
         </span>
         <span
-          className={`text-[13px] font-semibold ${on ? 'text-accent-text' : 'text-ink-mutedxl'}`}
+          className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full px-0.5 transition-colors ${
+            on ? 'bg-accent' : 'bg-chip'
+          } ${busy ? 'opacity-60' : ''}`}
         >
-          {busy ? '…' : on ? 'Вкл' : 'Выкл'}
+          <span
+            className={`h-4 w-4 rounded-full bg-white shadow transition-transform ${
+              on ? 'translate-x-4' : 'translate-x-0'
+            }`}
+          />
         </span>
       </button>
       {denied && (
@@ -73,6 +86,7 @@ export function NotificationsToggle() {
           Уведомления запрещены — разрешите их для сайта в настройках браузера.
         </p>
       )}
+      {note && !denied && <p className="px-1 text-[12px] text-ink-muted">{note}</p>}
     </div>
   );
 }

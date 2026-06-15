@@ -6,7 +6,7 @@ import type { SessionResponse, SessionStatus } from '@trener/shared';
 export type SessionRow = {
   id: string;
   trainerId: string;
-  clientId: string;
+  clientId: string | null;
   workoutId: string | null;
   date: string;
   startTime: string;
@@ -23,7 +23,7 @@ export type SessionRow = {
 export type CreateSessionInput = {
   id: string;
   trainerId: string;
-  clientId: string;
+  clientId: string | null;
   date: string;
   startTime: string;
   durationMin: number;
@@ -34,7 +34,7 @@ export type CreateSessionInput = {
 };
 
 export type UpdateSessionInput = {
-  clientId?: string;
+  clientId?: string | null;
   date?: string;
   startTime?: string;
   durationMin?: number;
@@ -70,7 +70,8 @@ const cols = {
 export function toResponse(r: SessionRow): SessionResponse {
   return {
     id: r.id,
-    clientId: r.clientId,
+    // Нет клиента → пустая строка (тип ответа остаётся string, без null по всему фронту).
+    clientId: r.clientId ?? '',
     workoutId: r.workoutId,
     date: r.date,
     startTime: r.startTime,
@@ -260,7 +261,7 @@ export function makeSessionsRepo(db: Db) {
       patch: UpdateSessionInput,
     ): Promise<SessionRow | null> {
       const set: Partial<{
-        clientId: string;
+        clientId: string | null;
         date: string;
         startTime: string;
         durationMin: number;

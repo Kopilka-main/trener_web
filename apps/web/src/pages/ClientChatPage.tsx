@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowUp, Check, CheckCheck } from 'lucide-react';
+import { ArrowUp, Check, CheckCheck, Pin, X } from 'lucide-react';
 import type { MessageResponse } from '@trener/shared';
 import {
   useChatMessages,
   useDeleteConversation,
   useMarkConversationRead,
   useSendMessage,
+  useUnpinMessage,
 } from '../api/chat';
 import { useClient } from '../api/clients';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -26,10 +27,24 @@ export function ClientChatPage() {
   const send = useSendMessage(id);
   const markRead = useMarkConversationRead(id);
   const removeChat = useDeleteConversation(id);
+  const unpin = useUnpinMessage(id);
 
   const [draft, setDraft] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  // Ссылки на пузыри по id — для перехода к закреплённому сообщению.
+  const msgRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  // Индекс показываемого закреплённого (циклически переключаем тапом по баннеру).
+  const [pinIdx, setPinIdx] = useState(0);
+
+  function jumpToMessage(mid: string) {
+    const el = msgRefs.current.get(mid);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    setHighlightId(mid);
+    window.setTimeout(() => setHighlightId((cur) => (cur === mid ? null : cur)), 1600);
+  }
 
   // Авто-рост поля ввода до 3 строк (80px), далее — внутренняя прокрутка.
   useEffect(() => {
@@ -41,6 +56,8 @@ export function ClientChatPage() {
 
   const list = messages.data?.messages ?? [];
   const clientReadAt = messages.data?.clientLastReadAt ?? null;
+  const pinnedList = messages.data?.pinnedMessages ?? [];
+  const pinCurrent = pinnedList.length > 0 ? pinnedList[pinIdx % pinnedList.length] : null;
   const title = client.data ? `${client.data.firstName} ${client.data.lastName}`.trim() : 'Чат';
 
   // Автоскролл вниз при появлении новых сообщений.
@@ -106,6 +123,41 @@ export function ClientChatPage() {
         }
       />
 
+      {/* Закреплённые сообщения: тап — переход к текущему и переключение на следующее
+          (как в Telegram); × — открепить показанное. Видно обоим. */}
+      {pinCurrent && (
+        <div className="flex items-center gap-2 border-b border-line bg-bg px-3 py-2">
+          <button
+            type="button"
+            onClick={() => {
+              jumpToMessage(pinCurrent.id);
+              if (pinnedList.length > 1) setPinIdx((i) => (i + 1) % pinnedList.length);
+            }}
+            className="flex min-w-0 flex-1 items-center gap-2 text-left active:opacity-70"
+          >
+            <Pin size={15} className="shrink-0 text-accent-text" />
+            <span className="flex min-w-0 flex-col">
+              <span className="text-[11px] font-semibold text-accent-text">
+                Закреплённое
+                {pinnedList.length > 1
+                  ? ` · ${(pinIdx % pinnedList.length) + 1}/${pinnedList.length}`
+                  : ''}
+              </span>
+              <span className="truncate text-[13px] text-ink">{pinCurrent.body}</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => unpin.mutate(pinCurrent.id)}
+            disabled={unpin.isPending}
+            aria-label="Открепить"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-muted active:bg-card-elevated disabled:opacity-40"
+          >
+            <X size={16} strokeWidth={2} />
+          </button>
+        </div>
+      )}
+
       <div
         ref={scrollRef}
         onClick={() => taRef.current?.blur()}
@@ -125,14 +177,25 @@ export function ClientChatPage() {
           <div className="flex flex-col items-center gap-2 pt-10 text-center">
             <p className="text-sm text-ink-muted">Сообщений пока нет. Напишите первым.</p>
             <p className="max-w-[260px] text-xs leading-relaxed text-ink-muted">
-              Подсказка: начните сообщение с <span className="font-mono">/task</span> — и оно станет
-              задачей с чекбоксом для клиента.
+              Подсказки: <span className="font-mono">/task</span> — задача с чекбоксом для клиента;{' '}
+              <span className="font-mono">/pin</span> — закрепить сообщение (видно обоим).
             </p>
           </div>
         )}
 
         {list.map((m) => (
-          <Bubble key={m.id} message={m} clientReadAt={clientReadAt} />
+          <div
+            key={m.id}
+            ref={(el) => {
+              if (el) msgRefs.current.set(m.id, el);
+              else msgRefs.current.delete(m.id);
+            }}
+            className={`rounded-2xl transition-colors ${
+              highlightId === m.id ? 'bg-accent/10' : ''
+            }`}
+          >
+            <Bubble message={m} clientReadAt={clientReadAt} />
+          </div>
         ))}
       </div>
 

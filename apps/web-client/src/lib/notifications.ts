@@ -79,7 +79,7 @@ export function buildClientNotifications(args: {
     .filter((s) => s.status !== 'cancelled' && startMs(s) >= nowMs)
     .sort((a, b) => startMs(a) - startMs(b));
 
-  // 1) Подтверждения (каждое pending-занятие).
+  // 1) Подтверждения (каждое будущее pending-занятие).
   for (const s of future) {
     if (s.clientConfirmation === 'pending') {
       out.push({
@@ -89,6 +89,22 @@ export function buildClientNotifications(args: {
         to: '/calendar',
       });
     }
+  }
+
+  // 1b) Проведённые тренером, но ещё не согласованные занятия (в т.ч. созданные задним
+  // числом при завершении тренировки без записи в календаре). Окно — последние 30 дней,
+  // чтобы не всплывали старые. Будущие сюда не попадают — они уже учтены в п.1.
+  const ago30Ms = nowMs - 30 * 24 * 3600 * 1000;
+  for (const s of sessions) {
+    if (s.status !== 'completed' || s.clientConfirmation !== 'pending') continue;
+    const ms = startMs(s);
+    if (ms >= nowMs || ms < ago30Ms) continue;
+    out.push({
+      id: `confirm:${s.id}`,
+      kind: 'confirm',
+      text: `Подтвердите проведённую тренировку ${whenLabel(s)}`,
+      to: '/calendar',
+    });
   }
 
   // 2) Скоро занятие — ближайшее НЕ pending в пределах 24ч.

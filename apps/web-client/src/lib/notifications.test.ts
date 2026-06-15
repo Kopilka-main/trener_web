@@ -106,6 +106,48 @@ describe('buildClientNotifications', () => {
     expect(r).toEqual([]);
   });
 
+  it('проведённое pending занятие (в окне 30 дней) → confirm', () => {
+    const r = buildClientNotifications({
+      sessions: [
+        session({
+          id: 'done1',
+          status: 'completed',
+          clientConfirmation: 'pending',
+          date: '2026-06-09',
+        }),
+      ],
+      unread: 0,
+      now: NOW,
+      dismissed: new Set(),
+    });
+    expect(r.map((n) => n.kind)).toEqual(['confirm']);
+    expect(r[0]?.id).toBe('confirm:done1');
+    expect(r[0]?.text).toContain('проведённую');
+  });
+
+  it('проведённое занятие: согласованное или старше 30 дней → нет confirm', () => {
+    const r = buildClientNotifications({
+      sessions: [
+        session({
+          id: 'ok',
+          status: 'completed',
+          clientConfirmation: 'confirmed',
+          date: '2026-06-09',
+        }),
+        session({
+          id: 'old',
+          status: 'completed',
+          clientConfirmation: 'pending',
+          date: '2026-04-01',
+        }),
+      ],
+      unread: 0,
+      now: NOW,
+      dismissed: new Set(),
+    });
+    expect(r).toEqual([]);
+  });
+
   it('dismissed-id исключается; порядок confirm → soon → chat', () => {
     const sessions = [
       session({ id: 'p', clientConfirmation: 'pending', date: '2026-06-11' }),

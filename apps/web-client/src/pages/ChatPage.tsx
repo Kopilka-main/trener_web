@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUp, Check, CheckCheck } from 'lucide-react';
+import { ArrowUp, Check, CheckCheck, Pin } from 'lucide-react';
 import { useClientMe } from '../api/auth';
 import {
   useClientMessages,
@@ -29,8 +29,33 @@ export function ChatPage() {
   const markRead = useMarkChatRead();
   const completeTask = useCompleteTask();
   const [draft, setDraft] = useState('');
-  const endRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  // Ссылки на сообщения по id — для перехода к закреплённому.
+  const msgRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [pinIdx, setPinIdx] = useState(0);
+
+  function jumpToMessage(mid: string) {
+    const el = msgRefs.current.get(mid);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    setHighlightId(mid);
+    window.setTimeout(() => setHighlightId((cur) => (cur === mid ? null : cur)), 1600);
+  }
+
+  const wrapMsg = (mid: string, node: ReactNode) => (
+    <div
+      key={mid}
+      ref={(el) => {
+        if (el) msgRefs.current.set(mid, el);
+        else msgRefs.current.delete(mid);
+      }}
+      className={`rounded-2xl transition-colors ${highlightId === mid ? 'bg-accent/10' : ''}`}
+    >
+      {node}
+    </div>
+  );
 
   // Авто-рост поля ввода до 3 строк (80px), далее — внутренняя прокрутка.
   useEffect(() => {
@@ -42,9 +67,12 @@ export function ChatPage() {
 
   const items = messages.data?.messages ?? [];
   const readAt = messages.data?.trainerLastReadAt ?? null;
+  const pinnedList = messages.data?.pinnedMessages ?? [];
+  const pinCurrent = pinnedList.length > 0 ? pinnedList[pinIdx % pinnedList.length] : null;
   const count = items.length;
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' });
+    const el = scrollRef.current;
+    if (el) requestAnimationFrame(() => (el.scrollTop = el.scrollHeight));
   }, [count]);
 
   // Перечитываем при открытии И при каждом новом входящем сообщении тренера.
@@ -61,6 +89,22 @@ export function ChatPage() {
     // Оставляем фокус в поле, чтобы клавиатура не закрывалась после отправки.
     taRef.current?.focus();
     send.mutate({ body }, { onError: () => setDraft((cur) => (cur === '' ? body : cur)) });
+  }
+
+  function scrollToBottom() {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }
+
+  // При фокусе клавиатура анимированно ужимает область сообщений. Чтобы лента не
+  // «дёргалась», непрерывно прижимаем её к низу каждый кадр, пока идёт анимация (~500мс).
+  function onInputFocus() {
+    const start = Date.now();
+    const tick = () => {
+      scrollToBottom();
+      if (Date.now() - start < 500) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
   }
 
   if (!linked) {
@@ -100,10 +144,35 @@ export function ChatPage() {
         </span>
       </div>
 
+      {/* Закреплённые тренером сообщения: тап — переход к текущему и переключение
+          на следующее (открепляет тренер). */}
+      {pinCurrent && (
+        <button
+          type="button"
+          onClick={() => {
+            jumpToMessage(pinCurrent.id);
+            if (pinnedList.length > 1) setPinIdx((i) => (i + 1) % pinnedList.length);
+          }}
+          className="flex items-center gap-2 border-b border-line bg-bg px-3 py-2 text-left active:opacity-70"
+        >
+          <Pin size={15} className="shrink-0 text-accent-text" />
+          <span className="flex min-w-0 flex-col">
+            <span className="text-[11px] font-semibold text-accent-text">
+              Закреплённое
+              {pinnedList.length > 1
+                ? ` · ${(pinIdx % pinnedList.length) + 1}/${pinnedList.length}`
+                : ''}
+            </span>
+            <span className="truncate text-[13px] text-ink">{pinCurrent.body}</span>
+          </span>
+        </button>
+      )}
+
       {/* Лента сообщений. Тап по ленте убирает клавиатуру (снимаем фокус с поля). */}
       <div
+        ref={scrollRef}
         onClick={() => taRef.current?.blur()}
-        className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-2 pb-3 pt-3"
+        className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto overscroll-contain px-2 pb-3 pt-3"
       >
         {count === 0 && (
           <p className="pt-10 text-center text-sm text-ink-muted">
@@ -115,20 +184,22 @@ export function ChatPage() {
 
           // Системная плашка (например «задача выполнена») — по центру, без пузыря.
           if (m.kind === 'system') {
-            return (
-              <div key={m.id} className="flex justify-center">
+            return wrapMsg(
+              m.id,
+              <div className="flex justify-center">
                 <div className="rounded-full bg-chip px-3 py-1 text-center text-[11px] text-ink-muted">
                   {m.body}
                 </div>
-              </div>
+              </div>,
             );
           }
 
           // Задача с чекбоксом — клиент отмечает выполнение (однократно).
           if (m.kind === 'task') {
             const done = m.taskDone === true;
-            return (
-              <div key={m.id} className="flex justify-start">
+            return wrapMsg(
+              m.id,
+              <div className="flex justify-start">
                 <div className="flex max-w-[85%] items-start gap-2.5 rounded-2xl border border-accent/40 bg-card px-3 py-2.5">
                   <button
                     type="button"
@@ -155,14 +226,15 @@ export function ChatPage() {
                     {time && <div className="mt-0.5 text-[10px] text-ink-muted">{time}</div>}
                   </div>
                 </div>
-              </div>
+              </div>,
             );
           }
 
           const mine = m.senderRole === 'client';
           const read = readAt !== null && m.createdAt <= readAt;
-          return (
-            <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+          return wrapMsg(
+            m.id,
+            <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
               <div
                 className={`max-w-[80%] rounded-2xl px-3 py-2 text-[14px] ${
                   mine ? 'bg-accent text-accent-on' : 'bg-card text-ink'
@@ -180,10 +252,9 @@ export function ChatPage() {
                   </div>
                 )}
               </div>
-            </div>
+            </div>,
           );
         })}
-        <div ref={endRef} />
       </div>
 
       {/* Ввод */}
@@ -192,13 +263,14 @@ export function ChatPage() {
           e.preventDefault();
           submit();
         }}
-        className="border-t border-line bg-bg px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+        className="shrink-0 border-t border-line bg-bg px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
       >
         <div className="relative">
           <textarea
             ref={taRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onFocus={onInputFocus}
             rows={1}
             maxLength={4000}
             placeholder="Сообщение…"

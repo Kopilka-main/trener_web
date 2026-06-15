@@ -9,6 +9,7 @@ export type ConversationRow = {
   lastMessageAt: Date | null;
   trainerLastReadAt: Date | null;
   clientLastReadAt: Date | null;
+  pinnedMessageId: string | null;
   createdAt: Date;
 };
 
@@ -21,6 +22,7 @@ export type MessageRow = {
   body: string;
   kind: MessageKindRow;
   taskDone: boolean | null;
+  pinned: boolean;
   createdAt: Date;
 };
 
@@ -35,6 +37,7 @@ const conversationColumns = {
   lastMessageAt: conversations.lastMessageAt,
   trainerLastReadAt: conversations.trainerLastReadAt,
   clientLastReadAt: conversations.clientLastReadAt,
+  pinnedMessageId: conversations.pinnedMessageId,
   createdAt: conversations.createdAt,
 };
 
@@ -45,6 +48,7 @@ const messageColumns = {
   body: messages.body,
   kind: messages.kind,
   taskDone: messages.taskDone,
+  pinned: messages.pinned,
   createdAt: messages.createdAt,
 };
 
@@ -214,6 +218,44 @@ export function makeChatRepo(db: Db) {
       });
       // returning по PK всегда возвращает строку.
       return row!;
+    },
+
+    // Пометить сообщение закреплённым (флаг на сообщении — закрепов может быть несколько).
+    // Сообщение должно принадлежать диалогу пары. now — для getOrCreate диалога.
+    async pinMessage(
+      trainerId: string,
+      clientId: string,
+      messageId: string,
+      now: Date,
+    ): Promise<boolean> {
+      const conversation = await getOrCreateConversation(trainerId, clientId, now);
+      const res = await db
+        .update(messages)
+        .set({ pinned: true })
+        .where(and(eq(messages.id, messageId), eq(messages.conversationId, conversation.id)))
+        .returning({ id: messages.id });
+      return res.length > 0;
+    },
+
+    // Снять закреп с конкретного сообщения. Идемпотентно: нет диалога/сообщения → ничего.
+    async unpinMessage(trainerId: string, clientId: string, messageId: string): Promise<void> {
+      const conversation = await findConversation(trainerId, clientId);
+      if (!conversation) return;
+      await db
+        .update(messages)
+        .set({ pinned: false })
+        .where(and(eq(messages.id, messageId), eq(messages.conversationId, conversation.id)));
+    },
+
+    // Все закреплённые сообщения диалога (по возрастанию времени). Нет диалога → [].
+    async getPinnedMessages(trainerId: string, clientId: string): Promise<MessageRow[]> {
+      const conversation = await findConversation(trainerId, clientId);
+      if (!conversation) return [];
+      return db
+        .select(messageColumns)
+        .from(messages)
+        .where(and(eq(messages.conversationId, conversation.id), eq(messages.pinned, true)))
+        .orderBy(asc(messages.createdAt), asc(messages.id));
     },
 
     // Закрыть задачу (kind='task') в диалоге пары. Идемпотентно: уже закрытая или

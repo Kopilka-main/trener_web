@@ -11,7 +11,8 @@ export type ClientConfirmation = z.infer<typeof clientConfirmationSchema>;
 // --- Создание занятия ---
 
 export const createSessionRequestSchema = z.object({
-  clientId: z.string().min(1),
+  // Клиент необязателен: можно запланировать занятие/блок без клиента.
+  clientId: z.string().nullish(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
   startTime: z.string().regex(/^\d{2}:\d{2}$/), // HH:MM
   durationMin: z.number().int().positive().default(60),
