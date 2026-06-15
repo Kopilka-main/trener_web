@@ -40,7 +40,7 @@ export function StatsPage() {
   return (
     <div className="flex min-h-full flex-col">
       <h1 className="px-2 pt-5 font-[family-name:var(--font-display)] text-[24px] text-ink">
-        Статистика
+        Прогресс
       </h1>
 
       <div className="px-2 pt-3">
@@ -153,7 +153,7 @@ function ExercisesTab({ linked }: { linked: boolean }) {
   if (workouts.isError) {
     return (
       <p className="text-sm text-ink-muted" role="alert">
-        Не удалось загрузить статистику. Попробуйте обновить страницу.
+        Не удалось загрузить прогресс. Попробуйте обновить страницу.
       </p>
     );
   }
@@ -170,7 +170,7 @@ function ExercisesTab({ linked }: { linked: boolean }) {
       <EmptyState icon={<Dumbbell size={28} strokeWidth={1.6} className="text-ink-muted" />}>
         {linked
           ? 'Тренировок с упражнениями пока нет.'
-          : 'Вы пока не подключены к тренеру. Подключите его, чтобы здесь появилась статистика по упражнениям.'}
+          : 'Вы пока не подключены к тренеру. Подключите его, чтобы здесь появился прогресс по упражнениям.'}
       </EmptyState>
     );
   }

@@ -9,7 +9,7 @@ const CLIENT_SECTION_LABELS: Record<string, string> = {
   chat: 'Чат',
   payments: 'Оплаты',
   calendar: 'Календарь',
-  stats: 'Статистика',
+  stats: 'Прогресс',
 };
 
 /** Заглушка раздела карточки клиента (/clients/:id/:section). «Назад» — к карточке. */

@@ -84,7 +84,7 @@ interface Tile {
 const TILES: Tile[] = [
   { key: 'calendar', label: 'Календарь', sub: 'занятия клиента', Icon: CalendarDays },
   { key: 'chat', label: 'Написать', sub: 'чат с клиентом', Icon: MessageSquare },
-  { key: 'stats', label: 'Статистика', sub: 'прогресс и история', Icon: BarChart3 },
+  { key: 'stats', label: 'Прогресс', sub: 'рекорды и история', Icon: BarChart3 },
   { key: 'payments', label: 'Оплата', sub: 'пакеты и расходы', Icon: Wallet },
   { key: 'medcard', label: 'Медкарта', sub: 'файлы и заметки', Icon: FileText },
   { key: 'profile', label: 'Профиль', sub: 'контакты и данные', Icon: Pencil },
@@ -129,10 +129,13 @@ export function ClientCardPage() {
     .reduce((acc, p) => acc + p.lessonsPaid, 0);
   const completedWorkouts = (workouts.data ?? []).filter((w) => w.status === 'completed').length;
   const paidBalance = paidLessons - completedWorkouts;
-  // Календарь: запланировано занятий / баланс по занятиям (оплачено − всего занятий).
+  // Календарь: «запланировано / ещё можно записать из оплаченных».
+  // Второе число = остаток оплаты (paidBalance) − уже запланированные занятия.
+  // Так плитки бьются: запланировано + осталось_записать = остаток оплаты (Оплата +N).
+  // Отрицательное → записано больше, чем оплачено (перезапись).
   const sessionList = sessions.data ?? [];
   const plannedSessions = sessionList.filter((s) => s.status === 'planned').length;
-  const calBalance = paidLessons - sessionList.length;
+  const calBalance = paidBalance - plannedSessions;
 
   return (
     <div className="flex min-h-full flex-col">
@@ -232,10 +235,10 @@ export function ClientCardPage() {
                     />
                   )}
                   {key === 'calendar' && (plannedSessions > 0 || sessionList.length > 0) && (
-                    <span className="flex items-baseline gap-0.5 text-[22px] font-bold leading-none">
-                      <span className="text-accent-text">{plannedSessions}</span>
+                    <span className="flex items-baseline gap-0.5 text-[22px] font-bold leading-none text-ink">
+                      <span>{plannedSessions}</span>
                       <span className="text-[16px] text-ink-mutedxl">/</span>
-                      <span className={calBalance < 0 ? 'text-danger' : 'text-accent-text'}>
+                      <span className={calBalance < 0 ? 'text-danger' : 'text-ink'}>
                         {calBalance > 0 ? `+${String(calBalance)}` : calBalance}
                       </span>
                     </span>

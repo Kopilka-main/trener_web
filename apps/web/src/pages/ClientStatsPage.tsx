@@ -68,9 +68,7 @@ export function ClientStatsPage() {
   const { data: client } = useClient(id);
   const [tab, setTab] = useState<Tab>('exercises');
 
-  const title = client
-    ? `Статистика · ${client.firstName} ${client.lastName}`.trim()
-    : 'Статистика';
+  const title = client ? `Прогресс · ${client.firstName} ${client.lastName}`.trim() : 'Прогресс';
 
   return (
     <div className="flex min-h-full flex-col">
