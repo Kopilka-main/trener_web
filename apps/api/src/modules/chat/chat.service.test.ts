@@ -28,6 +28,7 @@ function msgRow(over: Partial<MessageRow> = {}): MessageRow {
     kind: 'text',
     taskDone: null,
     pinned: false,
+    replyToId: null,
     createdAt: new Date(0),
     ...over,
   };
@@ -50,6 +51,7 @@ function fakeRepo(over: Partial<ChatRepo> = {}): ChatRepo {
     pinMessage: vi.fn(() => Promise.resolve(true)),
     unpinMessage: vi.fn(() => Promise.resolve()),
     getPinnedMessages: vi.fn(() => Promise.resolve([])),
+    getReplyBrief: vi.fn(() => Promise.resolve(null)),
     ...over,
   };
 }
@@ -96,6 +98,7 @@ describe('chat.service', () => {
       'trainer',
       'text',
       null,
+      null,
     );
   });
 
@@ -116,6 +119,7 @@ describe('chat.service', () => {
       'trainer',
       'task',
       false,
+      null,
     );
   });
 
@@ -131,6 +135,7 @@ describe('chat.service', () => {
       new Date(0),
       'client',
       'text',
+      null,
       null,
     );
   });
@@ -150,6 +155,7 @@ describe('chat.service', () => {
       'trainer',
       'text',
       null,
+      null,
     );
     expect(pinMessage).toHaveBeenCalledWith('A', 'c1', 'pm', new Date(0));
   });
@@ -168,8 +174,31 @@ describe('chat.service', () => {
       'client',
       'text',
       null,
+      null,
     );
     expect(pinMessage).not.toHaveBeenCalled();
+  });
+
+  it('reply: передаёт replyTo в addMessage и отдаёт превью цитаты', async () => {
+    const addMessage = vi.fn(() => Promise.resolve(msgRow({ id: 'm2', replyToId: 'm1' })));
+    const getReplyBrief = vi.fn(() =>
+      Promise.resolve({ id: 'm1', senderRole: 'trainer' as const, body: 'привет' }),
+    );
+    const svc = makeChatService(fakeRepo({ addMessage, getReplyBrief }), deps);
+    const res = await svc.sendMessage('A', 'c1', { body: 'ответ', replyTo: 'm1' });
+    expect(addMessage).toHaveBeenCalledWith(
+      'A',
+      'c1',
+      'newid',
+      'ответ',
+      new Date(0),
+      'trainer',
+      'text',
+      null,
+      'm1',
+    );
+    expect(getReplyBrief).toHaveBeenCalledWith('A', 'c1', 'm1');
+    expect(res.replyTo).toEqual({ id: 'm1', senderRole: 'trainer', body: 'привет' });
   });
 
   it('getPinned резолвит список закреплённых (или пусто)', async () => {

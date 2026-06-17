@@ -377,7 +377,6 @@ function MonthView({
           const c = counts.get(iso);
           const inMonth = d.getMonth() === month;
           const today = sameDay(d, now);
-          const hasSessions = c ? c.pending + c.confirmed + c.declined > 0 : false;
           return (
             <button
               key={iso}
@@ -387,13 +386,6 @@ function MonthView({
                 today ? 'ring-2 ring-accent' : ''
               } ${inMonth ? '' : 'opacity-40'}`}
             >
-              {/* Есть занятия в этот день → четвертькруга акцентом в правом верхнем углу. */}
-              {showDayBadges && hasSessions && (
-                <span
-                  aria-hidden
-                  className="absolute right-0 top-0 h-3 w-3 rounded-bl-full bg-accent"
-                />
-              )}
               <span className="font-[family-name:var(--font-mono)] text-[13px] font-semibold tabular-nums text-ink">
                 {d.getDate()}
               </span>

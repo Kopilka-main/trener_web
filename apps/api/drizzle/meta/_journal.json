@@ -323,6 +323,13 @@
       "when": 1781518046367,
       "tag": "0045_brown_agent_zero",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1781714914175,
+      "tag": "0046_remarkable_vision",
+      "breakpoints": true
     }
   ]
 }

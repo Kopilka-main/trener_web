@@ -40,6 +40,7 @@ function toMessageResponse(r: MessageRow): MessageResponse {
     createdAt: r.createdAt.toISOString(),
     kind: r.kind,
     taskDone: r.taskDone,
+    replyTo: r.reply ?? null,
   };
 }
 
@@ -99,8 +100,11 @@ export function makeChatService(repo: ChatRepo, deps: ChatDeps) {
         senderRole,
         isTask ? 'task' : 'text',
         isTask ? false : null,
+        input.replyTo ?? null,
       );
       if (isPin) await repo.pinMessage(trainerId, clientId, row.id, deps.now());
+      // Превью цитаты в ответе на POST (в ленте оно подтянется join-ом при следующем опросе).
+      if (row.replyToId) row.reply = await repo.getReplyBrief(trainerId, clientId, row.replyToId);
       // Пуш получателю с именем отправителя в заголовке (как в мессенджерах)
       // и числом непрочитанного для бейджа на иконке приложения.
       const preview = body.length > 120 ? `${body.slice(0, 117)}…` : body;

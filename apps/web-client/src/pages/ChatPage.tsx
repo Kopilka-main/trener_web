@@ -1,6 +1,13 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUp, Check, CheckCheck, Pin } from 'lucide-react';
+import { ArrowUp, Check, CheckCheck, Pin, Reply, X } from 'lucide-react';
+import type { MessageResponse } from '@trener/shared';
 import { useClientMe } from '../api/auth';
 import {
   useClientMessages,
@@ -20,6 +27,96 @@ function initials(first: string, last: string): string {
   return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase() || '?';
 }
 
+/** Цитата сообщения, на которое отвечает текущее (тап — переход к оригиналу). */
+function ReplyQuote({
+  reply,
+  onJump,
+}: {
+  reply: NonNullable<MessageResponse['replyTo']>;
+  onJump: (id: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onJump(reply.id)}
+      className="mb-1 flex w-full flex-col rounded-md border-l-2 border-current/40 bg-black/10 px-2 py-1 text-left opacity-90 active:opacity-70"
+    >
+      <span className="truncate text-[11px] font-semibold">
+        {reply.senderRole === 'trainer' ? 'Тренер' : 'Вы'}
+      </span>
+      <span className="truncate text-[11px]">{reply.body}</span>
+    </button>
+  );
+}
+
+/** Свайп сообщения влево → ответить. Вертикальный скролл не перехватывается (pan-y). */
+const SWIPE_TRIGGER = 56;
+function SwipeToReply({
+  onReply,
+  disabled,
+  children,
+}: {
+  onReply: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  const [dx, setDx] = useState(0);
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const horizontal = useRef(false);
+
+  function down(e: ReactPointerEvent<HTMLDivElement>) {
+    if (disabled) return;
+    start.current = { x: e.clientX, y: e.clientY };
+    horizontal.current = false;
+  }
+  function move(e: ReactPointerEvent<HTMLDivElement>) {
+    if (!start.current) return;
+    const ddx = e.clientX - start.current.x;
+    const ddy = e.clientY - start.current.y;
+    if (!horizontal.current) {
+      if (Math.abs(ddy) > 12 && Math.abs(ddy) >= Math.abs(ddx)) {
+        start.current = null;
+        return;
+      }
+      if (Math.abs(ddx) > 12 && Math.abs(ddx) > Math.abs(ddy)) horizontal.current = true;
+      else return;
+    }
+    setDx(Math.max(-90, Math.min(0, ddx)));
+  }
+  function end() {
+    if (dx <= -SWIPE_TRIGGER) onReply();
+    setDx(0);
+    start.current = null;
+    horizontal.current = false;
+  }
+
+  return (
+    <div className="relative">
+      {dx < 0 && (
+        <div
+          className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-accent-text"
+          style={{ opacity: Math.min(1, -dx / SWIPE_TRIGGER) }}
+        >
+          <Reply size={18} />
+        </div>
+      )}
+      <div
+        onPointerDown={down}
+        onPointerMove={move}
+        onPointerUp={end}
+        onPointerCancel={end}
+        style={{
+          transform: `translateX(${String(dx)}px)`,
+          transition: dx === 0 ? 'transform 0.18s' : 'none',
+          touchAction: 'pan-y',
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export function ChatPage() {
   const me = useClientMe();
   const linked = me.data?.link != null;
@@ -35,6 +132,7 @@ export function ChatPage() {
   const msgRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [pinIdx, setPinIdx] = useState(0);
+  const [replyTo, setReplyTo] = useState<MessageResponse | null>(null);
 
   function jumpToMessage(mid: string) {
     const el = msgRefs.current.get(mid);
@@ -44,17 +142,25 @@ export function ChatPage() {
     window.setTimeout(() => setHighlightId((cur) => (cur === mid ? null : cur)), 1600);
   }
 
-  const wrapMsg = (mid: string, node: ReactNode) => (
-    <div
-      key={mid}
-      ref={(el) => {
-        if (el) msgRefs.current.set(mid, el);
-        else msgRefs.current.delete(mid);
+  const wrapMsg = (m: MessageResponse, node: ReactNode) => (
+    <SwipeToReply
+      key={m.id}
+      disabled={m.kind === 'system'}
+      onReply={() => {
+        setReplyTo(m);
+        taRef.current?.focus();
       }}
-      className={`rounded-2xl transition-colors ${highlightId === mid ? 'bg-accent/10' : ''}`}
     >
-      {node}
-    </div>
+      <div
+        ref={(el) => {
+          if (el) msgRefs.current.set(m.id, el);
+          else msgRefs.current.delete(m.id);
+        }}
+        className={`rounded-2xl transition-colors ${highlightId === m.id ? 'bg-accent/10' : ''}`}
+      >
+        {node}
+      </div>
+    </SwipeToReply>
   );
 
   // Авто-рост поля ввода до 3 строк (80px), далее — внутренняя прокрутка.
@@ -85,10 +191,15 @@ export function ChatPage() {
   function submit() {
     const body = draft.trim();
     if (body === '' || send.isPending) return;
+    const replyId = replyTo?.id;
     setDraft('');
+    setReplyTo(null);
     // Оставляем фокус в поле, чтобы клавиатура не закрывалась после отправки.
     taRef.current?.focus();
-    send.mutate({ body }, { onError: () => setDraft((cur) => (cur === '' ? body : cur)) });
+    send.mutate(
+      { body, ...(replyId ? { replyTo: replyId } : {}) },
+      { onError: () => setDraft((cur) => (cur === '' ? body : cur)) },
+    );
   }
 
   function scrollToBottom() {
@@ -185,7 +296,7 @@ export function ChatPage() {
           // Системная плашка (например «задача выполнена») — по центру, без пузыря.
           if (m.kind === 'system') {
             return wrapMsg(
-              m.id,
+              m,
               <div className="flex justify-center">
                 <div className="rounded-full bg-chip px-3 py-1 text-center text-[11px] text-ink-muted">
                   {m.body}
@@ -198,7 +309,7 @@ export function ChatPage() {
           if (m.kind === 'task') {
             const done = m.taskDone === true;
             return wrapMsg(
-              m.id,
+              m,
               <div className="flex justify-start">
                 <div className="flex max-w-[85%] items-start gap-2.5 rounded-2xl border border-accent/40 bg-card px-3 py-2.5">
                   <button
@@ -233,13 +344,14 @@ export function ChatPage() {
           const mine = m.senderRole === 'client';
           const read = readAt !== null && m.createdAt <= readAt;
           return wrapMsg(
-            m.id,
+            m,
             <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
               <div
                 className={`max-w-[80%] rounded-2xl px-3 py-2 text-[14px] ${
                   mine ? 'bg-accent text-accent-on' : 'bg-card text-ink'
                 }`}
               >
+                {m.replyTo && <ReplyQuote reply={m.replyTo} onJump={jumpToMessage} />}
                 <div className="whitespace-pre-wrap break-words">{m.body}</div>
                 {time && (
                   <div
@@ -257,13 +369,34 @@ export function ChatPage() {
         })}
       </div>
 
+      {/* Панель ответа: на какое сообщение отвечаем (× — отменить). */}
+      {replyTo && (
+        <div className="flex shrink-0 items-center gap-2 border-t border-line bg-bg px-4 pt-2">
+          <Reply size={15} className="shrink-0 text-accent-text" />
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="text-[11px] font-semibold text-accent-text">
+              Ответ {replyTo.senderRole === 'trainer' ? 'тренеру' : 'на ваше'}
+            </span>
+            <span className="truncate text-[13px] text-ink-muted">{replyTo.body}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setReplyTo(null)}
+            aria-label="Отменить ответ"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-muted active:bg-card-elevated"
+          >
+            <X size={16} strokeWidth={2} />
+          </button>
+        </div>
+      )}
+
       {/* Ввод */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
           submit();
         }}
-        className="shrink-0 border-t border-line bg-bg px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+        className={`shrink-0 bg-bg px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] ${replyTo ? '' : 'border-t border-line'}`}
       >
         <div className="relative">
           <textarea

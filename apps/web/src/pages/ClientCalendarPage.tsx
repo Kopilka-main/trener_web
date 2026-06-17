@@ -64,7 +64,6 @@ export function ClientCalendarPage() {
           onSlotClick={openSlot}
           onSessionClick={setEditing}
           renderLabel={(s) => s.title ?? clientName}
-          showDayBadges={false}
           showStats
         />
       )}

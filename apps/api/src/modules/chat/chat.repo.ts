@@ -1,6 +1,10 @@
 import { and, asc, desc, eq, gt, isNull, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type { Db } from '../../db/client.js';
 import { conversations, messages } from '../../db/schema.js';
+
+/** Короткая цитата сообщения, на которое отвечают. */
+export type ReplyBrief = { id: string; senderRole: 'trainer' | 'client'; body: string };
 
 export type ConversationRow = {
   id: string;
@@ -23,6 +27,9 @@ export type MessageRow = {
   kind: MessageKindRow;
   taskDone: boolean | null;
   pinned: boolean;
+  replyToId: string | null;
+  // Заполняется только там, где делаем join с цитируемым (listMessages). Иначе undefined.
+  reply?: ReplyBrief | null;
   createdAt: Date;
 };
 
@@ -49,6 +56,7 @@ const messageColumns = {
   kind: messages.kind,
   taskDone: messages.taskDone,
   pinned: messages.pinned,
+  replyToId: messages.replyToId,
   createdAt: messages.createdAt,
 };
 
@@ -175,11 +183,26 @@ export function makeChatRepo(db: Db) {
         }
       }
 
-      return db
-        .select(messageColumns)
+      // LEFT JOIN на цитируемое сообщение — чтобы отдать короткое превью (id/автор/текст).
+      const replied = alias(messages, 'replied');
+      const rows = await db
+        .select({
+          ...messageColumns,
+          replySenderRole: replied.senderRole,
+          replyBody: replied.body,
+        })
         .from(messages)
+        .leftJoin(replied, eq(replied.id, messages.replyToId))
         .where(and(...filters))
         .orderBy(asc(messages.createdAt), asc(messages.id));
+
+      return rows.map(({ replySenderRole, replyBody, ...m }) => ({
+        ...m,
+        reply:
+          m.replyToId && replySenderRole && replyBody !== null
+            ? { id: m.replyToId, senderRole: replySenderRole, body: replyBody }
+            : null,
+      }));
     },
 
     // Создать диалог при отсутствии, вставить сообщение, обновить lastMessageAt.
@@ -193,8 +216,18 @@ export function makeChatRepo(db: Db) {
       senderRole: 'trainer' | 'client' = 'trainer',
       kind: MessageKindRow = 'text',
       taskDone: boolean | null = null,
+      replyToId: string | null = null,
     ): Promise<MessageRow> {
       const conversation = await getOrCreateConversation(trainerId, clientId, now);
+      // Цитировать можно только сообщение этого же диалога (иначе игнорируем ссылку).
+      let safeReplyTo: string | null = null;
+      if (replyToId) {
+        const [r] = await db
+          .select({ id: messages.id })
+          .from(messages)
+          .where(and(eq(messages.id, replyToId), eq(messages.conversationId, conversation.id)));
+        safeReplyTo = r ? replyToId : null;
+      }
       // insert сообщения + обновление lastMessageAt атомарны: иначе при сбое между ними
       // диалог «потеряет» свежий lastMessageAt относительно вставленного сообщения.
       const row = await db.transaction(async (tx) => {
@@ -207,6 +240,7 @@ export function makeChatRepo(db: Db) {
             body,
             kind,
             taskDone,
+            replyToId: safeReplyTo,
             createdAt: now,
           })
           .returning(messageColumns);
@@ -245,6 +279,21 @@ export function makeChatRepo(db: Db) {
         .update(messages)
         .set({ pinned: false })
         .where(and(eq(messages.id, messageId), eq(messages.conversationId, conversation.id)));
+    },
+
+    // Короткая цитата сообщения диалога (для ответа на отправку). Нет/не своё → null.
+    async getReplyBrief(
+      trainerId: string,
+      clientId: string,
+      messageId: string,
+    ): Promise<ReplyBrief | null> {
+      const conversation = await findConversation(trainerId, clientId);
+      if (!conversation) return null;
+      const [r] = await db
+        .select({ id: messages.id, senderRole: messages.senderRole, body: messages.body })
+        .from(messages)
+        .where(and(eq(messages.id, messageId), eq(messages.conversationId, conversation.id)));
+      return r ?? null;
     },
 
     // Все закреплённые сообщения диалога (по возрастанию времени). Нет диалога → [].

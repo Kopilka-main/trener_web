@@ -1,6 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowUp, Check, CheckCheck, Pin, X } from 'lucide-react';
+import { ArrowUp, Check, CheckCheck, Pin, Reply, X } from 'lucide-react';
 import type { MessageResponse } from '@trener/shared';
 import {
   useChatMessages,
@@ -17,6 +23,75 @@ function formatTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
+
+/** Свайп сообщения влево → ответить. Вертикальный скролл не перехватывается (touch-action: pan-y). */
+const SWIPE_TRIGGER = 56;
+function SwipeToReply({
+  onReply,
+  disabled,
+  children,
+}: {
+  onReply: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  const [dx, setDx] = useState(0);
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const horizontal = useRef(false);
+
+  function down(e: ReactPointerEvent<HTMLDivElement>) {
+    if (disabled) return;
+    start.current = { x: e.clientX, y: e.clientY };
+    horizontal.current = false;
+  }
+  function move(e: ReactPointerEvent<HTMLDivElement>) {
+    if (!start.current) return;
+    const ddx = e.clientX - start.current.x;
+    const ddy = e.clientY - start.current.y;
+    if (!horizontal.current) {
+      // Вертикальное движение — это скролл, не наш жест.
+      if (Math.abs(ddy) > 12 && Math.abs(ddy) >= Math.abs(ddx)) {
+        start.current = null;
+        return;
+      }
+      if (Math.abs(ddx) > 12 && Math.abs(ddx) > Math.abs(ddy)) horizontal.current = true;
+      else return;
+    }
+    setDx(Math.max(-90, Math.min(0, ddx)));
+  }
+  function end() {
+    if (dx <= -SWIPE_TRIGGER) onReply();
+    setDx(0);
+    start.current = null;
+    horizontal.current = false;
+  }
+
+  return (
+    <div className="relative">
+      {dx < 0 && (
+        <div
+          className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-accent-text"
+          style={{ opacity: Math.min(1, -dx / SWIPE_TRIGGER) }}
+        >
+          <Reply size={18} />
+        </div>
+      )}
+      <div
+        onPointerDown={down}
+        onPointerMove={move}
+        onPointerUp={end}
+        onPointerCancel={end}
+        style={{
+          transform: `translateX(${String(dx)}px)`,
+          transition: dx === 0 ? 'transform 0.18s' : 'none',
+          touchAction: 'pan-y',
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
 }
 
 export function ClientChatPage() {
@@ -37,6 +112,8 @@ export function ClientChatPage() {
   const [highlightId, setHighlightId] = useState<string | null>(null);
   // Индекс показываемого закреплённого (циклически переключаем тапом по баннеру).
   const [pinIdx, setPinIdx] = useState(0);
+  // Сообщение, на которое отвечаем (свайп влево по сообщению).
+  const [replyTo, setReplyTo] = useState<MessageResponse | null>(null);
 
   function jumpToMessage(mid: string) {
     const el = msgRefs.current.get(mid);
@@ -77,15 +154,20 @@ export function ClientChatPage() {
   function submit() {
     const body = draft.trim();
     if (body.length === 0 || send.isPending) return;
+    const replyId = replyTo?.id;
     setDraft('');
+    setReplyTo(null);
     // Оставляем фокус в поле, чтобы клавиатура не закрывалась после отправки.
     taRef.current?.focus();
-    send.mutate(body, {
-      onError: () => {
-        // Возвращаем текст в поле, чтобы тренер не потерял сообщение.
-        setDraft((current) => (current.length === 0 ? body : current));
+    send.mutate(
+      { body, ...(replyId ? { replyTo: replyId } : {}) },
+      {
+        onError: () => {
+          // Возвращаем текст в поле, чтобы тренер не потерял сообщение.
+          setDraft((current) => (current.length === 0 ? body : current));
+        },
       },
-    });
+    );
   }
 
   function scrollToBottom() {
@@ -184,27 +266,56 @@ export function ClientChatPage() {
         )}
 
         {list.map((m) => (
-          <div
+          <SwipeToReply
             key={m.id}
-            ref={(el) => {
-              if (el) msgRefs.current.set(m.id, el);
-              else msgRefs.current.delete(m.id);
+            disabled={m.kind === 'system'}
+            onReply={() => {
+              setReplyTo(m);
+              taRef.current?.focus();
             }}
-            className={`rounded-2xl transition-colors ${
-              highlightId === m.id ? 'bg-accent/10' : ''
-            }`}
           >
-            <Bubble message={m} clientReadAt={clientReadAt} />
-          </div>
+            <div
+              ref={(el) => {
+                if (el) msgRefs.current.set(m.id, el);
+                else msgRefs.current.delete(m.id);
+              }}
+              className={`rounded-2xl transition-colors ${
+                highlightId === m.id ? 'bg-accent/10' : ''
+              }`}
+            >
+              <Bubble message={m} clientReadAt={clientReadAt} onJump={jumpToMessage} />
+            </div>
+          </SwipeToReply>
         ))}
       </div>
+
+      {/* Панель ответа: на какое сообщение отвечаем (× — отменить). */}
+      {replyTo && (
+        <div className="flex items-center gap-2 border-t border-line bg-bg px-4 pt-2">
+          <Reply size={15} className="shrink-0 text-accent-text" />
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="text-[11px] font-semibold text-accent-text">
+              Ответ {replyTo.senderRole === 'trainer' ? 'на ваше' : 'клиенту'}
+            </span>
+            <span className="truncate text-[13px] text-ink-muted">{replyTo.body}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setReplyTo(null)}
+            aria-label="Отменить ответ"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-muted active:bg-card-elevated"
+          >
+            <X size={16} strokeWidth={2} />
+          </button>
+        </div>
+      )}
 
       <form
         onSubmit={(e) => {
           e.preventDefault();
           submit();
         }}
-        className="border-t border-line bg-bg px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+        className={`bg-bg px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] ${replyTo ? '' : 'border-t border-line'}`}
       >
         <div className="relative">
           <textarea
@@ -236,12 +347,36 @@ export function ClientChatPage() {
   );
 }
 
+/** Цитата сообщения, на которое отвечает текущее (тап — переход к оригиналу). */
+function ReplyQuote({
+  reply,
+  onJump,
+}: {
+  reply: NonNullable<MessageResponse['replyTo']>;
+  onJump: (id: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onJump(reply.id)}
+      className="mb-1 flex w-full flex-col rounded-md border-l-2 border-current/40 bg-black/10 px-2 py-1 text-left opacity-90 active:opacity-70"
+    >
+      <span className="truncate text-[11px] font-semibold">
+        {reply.senderRole === 'trainer' ? 'Вы' : 'Клиент'}
+      </span>
+      <span className="truncate text-[11px]">{reply.body}</span>
+    </button>
+  );
+}
+
 function Bubble({
   message,
   clientReadAt,
+  onJump,
 }: {
   message: MessageResponse;
   clientReadAt: string | null;
+  onJump: (id: string) => void;
 }) {
   const time = formatTime(message.createdAt);
 
@@ -298,6 +433,7 @@ function Bubble({
           mine ? 'bg-accent text-accent-on' : 'bg-card text-ink'
         }`}
       >
+        {message.replyTo && <ReplyQuote reply={message.replyTo} onJump={onJump} />}
         <div className="whitespace-pre-wrap break-words">{message.body}</div>
         {time && (
           <div

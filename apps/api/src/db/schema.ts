@@ -524,6 +524,10 @@ export const messages = pgTable(
     taskCompletedAt: timestamp('task_completed_at', { withTimezone: true }),
     // Закреплено в диалоге (видно обоим). Несколько сообщений могут быть закреплены.
     pinned: boolean('pinned').notNull().default(false),
+    // Ответ на сообщение (цитата). NULL — обычное сообщение. При удалении цитируемого — NULL.
+    replyToId: text('reply_to_id').references((): AnyPgColumn => messages.id, {
+      onDelete: 'set null',
+    }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

@@ -4,8 +4,18 @@ import { z } from 'zod';
 
 export const sendMessageRequestSchema = z.object({
   body: z.string().trim().min(1).max(4000),
+  /** Ответ на сообщение (id цитируемого). Необязательно. */
+  replyTo: z.string().optional(),
 });
 export type SendMessageRequest = z.infer<typeof sendMessageRequestSchema>;
+
+// Короткая цитата сообщения, на которое отвечают (для отрисовки над текстом).
+export const replyPreviewSchema = z.object({
+  id: z.string(),
+  senderRole: z.enum(['trainer', 'client']),
+  body: z.string(),
+});
+export type ReplyPreview = z.infer<typeof replyPreviewSchema>;
 
 // --- Ответы ---
 
@@ -22,6 +32,8 @@ export const messageResponseSchema = z.object({
   kind: messageKindSchema,
   // Для kind='task' — текущий статус выполнения (true=закрыта). Иначе null.
   taskDone: z.boolean().nullable(),
+  // Цитата сообщения, на которое отвечают (или null). Опционально для совместимости.
+  replyTo: replyPreviewSchema.nullable().optional(),
 });
 export type MessageResponse = z.infer<typeof messageResponseSchema>;
 

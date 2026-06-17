@@ -83,11 +83,11 @@ export function useUnpinMessage(clientId: string) {
   });
 }
 
-/** Отправка сообщения тренером с инвалидацией ленты. */
+/** Отправка сообщения тренером (с опц. ответом-цитатой) и инвалидацией ленты. */
 export function useSendMessage(clientId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: string) => sendClientMessage(clientId, { body }),
+    mutationFn: (input: SendMessageRequest) => sendClientMessage(clientId, input),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: clientMessagesQueryKey(clientId) });
     },
