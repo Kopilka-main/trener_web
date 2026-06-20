@@ -99,7 +99,7 @@ export function HomePage() {
     .filter((p) => p.status === 'active')
     .reduce((acc, p) => acc + p.lessonsPaid, 0);
   const completedTrainerWorkouts = workouts.filter(
-    (w) => w.status === 'completed' && !w.createdByClient,
+    (w) => w.status === 'completed' && !w.createdByClient && !w.excludedFromBalance,
   ).length;
   const paidBalance = paidLessons - completedTrainerWorkouts;
   // Дата окончания пакета (период), которую задаёт тренер. Берём самую позднюю среди

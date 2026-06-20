@@ -23,6 +23,29 @@ export function makeExercisesService(repo: ExercisesRepo, deps: ExercisesDeps) {
     },
 
     async create(trainerId: string, input: CreateExerciseRequest): Promise<ExerciseResponse> {
+      // Вариант базового упражнения: переносим фото/видео и справочные поля каталога
+      // из источника (если он виден тренеру — личный или глобальный).
+      let media: {
+        imageUrl: string | null;
+        thumbUrl: string | null;
+        videoUrl: string | null;
+        equipment: string | null;
+        primaryMuscles: string | null;
+        secondaryMuscles: string | null;
+      } | null = null;
+      if (input.sourceExerciseId) {
+        const src = await repo.getVisible(trainerId, input.sourceExerciseId);
+        if (src) {
+          media = {
+            imageUrl: src.imageUrl,
+            thumbUrl: src.thumbUrl,
+            videoUrl: src.videoUrl,
+            equipment: src.equipment,
+            primaryMuscles: src.primaryMuscles,
+            secondaryMuscles: src.secondaryMuscles,
+          };
+        }
+      }
       const row = await repo.create({
         id: deps.newId(),
         trainerId,
@@ -35,6 +58,7 @@ export function makeExercisesService(repo: ExercisesRepo, deps: ExercisesDeps) {
         defaultTimeSec: input.defaultTimeSec ?? null,
         restSec: input.restSec,
         note: input.note ?? null,
+        ...(media ?? {}),
       });
       return toResponse(row);
     },

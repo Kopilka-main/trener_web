@@ -128,6 +128,37 @@ function ExerciseThumb({ url, alt }: { url: string | null; alt: string }) {
   );
 }
 
+/** Иконки параметров подхода (Material Symbols, 13px, наследуют цвет текста). */
+const ICON_CLS = 'h-[13px] w-[13px] shrink-0';
+function RepsIcon() {
+  return (
+    <svg viewBox="0 -960 960 960" className={ICON_CLS} fill="currentColor" aria-hidden>
+      <path d="M204-318q-22-38-33-78t-11-82q0-134 93-228t227-94h7l-64-64 56-56 160 160-160 160-56-56 64-64h-7q-100 0-170 70.5T240-478q0 26 6 51t18 49l-60 60ZM481-40 321-200l160-160 56 56-64 64h7q100 0 170-70.5T720-482q0-26-6-51t-18-49l60-60q22 38 33 78t11 82q0 134-93 228t-227 94h-7l64 64-56 56Z" />
+    </svg>
+  );
+}
+function WeightIcon() {
+  return (
+    <svg viewBox="0 -960 960 960" className={ICON_CLS} fill="currentColor" aria-hidden>
+      <path d="M240-200h480l-57-400H297l-57 400Zm240-480q17 0 28.5-11.5T520-720q0-17-11.5-28.5T480-760q-17 0-28.5 11.5T440-720q0 17 11.5 28.5T480-680Zm113 0h70q30 0 52 20t27 49l57 400q5 36-18.5 63.5T720-120H240q-37 0-60.5-27.5T161-211l57-400q5-29 27-49t52-20h70q-3-10-5-19.5t-2-20.5q0-50 35-85t85-35q50 0 85 35t35 85q0 11-2 20.5t-5 19.5ZM240-200h480-480Z" />
+    </svg>
+  );
+}
+function TimeIcon() {
+  return (
+    <svg viewBox="0 -960 960 960" className={ICON_CLS} fill="currentColor" aria-hidden>
+      <path d="M203-480h117q11 0 21 5.5t15 16.5l44 88 124-248q11-23 36-23t36 23l69 138h92q-15-102-93-171t-184-69q-106 0-184 69t-93 171Zm461 251q78-69 93-171H640q-11 0-21-5.5T604-422l-44-88-124 248q-11 23-36 23t-36-23l-69-138h-92q15 102 93 171t184 69q106 0 184-69ZM340.5-108.5Q275-137 226-186t-77.5-114.5Q120-366 120-440h80q0 116 82 198t198 82q116 0 198-82t82-198h80q0 74-28.5 139.5T734-186q-49 49-114.5 77.5T480-80q-74 0-139.5-28.5ZM120-440q0-74 28.5-139.5T226-694q49-49 114.5-77.5T480-800q62 0 119 20t107 58l56-56 56 56-56 56q38 50 58 107t20 119h-80q0-116-82-198t-198-82q-116 0-198 82t-82 198h-80Zm240-400v-80h240v80H360Zm-78 598q-82-82-82-198t82-198q82-82 198-82t198 82q82 82 82 198t-82 198q-82 82-198 82t-198-82Zm198-198Z" />
+    </svg>
+  );
+}
+function RestIcon() {
+  return (
+    <svg viewBox="0 -960 960 960" className={ICON_CLS} fill="currentColor" aria-hidden>
+      <path d="M380-334h200v-60H468l112-126v-54H380v60h114L380-386v52Zm-40.5 225.5q-65.5-28.5-114-77t-77-114Q120-365 120-440t28.5-140.5q28.5-65.5 77-114t114-77Q405-800 480-800t140.5 28.5q65.5 28.5 114 77t77 114Q840-515 840-440t-28.5 140.5q-28.5 65.5-77 114t-114 77Q555-80 480-80t-140.5-28.5ZM480-440ZM224-866l56 56-170 170-56-56 170-170Zm512 0 170 170-56 56-170-170 56-56ZM480-160q117 0 198.5-81.5T760-440q0-117-81.5-198.5T480-720q-117 0-198.5 81.5T200-440q0 117 81.5 198.5T480-160Z" />
+    </svg>
+  );
+}
+
 function ExerciseRow({ exercise }: { exercise: ExerciseResponse }) {
   return (
     <Link
@@ -139,7 +170,25 @@ function ExerciseRow({ exercise }: { exercise: ExerciseResponse }) {
         <span className="line-clamp-2 text-base font-semibold leading-snug text-ink">
           {exercise.name}
         </span>
-        <span className="truncate font-mono text-xs text-ink-muted">{exercise.category}</span>
+        <span className="flex items-center gap-2 overflow-hidden whitespace-nowrap font-mono text-[11px] text-ink-muted">
+          <span className="shrink-0">{exercise.category}</span>
+          <span className="inline-flex shrink-0 items-center gap-0.5">
+            <RepsIcon />
+            {exercise.defaultReps ?? 0}
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-0.5">
+            <WeightIcon />
+            {exercise.defaultWeightKg ?? 0}
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-0.5">
+            <TimeIcon />
+            {exercise.defaultTimeSec ?? 0}
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-0.5">
+            <RestIcon />
+            {exercise.restSec}
+          </span>
+        </span>
       </span>
       <span className="flex shrink-0 items-center pr-3">
         <ChevronRight size={16} className="tile-chevron" />

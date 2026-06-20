@@ -6,8 +6,10 @@ import {
   updateMeasurementRequestSchema,
   measurementResponseSchema,
   measurementListResponseSchema,
+  measurementTaskListResponseSchema,
 } from '@trener/shared';
 import type { MeasurementsService } from '../measurements/measurements.service.js';
+import type { MeasurementTasksService } from '../measurements/measurement-tasks.service.js';
 import { requireClient } from '../../plugins/client-context.js';
 import { makeClientScope, type ResolveScope } from '../../core/client-scope.js';
 
@@ -18,6 +20,7 @@ const okResponse = z.object({ ok: z.literal(true) });
 export function clientAppMeasurementsRoutes(
   app: FastifyInstance,
   svc: MeasurementsService,
+  tasksSvc: MeasurementTasksService,
   resolveScope: ResolveScope,
 ): void {
   const typed = app.withTypeProvider<ZodTypeProvider>();
@@ -29,6 +32,16 @@ export function clientAppMeasurementsRoutes(
     async (req) => {
       const { trainerId, clientId } = await scope(req);
       return { measurements: await svc.list(trainerId, clientId) };
+    },
+  );
+
+  // Открытые задачи на замеры (для уведомления клиенту, пока не внесёт замер).
+  typed.get(
+    '/api/client/measurement-tasks',
+    { preHandler: requireClient, schema: { response: { 200: measurementTaskListResponseSchema } } },
+    async (req) => {
+      const { trainerId, clientId } = await scope(req);
+      return { tasks: await tasksSvc.listOpen(trainerId, clientId) };
     },
   );
 

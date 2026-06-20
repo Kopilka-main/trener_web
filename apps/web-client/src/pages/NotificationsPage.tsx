@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CalendarPlus, Clock, Dumbbell, MessageSquare, Wallet } from 'lucide-react';
+import { CalendarPlus, Clock, Dumbbell, MessageSquare, Ruler, Wallet } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import type { SessionResponse } from '@trener/shared';
 import { useClientSessions } from '../api/calendar';
+import { SessionSheet } from './CalendarPage';
 import {
   useClientChatUnread,
   useClientMessages,
@@ -11,6 +13,7 @@ import {
 } from '../api/chat';
 import { useClientPackages } from '../api/packages';
 import { useClientWorkouts } from '../api/workouts';
+import { useClientMeasurementTasks } from '../api/measurements';
 import { HoldToDelete } from '../components/HoldToDelete';
 import { toISODate } from '../lib/calendar';
 import {
@@ -26,21 +29,34 @@ const ICONS: Record<ClientNotificationKind, LucideIcon> = {
   chat: MessageSquare,
   package: Wallet,
   workout: Dumbbell,
+  measure: Ruler,
 };
 
 export function NotificationsPage() {
   const navigate = useNavigate();
   const now = new Date();
-  const from = toISODate(now);
+  // Назад на 30 дней — чтобы проведённые занятия (confirm-уведомление о согласовании
+  // задним числом) тоже попадали в выборку и открывались в шторке.
+  const from = toISODate(new Date(now.getTime() - 30 * 86400000));
   const to = toISODate(new Date(now.getTime() + 30 * 86400000));
 
   const sessions = useClientSessions(from, to).data ?? [];
+  const [confirmSession, setConfirmSession] = useState<SessionResponse | null>(null);
   const unread = useClientChatUnread().data ?? 0;
   const packages = useClientPackages().data ?? [];
   const workouts = useClientWorkouts().data ?? [];
+  const measurementTasks = useClientMeasurementTasks().data ?? [];
   const [dismissed, setDismissed] = useState<Set<string>>(() => loadDismissed());
 
-  const items = buildClientNotifications({ sessions, unread, now, dismissed, packages, workouts });
+  const items = buildClientNotifications({
+    sessions,
+    unread,
+    now,
+    dismissed,
+    packages,
+    workouts,
+    measurementTasks,
+  });
 
   // Открытые задачи от тренера (требуют внимания): берём из ленты сообщений и
   // показываем с чекбоксом — клиент закрывает их прямо отсюда.
@@ -103,7 +119,18 @@ export function NotificationsPage() {
               <div key={n.id} className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3">
                 <button
                   type="button"
-                  onClick={() => void navigate(n.to)}
+                  onClick={() => {
+                    // Согласование занятия — открываем шторку подтверждения прямо здесь
+                    // (как в календаре), а не перебрасываем на страницу календаря.
+                    if (n.kind === 'confirm' && n.sessionId) {
+                      const s = sessions.find((x) => x.id === n.sessionId);
+                      if (s) {
+                        setConfirmSession(s);
+                        return;
+                      }
+                    }
+                    void navigate(n.to);
+                  }}
                   className="flex min-w-0 flex-1 items-center gap-3 text-left active:opacity-80"
                 >
                   <Icon size={18} strokeWidth={2} className="shrink-0 text-accent-text" />
@@ -117,6 +144,10 @@ export function NotificationsPage() {
             );
           })}
       </div>
+
+      {confirmSession && (
+        <SessionSheet session={confirmSession} onClose={() => setConfirmSession(null)} />
+      )}
     </div>
   );
 }

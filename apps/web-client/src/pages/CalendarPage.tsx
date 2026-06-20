@@ -86,7 +86,13 @@ export function CalendarPage() {
   );
 }
 
-function SessionSheet({ session, onClose }: { session: SessionResponse; onClose: () => void }) {
+export function SessionSheet({
+  session,
+  onClose,
+}: {
+  session: SessionResponse;
+  onClose: () => void;
+}) {
   const confirm = useConfirmSession();
   const cancelled = session.status === 'cancelled';
   // Подтвердить/отклонить можно, пока занятие ждёт ответа и не отменено

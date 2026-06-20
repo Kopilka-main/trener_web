@@ -26,6 +26,7 @@ function fakeRepo(over: Partial<ClientsRepo> = {}): ClientsRepo {
   return {
     getForTrainer: vi.fn(() => Promise.resolve(null)),
     isLinked: vi.fn(() => Promise.resolve(false)),
+    findByAccountId: vi.fn(() => Promise.resolve(null)),
     create: vi.fn(() => Promise.resolve(row())),
     listByTrainer: vi.fn(() => Promise.resolve([])),
     update: vi.fn(() => Promise.resolve(null)),
@@ -326,18 +327,43 @@ describe('clients.service', () => {
     expect(accountExists).not.toHaveBeenCalled();
   });
 
-  it('verifyConnectCode: пустой код → false без обращения к accountExists', async () => {
+  it('checkConnectCode: пустой код → exists=false без обращения к accountExists', async () => {
     const accountExists = vi.fn(() => Promise.resolve(true));
     const svc = makeSvc({ accountExists });
-    expect(await svc.verifyConnectCode('   ')).toBe(false);
+    expect(await svc.checkConnectCode('A', '   ')).toEqual({ exists: false, linkedClient: null });
     expect(accountExists).not.toHaveBeenCalled();
   });
 
-  it('verifyConnectCode: непустой код делегирует accountExists', async () => {
+  it('checkConnectCode: непустой код — exists + привязанный клиент (дубль)', async () => {
     const accountExists = vi.fn(() => Promise.resolve(true));
-    const svc = makeSvc({ accountExists });
-    expect(await svc.verifyConnectCode(' code1 ')).toBe(true);
+    const findByAccountId = vi.fn(() =>
+      Promise.resolve({ id: 'c2', firstName: 'Иван', lastName: 'Петров' }),
+    );
+    const svc = makeSvc({ accountExists, repo: { findByAccountId } });
+    const res = await svc.checkConnectCode('A', ' code1 ', 'c1');
+    expect(res).toEqual({
+      exists: true,
+      linkedClient: { id: 'c2', firstName: 'Иван', lastName: 'Петров' },
+    });
     expect(accountExists).toHaveBeenCalledWith('code1');
+    expect(findByAccountId).toHaveBeenCalledWith('A', 'code1', 'c1');
+  });
+
+  it('create с уже привязанным accountId → 409 CLIENT_ALREADY_LINKED (с именем)', async () => {
+    const findByAccountId = vi.fn(() =>
+      Promise.resolve({ id: 'c2', firstName: 'Иван', lastName: 'Петров' }),
+    );
+    const svc = makeSvc({ repo: { findByAccountId } });
+    await expect(
+      svc.create('A', {
+        firstName: 'Н',
+        lastName: '',
+        contacts: [],
+        tags: [],
+        isOnline: false,
+        accountId: 'acc-1',
+      }),
+    ).rejects.toMatchObject({ status: 409, code: 'CLIENT_ALREADY_LINKED' });
   });
 
   it('getAccountProfile возвращает профиль аккаунта (с тримом id)', async () => {

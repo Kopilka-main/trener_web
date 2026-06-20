@@ -15,6 +15,9 @@ export const createExerciseRequestSchema = z.object({
   defaultTimeSec: optInt,
   restSec: z.number().int().min(0).max(3600).default(90),
   note: z.string().trim().max(2000).nullish(),
+  // Создание варианта базового упражнения: id источника. Если задан и виден тренеру —
+  // сервер переносит фото/видео и справочные поля каталога в новую личную копию.
+  sourceExerciseId: z.string().nullish(),
 });
 export type CreateExerciseRequest = z.infer<typeof createExerciseRequestSchema>;
 

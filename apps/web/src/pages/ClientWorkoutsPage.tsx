@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ChevronDown, ChevronRight, ChevronUp, Play, Plus, RotateCcw, X } from 'lucide-react';
 import type {
@@ -31,9 +32,21 @@ export function ClientWorkoutsPage() {
   const createWorkout = useCreateWorkout(id);
   const [picker, setPicker] = useState<'none' | 'template' | 'history'>('none');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Композер для ретроспективной записи в историю: открывает те же варианты (новая /
+  // из базы / повторить), но созданный черновик помечается excludedFromBalance —
+  // он не учитывается в балансе пакета и не попадает в календарь. Финал — в редакторе
+  // («Добавить в историю» с датой).
+  const [historyCompose, setHistoryCompose] = useState(false);
+  // true → следующий выбор из пикера создаёт историческую запись.
+  const [pickerExcluded, setPickerExcluded] = useState(false);
+
+  function closePicker() {
+    setPicker('none');
+    setPickerExcluded(false);
+  }
 
   // Повторить прошлую тренировку: клонируем упражнения и подходы в новый черновик.
-  function repeat(w: WorkoutResponse) {
+  function repeat(w: WorkoutResponse, excluded = false) {
     // «Точь-в-точь как провели»: берём ФАКТ (что реально сделали) как новый план,
     // только ВЫПОЛНЕННЫЕ подходы; пропущенные подходы/упражнения исключаем.
     const exercises = w.exercises
@@ -50,9 +63,14 @@ export function ClientWorkoutsPage() {
       }))
       .filter((ex) => ex.sets.length > 0);
     if (exercises.length === 0) return;
-    const body: CreateWorkoutRequest = { name: w.name, exercises };
+    const body: CreateWorkoutRequest = {
+      name: w.name,
+      exercises,
+      ...(excluded ? { excludedFromBalance: true } : {}),
+    };
     createWorkout.mutate(body, {
       onSuccess: (workout) => {
+        setHistoryCompose(false);
         void navigate(`/clients/${id}/workouts/${workout.id}`);
       },
     });
@@ -62,7 +80,8 @@ export function ClientWorkoutsPage() {
   const current = useMemo(
     () =>
       list
-        .filter(isCurrent)
+        // «Ближайшая» — только тренерские черновики/активные; клиентские сюда не берём.
+        .filter((w) => isCurrent(w) && !w.createdByClient)
         .sort((a, b) => (a.status === 'active' ? -1 : 1) - (b.status === 'active' ? -1 : 1)),
     [list],
   );
@@ -71,20 +90,25 @@ export function ClientWorkoutsPage() {
     [list],
   );
 
-  function createEmpty() {
-    const body: CreateWorkoutRequest = { name: 'Новая тренировка', exercises: [] };
+  function createEmpty(excluded = false) {
+    const body: CreateWorkoutRequest = {
+      name: 'Новая тренировка',
+      exercises: [],
+      ...(excluded ? { excludedFromBalance: true } : {}),
+    };
     createWorkout.mutate(body, {
       onSuccess: (workout) => {
-        setPicker('none');
+        closePicker();
+        setHistoryCompose(false);
         void navigate(`/clients/${id}/workouts/${workout.id}`);
       },
     });
   }
 
-  function assignTemplate(template: TemplateResponse) {
+  function assignTemplate(template: TemplateResponse, excluded = false) {
     // Плоская модель: каждый подход — отдельное упражнение с одним подходом
     // (sets:N в шаблоне разворачиваем в N отдельных записей).
-    const body = {
+    const body: CreateWorkoutRequest = {
       name: template.name,
       sourceTemplateId: template.id,
       exercises: template.exercises.flatMap((ex) =>
@@ -100,10 +124,12 @@ export function ClientWorkoutsPage() {
           ],
         })),
       ),
+      ...(excluded ? { excludedFromBalance: true } : {}),
     };
     createWorkout.mutate(body, {
       onSuccess: (workout) => {
-        setPicker('none');
+        closePicker();
+        setHistoryCompose(false);
         void navigate(`/clients/${id}/workouts/${workout.id}`);
       },
     });
@@ -185,13 +211,24 @@ export function ClientWorkoutsPage() {
             ))}
           </section>
         )}
+
+        {/* Ретроспективно добавить уже проведённую тренировку в историю клиента. */}
+        {workouts.isSuccess && (
+          <button
+            type="button"
+            onClick={() => setHistoryCompose(true)}
+            className="flex items-center justify-center gap-2 rounded-3xl border-2 border-dashed border-line py-4 text-[14px] font-semibold text-ink-muted active:bg-card-elevated/40"
+          >
+            <Plus size={18} strokeWidth={2.2} /> Добавить в историю
+          </button>
+        )}
       </div>
 
       {picker === 'template' && (
         <TemplatePickerSheet
-          onClose={() => setPicker('none')}
-          onPick={assignTemplate}
-          onCreateEmpty={createEmpty}
+          onClose={closePicker}
+          onPick={(t) => assignTemplate(t, pickerExcluded)}
+          onCreateEmpty={() => createEmpty(pickerExcluded)}
           pending={createWorkout.isPending}
         />
       )}
@@ -199,9 +236,28 @@ export function ClientWorkoutsPage() {
       {picker === 'history' && (
         <HistoryPickerSheet
           history={history}
-          onClose={() => setPicker('none')}
-          onPick={(w) => repeat(w)}
+          onClose={closePicker}
+          onPick={(w) => repeat(w, pickerExcluded)}
           pending={createWorkout.isPending}
+        />
+      )}
+
+      {historyCompose && (
+        <HistoryComposeSheet
+          hasHistory={history.length > 0}
+          pending={createWorkout.isPending}
+          onClose={() => setHistoryCompose(false)}
+          onCreateEmpty={() => createEmpty(true)}
+          onPickTemplate={() => {
+            setPickerExcluded(true);
+            setHistoryCompose(false);
+            setPicker('template');
+          }}
+          onPickHistory={() => {
+            setPickerExcluded(true);
+            setHistoryCompose(false);
+            setPicker('history');
+          }}
         />
       )}
     </div>
@@ -288,6 +344,69 @@ function EmptyCurrent({
   );
 }
 
+/** Композер исторической записи: те же 3 варианта (новая / из базы / повторить),
+ * но созданная тренировка фиксируется в истории (не запускается, не влияет на баланс
+ * пакета, нет в календаре). Дата задаётся на следующем шаге — в редакторе. */
+function HistoryComposeSheet({
+  hasHistory,
+  pending,
+  onClose,
+  onCreateEmpty,
+  onPickTemplate,
+  onPickHistory,
+}: {
+  hasHistory: boolean;
+  pending: boolean;
+  onClose: () => void;
+  onCreateEmpty: () => void;
+  onPickTemplate: () => void;
+  onPickHistory: () => void;
+}) {
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex flex-col justify-end">
+      <button
+        type="button"
+        aria-label="Закрыть"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/60"
+      />
+      <div className="relative z-10 flex flex-col rounded-t-3xl bg-bg px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3">
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
+        <h2 className="text-center text-[16px] font-bold text-ink">Добавить в историю</h2>
+        <p className="mx-auto mt-1 max-w-[300px] text-center text-[12px] text-ink-muted">
+          Зафиксируйте уже проведённую тренировку. Она не запускается, не влияет на баланс пакета и
+          не попадает в календарь.
+        </p>
+        <button
+          type="button"
+          onClick={onCreateEmpty}
+          disabled={pending}
+          className="mt-4 w-full rounded-2xl bg-accent py-3 text-[14px] font-semibold text-accent-on active:scale-[0.99] disabled:opacity-50"
+        >
+          Создать новую
+        </button>
+        <button
+          type="button"
+          onClick={onPickTemplate}
+          disabled={pending}
+          className="mt-2 w-full rounded-2xl bg-card-elevated py-3 text-[14px] font-semibold text-ink active:scale-[0.99] disabled:opacity-50"
+        >
+          Выбрать из базы
+        </button>
+        <button
+          type="button"
+          onClick={onPickHistory}
+          disabled={pending || !hasHistory}
+          className="mt-2 inline-flex w-full items-center justify-center gap-1.5 py-3 text-[13px] text-ink-muted disabled:opacity-40"
+        >
+          <RotateCcw size={13} /> Повторить из истории
+        </button>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 /** Заголовок группы истории: дата в формате ДД/ММ/ГГГГ. */
 function formatGroupDate(dateKey: string): string {
   if (dateKey === 'unknown') return 'Без даты';
@@ -353,7 +472,14 @@ function HistoryRow({
     <li className="overflow-hidden rounded-2xl bg-card">
       <div className="flex items-center gap-3 px-4 py-3">
         <button type="button" onClick={onToggle} className="min-w-0 flex-1 text-left">
-          <div className="truncate text-[14px] font-semibold text-ink">{workout.name}</div>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-[14px] font-semibold text-ink">{workout.name}</span>
+            {workout.createdByClient && (
+              <span className="shrink-0 rounded-full bg-chip px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-ink-muted">
+                клиентская
+              </span>
+            )}
+          </div>
           <div className="font-[family-name:var(--font-mono)] text-[11px] text-ink-muted">
             {meta}
           </div>

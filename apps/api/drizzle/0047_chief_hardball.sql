@@ -1,0 +1,1 @@
+ALTER TABLE "client_workouts" ADD COLUMN "excluded_from_balance" boolean DEFAULT false NOT NULL;

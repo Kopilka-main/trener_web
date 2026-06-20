@@ -3,7 +3,9 @@ import {
   updateMeasurementRequestSchema,
   measurementResponseSchema,
   measurementListResponseSchema,
+  measurementTaskListResponseSchema,
   type MeasurementResponse,
+  type MeasurementTaskResponse,
   type CreateMeasurementRequest,
   type UpdateMeasurementRequest,
 } from '@trener/shared';
@@ -15,6 +17,30 @@ const measurementWrap = z.object({ measurement: measurementResponseSchema });
 const okWrap = z.object({ ok: z.boolean() });
 
 export const clientMeasurementsQueryKey = ['client', 'measurements'] as const;
+export const clientMeasurementTasksQueryKey = ['client', 'measurement-tasks'] as const;
+
+const measurementTaskListWrap = measurementTaskListResponseSchema;
+
+/** Открытые задачи на замеры (тренер просит клиента сделать замеры). */
+export async function listClientMeasurementTasks(): Promise<MeasurementTaskResponse[]> {
+  const r = await apiFetch('/client/measurement-tasks', { schema: measurementTaskListWrap });
+  return r.tasks;
+}
+
+/** Открытые задачи на замеры. Непривязанный (409) → пустой список, не ошибка. */
+export function useClientMeasurementTasks() {
+  return useQuery<MeasurementTaskResponse[]>({
+    queryKey: clientMeasurementTasksQueryKey,
+    queryFn: async () => {
+      try {
+        return await listClientMeasurementTasks();
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 409) return [];
+        throw err;
+      }
+    },
+  });
+}
 
 /** Замеры клиента. Непривязанный (409) → пустой список, не ошибка. */
 export function useClientMeasurements() {
@@ -45,6 +71,8 @@ export function useCreateMeasurement() {
       }).then((r) => r.measurement),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: clientMeasurementsQueryKey });
+      // Бэкенд авторазрешает задачу на замеры при создании замера — обновляем её.
+      void qc.invalidateQueries({ queryKey: clientMeasurementTasksQueryKey });
     },
   });
 }
@@ -65,6 +93,7 @@ export function useUpdateMeasurement() {
       }).then((r) => r.measurement),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: clientMeasurementsQueryKey });
+      void qc.invalidateQueries({ queryKey: clientMeasurementTasksQueryKey });
     },
   });
 }

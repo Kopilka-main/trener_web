@@ -62,11 +62,20 @@ export function makeClientsService(
 ) {
   return {
     async create(trainerId: string, input: CreateClientRequest): Promise<ClientResponse> {
-      // Привязка при создании: непустой accountId должен существовать (как в update).
+      // Привязка при создании: непустой accountId должен существовать (как в update)
+      // и не должен быть уже привязан к другому клиенту тренера (дубль в записной книжке).
       if (input.accountId != null && input.accountId !== '') {
         const exists = await deps.accountExists(input.accountId);
         if (!exists) {
           throw new AppError(422, 'CLIENT_ACCOUNT_NOT_FOUND', 'Клиентский аккаунт не найден');
+        }
+        const dup = await repo.findByAccountId(trainerId, input.accountId);
+        if (dup) {
+          throw new AppError(
+            409,
+            'CLIENT_ALREADY_LINKED',
+            `Клиент с таким ID уже есть: ${dup.firstName} ${dup.lastName}`.trim(),
+          );
         }
       }
       const row = await repo.create({
@@ -85,11 +94,24 @@ export function makeClientsService(
       return toResponse(row);
     },
 
-    // Проверка кода привязки тренером ДО сохранения: существует ли такой
-    // клиентский аккаунт. Пустой код → false. Используется диалогом «Подключить».
-    verifyConnectCode(code: string): Promise<boolean> {
+    // Проверка кода привязки тренером ДО сохранения: существует ли такой клиентский
+    // аккаунт И не привязан ли он уже к другому клиенту этого тренера (дубль). Возвращает
+    // имя такого клиента для предупреждения. excludeClientId — текущий редактируемый.
+    async checkConnectCode(
+      trainerId: string,
+      code: string,
+      excludeClientId?: string,
+    ): Promise<{
+      exists: boolean;
+      linkedClient: { id: string; firstName: string; lastName: string } | null;
+    }> {
       const c = code.trim();
-      return c === '' ? Promise.resolve(false) : deps.accountExists(c);
+      if (c === '') return { exists: false, linkedClient: null };
+      const [exists, linkedClient] = await Promise.all([
+        deps.accountExists(c),
+        repo.findByAccountId(trainerId, c, excludeClientId),
+      ]);
+      return { exists, linkedClient };
     },
 
     // Профиль подключённого клиентского аккаунта — для кнопки «Получить данные».
@@ -120,12 +142,20 @@ export function makeClientsService(
       clientId: string,
       patch: UpdateClientRequest,
     ): Promise<ClientResponse> {
-      // Привязка клиентского аккаунта: непустой accountId должен существовать.
-      // Пустая строка/null = отвязка, существование не проверяем.
+      // Привязка клиентского аккаунта: непустой accountId должен существовать и не быть
+      // уже привязан к ДРУГОМУ клиенту тренера. Пустая строка/null = отвязка — не проверяем.
       if (patch.accountId != null && patch.accountId !== '') {
         const exists = await deps.accountExists(patch.accountId);
         if (!exists) {
           throw new AppError(422, 'CLIENT_ACCOUNT_NOT_FOUND', 'Клиентский аккаунт не найден');
+        }
+        const dup = await repo.findByAccountId(trainerId, patch.accountId, clientId);
+        if (dup) {
+          throw new AppError(
+            409,
+            'CLIENT_ALREADY_LINKED',
+            `Клиент с таким ID уже есть: ${dup.firstName} ${dup.lastName}`.trim(),
+          );
         }
       }
 

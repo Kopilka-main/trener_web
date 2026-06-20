@@ -36,6 +36,14 @@ export type CreateExerciseInput = {
   defaultTimeSec?: number | null;
   restSec: number;
   note?: string | null;
+  // Медиа/справочные поля каталога — переносятся при создании варианта базового
+  // упражнения (sourceExerciseId), чтобы у личной копии остались фото/видео/мышцы.
+  imageUrl?: string | null;
+  thumbUrl?: string | null;
+  videoUrl?: string | null;
+  equipment?: string | null;
+  primaryMuscles?: string | null;
+  secondaryMuscles?: string | null;
 };
 
 export type UpdateExerciseInput = {
@@ -143,6 +151,12 @@ export function makeExercisesRepo(db: Db) {
           defaultTimeSec: input.defaultTimeSec ?? null,
           restSec: input.restSec,
           note: input.note ?? null,
+          imageUrl: input.imageUrl ?? null,
+          thumbUrl: input.thumbUrl ?? null,
+          videoUrl: input.videoUrl ?? null,
+          equipment: input.equipment ?? null,
+          primaryMuscles: input.primaryMuscles ?? null,
+          secondaryMuscles: input.secondaryMuscles ?? null,
         })
         .returning(cols);
       if (!row) throw new Error('insert failed');

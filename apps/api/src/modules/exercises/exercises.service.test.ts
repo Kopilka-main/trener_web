@@ -15,6 +15,12 @@ function row(over: Partial<ExerciseRow> = {}): ExerciseRow {
     defaultTimeSec: null,
     restSec: 90,
     note: null,
+    imageUrl: null,
+    thumbUrl: null,
+    videoUrl: null,
+    equipment: null,
+    primaryMuscles: null,
+    secondaryMuscles: null,
     createdAt: new Date(0),
     ...over,
   };
@@ -42,6 +48,50 @@ describe('exercises.service', () => {
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'newid', trainerId: 'A', name: 'Присед' }),
     );
+  });
+
+  it('create с sourceExerciseId переносит фото/видео/мышцы из источника', async () => {
+    const create = vi.fn(() => Promise.resolve(row()));
+    const getVisible = vi.fn(() =>
+      Promise.resolve(
+        row({
+          id: 'src',
+          trainerId: null,
+          imageUrl: '/img.png',
+          thumbUrl: '/t.png',
+          videoUrl: '/v.mp4',
+          equipment: 'Штанга',
+          primaryMuscles: 'Плечи',
+          secondaryMuscles: 'Трицепс',
+        }),
+      ),
+    );
+    const svc = makeExercisesService(fakeRepo({ create, getVisible }), { newId: () => 'newid' });
+    await svc.create('A', {
+      name: 'Мой вариант',
+      category: 'Плечи',
+      restSec: 90,
+      sourceExerciseId: 'src',
+    });
+    expect(getVisible).toHaveBeenCalledWith('A', 'src');
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        imageUrl: '/img.png',
+        thumbUrl: '/t.png',
+        videoUrl: '/v.mp4',
+        equipment: 'Штанга',
+        primaryMuscles: 'Плечи',
+        secondaryMuscles: 'Трицепс',
+      }),
+    );
+  });
+
+  it('create без sourceExerciseId не зовёт getVisible (медиа null)', async () => {
+    const create = vi.fn(() => Promise.resolve(row()));
+    const getVisible = vi.fn(() => Promise.resolve(null));
+    const svc = makeExercisesService(fakeRepo({ create, getVisible }), { newId: () => 'newid' });
+    await svc.create('A', { name: 'Присед', category: 'Ноги', restSec: 90 });
+    expect(getVisible).not.toHaveBeenCalled();
   });
 
   it('create по умолчанию subgroup=null в ответе и передаёт null в repo', async () => {

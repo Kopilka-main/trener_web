@@ -29,8 +29,17 @@ export const createWorkoutRequestSchema = z.object({
   // Допускаем пустой список: клиент создаёт пустую тренировку и наполняет её
   // упражнениями уже на странице проведения (как тренер в ActiveWorkout).
   exercises: z.array(workoutExercisePlanSchema),
+  // Тренер формирует историческую запись (постфактум): не уведомлять клиента и
+  // не учитывать в балансе пакета/календаре. Для клиентских тренировок игнорируется.
+  excludedFromBalance: z.boolean().optional(),
 });
 export type CreateWorkoutRequest = z.infer<typeof createWorkoutRequestSchema>;
+
+// Тренер фиксирует уже проведённую тренировку в истории клиента указанной датой.
+export const addWorkoutToHistoryRequestSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Ожидается дата YYYY-MM-DD'),
+});
+export type AddWorkoutToHistoryRequest = z.infer<typeof addWorkoutToHistoryRequestSchema>;
 
 // --- Редактирование набора упражнений тренировки ---
 
@@ -101,6 +110,8 @@ export const workoutResponseSchema = z.object({
   trainerNote: z.string().nullable(),
   rpe: z.number().nullable(),
   createdByClient: z.boolean(),
+  // Историческая запись тренера: не уменьшает баланс пакета, нет в календаре.
+  excludedFromBalance: z.boolean(),
   exercises: z.array(workoutExerciseResponseSchema),
 });
 export type WorkoutResponse = z.infer<typeof workoutResponseSchema>;

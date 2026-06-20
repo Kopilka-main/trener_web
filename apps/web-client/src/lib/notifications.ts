@@ -1,7 +1,18 @@
-import type { PackageResponse, SessionResponse, WorkoutResponse } from '@trener/shared';
+import type {
+  MeasurementTaskResponse,
+  PackageResponse,
+  SessionResponse,
+  WorkoutResponse,
+} from '@trener/shared';
 import { MONTH_GEN, parseISO } from './calendar';
 
-export type ClientNotificationKind = 'confirm' | 'soon' | 'chat' | 'package' | 'workout';
+export type ClientNotificationKind =
+  | 'confirm'
+  | 'soon'
+  | 'chat'
+  | 'package'
+  | 'workout'
+  | 'measure';
 
 /** Пакет считается заканчивающимся, когда остаток занятий ≤ этого порога. */
 const PACKAGE_LOW_THRESHOLD = 2;
@@ -11,6 +22,8 @@ export interface ClientNotification {
   kind: ClientNotificationKind;
   text: string;
   to: string;
+  /** Для confirm-уведомлений — id занятия, чтобы открыть шторку подтверждения напрямую. */
+  sessionId?: string;
 }
 
 const DISMISSED_KEY = 'client_notifications_dismissed';
@@ -58,8 +71,17 @@ export function buildClientNotifications(args: {
   dismissed: Set<string>;
   packages?: PackageResponse[];
   workouts?: WorkoutResponse[];
+  measurementTasks?: MeasurementTaskResponse[];
 }): ClientNotification[] {
-  const { sessions, unread, now, dismissed, packages = [], workouts = [] } = args;
+  const {
+    sessions,
+    unread,
+    now,
+    dismissed,
+    packages = [],
+    workouts = [],
+    measurementTasks = [],
+  } = args;
   const nowMs = now.getTime();
   const out: ClientNotification[] = [];
 
@@ -75,6 +97,19 @@ export function buildClientNotifications(args: {
     }
   }
 
+  // 0b) Задачи на замеры от тренера (бэкенд возвращает только открытые).
+  for (const t of measurementTasks) {
+    out.push({
+      id: `measure:${t.id}`,
+      kind: 'measure',
+      text:
+        t.note && t.note.trim()
+          ? `Тренер просит сделать замеры: ${t.note}`
+          : 'Тренер просит сделать замеры',
+      to: '/progress?tab=measurements',
+    });
+  }
+
   const future = sessions
     .filter((s) => s.status !== 'cancelled' && startMs(s) >= nowMs)
     .sort((a, b) => startMs(a) - startMs(b));
@@ -87,6 +122,7 @@ export function buildClientNotifications(args: {
         kind: 'confirm',
         text: `Подтвердите занятие ${whenLabel(s)}`,
         to: '/calendar',
+        sessionId: s.id,
       });
     }
   }
@@ -104,6 +140,7 @@ export function buildClientNotifications(args: {
       kind: 'confirm',
       text: `Подтвердите проведённую тренировку ${whenLabel(s)}`,
       to: '/calendar',
+      sessionId: s.id,
     });
   }
 

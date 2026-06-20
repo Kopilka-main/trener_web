@@ -34,6 +34,9 @@ const MUSCLES_BY_CATEGORY: Record<string, string[]> = {
   Йога: ['Корпус', 'Грудные', 'Ягодицы'],
 };
 
+/** Sentinel-значение группы «Все» — показывает упражнения всех категорий. */
+const ALL_GROUPS = '__all__';
+
 function musclesFor(category: string): string {
   const m = MUSCLES_BY_CATEGORY[category];
   return m ? m.slice(0, 3).join(', ') : category;
@@ -94,9 +97,13 @@ export function ExercisePicker({
     if (group === null && groups.length > 0) setGroup(groups[0] ?? null);
   }, [group, groups]);
 
-  const subgroupChips = group ? subgroupsFor(group) : [];
+  // group === ALL_GROUPS → все упражнения (без фильтра по группе); подгруппы не применяются.
+  const subgroupChips = group && group !== ALL_GROUPS ? subgroupsFor(group) : [];
   const groupExercises = useMemo(
-    () => (catalog.data ?? []).filter((e) => e.category === group),
+    () =>
+      group === ALL_GROUPS
+        ? (catalog.data ?? [])
+        : (catalog.data ?? []).filter((e) => e.category === group),
     [catalog.data, group],
   );
   const visible = useMemo(() => {
@@ -117,6 +124,15 @@ export function ExercisePicker({
         {catalog.isPending && <p className="text-sm text-ink-muted">Загрузка каталога…</p>}
         {groups.length > 0 && (
           <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => selectGroup(ALL_GROUPS)}
+              className={`rounded-full px-4 py-2 text-[14px] font-semibold transition-colors ${
+                group === ALL_GROUPS ? 'bg-accent text-accent-on' : 'bg-chip text-ink'
+              }`}
+            >
+              Все
+            </button>
             {groups.map((g) => {
               const active = g === group;
               return (

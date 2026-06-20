@@ -68,6 +68,16 @@ export function makeFilesRepo(db: Db) {
       return row ?? null;
     },
 
+    // Файл в scope пары (тренер, клиент), либо null. Для клиентской раздачи фото
+    // прогресса: файл принадлежит тренеру и привязан к clientId клиента.
+    async getForClient(trainerId: string, clientId: string, id: string): Promise<FileRow | null> {
+      const [row] = await db
+        .select(columns)
+        .from(files)
+        .where(and(eq(files.id, id), eq(files.trainerId, trainerId), eq(files.clientId, clientId)));
+      return row ?? null;
+    },
+
     // Файл в scope клиент-аккаунта, либо null (нет/чужой).
     async getForAccount(accountId: string, id: string): Promise<FileRow | null> {
       const [row] = await db

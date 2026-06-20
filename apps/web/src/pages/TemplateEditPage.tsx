@@ -35,6 +35,9 @@ const GROUP_ORDER = [
   'Йога',
 ];
 
+/** Sentinel-значение группы «Все» — показывает упражнения всех категорий. */
+const ALL_GROUPS = '__all__';
+
 /** Варианты «Тип» тренировки. */
 const TEMPLATE_TAGS = [
   'Сила',
@@ -206,12 +209,15 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
   }, [positions]);
 
   const groupExercises = useMemo(
-    () => (catalog.data ?? []).filter((e) => e.category === group),
+    () =>
+      group === ALL_GROUPS
+        ? (catalog.data ?? [])
+        : (catalog.data ?? []).filter((e) => e.category === group),
     [catalog.data, group],
   );
 
-  // Подгруппы — полный список из таксономии выбранной группы.
-  const subgroupChips = group ? subgroupsFor(group) : [];
+  // Подгруппы — полный список из таксономии выбранной группы (для «Все» не применяются).
+  const subgroupChips = group && group !== ALL_GROUPS ? subgroupsFor(group) : [];
 
   // Отфильтрованный по подгруппе список, плюс поиск по названию (ё/е, слова, опечатки).
   const visibleExercises = useMemo(() => {
@@ -328,6 +334,15 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
                 Группа мышц
               </h2>
               <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => selectGroup(ALL_GROUPS)}
+                  className={`rounded-full px-4 py-2 text-[14px] font-semibold transition-colors ${
+                    group === ALL_GROUPS ? 'bg-accent text-accent-on' : 'bg-chip text-ink'
+                  }`}
+                >
+                  Все
+                </button>
                 {groups.map((g) => {
                   const active = g === group;
                   return (
@@ -375,7 +390,7 @@ export function TemplateEditPage({ mode }: TemplateEditPageProps) {
           {group && (
             <section className="flex flex-col gap-2">
               <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-                Упражнения «{group}»
+                {group === ALL_GROUPS ? 'Все упражнения' : `Упражнения «${group}»`}
               </h2>
               <div className="relative">
                 <Search

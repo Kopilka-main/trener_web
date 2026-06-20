@@ -10,6 +10,7 @@ import {
   Pencil,
   Plus,
   Ruler,
+  X,
 } from 'lucide-react';
 import type {
   CreateMeasurementRequest,
@@ -27,6 +28,9 @@ import {
   useCreateMeasurement,
   useDeleteMeasurement,
   useUpdateMeasurement,
+  useClientMeasurementTasks,
+  useCreateMeasurementTask,
+  useCancelMeasurementTask,
 } from '../api/measurements';
 import {
   fileUrl,
@@ -648,19 +652,30 @@ interface MeasurementField {
 function measurementFields(m: MeasurementResponse): MeasurementField[] {
   return [
     { label: 'Вес', value: m.weightKg, suffix: 'кг' },
-    { label: '% жира', value: m.bodyFatPct, suffix: '%' },
+    { label: 'Бицепс', value: m.bicepsCm, suffix: 'см' },
     { label: 'Грудь', value: m.chestCm, suffix: 'см' },
+    { label: 'Под грудью', value: m.underbustCm, suffix: 'см' },
     { label: 'Талия', value: m.waistCm, suffix: 'см' },
+    { label: 'Живот', value: m.bellyCm, suffix: 'см' },
+    { label: 'Ягодицы', value: m.glutesCm, suffix: 'см' },
     { label: 'Бёдра', value: m.hipsCm, suffix: 'см' },
+    { label: 'Бедро', value: m.thighCm, suffix: 'см' },
+    { label: 'Голень', value: m.calfCm, suffix: 'см' },
+    { label: '% жира', value: m.bodyFatPct, suffix: '%' },
   ];
 }
 
 function MeasurementsTab({ clientId }: { clientId: string }) {
   const measurements = useClientMeasurements(clientId);
+  const tasks = useClientMeasurementTasks(clientId);
+  const createTask = useCreateMeasurementTask(clientId);
+  const cancelTask = useCancelMeasurementTask(clientId);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<MeasurementResponse | null>(null);
 
   const items = measurements.data ?? [];
+  // Бэкенд возвращает только открытые задачи — берём первую.
+  const openTask = tasks.data?.[0] ?? null;
 
   if (adding) {
     return <MeasurementForm clientId={clientId} onClose={() => setAdding(false)} />;
@@ -673,6 +688,32 @@ function MeasurementsTab({ clientId }: { clientId: string }) {
 
   return (
     <div className="flex flex-col gap-3">
+      {openTask ? (
+        <div className="flex items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3">
+          <span className="flex items-center gap-2 text-[14px] font-medium text-ink">
+            <Ruler size={16} className="shrink-0 text-ink-muted" />
+            Запрос на замеры отправлен
+          </span>
+          <button
+            type="button"
+            onClick={() => cancelTask.mutate(openTask.id)}
+            disabled={cancelTask.isPending}
+            className="flex items-center gap-1 text-[13px] font-medium text-ink-muted active:text-ink disabled:opacity-60"
+          >
+            <X size={14} /> Отменить
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => createTask.mutate({ note: null })}
+          disabled={createTask.isPending}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-line py-3 text-[14px] font-medium text-ink disabled:opacity-60"
+        >
+          <Ruler size={16} /> Запросить замеры у клиента
+        </button>
+      )}
+
       <button
         type="button"
         onClick={() => setAdding(true)}
@@ -705,16 +746,33 @@ function MeasurementsTab({ clientId }: { clientId: string }) {
 // ─── Аналитика (графики динамики) ──────────────────────────────────────────────
 
 interface MetricDef {
-  key: 'weightKg' | 'waistCm' | 'chestCm' | 'hipsCm' | 'bodyFatPct';
+  key:
+    | 'weightKg'
+    | 'bicepsCm'
+    | 'chestCm'
+    | 'underbustCm'
+    | 'waistCm'
+    | 'bellyCm'
+    | 'glutesCm'
+    | 'hipsCm'
+    | 'thighCm'
+    | 'calfCm'
+    | 'bodyFatPct';
   label: string;
   suffix: string;
 }
 
 const ANALYTICS_METRICS: MetricDef[] = [
   { key: 'weightKg', label: 'Вес', suffix: ' кг' },
-  { key: 'waistCm', label: 'Талия', suffix: ' см' },
+  { key: 'bicepsCm', label: 'Бицепс', suffix: ' см' },
   { key: 'chestCm', label: 'Грудь', suffix: ' см' },
+  { key: 'underbustCm', label: 'Под грудью', suffix: ' см' },
+  { key: 'waistCm', label: 'Талия', suffix: ' см' },
+  { key: 'bellyCm', label: 'Живот', suffix: ' см' },
+  { key: 'glutesCm', label: 'Ягодицы', suffix: ' см' },
   { key: 'hipsCm', label: 'Бёдра', suffix: ' см' },
+  { key: 'thighCm', label: 'Бедро', suffix: ' см' },
+  { key: 'calfCm', label: 'Голень', suffix: ' см' },
   { key: 'bodyFatPct', label: '% жира', suffix: ' %' },
 ];
 
@@ -870,9 +928,15 @@ type MeasurementFormState = {
   date: string;
   weightKg: number | null;
   bodyFatPct: number | null;
+  bicepsCm: number | null;
   chestCm: number | null;
+  underbustCm: number | null;
   waistCm: number | null;
+  bellyCm: number | null;
+  glutesCm: number | null;
   hipsCm: number | null;
+  thighCm: number | null;
+  calfCm: number | null;
   note: string;
 };
 
@@ -881,9 +945,15 @@ function initialFormState(m?: MeasurementResponse): MeasurementFormState {
     date: m?.date ?? new Date().toISOString().slice(0, 10),
     weightKg: m?.weightKg ?? null,
     bodyFatPct: m?.bodyFatPct ?? null,
+    bicepsCm: m?.bicepsCm ?? null,
     chestCm: m?.chestCm ?? null,
+    underbustCm: m?.underbustCm ?? null,
     waistCm: m?.waistCm ?? null,
+    bellyCm: m?.bellyCm ?? null,
+    glutesCm: m?.glutesCm ?? null,
     hipsCm: m?.hipsCm ?? null,
+    thighCm: m?.thighCm ?? null,
+    calfCm: m?.calfCm ?? null,
     note: m?.note ?? '',
   };
 }
@@ -915,9 +985,15 @@ function MeasurementForm({
       date: form.date,
       weightKg: form.weightKg,
       bodyFatPct: form.bodyFatPct,
+      bicepsCm: form.bicepsCm,
       chestCm: form.chestCm,
+      underbustCm: form.underbustCm,
       waistCm: form.waistCm,
+      bellyCm: form.bellyCm,
+      glutesCm: form.glutesCm,
       hipsCm: form.hipsCm,
+      thighCm: form.thighCm,
+      calfCm: form.calfCm,
       note: note === '' ? null : note,
     };
   }
@@ -986,10 +1062,22 @@ function MeasurementForm({
 
       <FormGroup title="Обхваты">
         <NumField
+          label="Бицепс"
+          suffix="см"
+          value={form.bicepsCm}
+          onChange={(v) => setField('bicepsCm', v)}
+        />
+        <NumField
           label="Грудь"
           suffix="см"
           value={form.chestCm}
           onChange={(v) => setField('chestCm', v)}
+        />
+        <NumField
+          label="Под грудью"
+          suffix="см"
+          value={form.underbustCm}
+          onChange={(v) => setField('underbustCm', v)}
         />
         <NumField
           label="Талия"
@@ -998,10 +1086,34 @@ function MeasurementForm({
           onChange={(v) => setField('waistCm', v)}
         />
         <NumField
+          label="Живот"
+          suffix="см"
+          value={form.bellyCm}
+          onChange={(v) => setField('bellyCm', v)}
+        />
+        <NumField
+          label="Ягодицы"
+          suffix="см"
+          value={form.glutesCm}
+          onChange={(v) => setField('glutesCm', v)}
+        />
+        <NumField
           label="Бёдра"
           suffix="см"
           value={form.hipsCm}
           onChange={(v) => setField('hipsCm', v)}
+        />
+        <NumField
+          label="Бедро"
+          suffix="см"
+          value={form.thighCm}
+          onChange={(v) => setField('thighCm', v)}
+        />
+        <NumField
+          label="Голень"
+          suffix="см"
+          value={form.calfCm}
+          onChange={(v) => setField('calfCm', v)}
         />
       </FormGroup>
 

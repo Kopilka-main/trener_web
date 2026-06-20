@@ -127,7 +127,11 @@ export function ClientCardPage() {
   const paidLessons = (packages.data ?? [])
     .filter((p) => p.status === 'active')
     .reduce((acc, p) => acc + p.lessonsPaid, 0);
-  const completedWorkouts = (workouts.data ?? []).filter((w) => w.status === 'completed').length;
+  // Баланс пакета уменьшают только тренерские проведённые тренировки: самостоятельные
+  // тренировки клиента и исторические записи в зачёт не идут.
+  const completedWorkouts = (workouts.data ?? []).filter(
+    (w) => w.status === 'completed' && !w.excludedFromBalance && !w.createdByClient,
+  ).length;
   const paidBalance = paidLessons - completedWorkouts;
   // Календарь: «запланировано / ещё можно записать из оплаченных».
   // Второе число = остаток оплаты (paidBalance) − уже запланированные занятия.

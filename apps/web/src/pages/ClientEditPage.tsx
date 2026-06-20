@@ -24,7 +24,7 @@ import {
   useRemoveClientAvatar,
   useUpdateClient,
   useUploadClientAvatar,
-  verifyConnectCode,
+  checkConnectCode,
 } from '../api/clients';
 import { ApiError } from '../api/client';
 import { Avatar } from '../components/Avatar';
@@ -620,6 +620,7 @@ export function ClientEditPage({ mode }: ClientEditPageProps) {
       {connectOpen && (
         <ConnectDialog
           value={accountId}
+          excludeClientId={id || undefined}
           onApply={(v) => {
             setAccountId(v);
             setConnectOpen(false);
@@ -717,11 +718,13 @@ function DeleteDialog({
 
 function ConnectDialog({
   value,
+  excludeClientId,
   onApply,
   onDisconnect,
   onClose,
 }: {
   value: string;
+  excludeClientId?: string | undefined;
   onApply: (v: string) => void;
   onDisconnect: () => void;
   onClose: () => void;
@@ -730,6 +733,8 @@ function ConnectDialog({
   const [scanning, setScanning] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
+  // Предупреждение о дубле: клиент тренера уже привязан к этому ID.
+  const [dupName, setDupName] = useState('');
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -741,16 +746,22 @@ function ConnectDialog({
 
   const connected = value.trim() !== '';
 
-  // Проверяем код на сервере ПЕРЕД применением: нет такого аккаунта → ошибка, диалог не закрываем.
+  // Проверяем код на сервере ПЕРЕД применением: нет аккаунта → ошибка; уже привязан
+  // к другому клиенту тренера → предупреждение с ФИО, не применяем (дубль ломает связь).
   async function apply() {
     const code = draft.trim();
     if (code === '') return;
     setChecking(true);
     setError('');
+    setDupName('');
     try {
-      const exists = await verifyConnectCode(code);
-      if (!exists) {
+      const res = await checkConnectCode(code, excludeClientId);
+      if (!res.exists) {
         setError('Клиент с таким кодом не найден. Проверьте код или отсканируйте QR.');
+        return;
+      }
+      if (res.linkedClient) {
+        setDupName(`${res.linkedClient.firstName} ${res.linkedClient.lastName}`.trim());
         return;
       }
       onApply(code);
@@ -787,6 +798,7 @@ function ConnectDialog({
             onChange={(e) => {
               setDraft(e.target.value);
               setError('');
+              setDupName('');
             }}
             autoFocus
             placeholder="Например, AB12-CD34"
@@ -797,6 +809,13 @@ function ConnectDialog({
           />
           {error !== '' && <span className="text-[12px] text-ink-muted">{error}</span>}
         </label>
+
+        {dupName !== '' && (
+          <div className="mt-2 rounded-xl border border-line bg-chip px-3 py-2.5 text-[12px] leading-snug text-ink">
+            <span className="font-semibold">Клиент с таким ID уже есть в записной книжке:</span>{' '}
+            {dupName}. Привязать повторно нельзя — сначала отвяжите этот ID у того клиента.
+          </div>
+        )}
 
         <button
           type="button"

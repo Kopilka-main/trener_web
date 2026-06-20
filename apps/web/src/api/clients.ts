@@ -5,8 +5,10 @@ import {
   clientResponseSchema,
   clientListResponseSchema,
   accountProfileResponseSchema,
+  connectCodeCheckResponseSchema,
   type AccountProfileResponse,
   type ClientResponse,
+  type ConnectCodeCheckResponse,
   type CreateClientRequest,
   type UpdateClientRequest,
 } from '@trener/shared';
@@ -27,12 +29,20 @@ export function getClient(id: string): Promise<ClientResponse> {
   return apiFetch(`/clients/${id}`, { schema: clientEnvelopeSchema }).then((r) => r.client);
 }
 
-/** Проверяет, существует ли клиентский аккаунт с таким кодом привязки (для диалога «Подключить»). */
-export function verifyConnectCode(code: string): Promise<boolean> {
+/**
+ * Проверка кода привязки (для диалога «Подключить»): существует ли клиентский аккаунт
+ * и не привязан ли он уже к другому клиенту тренера (тогда вернёт его ФИО — предупреждаем).
+ * excludeClientId — текущий редактируемый клиент (исключить из проверки на дубль).
+ */
+export function checkConnectCode(
+  code: string,
+  excludeClientId?: string,
+): Promise<ConnectCodeCheckResponse> {
   const params = new URLSearchParams({ code });
+  if (excludeClientId) params.set('excludeClientId', excludeClientId);
   return apiFetch(`/clients/connect-code/check?${params.toString()}`, {
-    schema: z.object({ exists: z.boolean() }),
-  }).then((r) => r.exists);
+    schema: connectCodeCheckResponseSchema,
+  });
 }
 
 /** Профиль подключённого клиентского аккаунта по коду привязки (для «Получить данные»). */

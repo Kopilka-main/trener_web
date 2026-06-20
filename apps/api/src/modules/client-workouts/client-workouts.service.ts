@@ -53,6 +53,7 @@ function toResponse(r: WorkoutRow): WorkoutResponse {
     trainerNote: r.trainerNote,
     rpe: r.rpe,
     createdByClient: r.createdByClient,
+    excludedFromBalance: r.excludedFromBalance,
     exercises: r.exercises.map((e) => ({
       position: e.position,
       exerciseId: e.exerciseId,
@@ -94,17 +95,21 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
       input: CreateWorkoutRequest,
       createdByClient = false,
     ): Promise<WorkoutResponse> {
+      // Историческую запись формирует только тренер; для клиентских — всегда false.
+      const excludedFromBalance = !createdByClient && input.excludedFromBalance === true;
       const plan = {
         id: deps.newId(),
         name: input.name,
         sourceTemplateId: input.sourceTemplateId ?? null,
         exercises: input.exercises.map(toExerciseInput),
+        excludedFromBalance,
       };
       const row = await repo.create(trainerId, clientId, plan, createdByClient);
       // null = одно из упражнений невидимо тренеру.
       if (!row) throw unknownExercise();
-      // Назначил тренер (не сам клиент) → пуш клиенту с именем тренера.
-      if (!createdByClient && deps.notify) {
+      // Назначил тренер (не сам клиент) → пуш клиенту с именем тренера. Историческую
+      // запись клиенту не анонсируем (это фиксация уже проведённой тренировки).
+      if (!createdByClient && !excludedFromBalance && deps.notify) {
         deps.notify(clientId, trainerId, (trainerName) => ({
           title: 'Новая тренировка',
           body: `${trainerName} добавил тренировку: ${input.name}`,
@@ -226,6 +231,25 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
           // отметка/создание занятия — побочный эффект, ошибка не критична
         }
       }
+      return toResponse(updated);
+    },
+
+    // Зафиксировать черновик/активную тренировку как историческую запись указанной
+    // датой (YYYY-MM-DD). НЕ вызывает onCompleted → не попадает в календарь, не влияет
+    // на баланс пакета (excluded_from_balance=true). 404 / 409 BAD_STATUS.
+    async addToHistory(
+      trainerId: string,
+      clientId: string,
+      workoutId: string,
+      date: string,
+    ): Promise<WorkoutResponse> {
+      // Полдень UTC: дата-часть (slice 0..10) совпадает с указанной во всех таймзонах.
+      const completedAt = new Date(`${date}T12:00:00.000Z`);
+      const res = await repo.addToHistory(trainerId, clientId, workoutId, completedAt);
+      if (res === 'not_found') throw notFound('Тренировка не найдена');
+      if (res === 'bad_status') throw badStatus('Эту тренировку нельзя добавить в историю');
+      const updated = await repo.getFull(trainerId, clientId, workoutId);
+      if (!updated) throw notFound('Тренировка не найдена');
       return toResponse(updated);
     },
 

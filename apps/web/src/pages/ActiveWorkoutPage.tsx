@@ -12,6 +12,7 @@ import type {
 import {
   clientWorkoutQueryKey,
   useAddWorkoutExercise,
+  useAddWorkoutToHistory,
   useCompleteWorkout,
   useDeleteWorkout,
   useRemoveWorkoutExercise,
@@ -175,6 +176,15 @@ function DraftView({
   const navigate = useNavigate();
   const qc = useQueryClient();
   const start = useStartWorkout(clientId, workout.id);
+  // Историческая запись (excludedFromBalance) — финал не «Начать», а «Добавить в историю»
+  // указанной датой (по умолчанию сегодня).
+  const isHistory = workout.excludedFromBalance;
+  const addToHistory = useAddWorkoutToHistory(clientId, workout.id);
+  const [historyDate, setHistoryDate] = useState(() => {
+    const d = new Date();
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${String(d.getFullYear())}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  });
   const remove = useDeleteWorkout(clientId);
   const reorder = useReorderWorkoutExercises(clientId, workout.id);
   const add = useAddWorkoutExercise(clientId, workout.id);
@@ -190,6 +200,7 @@ function DraftView({
       plannedReps: number | null;
       plannedWeightKg: number | null;
       plannedTimeSec: number | null;
+      plannedRestSec: number | null;
     },
   ) {
     updateSet.mutate(
@@ -269,18 +280,45 @@ function DraftView({
         <AddExerciseButton onClick={() => setAdding(true)} />
       </div>
 
-      <div className="sticky bottom-0 mt-auto bg-bg px-2 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
-        <Button
-          className="w-full"
-          disabled={start.isPending || workout.exercises.length === 0}
-          onClick={() =>
-            start.mutate(undefined, {
-              onSuccess: () => void navigate(`/clients/${clientId}/workouts/${workout.id}`),
-            })
-          }
-        >
-          Начать тренировку
-        </Button>
+      <div className="sticky bottom-0 mt-auto flex flex-col gap-2 bg-bg px-2 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+        {isHistory ? (
+          <>
+            <label className="flex items-center justify-between gap-2 rounded-xl bg-chip px-3 py-2.5">
+              <span className="text-[13px] font-medium text-ink-muted">Дата тренировки</span>
+              <input
+                type="date"
+                value={historyDate}
+                onChange={(e) => setHistoryDate(e.target.value)}
+                className="bg-transparent text-[15px] tabular-nums text-ink outline-none [color-scheme:dark]"
+              />
+            </label>
+            <Button
+              className="w-full"
+              disabled={
+                addToHistory.isPending || workout.exercises.length === 0 || historyDate === ''
+              }
+              onClick={() =>
+                addToHistory.mutate(historyDate, {
+                  onSuccess: () => void navigate(backTo, { replace: true }),
+                })
+              }
+            >
+              Добавить в историю
+            </Button>
+          </>
+        ) : (
+          <Button
+            className="w-full"
+            disabled={start.isPending || workout.exercises.length === 0}
+            onClick={() =>
+              start.mutate(undefined, {
+                onSuccess: () => void navigate(`/clients/${clientId}/workouts/${workout.id}`),
+              })
+            }
+          >
+            Начать тренировку
+          </Button>
+        )}
       </div>
 
       {adding && (
@@ -918,14 +956,14 @@ function PlannedSetEditor({
     plannedReps: number | null;
     plannedWeightKg: number | null;
     plannedTimeSec: number | null;
+    plannedRestSec: number | null;
   }) => void;
 }) {
-  const showReps = set.plannedReps !== null || set.plannedWeightKg !== null;
-  const showWeight = set.plannedWeightKg !== null;
-  const showTime = set.plannedTimeSec !== null;
+  // План подхода всегда даёт все поля — заполняем те, что нужны упражнению.
   const [reps, setReps] = useState(String(set.plannedReps ?? ''));
   const [weight, setWeight] = useState(String(set.plannedWeightKg ?? ''));
   const [time, setTime] = useState(String(set.plannedTimeSec ?? ''));
+  const [rest, setRest] = useState(String(set.plannedRestSec ?? ''));
 
   const num = (s: string): number | null => {
     const t = s.trim();
@@ -934,55 +972,70 @@ function PlannedSetEditor({
     return Number.isFinite(n) ? n : null;
   };
 
-  const repsShown = showReps || (!showWeight && !showTime);
-
   return (
-    <div className="flex items-center gap-2">
-      {/* Раздельные поля ввода (без единиц): 8 × 60. */}
-      <div className="flex flex-1 items-center gap-2">
-        {repsShown && <NumBox value={reps} onChange={setReps} ariaLabel="повторы" />}
-        {showWeight && (
-          <>
-            <span className="font-[family-name:var(--font-mono)] text-[14px] text-ink-muted">
-              ×
-            </span>
-            <NumBox value={weight} onChange={setWeight} ariaLabel="вес" />
-          </>
-        )}
-        {showTime && (
-          <>
-            {repsShown && (
-              <span className="font-[family-name:var(--font-mono)] text-[14px] text-ink-muted">
-                ·
-              </span>
-            )}
-            <NumBox value={time} onChange={setTime} ariaLabel="секунды" />
-          </>
-        )}
+    <div className="flex flex-col gap-2 rounded-2xl bg-card-elevated p-2.5">
+      <div className="grid grid-cols-4 gap-2">
+        <LabeledNum label="Повт." value={reps} onChange={setReps} />
+        <LabeledNum label="Кг" value={weight} onChange={setWeight} step="0.5" />
+        <LabeledNum label="Сек" value={time} onChange={setTime} />
+        <LabeledNum label="Отдых" value={rest} onChange={setRest} />
       </div>
-      <button
-        type="button"
-        aria-label="Сохранить подход"
-        onClick={() =>
-          onSave({
-            plannedReps: repsShown ? num(reps) : null,
-            plannedWeightKg: showWeight ? num(weight) : null,
-            plannedTimeSec: showTime ? num(time) : null,
-          })
-        }
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-on active:scale-90"
-      >
-        <Check size={18} strokeWidth={2.8} />
-      </button>
-      <button
-        type="button"
-        aria-label="Отменить"
-        onClick={onCancel}
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-card-elevated text-ink-muted active:scale-90"
-      >
-        <X size={18} strokeWidth={2.2} />
-      </button>
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          aria-label="Отменить"
+          onClick={onCancel}
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-card text-ink-muted active:scale-90"
+        >
+          <X size={18} strokeWidth={2.2} />
+        </button>
+        <button
+          type="button"
+          aria-label="Сохранить подход"
+          onClick={() =>
+            onSave({
+              plannedReps: num(reps),
+              plannedWeightKg: num(weight),
+              plannedTimeSec: num(time),
+              plannedRestSec: num(rest),
+            })
+          }
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-accent-on active:scale-90"
+        >
+          <Check size={18} strokeWidth={2.8} />
+        </button>
+      </div>
     </div>
+  );
+}
+
+/** Подписанное числовое поле для планирования подхода (Повт./Кг/Сек/Отдых). */
+function LabeledNum({
+  label,
+  value,
+  onChange,
+  step,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  step?: string;
+}) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-wide text-ink-muted">
+        {label}
+      </span>
+      <input
+        type="number"
+        inputMode="decimal"
+        {...(step ? { step } : {})}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={label}
+        className="w-full rounded-lg border border-line bg-card px-2 py-2 text-center font-[family-name:var(--font-mono)] text-[15px] tabular-nums text-ink outline-none focus:border-accent"
+      />
+    </label>
   );
 }
 

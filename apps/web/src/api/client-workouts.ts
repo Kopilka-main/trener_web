@@ -4,6 +4,7 @@ import {
   updateSetRequestSchema,
   completeWorkoutRequestSchema,
   addWorkoutExerciseRequestSchema,
+  addWorkoutToHistoryRequestSchema,
   reorderWorkoutExercisesRequestSchema,
   workoutResponseSchema,
   workoutListResponseSchema,
@@ -51,6 +52,18 @@ export function createClientWorkout(
 export function startClientWorkout(clientId: string, wid: string): Promise<WorkoutResponse> {
   return apiFetch(`/clients/${clientId}/workouts/${wid}/start`, {
     method: 'POST',
+    schema: workoutEnvelopeSchema,
+  }).then((r) => r.workout);
+}
+
+export function addWorkoutToHistory(
+  clientId: string,
+  wid: string,
+  date: string,
+): Promise<WorkoutResponse> {
+  return apiFetch(`/clients/${clientId}/workouts/${wid}/add-to-history`, {
+    method: 'POST',
+    body: addWorkoutToHistoryRequestSchema.parse({ date }),
     schema: workoutEnvelopeSchema,
   }).then((r) => r.workout);
 }
@@ -150,6 +163,18 @@ export function useCreateWorkout(clientId: string) {
   return useMutation({
     mutationFn: (input: CreateWorkoutRequest) => createClientWorkout(clientId, input),
     onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: clientWorkoutsQueryKey(clientId) });
+    },
+  });
+}
+
+/** Зафиксировать тренировку в истории клиента указанной датой (постфактум). */
+export function useAddWorkoutToHistory(clientId: string, wid: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (date: string) => addWorkoutToHistory(clientId, wid, date),
+    onSuccess: (workout) => {
+      qc.setQueryData(clientWorkoutQueryKey(clientId, wid), workout);
       void qc.invalidateQueries({ queryKey: clientWorkoutsQueryKey(clientId) });
     },
   });

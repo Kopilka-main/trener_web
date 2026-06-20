@@ -85,3 +85,13 @@ export const accountProfileResponseSchema = z.object({
   contacts: z.array(contactSchema),
 });
 export type AccountProfileResponse = z.infer<typeof accountProfileResponseSchema>;
+
+// Проверка кода привязки: существует ли аккаунт + уже привязанный к нему клиент
+// этого тренера (для предупреждения о дубле в записной книжке).
+export const connectCodeCheckResponseSchema = z.object({
+  exists: z.boolean(),
+  linkedClient: z
+    .object({ id: z.string(), firstName: z.string(), lastName: z.string() })
+    .nullable(),
+});
+export type ConnectCodeCheckResponse = z.infer<typeof connectCodeCheckResponseSchema>;

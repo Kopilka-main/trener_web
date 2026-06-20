@@ -22,6 +22,7 @@ import { registerClientAppChatModule } from './modules/client-app-chat/client-ap
 import { registerClientAppTrainerModule } from './modules/client-app-trainer/client-app-trainer.module.js';
 import { registerClientAppCalendarModule } from './modules/client-app-calendar/client-app-calendar.module.js';
 import { registerClientAppMeasurementsModule } from './modules/client-app-measurements/client-app-measurements.module.js';
+import { registerClientAppProgressPhotosModule } from './modules/client-app-progress-photos/client-app-progress-photos.module.js';
 import { registerClientAppExercisesModule } from './modules/client-app-exercises/client-app-exercises.module.js';
 import { registerClientAppPackagesModule } from './modules/client-app-packages/client-app-packages.module.js';
 import { registerClientAppTemplatesModule } from './modules/client-app-templates/client-app-templates.module.js';
@@ -150,6 +151,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     clock,
     resolveScope: (id) => clientAuthSvc.resolveScope(id),
   });
+  registerClientAppProgressPhotosModule(app, {
+    db: deps.db,
+    storage,
+    clock,
+    resolveScope: (id) => clientAuthSvc.resolveScope(id),
+  });
   registerClientAppExercisesModule(app, {
     db: deps.db,
     clock,
@@ -190,7 +197,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
   registerPackagesModule(app, { db: deps.db, clock });
   registerAccountingModule(app, { db: deps.db, clock });
-  registerMeasurementsModule(app, { db: deps.db, clock });
+  registerMeasurementsModule(app, {
+    db: deps.db,
+    clock,
+    notifyClient: (clientId, trainerId, build) => {
+      void pushSvc.notifyClientFrom(clientId, trainerId, build).catch(() => undefined);
+    },
+  });
   registerChatModule(app, {
     db: deps.db,
     clock,

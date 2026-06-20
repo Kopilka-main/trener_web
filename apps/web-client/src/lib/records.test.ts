@@ -14,6 +14,7 @@ function wk(id: string, sets: { w: number | null; r: number | null }[]): Workout
     trainerNote: null,
     rpe: null,
     createdByClient: false,
+    excludedFromBalance: false,
     exercises: [
       {
         position: 0,

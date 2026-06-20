@@ -59,6 +59,7 @@ function workout(over: Partial<WorkoutResponse> = {}): WorkoutResponse {
     trainerNote: null,
     rpe: 7,
     createdByClient: false,
+    excludedFromBalance: false,
     exercises: [{ position: 0, exerciseId: 'e1', exerciseName: 'Жим', sets: [] }],
     ...over,
   };

@@ -7,6 +7,7 @@ import {
   clientResponseSchema,
   clientListResponseSchema,
   accountProfileResponseSchema,
+  connectCodeCheckResponseSchema,
 } from '@trener/shared';
 import type { ClientsService, AvatarUploadInput } from './clients.service.js';
 import { requireAuth } from '../../plugins/tenant-context.js';
@@ -88,14 +89,11 @@ export function clientsRoutes(
     {
       preHandler: requireAuth,
       schema: {
-        querystring: z.object({ code: z.string() }),
-        response: { 200: z.object({ exists: z.boolean() }) },
+        querystring: z.object({ code: z.string(), excludeClientId: z.string().optional() }),
+        response: { 200: connectCodeCheckResponseSchema },
       },
     },
-    async (req) => {
-      trainerId(req); // гард: только авторизованный тренер
-      return { exists: await svc.verifyConnectCode(req.query.code) };
-    },
+    async (req) => svc.checkConnectCode(trainerId(req), req.query.code, req.query.excludeClientId),
   );
 
   // Профиль подключённого клиентского аккаунта — для кнопки «Получить данные».

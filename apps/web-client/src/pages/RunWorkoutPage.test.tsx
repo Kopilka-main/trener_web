@@ -26,6 +26,7 @@ function activeWorkout(): WorkoutResponse {
     trainerNote: null,
     rpe: null,
     createdByClient: true,
+    excludedFromBalance: false,
     exercises: [
       {
         position: 2,

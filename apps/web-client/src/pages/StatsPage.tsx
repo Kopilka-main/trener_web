@@ -1,11 +1,24 @@
 import { useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, ChevronRight, Dumbbell, Pencil, Plus, Ruler } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import {
+  ArrowDown,
+  ArrowUp,
+  BarChart3,
+  ChevronRight,
+  Dumbbell,
+  ImagePlus,
+  Pencil,
+  Plus,
+  Ruler,
+} from 'lucide-react';
 import type {
   CreateMeasurementRequest,
   MeasurementResponse,
+  PhotoResponse,
   WorkoutResponse,
 } from '@trener/shared';
 import { HoldToDelete } from '../components/HoldToDelete';
+import { BodyPoseGuide } from '../components/BodyPoseGuide';
 import { LineChart, type LineChartPoint } from '../components/LineChart';
 import { useClientMe } from '../api/auth';
 import { useClientWorkouts } from '../api/workouts';
@@ -17,6 +30,12 @@ import {
   type UpdateMeasurementArgs,
 } from '../api/measurements';
 import {
+  fileUrl,
+  useClientProgressPhotos,
+  useDeleteProgressPhoto,
+  useUploadProgressPhoto,
+} from '../api/progress-photos';
+import {
   aggregateExerciseHistory,
   aggregateExerciseOverview,
   workoutRowStats,
@@ -25,7 +44,19 @@ import {
   type ExerciseOverview,
 } from '../lib/workout-stats';
 
-type Tab = 'exercises' | 'measurements';
+type Tab = 'exercises' | 'measurements' | 'photos';
+
+const ANGLES = [
+  { value: 'front', label: 'Спереди' },
+  { value: 'side', label: 'Сбоку' },
+  { value: 'back', label: 'Сзади' },
+] as const;
+
+type AngleValue = (typeof ANGLES)[number]['value'];
+
+function angleLabel(angle: string): string {
+  return ANGLES.find((a) => a.value === angle)?.label ?? angle;
+}
 
 /**
  * Экран «Статистика» клиентского приложения. Два таба:
@@ -35,7 +66,10 @@ type Tab = 'exercises' | 'measurements';
 export function StatsPage() {
   const me = useClientMe();
   const linked = me.data?.link != null;
-  const [tab, setTab] = useState<Tab>('exercises');
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(
+    searchParams.get('tab') === 'measurements' ? 'measurements' : 'exercises',
+  );
 
   return (
     <div className="flex min-h-full flex-col">
@@ -51,12 +85,16 @@ export function StatsPage() {
           <TabButton active={tab === 'measurements'} onClick={() => setTab('measurements')}>
             Замеры
           </TabButton>
+          <TabButton active={tab === 'photos'} onClick={() => setTab('photos')}>
+            Фото
+          </TabButton>
         </div>
       </div>
 
       <div className="flex flex-1 flex-col px-2 pb-8 pt-4">
         {tab === 'exercises' && <ExercisesTab linked={linked} />}
         {tab === 'measurements' && <MeasurementsTab linked={linked} />}
+        {tab === 'photos' && <PhotosTab linked={linked} />}
       </div>
     </div>
   );
@@ -615,10 +653,16 @@ interface MeasurementField {
 function measurementFields(m: MeasurementResponse): MeasurementField[] {
   return [
     { label: 'Вес', value: m.weightKg, suffix: 'кг' },
-    { label: '% жира', value: m.bodyFatPct, suffix: '%' },
+    { label: 'Бицепс', value: m.bicepsCm, suffix: 'см' },
     { label: 'Грудь', value: m.chestCm, suffix: 'см' },
+    { label: 'Под грудью', value: m.underbustCm, suffix: 'см' },
     { label: 'Талия', value: m.waistCm, suffix: 'см' },
+    { label: 'Живот', value: m.bellyCm, suffix: 'см' },
+    { label: 'Ягодицы', value: m.glutesCm, suffix: 'см' },
     { label: 'Бёдра', value: m.hipsCm, suffix: 'см' },
+    { label: 'Бедро', value: m.thighCm, suffix: 'см' },
+    { label: 'Голень', value: m.calfCm, suffix: 'см' },
+    { label: '% жира', value: m.bodyFatPct, suffix: '%' },
   ];
 }
 
@@ -674,16 +718,33 @@ function MeasurementsTab({ linked }: { linked: boolean }) {
 // ─── Аналитика (графики динамики) ──────────────────────────────────────────────
 
 interface MetricDef {
-  key: 'weightKg' | 'waistCm' | 'chestCm' | 'hipsCm' | 'bodyFatPct';
+  key:
+    | 'weightKg'
+    | 'bicepsCm'
+    | 'chestCm'
+    | 'underbustCm'
+    | 'waistCm'
+    | 'bellyCm'
+    | 'glutesCm'
+    | 'hipsCm'
+    | 'thighCm'
+    | 'calfCm'
+    | 'bodyFatPct';
   label: string;
   suffix: string;
 }
 
 const ANALYTICS_METRICS: MetricDef[] = [
   { key: 'weightKg', label: 'Вес', suffix: ' кг' },
-  { key: 'waistCm', label: 'Талия', suffix: ' см' },
+  { key: 'bicepsCm', label: 'Бицепс', suffix: ' см' },
   { key: 'chestCm', label: 'Грудь', suffix: ' см' },
+  { key: 'underbustCm', label: 'Под грудью', suffix: ' см' },
+  { key: 'waistCm', label: 'Талия', suffix: ' см' },
+  { key: 'bellyCm', label: 'Живот', suffix: ' см' },
+  { key: 'glutesCm', label: 'Ягодицы', suffix: ' см' },
   { key: 'hipsCm', label: 'Бёдра', suffix: ' см' },
+  { key: 'thighCm', label: 'Бедро', suffix: ' см' },
+  { key: 'calfCm', label: 'Голень', suffix: ' см' },
   { key: 'bodyFatPct', label: '% жира', suffix: ' %' },
 ];
 
@@ -833,9 +894,15 @@ type MeasurementFormState = {
   date: string;
   weightKg: number | null;
   bodyFatPct: number | null;
+  bicepsCm: number | null;
   chestCm: number | null;
+  underbustCm: number | null;
   waistCm: number | null;
+  bellyCm: number | null;
+  glutesCm: number | null;
   hipsCm: number | null;
+  thighCm: number | null;
+  calfCm: number | null;
   note: string;
 };
 
@@ -844,9 +911,15 @@ function initialFormState(m?: MeasurementResponse): MeasurementFormState {
     date: m?.date ?? new Date().toISOString().slice(0, 10),
     weightKg: m?.weightKg ?? null,
     bodyFatPct: m?.bodyFatPct ?? null,
+    bicepsCm: m?.bicepsCm ?? null,
     chestCm: m?.chestCm ?? null,
+    underbustCm: m?.underbustCm ?? null,
     waistCm: m?.waistCm ?? null,
+    bellyCm: m?.bellyCm ?? null,
+    glutesCm: m?.glutesCm ?? null,
     hipsCm: m?.hipsCm ?? null,
+    thighCm: m?.thighCm ?? null,
+    calfCm: m?.calfCm ?? null,
     note: m?.note ?? '',
   };
 }
@@ -876,9 +949,15 @@ function MeasurementForm({
       date: form.date,
       weightKg: form.weightKg,
       bodyFatPct: form.bodyFatPct,
+      bicepsCm: form.bicepsCm,
       chestCm: form.chestCm,
+      underbustCm: form.underbustCm,
       waistCm: form.waistCm,
+      bellyCm: form.bellyCm,
+      glutesCm: form.glutesCm,
       hipsCm: form.hipsCm,
+      thighCm: form.thighCm,
+      calfCm: form.calfCm,
       note: note === '' ? null : note,
     };
   }
@@ -948,10 +1027,22 @@ function MeasurementForm({
 
       <FormGroup title="Обхваты">
         <NumField
+          label="Бицепс"
+          suffix="см"
+          value={form.bicepsCm}
+          onChange={(v) => setField('bicepsCm', v)}
+        />
+        <NumField
           label="Грудь"
           suffix="см"
           value={form.chestCm}
           onChange={(v) => setField('chestCm', v)}
+        />
+        <NumField
+          label="Под грудью"
+          suffix="см"
+          value={form.underbustCm}
+          onChange={(v) => setField('underbustCm', v)}
         />
         <NumField
           label="Талия"
@@ -960,10 +1051,34 @@ function MeasurementForm({
           onChange={(v) => setField('waistCm', v)}
         />
         <NumField
+          label="Живот"
+          suffix="см"
+          value={form.bellyCm}
+          onChange={(v) => setField('bellyCm', v)}
+        />
+        <NumField
+          label="Ягодицы"
+          suffix="см"
+          value={form.glutesCm}
+          onChange={(v) => setField('glutesCm', v)}
+        />
+        <NumField
           label="Бёдра"
           suffix="см"
           value={form.hipsCm}
           onChange={(v) => setField('hipsCm', v)}
+        />
+        <NumField
+          label="Бедро"
+          suffix="см"
+          value={form.thighCm}
+          onChange={(v) => setField('thighCm', v)}
+        />
+        <NumField
+          label="Голень"
+          suffix="см"
+          value={form.calfCm}
+          onChange={(v) => setField('calfCm', v)}
         />
       </FormGroup>
 
@@ -1041,5 +1156,112 @@ function NumField({
         <span className="text-[12px] text-ink-mutedxl">{suffix}</span>
       </span>
     </label>
+  );
+}
+
+// ─── Фото прогресса ──────────────────────────────────────────────────────────
+
+function PhotosTab({ linked }: { linked: boolean }) {
+  const photos = useClientProgressPhotos();
+  const upload = useUploadProgressPhoto();
+  const remove = useDeleteProgressPhoto();
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [angle, setAngle] = useState<AngleValue>('front');
+  const [error, setError] = useState<string | null>(null);
+
+  const items = photos.data ?? [];
+
+  const groups = useMemo(() => {
+    const map = new Map<string, PhotoResponse[]>();
+    for (const p of items) {
+      const arr = map.get(p.date) ?? [];
+      arr.push(p);
+      map.set(p.date, arr);
+    }
+    return Array.from(map.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
+  }, [items]);
+
+  if (!linked) {
+    return (
+      <p className="text-sm text-ink-muted">Подключитесь к тренеру, чтобы вести фото прогресса.</p>
+    );
+  }
+
+  function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setError(null);
+    upload.mutate({ file, date, angle }, { onError: () => setError('Не удалось загрузить фото.') });
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3 rounded-2xl bg-card p-3">
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          className="w-full rounded-xl bg-card-elevated px-3 py-2 text-[14px] text-ink focus:outline-none"
+        />
+        <BodyPoseGuide value={angle} onSelect={setAngle} />
+        <label className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-line py-3 text-[13px] font-medium text-ink">
+          <ImagePlus size={16} />
+          {upload.isPending
+            ? `Загрузка · ${angleLabel(angle)}…`
+            : `Выбрать фото · ${angleLabel(angle)}`}
+          <input type="file" accept="image/*" className="hidden" onChange={onPick} />
+        </label>
+      </div>
+
+      {error && (
+        <p className="text-[13px] text-danger" role="alert">
+          {error}
+        </p>
+      )}
+
+      {photos.isPending && <p className="text-sm text-ink-muted">Загрузка…</p>}
+      {photos.isError && (
+        <p className="text-sm text-ink-muted" role="alert">
+          Не удалось загрузить фото.
+        </p>
+      )}
+      {photos.isSuccess && items.length === 0 && (
+        <EmptyState icon={<BarChart3 size={28} strokeWidth={1.6} className="text-ink-muted" />}>
+          Фотографий пока нет. Добавьте первую.
+        </EmptyState>
+      )}
+
+      {groups.map(([d, list]) => (
+        <div key={d} className="flex flex-col gap-2">
+          <h3 className="px-1 font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.06em] text-ink-mutedxl">
+            {formatRuDate(d)}
+          </h3>
+          <div className="grid grid-cols-3 gap-2">
+            {list.map((p) => (
+              <div
+                key={p.id}
+                className="relative aspect-square overflow-hidden rounded-xl bg-card-elevated"
+              >
+                <img
+                  src={fileUrl(p.file.id)}
+                  alt={angleLabel(p.angle)}
+                  className="h-full w-full object-cover"
+                />
+                <span className="absolute left-1.5 top-1.5 rounded bg-black/55 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[9px] font-bold uppercase tracking-[0.04em] text-white">
+                  {angleLabel(p.angle)}
+                </span>
+                <div className="absolute right-1.5 top-1.5">
+                  <HoldToDelete
+                    onDelete={() => remove.mutate(p.id)}
+                    label="Удерживайте, чтобы удалить фото"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }

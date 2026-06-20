@@ -6,6 +6,7 @@ import {
   updateSetRequestSchema,
   completeWorkoutRequestSchema,
   addWorkoutExerciseRequestSchema,
+  addWorkoutToHistoryRequestSchema,
   reorderWorkoutExercisesRequestSchema,
   workoutResponseSchema,
   workoutListResponseSchema,
@@ -94,6 +95,23 @@ export function clientWorkoutsRoutes(
       schema: { params: workoutParams, response: { 200: workoutWrap } },
     },
     async (req) => ({ workout: await svc.start(trainerId(req), req.params.id, req.params.wid) }),
+  );
+
+  // Зафиксировать тренировку в истории клиента указанной датой (постфактум):
+  // не запускается, не учитывается в балансе пакета, не попадает в календарь.
+  typed.post(
+    '/api/clients/:id/workouts/:wid/add-to-history',
+    {
+      preHandler,
+      schema: {
+        params: workoutParams,
+        body: addWorkoutToHistoryRequestSchema,
+        response: { 200: workoutWrap },
+      },
+    },
+    async (req) => ({
+      workout: await svc.addToHistory(trainerId(req), req.params.id, req.params.wid, req.body.date),
+    }),
   );
 
   typed.patch(

@@ -14,6 +14,7 @@ function workout(over: Partial<WorkoutResponse>): WorkoutResponse {
     trainerNote: null,
     rpe: null,
     createdByClient: false,
+    excludedFromBalance: false,
     exercises: [],
     ...over,
   };

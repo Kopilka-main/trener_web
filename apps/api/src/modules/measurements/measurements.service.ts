@@ -11,7 +11,11 @@ import type {
 } from '@trener/shared';
 import { notFound } from '../../errors.js';
 
-export type MeasurementsDeps = { newId: () => string };
+export type MeasurementsDeps = {
+  newId: () => string;
+  // Вызывается после успешного создания замера — закрыть открытые задачи на замеры пары.
+  onMeasurementCreated?: (trainerId: string, clientId: string) => void | Promise<void>;
+};
 
 function toResponse(r: MeasurementRow): MeasurementResponse {
   return {
@@ -20,9 +24,15 @@ function toResponse(r: MeasurementRow): MeasurementResponse {
     date: r.date,
     weightKg: r.weightKg,
     bodyFatPct: r.bodyFatPct,
+    bicepsCm: r.bicepsCm,
     chestCm: r.chestCm,
+    underbustCm: r.underbustCm,
     waistCm: r.waistCm,
+    bellyCm: r.bellyCm,
+    glutesCm: r.glutesCm,
     hipsCm: r.hipsCm,
+    thighCm: r.thighCm,
+    calfCm: r.calfCm,
     note: r.note,
     createdAt: r.createdAt.toISOString(),
   };
@@ -42,12 +52,20 @@ export function makeMeasurementsService(repo: MeasurementsRepo, deps: Measuremen
       };
       if (input.weightKg !== undefined) data.weightKg = input.weightKg ?? null;
       if (input.bodyFatPct !== undefined) data.bodyFatPct = input.bodyFatPct ?? null;
+      if (input.bicepsCm !== undefined) data.bicepsCm = input.bicepsCm ?? null;
       if (input.chestCm !== undefined) data.chestCm = input.chestCm ?? null;
+      if (input.underbustCm !== undefined) data.underbustCm = input.underbustCm ?? null;
       if (input.waistCm !== undefined) data.waistCm = input.waistCm ?? null;
+      if (input.bellyCm !== undefined) data.bellyCm = input.bellyCm ?? null;
+      if (input.glutesCm !== undefined) data.glutesCm = input.glutesCm ?? null;
       if (input.hipsCm !== undefined) data.hipsCm = input.hipsCm ?? null;
+      if (input.thighCm !== undefined) data.thighCm = input.thighCm ?? null;
+      if (input.calfCm !== undefined) data.calfCm = input.calfCm ?? null;
       if (input.note !== undefined) data.note = input.note ?? null;
 
       const row = await repo.create(trainerId, clientId, data);
+      // Замер внесён → закрываем открытые задачи на замеры (если хук задан).
+      if (deps.onMeasurementCreated) await deps.onMeasurementCreated(trainerId, clientId);
       return toResponse(row);
     },
 
@@ -77,9 +95,15 @@ export function makeMeasurementsService(repo: MeasurementsRepo, deps: Measuremen
       if (input.date !== undefined) patch.date = input.date;
       if (input.weightKg !== undefined) patch.weightKg = input.weightKg ?? null;
       if (input.bodyFatPct !== undefined) patch.bodyFatPct = input.bodyFatPct ?? null;
+      if (input.bicepsCm !== undefined) patch.bicepsCm = input.bicepsCm ?? null;
       if (input.chestCm !== undefined) patch.chestCm = input.chestCm ?? null;
+      if (input.underbustCm !== undefined) patch.underbustCm = input.underbustCm ?? null;
       if (input.waistCm !== undefined) patch.waistCm = input.waistCm ?? null;
+      if (input.bellyCm !== undefined) patch.bellyCm = input.bellyCm ?? null;
+      if (input.glutesCm !== undefined) patch.glutesCm = input.glutesCm ?? null;
       if (input.hipsCm !== undefined) patch.hipsCm = input.hipsCm ?? null;
+      if (input.thighCm !== undefined) patch.thighCm = input.thighCm ?? null;
+      if (input.calfCm !== undefined) patch.calfCm = input.calfCm ?? null;
       if (input.note !== undefined) patch.note = input.note ?? null;
 
       const row = await repo.update(trainerId, clientId, measurementId, patch);

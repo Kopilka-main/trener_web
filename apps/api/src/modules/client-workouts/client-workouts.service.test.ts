@@ -15,6 +15,7 @@ function row(over: Partial<WorkoutRow> = {}): WorkoutRow {
     trainerNote: null,
     rpe: null,
     createdByClient: false,
+    excludedFromBalance: false,
     createdAt: new Date(0),
     exercises: [
       {
@@ -49,6 +50,7 @@ function fakeRepo(over: Partial<ClientWorkoutsRepo> = {}): ClientWorkoutsRepo {
     setStatusActive: vi.fn(() => Promise.resolve('updated' as const)),
     updateSet: vi.fn(() => Promise.resolve(row())),
     complete: vi.fn(() => Promise.resolve('updated' as const)),
+    addToHistory: vi.fn(() => Promise.resolve('updated' as const)),
     remove: vi.fn(() => Promise.resolve(false)),
     addExercise: vi.fn(() => Promise.resolve(row())),
     removeExercise: vi.fn(() => Promise.resolve(row())),
@@ -171,6 +173,46 @@ describe('client-workouts.service', () => {
       deps.now(),
       true,
     );
+  });
+
+  it('addToHistory: completed датой (полдень UTC), без onCompleted, excludedFromBalance', async () => {
+    const addToHistory = vi.fn(() => Promise.resolve('updated' as const));
+    const onCompleted = vi.fn(() => Promise.resolve());
+    const svc = makeClientWorkoutsService(
+      fakeRepo({
+        addToHistory,
+        getFull: vi.fn(() =>
+          Promise.resolve(row({ status: 'completed', excludedFromBalance: true })),
+        ),
+      }),
+      { ...deps, onCompleted },
+    );
+    const res = await svc.addToHistory('A', 'c1', 'w1', '2026-06-04');
+    expect(addToHistory).toHaveBeenCalledWith(
+      'A',
+      'c1',
+      'w1',
+      new Date('2026-06-04T12:00:00.000Z'),
+    );
+    expect(onCompleted).not.toHaveBeenCalled();
+    expect(res.excludedFromBalance).toBe(true);
+  });
+
+  it('addToHistory: repo bad_status → 409', async () => {
+    const svc = makeClientWorkoutsService(
+      fakeRepo({ addToHistory: vi.fn(() => Promise.resolve('bad_status' as const)) }),
+      deps,
+    );
+    await expect(svc.addToHistory('A', 'c1', 'w1', '2026-06-04')).rejects.toMatchObject({
+      status: 409,
+    });
+  });
+
+  it('create с excludedFromBalance=true (тренер) не уведомляет клиента', async () => {
+    const notify = vi.fn();
+    const svc = makeClientWorkoutsService(fakeRepo(), { ...deps, notify });
+    await svc.create('A', 'c1', { name: 'История', exercises: [], excludedFromBalance: true });
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it('remove с ownedByClientOnly прокидывает флаг в repo', async () => {

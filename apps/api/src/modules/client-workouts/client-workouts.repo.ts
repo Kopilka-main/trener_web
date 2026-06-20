@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, or } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import {
   clientWorkouts,
@@ -40,6 +40,7 @@ export type WorkoutRow = {
   trainerNote: string | null;
   rpe: number | null;
   createdByClient: boolean;
+  excludedFromBalance: boolean;
   createdAt: Date;
   exercises: WorkoutExerciseRow[];
 };
@@ -63,6 +64,7 @@ export type CreateWorkoutInput = {
   name: string;
   sourceTemplateId?: string | null;
   exercises: WorkoutExerciseInput[];
+  excludedFromBalance?: boolean;
 };
 
 export type SetPatchInput = {
@@ -125,6 +127,7 @@ export function makeClientWorkoutsRepo(db: Db) {
         trainerNote: clientWorkouts.trainerNote,
         rpe: clientWorkouts.rpe,
         createdByClient: clientWorkouts.createdByClient,
+        excludedFromBalance: clientWorkouts.excludedFromBalance,
         createdAt: clientWorkouts.createdAt,
       })
       .from(clientWorkouts)
@@ -289,6 +292,7 @@ export function makeClientWorkoutsRepo(db: Db) {
           name: plan.name,
           status: 'draft',
           createdByClient,
+          excludedFromBalance: plan.excludedFromBalance ?? false,
         });
         // Пустая тренировка (exercises: []) допустима — клиент наполняет её позже.
         if (plan.exercises.length > 0) {
@@ -322,9 +326,14 @@ export function makeClientWorkoutsRepo(db: Db) {
       clientId: string,
       owner: 'trainer' | 'all' = 'all',
     ): Promise<WorkoutRow[]> {
-      // owner='trainer' → только тренерские (createdByClient=false): тренер не видит
-      // самостоятельные тренировки клиента; 'all' → свои + тренерские (клиентский фасад).
-      const ownerCond = owner === 'trainer' ? eq(clientWorkouts.createdByClient, false) : undefined;
+      // owner='trainer' → тренерское представление: свои тренировки (любой статус) +
+      // ЗАВЕРШЁННЫЕ самостоятельные тренировки клиента (попадают в историю/прогресс).
+      // Черновики/активные/пропущенные клиента остаются скрытыми, чтобы не засорять
+      // «Ближайшую тренировку». 'all' → свои + тренерские (клиентский фасад).
+      const ownerCond =
+        owner === 'trainer'
+          ? or(eq(clientWorkouts.createdByClient, false), eq(clientWorkouts.status, 'completed'))
+          : undefined;
       const heads = await db
         .select({
           id: clientWorkouts.id,
@@ -338,6 +347,7 @@ export function makeClientWorkoutsRepo(db: Db) {
           trainerNote: clientWorkouts.trainerNote,
           rpe: clientWorkouts.rpe,
           createdByClient: clientWorkouts.createdByClient,
+          excludedFromBalance: clientWorkouts.excludedFromBalance,
           createdAt: clientWorkouts.createdAt,
         })
         .from(clientWorkouts)
@@ -475,6 +485,50 @@ export function makeClientWorkoutsRepo(db: Db) {
         .where(and(scope, eq(clientWorkouts.status, 'active')))
         .returning({ id: clientWorkouts.id });
       if (res.length > 0) return 'updated';
+      const [exists] = await db.select({ id: clientWorkouts.id }).from(clientWorkouts).where(scope);
+      return exists ? 'bad_status' : 'not_found';
+    },
+
+    // Зафиксировать черновик/активную тренировку как историческую запись:
+    // status='completed' указанной датой, excluded_from_balance=true, все подходы
+    // помечаются выполненными (факт := план). Календарь НЕ затрагивается (вызывающий
+    // не дёргает reconcile). bad_status — если тренировка уже completed/skipped.
+    async addToHistory(
+      trainerId: string,
+      clientId: string,
+      workoutId: string,
+      completedAt: Date,
+    ): Promise<StatusTransitionResult> {
+      const scope = and(
+        eq(clientWorkouts.id, workoutId),
+        eq(clientWorkouts.trainerId, trainerId),
+        eq(clientWorkouts.clientId, clientId),
+      );
+      const updated = await db.transaction(async (tx) => {
+        const res = await tx
+          .update(clientWorkouts)
+          .set({
+            status: 'completed',
+            completedAt,
+            startedAt: completedAt,
+            excludedFromBalance: true,
+          })
+          .where(and(scope, inArray(clientWorkouts.status, ['draft', 'active'])))
+          .returning({ id: clientWorkouts.id });
+        if (res.length === 0) return false;
+        // Факт := план, все подходы выполнены — чтобы запись выглядела как проведённая.
+        await tx
+          .update(clientWorkoutSets)
+          .set({
+            done: 1,
+            actualReps: sql`${clientWorkoutSets.plannedReps}`,
+            actualWeightKg: sql`${clientWorkoutSets.plannedWeightKg}`,
+            actualTimeSec: sql`${clientWorkoutSets.plannedTimeSec}`,
+          })
+          .where(eq(clientWorkoutSets.workoutId, workoutId));
+        return true;
+      });
+      if (updated) return 'updated';
       const [exists] = await db.select({ id: clientWorkouts.id }).from(clientWorkouts).where(scope);
       return exists ? 'bad_status' : 'not_found';
     },

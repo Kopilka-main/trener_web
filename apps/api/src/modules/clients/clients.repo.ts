@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { clients, trainerClients } from '../../db/schema.js';
 import type { ClientStatus, Contact } from '@trener/shared';
@@ -84,6 +84,23 @@ export function makeClientsRepo(db: Db) {
     getForTrainer,
 
     isLinked: isLinkedLocal,
+
+    // Клиент тренера, уже привязанный к этому accountId (для предупреждения о дубле).
+    // excludeClientId — исключить текущего редактируемого клиента. Нет такого → null.
+    async findByAccountId(
+      trainerId: string,
+      accountId: string,
+      excludeClientId?: string,
+    ): Promise<{ id: string; firstName: string; lastName: string } | null> {
+      const conds = [eq(trainerClients.trainerId, trainerId), eq(clients.accountId, accountId)];
+      if (excludeClientId) conds.push(ne(clients.id, excludeClientId));
+      const [row] = await db
+        .select({ id: clients.id, firstName: clients.firstName, lastName: clients.lastName })
+        .from(trainerClients)
+        .innerJoin(clients, eq(clients.id, trainerClients.clientId))
+        .where(and(...conds));
+      return row ?? null;
+    },
 
     async create(input: CreateClientInput): Promise<ClientRow> {
       await db.transaction(async (tx) => {

@@ -11,9 +11,15 @@ export const createMeasurementRequestSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
   weightKg: metricField,
   bodyFatPct: metricField,
+  bicepsCm: metricField,
   chestCm: metricField,
+  underbustCm: metricField,
   waistCm: metricField,
+  bellyCm: metricField,
+  glutesCm: metricField,
   hipsCm: metricField,
+  thighCm: metricField,
+  calfCm: metricField,
   note: noteField,
 });
 export type CreateMeasurementRequest = z.infer<typeof createMeasurementRequestSchema>;
@@ -31,9 +37,15 @@ export const measurementResponseSchema = z.object({
   date: z.string(),
   weightKg: z.number().nullable(),
   bodyFatPct: z.number().nullable(),
+  bicepsCm: z.number().nullable(),
   chestCm: z.number().nullable(),
+  underbustCm: z.number().nullable(),
   waistCm: z.number().nullable(),
+  bellyCm: z.number().nullable(),
+  glutesCm: z.number().nullable(),
   hipsCm: z.number().nullable(),
+  thighCm: z.number().nullable(),
+  calfCm: z.number().nullable(),
   note: z.string().nullable(),
   createdAt: z.string(),
 });
@@ -43,3 +55,25 @@ export const measurementListResponseSchema = z.object({
   measurements: z.array(measurementResponseSchema),
 });
 export type MeasurementListResponse = z.infer<typeof measurementListResponseSchema>;
+
+// --- Задача на замеры (тренер просит клиента сделать замеры) ---
+// Висит у клиента в уведомлениях, пока он не внесёт замер (тогда авторазрешается).
+
+export const createMeasurementTaskSchema = z.object({
+  note: noteField,
+});
+export type CreateMeasurementTask = z.infer<typeof createMeasurementTaskSchema>;
+
+export const measurementTaskResponseSchema = z.object({
+  id: z.string(),
+  clientId: z.string(),
+  note: z.string().nullable(),
+  createdAt: z.string(),
+  resolvedAt: z.string().nullable(),
+});
+export type MeasurementTaskResponse = z.infer<typeof measurementTaskResponseSchema>;
+
+export const measurementTaskListResponseSchema = z.object({
+  tasks: z.array(measurementTaskResponseSchema),
+});
+export type MeasurementTaskListResponse = z.infer<typeof measurementTaskListResponseSchema>;

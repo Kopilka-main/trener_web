@@ -218,6 +218,9 @@ export const clientWorkouts = pgTable(
     trainerNote: text('trainer_note'),
     rpe: integer('rpe'),
     createdByClient: boolean('created_by_client').notNull().default(false),
+    // Историческая запись, добавленная тренером постфактум: не уменьшает баланс пакета
+    // и не попадает в календарь (reconcile не вызывается).
+    excludedFromBalance: boolean('excluded_from_balance').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -425,13 +428,38 @@ export const measurements = pgTable(
     date: text('date').notNull(), // YYYY-MM-DD
     weightKg: doublePrecision('weight_kg'),
     bodyFatPct: doublePrecision('body_fat_pct'),
+    bicepsCm: doublePrecision('biceps_cm'),
     chestCm: doublePrecision('chest_cm'),
+    underbustCm: doublePrecision('underbust_cm'),
     waistCm: doublePrecision('waist_cm'),
+    bellyCm: doublePrecision('belly_cm'),
+    glutesCm: doublePrecision('glutes_cm'),
     hipsCm: doublePrecision('hips_cm'),
+    thighCm: doublePrecision('thigh_cm'),
+    calfCm: doublePrecision('calf_cm'),
     note: text('note'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('idx_measurements_trainer_client_date').on(t.trainerId, t.clientId, t.date)],
+);
+
+// Задача на замеры: тренер просит клиента сделать замеры. Открытая задача (resolvedAt IS NULL)
+// висит у клиента в уведомлениях, пока он не внесёт замер (тогда авторазрешается).
+export const measurementTasks = pgTable(
+  'measurement_tasks',
+  {
+    id: text('id').primaryKey(),
+    trainerId: text('trainer_id')
+      .notNull()
+      .references(() => trainers.id, { onDelete: 'cascade' }),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
+    note: text('note'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  },
+  (t) => [index('idx_measurement_tasks_trainer_client').on(t.trainerId, t.clientId)],
 );
 
 // Загруженный файл (приватный). Раздаётся только владельцу через соответствующие роуты.

@@ -87,6 +87,8 @@ export function ExerciseEditPage({ mode }: ExerciseEditPageProps) {
       defaultWeightKg: positiveOrNull(defaultWeightKg),
       defaultTimeSec: positiveOrNull(defaultTimeSec),
       restSec,
+      // Вариант базового упражнения → переносим фото/видео/мышцы из каталога.
+      ...(isGlobalEdit ? { sourceExerciseId: id } : {}),
     };
     mutation.mutate(payload, {
       onSuccess: () => {
