@@ -24,23 +24,23 @@
 
 ## Матрица покрытия — КЛИЕНТ (`apps/web-client` → `mobile/apps/client`)
 
-| Веб-страница       | Мобильный экран          | Статус | Заметки                                                             |
-| ------------------ | ------------------------ | ------ | ------------------------------------------------------------------- |
-| LoginPage          | login_screen             | ✅     |                                                                     |
-| RegisterPage       | register_screen          | ✅     |                                                                     |
-| ConnectPage        | connect_screen           | ✅     |                                                                     |
-| HomePage           | home_screen              | ✅     | след.занятие, records/база, не-подключён, тренер в шапке; аватар P2 |
-| CalendarPage       | calendar_screen          | ✅     | аудит пройден; P2 отложено (см. журнал)                             |
-| WorkoutsListPage   | workouts_screen          | ✅     | + нумерация повторяющихся упражнений в истории                      |
-| RunWorkoutPage     | active_workout_screen    | ✅     | + drag-перестановка черновика, KB-фильтр пикера; подгруппы P2       |
-| WorkoutDetailPage  | workouts_screen (Detail) | ⚠️     |                                                                     |
-| ChatPage           | chat_screen              | ✅     | аудит пройден; jump/highlight P2 отложено                           |
-| NotificationsPage  | notifications_screen     | ✅     | measure-задачи + прочтение чата при уходе; inline-шит P2            |
-| KnowledgePage      | knowledge_screen         | ⚠️     | группы мышц/фильтры?                                                |
-| ExerciseDetailPage | knowledge (Detail)       | ⚠️     | нет графика                                                         |
-| StatsPage          | progress_screen          | ⚠️     | нет графиков; вкладка замеров                                       |
-| ProfilePage        | settings_screen          | ⚠️     | НЕТ редактирования профиля + аватара (net-new, отложено)            |
-| TrainerPage        | —                        | ❌     | профиль тренера глазами клиента                                     |
+| Веб-страница       | Мобильный экран          | Статус | Заметки                                                                       |
+| ------------------ | ------------------------ | ------ | ----------------------------------------------------------------------------- |
+| LoginPage          | login_screen             | ✅     |                                                                               |
+| RegisterPage       | register_screen          | ✅     |                                                                               |
+| ConnectPage        | connect_screen           | ✅     |                                                                               |
+| HomePage           | home_screen              | ✅     | след.занятие, records/база, не-подключён, тренер в шапке; аватар P2           |
+| CalendarPage       | calendar_screen          | ✅     | аудит пройден; P2 отложено (см. журнал)                                       |
+| WorkoutsListPage   | workouts_screen          | ✅     | + нумерация повторяющихся упражнений в истории                                |
+| RunWorkoutPage     | active_workout_screen    | ✅     | + drag-перестановка черновика, KB-фильтр пикера; подгруппы P2                 |
+| WorkoutDetailPage  | workouts_screen (Detail) | ⚠️     |                                                                               |
+| ChatPage           | chat_screen              | ✅     | аудит пройден; jump/highlight P2 отложено                                     |
+| NotificationsPage  | notifications_screen     | ✅     | measure-задачи + прочтение чата при уходе; inline-шит P2                      |
+| KnowledgePage      | knowledge_screen         | ⚠️     | НЕТ вкладок Тренировки/Упражнения и чипов групп/подгрупп мышц (есть поиск+PR) |
+| ExerciseDetailPage | knowledge (Detail)       | ⚠️     | история списком вместо графика (P2)                                           |
+| StatsPage          | progress_screen          | ⚠️     | карточки+рекорды вместо графиков; нет вкладки замеров (P1/P2)                 |
+| ProfilePage        | settings_screen          | ⚠️     | НЕТ редактирования профиля + аватара (net-new, отложено)                      |
+| TrainerPage        | —                        | ❌     | профиль тренера глазами клиента                                               |
 
 ## Матрица покрытия — ТРЕНЕР (`apps/web` → `mobile/apps/trainer`)
 
