@@ -16,6 +16,14 @@ class Conversation {
   final int unreadCount;
 }
 
+/// Снимок диалога: сообщения, момент прочтения КЛИЕНТОМ (для ✓✓), закреплённые.
+class TrainerChatThread {
+  TrainerChatThread({required this.messages, required this.clientReadAt, required this.pinned});
+  final List<ChatMessage> messages;
+  final DateTime? clientReadAt;
+  final List<ChatMessage> pinned;
+}
+
 /// Доступ к чатам тренера: список диалогов (с именами), лента, отправка, прочтение.
 class TrainerChatApi {
   TrainerChatApi(this._ref);
@@ -53,14 +61,22 @@ class TrainerChatApi {
     return list;
   }
 
-  Future<List<ChatMessage>> loadMessages(String clientId) async {
+  Future<TrainerChatThread> loadMessages(String clientId) async {
     final Map<String, dynamic> r = await _api.getJson('/api/clients/$clientId/messages');
-    return ChatMessage.listFrom(r['messages']);
+    final String? readAt = r['clientLastReadAt'] as String?;
+    return TrainerChatThread(
+      messages: ChatMessage.listFrom(r['messages']),
+      clientReadAt: readAt != null ? DateTime.tryParse(readAt)?.toLocal() : null,
+      pinned: ChatMessage.listFrom(r['pinnedMessages']),
+    );
   }
 
-  Future<bool> send(String clientId, String body) async {
+  Future<bool> send(String clientId, String body, String? replyToId) async {
     try {
-      await _api.postJson('/api/clients/$clientId/messages', <String, String>{'body': body});
+      await _api.postJson('/api/clients/$clientId/messages', <String, dynamic>{
+        'body': body,
+        'replyTo': ?replyToId,
+      });
       return true;
     } catch (_) {
       return false;
@@ -83,6 +99,6 @@ final FutureProvider<List<Conversation>> trainerConversationsProvider =
     FutureProvider<List<Conversation>>((ref) => ref.read(trainerChatApiProvider).listConversations());
 
 /// Лента конкретного диалога по clientId.
-final FutureProviderFamily<List<ChatMessage>, String> trainerChatMessagesProvider =
-    FutureProvider.family<List<ChatMessage>, String>(
+final FutureProviderFamily<TrainerChatThread, String> trainerChatMessagesProvider =
+    FutureProvider.family<TrainerChatThread, String>(
         (ref, String clientId) => ref.read(trainerChatApiProvider).loadMessages(clientId));

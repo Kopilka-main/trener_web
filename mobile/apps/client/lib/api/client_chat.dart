@@ -1,23 +1,48 @@
 import 'package:core/core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Доступ к чату клиента с тренером: загрузка ленты, отправка, отметка прочтения.
+/// Снимок диалога клиента: сообщения, момент прочтения ТРЕНЕРОМ (для ✓✓),
+/// закреплённые сообщения.
+class ClientChatData {
+  ClientChatData({required this.messages, required this.trainerReadAt, required this.pinned});
+  final List<ChatMessage> messages;
+  final DateTime? trainerReadAt;
+  final List<ChatMessage> pinned;
+}
+
+/// Доступ к чату клиента с тренером: загрузка, отправка (с ответом), задачи, прочтение.
 class ClientChatApi {
   ClientChatApi(this._ref);
   final Ref _ref;
   ApiClient get _api => _ref.read(apiClientProvider);
 
-  Future<List<ChatMessage>> load() async {
+  Future<ClientChatData> load() async {
     final Map<String, dynamic> r = await _api.getJson('/api/client/chat/messages');
-    return ChatMessage.listFrom(r['messages']);
+    final String? readAt = r['trainerLastReadAt'] as String?;
+    return ClientChatData(
+      messages: ChatMessage.listFrom(r['messages']),
+      trainerReadAt: readAt != null ? DateTime.tryParse(readAt)?.toLocal() : null,
+      pinned: ChatMessage.listFrom(r['pinnedMessages']),
+    );
   }
 
-  Future<bool> send(String body) async {
+  Future<bool> send(String body, String? replyToId) async {
     try {
-      await _api.postJson('/api/client/chat/messages', <String, String>{'body': body});
+      await _api.postJson('/api/client/chat/messages', <String, dynamic>{
+        'body': body,
+        'replyTo': ?replyToId,
+      });
       return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  Future<void> completeTask(String id) async {
+    try {
+      await _api.postJson('/api/client/chat/tasks/$id/complete');
+    } catch (_) {
+      // best-effort
     }
   }
 
@@ -25,7 +50,7 @@ class ClientChatApi {
     try {
       await _api.postJson('/api/client/chat/read');
     } catch (_) {
-      // не критично — отметку повторим при следующем заходе
+      // не критично
     }
   }
 }
@@ -33,5 +58,5 @@ class ClientChatApi {
 final Provider<ClientChatApi> clientChatApiProvider =
     Provider<ClientChatApi>((ref) => ClientChatApi(ref));
 
-final FutureProvider<List<ChatMessage>> clientChatProvider =
-    FutureProvider<List<ChatMessage>>((ref) => ref.read(clientChatApiProvider).load());
+final FutureProvider<ClientChatData> clientChatProvider =
+    FutureProvider<ClientChatData>((ref) => ref.read(clientChatApiProvider).load());

@@ -35,15 +35,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     super.dispose();
   }
 
-  Future<bool> _send(String body) async {
-    final bool ok = await ref.read(trainerChatApiProvider).send(widget.clientId, body);
+  Future<bool> _send(String body, String? replyToId) async {
+    final bool ok = await ref.read(trainerChatApiProvider).send(widget.clientId, body, replyToId);
     if (ok) ref.invalidate(trainerChatMessagesProvider(widget.clientId));
     return ok;
   }
 
   @override
   Widget build(BuildContext context) {
-    final AsyncValue<List<ChatMessage>> chat =
+    final AsyncValue<TrainerChatThread> chat =
         ref.watch(trainerChatMessagesProvider(widget.clientId));
     return Scaffold(
       appBar: AppBar(title: Text(widget.clientName)),
@@ -62,9 +62,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ],
           ),
         ),
-        data: (List<ChatMessage> messages) => ChatThreadView(
-          messages: messages,
+        data: (TrainerChatThread d) => ChatThreadView(
+          messages: d.messages,
           myRole: SenderRole.trainer,
+          otherReadAt: d.clientReadAt,
+          pinned: d.pinned,
           onSend: _send,
           onRefresh: () async => ref.invalidate(trainerChatMessagesProvider(widget.clientId)),
         ),
