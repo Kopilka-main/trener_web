@@ -3,11 +3,29 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../api/client_chat.dart';
 import '../api/client_home.dart';
 
 const List<String> _ruMonths = <String>[
   'янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
 ];
+
+/// Короткий обратный отсчёт до занятия: «2Д», «3Ч 10М», «45М», «СЕЙЧАС».
+String _diffShort(DateTime future, DateTime now) {
+  final int ms = future.difference(now).inMilliseconds;
+  if (ms <= 0) return 'СЕЙЧАС';
+  final int totalMin = (ms / 60000).round();
+  final int totalH = totalMin ~/ 60;
+  if (totalH >= 24) {
+    final int d = totalH ~/ 24;
+    final int h = totalH % 24;
+    return h == 0 ? '$d' 'Д' : '$d' 'Д ' '$h' 'Ч';
+  }
+  final int m = totalMin % 60;
+  if (totalH == 0) return '$m' 'М';
+  if (m == 0) return '$totalH' 'Ч';
+  return '$totalH' 'Ч ' '$m' 'М';
+}
 
 String _formatRuDate(String iso) {
   final List<String> p = iso.substring(0, 10).split('-');
@@ -41,19 +59,28 @@ class HomeScreen extends ConsumerWidget {
               ],
             ),
           ),
-          data: (HomeData d) => RefreshIndicator(
+          data: (HomeData d) {
+            final String? trainerName = ref.watch(clientTrainerNameProvider).valueOrNull;
+            return RefreshIndicator(
             onRefresh: () async => ref.invalidate(clientHomeProvider),
             child: ListView(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
               children: <Widget>[
-                // Шапка: имя + шестерёнка.
+                // Шапка: тренер (если подключён) / имя + шестерёнка.
                 Row(
                   children: <Widget>[
                     Expanded(
-                      child: Text(d.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(d.linked && trainerName != null ? trainerName : d.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
+                          if (d.linked && trainerName != null)
+                            Text('тренер', style: TextStyle(fontSize: 11, color: c.inkMuted)),
+                        ],
+                      ),
                     ),
                     IconButton(
                       onPressed: () => context.push('/settings'),
@@ -62,48 +89,92 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
-                // Hero: счётчик оплаченных тренировок.
+                // Hero: счётчик / CTA подключения.
                 Padding(
                   padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: <Widget>[
-                          Text(
-                            d.paidBalance < 0 ? '${d.paidBalance}' : _pad2(d.paidBalance),
-                            style: AppFonts.display(
-                                size: 64,
-                                color: d.paidBalance < 0 ? c.danger : c.accent,
-                                letterSpacing: -2),
+                  child: !d.linked
+                      ? GestureDetector(
+                          onTap: () => context.push('/connect'),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text('Подключите\nтренера',
+                                  style: AppFonts.display(size: 30, color: c.accent, height: 1.1)),
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  Text('чтобы видеть занятия и прогресс',
+                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: c.inkMuted)),
+                                  const SizedBox(width: 4),
+                                  Icon(Icons.arrow_forward, size: 15, color: c.accent),
+                                ],
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 12),
-                          Flexible(
-                            child: Text('количество\nтренировок',
-                                style: TextStyle(
-                                    fontSize: 22,
-                                    height: 1.1,
-                                    fontWeight: FontWeight.bold,
-                                    color: c.ink)),
-                          ),
-                        ],
-                      ),
-                      if (d.packageEndsAt != null) ...<Widget>[
-                        const SizedBox(height: 6),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
-                            Icon(Icons.local_fire_department, size: 15, color: c.accent),
-                            const SizedBox(width: 5),
-                            Text('до ${_formatRuDate(d.packageEndsAt!)}',
-                                style: TextStyle(
-                                    fontSize: 13, fontWeight: FontWeight.w600, color: c.inkMuted)),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: <Widget>[
+                                Text(
+                                  d.paidBalance < 0 ? '${d.paidBalance}' : _pad2(d.paidBalance),
+                                  style: AppFonts.display(
+                                      size: 64,
+                                      color: d.paidBalance < 0 ? c.danger : c.accent,
+                                      letterSpacing: -2),
+                                ),
+                                const SizedBox(width: 12),
+                                Flexible(
+                                  child: Text('количество\nтренировок',
+                                      style: TextStyle(
+                                          fontSize: 22,
+                                          height: 1.1,
+                                          fontWeight: FontWeight.bold,
+                                          color: c.ink)),
+                                ),
+                              ],
+                            ),
+                            if (d.packageEndsAt != null) ...<Widget>[
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  Icon(Icons.local_fire_department, size: 15, color: c.accent),
+                                  const SizedBox(width: 5),
+                                  Text('до ${_formatRuDate(d.packageEndsAt!)}',
+                                      style: TextStyle(
+                                          fontSize: 13, fontWeight: FontWeight.w600, color: c.inkMuted)),
+                                ],
+                              ),
+                            ],
+                            if (d.nextSessionAt != null && d.nextSessionLabel != null) ...<Widget>[
+                              const SizedBox(height: 6),
+                              GestureDetector(
+                                onTap: () => context.push('/calendar'),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: <Widget>[
+                                    Text('СЛЕД · ${d.nextSessionLabel!.toUpperCase()}',
+                                        style: AppFonts.mono(size: 11, color: c.inkMuted)),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                          color: c.accent, borderRadius: BorderRadius.circular(4)),
+                                      child: Text(_diffShort(d.nextSessionAt!, DateTime.now()),
+                                          style: AppFonts.mono(size: 10, color: c.accentOn)),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Icon(Icons.arrow_forward, size: 16, color: c.accent),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
-                      ],
-                    ],
-                  ),
                 ),
                 const SizedBox(height: 12),
                 // Сетка плиток 2×3.
@@ -143,16 +214,16 @@ class HomeScreen extends ConsumerWidget {
                     _Tile(
                       title: 'Прогресс',
                       sub: 'рекорды и цифры',
-                      value: _pad2(d.completedWorkouts),
-                      metric: 'тренировок',
+                      value: _pad2(d.recordsCount),
+                      metric: 'рекордов',
                       icon: Icons.trending_up,
                       onTap: () => context.push('/progress'),
                     ),
                     _Tile(
                       title: 'База знаний',
                       sub: 'упражнения',
-                      value: '↗',
-                      metric: 'открыть',
+                      value: _pad2(d.knowledgeCount),
+                      metric: 'упражнений',
                       icon: Icons.menu_book_outlined,
                       onTap: () => context.push('/knowledge'),
                     ),
@@ -168,7 +239,8 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ],
             ),
-          ),
+          );
+          },
         ),
       ),
     );

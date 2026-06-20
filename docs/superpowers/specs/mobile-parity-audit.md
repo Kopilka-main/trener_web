@@ -24,23 +24,23 @@
 
 ## Матрица покрытия — КЛИЕНТ (`apps/web-client` → `mobile/apps/client`)
 
-| Веб-страница       | Мобильный экран          | Статус | Заметки                                             |
-| ------------------ | ------------------------ | ------ | --------------------------------------------------- |
-| LoginPage          | login_screen             | ✅     |                                                     |
-| RegisterPage       | register_screen          | ✅     |                                                     |
-| ConnectPage        | connect_screen           | ✅     |                                                     |
-| HomePage           | home_screen              | ⚠️     | нет «след. занятие» kicker; тренер-аватар в шапке   |
-| CalendarPage       | calendar_screen          | ✅     | аудит пройден; P2 отложено (см. журнал)             |
-| WorkoutsListPage   | workouts_screen          | ⚠️     | проверить шаблоны/повтор/группировку                |
-| RunWorkoutPage     | active_workout_screen    | ⚠️     | проверить таймер отдыха, reorder, KB-пикер          |
-| WorkoutDetailPage  | workouts_screen (Detail) | ⚠️     |                                                     |
-| ChatPage           | chat_screen              | ✅     | аудит пройден; jump/highlight P2 отложено           |
-| NotificationsPage  | notifications_screen     | ⚠️     | confirm открывает шит vs переход; measurement-tasks |
-| KnowledgePage      | knowledge_screen         | ⚠️     | группы мышц/фильтры?                                |
-| ExerciseDetailPage | knowledge (Detail)       | ⚠️     | нет графика                                         |
-| StatsPage          | progress_screen          | ⚠️     | нет графиков; вкладка замеров                       |
-| ProfilePage        | settings_screen          | ⚠️     | аватар, редактирование, пакеты, выход               |
-| TrainerPage        | —                        | ❌     | профиль тренера глазами клиента                     |
+| Веб-страница       | Мобильный экран          | Статус | Заметки                                                             |
+| ------------------ | ------------------------ | ------ | ------------------------------------------------------------------- |
+| LoginPage          | login_screen             | ✅     |                                                                     |
+| RegisterPage       | register_screen          | ✅     |                                                                     |
+| ConnectPage        | connect_screen           | ✅     |                                                                     |
+| HomePage           | home_screen              | ✅     | след.занятие, records/база, не-подключён, тренер в шапке; аватар P2 |
+| CalendarPage       | calendar_screen          | ✅     | аудит пройден; P2 отложено (см. журнал)                             |
+| WorkoutsListPage   | workouts_screen          | ⚠️     | проверить шаблоны/повтор/группировку                                |
+| RunWorkoutPage     | active_workout_screen    | ⚠️     | проверить таймер отдыха, reorder, KB-пикер                          |
+| WorkoutDetailPage  | workouts_screen (Detail) | ⚠️     |                                                                     |
+| ChatPage           | chat_screen              | ✅     | аудит пройден; jump/highlight P2 отложено                           |
+| NotificationsPage  | notifications_screen     | ✅     | measure-задачи + прочтение чата при уходе; inline-шит P2            |
+| KnowledgePage      | knowledge_screen         | ⚠️     | группы мышц/фильтры?                                                |
+| ExerciseDetailPage | knowledge (Detail)       | ⚠️     | нет графика                                                         |
+| StatsPage          | progress_screen          | ⚠️     | нет графиков; вкладка замеров                                       |
+| ProfilePage        | settings_screen          | ⚠️     | НЕТ редактирования профиля + аватара (net-new, отложено)            |
+| TrainerPage        | —                        | ❌     | профиль тренера глазами клиента                                     |
 
 ## Матрица покрытия — ТРЕНЕР (`apps/web` → `mobile/apps/trainer`)
 
@@ -124,3 +124,23 @@
 - ⏸ Прыжок к закреплённому/из цитаты к оригиналу + подсветка (нужен scroll-to-id
   в reverse-ленте). Аватар тренера в шапке (нужна авторизованная загрузка картинки).
 - ⏸ Плавный авто-рост поля ввода (сейчас до 5 строк сразу).
+
+### Главная клиента — HomePage.tsx ↔ home_screen.dart + client_home.dart
+
+Аудит: 7 расхождений. Закрыто: ✅ след.занятие с обратным отсчётом в hero;
+✅ плитка «Прогресс»=рекорды, «База»=кол-во упражнений (aggregateExerciseOverview
+в client_home); ✅ ветка «не подключён» (CTA в hero); ✅ имя тренера в шапке.
+P2: счётчик внимания в плитке «Уведомления», аватар тренера.
+
+### Уведомления клиента — NotificationsPage.tsx ↔ notifications_screen.dart
+
+Аудит: 5 расхождений. Закрыто: ✅ measure-задачи (clientMeasurementTasksProvider →
+/api/client/measurement-tasks); ✅ отметка чата прочитанным при уходе (dispose).
+P2: inline confirm-шит вместо перехода на /calendar; HoldToDelete vs свайп.
+
+### Профиль клиента — ProfilePage.tsx ↔ settings_screen.dart (ОТЛОЖЕНО)
+
+Аудит: 7 расхождений. **НЕ закрыто** (крупный net-new): редактирование профиля
+(имя/фамилия/дата рождения/о себе/контакты), загрузка+кроп аватара, переключатель
+push-уведомлений. Нужна отдельная форма редактирования + image picker/upload.
+Текущий экран: профиль (чтение) + код подключения + тема + выход.

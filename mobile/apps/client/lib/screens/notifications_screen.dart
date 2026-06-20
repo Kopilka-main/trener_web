@@ -13,7 +13,7 @@ const List<String> _ruMonths = <String>[
   'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
 ];
 
-enum _Kind { confirm, soon, chat, package, workout }
+enum _Kind { confirm, soon, chat, package, workout, measure }
 
 class _Notif {
   _Notif({required this.id, required this.kind, required this.text, required this.to});
@@ -29,6 +29,7 @@ IconData _icon(_Kind k) => switch (k) {
       _Kind.chat => Icons.chat_bubble_outline,
       _Kind.package => Icons.account_balance_wallet_outlined,
       _Kind.workout => Icons.fitness_center,
+      _Kind.measure => Icons.straighten,
     };
 
 /// Отброшенные уведомления (в памяти сессии).
@@ -43,6 +44,7 @@ List<_Notif> _build({
   required List<Session> sessions,
   required List<Workout> workouts,
   required List<ClientPackage> packages,
+  required List<ClientMeasurementTask> measurementTasks,
   required int unread,
   required Set<String> dismissed,
 }) {
@@ -54,6 +56,18 @@ List<_Notif> _build({
     if (!w.createdByClient && w.status == WorkoutStatus.draft) {
       out.add(_Notif(id: 'workout:${w.id}', kind: _Kind.workout, text: 'Новая тренировка от тренера: ${w.name}', to: '/workouts'));
     }
+  }
+
+  // Задачи на замеры от тренера.
+  for (final ClientMeasurementTask t in measurementTasks) {
+    out.add(_Notif(
+      id: 'measure:${t.id}',
+      kind: _Kind.measure,
+      text: t.note?.trim().isNotEmpty == true
+          ? 'Тренер просит сделать замеры: ${t.note!.trim()}'
+          : 'Тренер просит сделать замеры',
+      to: '/progress',
+    ));
   }
 
   final List<Session> future = sessions
@@ -103,23 +117,40 @@ List<_Notif> _build({
   return out.where((_Notif n) => !dismissed.contains(n.id)).toList();
 }
 
-class NotificationsScreen extends ConsumerWidget {
+class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<NotificationsScreen> createState() => _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
+  bool _hadUnread = false;
+
+  @override
+  void dispose() {
+    // Уход со страницы = «увидел новые сообщения» → отмечаем чат прочитанным.
+    if (_hadUnread) ref.read(clientChatApiProvider).markRead();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final AppColors c = context.colors;
     final AsyncValue<List<Session>> sessions = ref.watch(clientSessionsProvider);
     final AsyncValue<List<Workout>> workouts = ref.watch(clientWorkoutsProvider);
     final AsyncValue<List<ClientPackage>> packages = ref.watch(clientPackagesProvider);
+    final AsyncValue<List<ClientMeasurementTask>> measureTasks = ref.watch(clientMeasurementTasksProvider);
     final AsyncValue<int> unread = ref.watch(clientUnreadProvider);
     final AsyncValue<ClientChatData> chat = ref.watch(clientChatProvider);
     final Set<String> dismissed = ref.watch(_dismissedProvider);
+    if ((unread.valueOrNull ?? 0) > 0) _hadUnread = true;
 
     final List<_Notif> items = _build(
       sessions: sessions.valueOrNull ?? <Session>[],
       workouts: workouts.valueOrNull ?? <Workout>[],
       packages: packages.valueOrNull ?? <ClientPackage>[],
+      measurementTasks: measureTasks.valueOrNull ?? <ClientMeasurementTask>[],
       unread: unread.valueOrNull ?? 0,
       dismissed: dismissed,
     );

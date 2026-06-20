@@ -46,6 +46,29 @@ final FutureProvider<List<ClientPackage>> clientPackagesProvider =
   }
 });
 
+/// Задача на замеры от тренера (бэкенд отдаёт только открытые).
+class ClientMeasurementTask {
+  ClientMeasurementTask({required this.id, required this.note});
+  final String id;
+  final String? note;
+  factory ClientMeasurementTask.fromJson(Map<String, dynamic> j) =>
+      ClientMeasurementTask(id: j['id'] as String? ?? '', note: j['note'] as String?);
+}
+
+final FutureProvider<List<ClientMeasurementTask>> clientMeasurementTasksProvider =
+    FutureProvider<List<ClientMeasurementTask>>((ref) async {
+  final ApiClient api = ref.read(apiClientProvider);
+  try {
+    final Map<String, dynamic> r = await api.getJson('/api/client/measurement-tasks');
+    return ((r['tasks'] as List<dynamic>?) ?? <dynamic>[])
+        .cast<Map<String, dynamic>>()
+        .map(ClientMeasurementTask.fromJson)
+        .toList();
+  } catch (_) {
+    return <ClientMeasurementTask>[];
+  }
+});
+
 /// Количество непрочитанных сообщений от тренера.
 final FutureProvider<int> clientUnreadProvider = FutureProvider<int>((ref) async {
   final ApiClient api = ref.read(apiClientProvider);
