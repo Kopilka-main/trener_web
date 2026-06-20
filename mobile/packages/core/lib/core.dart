@@ -10,3 +10,4 @@ export 'src/chat/chat_thread_view.dart';
 export 'src/auth/token_store.dart';
 export 'src/push/push_service.dart';
 export 'src/theme/app_theme.dart';
+export 'src/theme/theme_controller.dart';

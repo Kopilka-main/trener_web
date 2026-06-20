@@ -21,6 +21,8 @@ dependencies:
   # Пуши (FCM)
   firebase_core: ^3.8.0
   firebase_messaging: ^15.1.5
+  # Шрифты бренда (Space Grotesk / Bowlby One / JetBrains Mono) — как в вебе
+  google_fonts: ^6.2.1
 
 dev_dependencies:
   flutter_test:

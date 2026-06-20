@@ -61,7 +61,9 @@ class _TrainerAppState extends ConsumerState<TrainerApp> {
     return MaterialApp.router(
       title: 'Trener — тренер',
       debugShowCheckedModeBanner: false,
-      theme: buildAppTheme(AppAccents.trainer),
+      theme: buildAppTheme(AppColors.light),
+      darkTheme: buildAppTheme(AppColors.dark),
+      themeMode: ref.watch(themeModeProvider),
       routerConfig: router,
     );
   }

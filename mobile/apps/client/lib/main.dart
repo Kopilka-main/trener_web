@@ -51,7 +51,9 @@ class _ClientAppState extends ConsumerState<ClientApp> {
     return MaterialApp.router(
       title: 'Trener — клиент',
       debugShowCheckedModeBanner: false,
-      theme: buildAppTheme(AppAccents.client),
+      theme: buildAppTheme(AppColors.light),
+      darkTheme: buildAppTheme(AppColors.dark),
+      themeMode: ref.watch(themeModeProvider),
       routerConfig: router,
     );
   }
