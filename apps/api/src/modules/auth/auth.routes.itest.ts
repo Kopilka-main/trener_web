@@ -41,6 +41,30 @@ describe.skipIf(!url)('auth routes (integration)', () => {
     expect(me.json<{ trainer: { email: string } }>().trainer.email).toBe('a@b.co');
   });
 
+  it('регистрация → token в теле → Bearer на /me (нативные клиенты)', async () => {
+    const reg = await app.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: { email: 'bearer@b.co', password: 'longenough1', firstName: 'И', lastName: 'Т' },
+    });
+    expect(reg.statusCode).toBe(201);
+    const token = reg.json<{ token: string }>().token;
+    expect(typeof token).toBe('string');
+    expect(token.length).toBeGreaterThan(10);
+
+    const me = await app.inject({
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(me.statusCode).toBe(200);
+    expect(me.json<{ trainer: { email: string } }>().trainer.email).toBe('bearer@b.co');
+
+    // Без cookie и без заголовка → 401.
+    const anon = await app.inject({ method: 'GET', url: '/api/auth/me' });
+    expect(anon.statusCode).toBe(401);
+  });
+
   it('повторная регистрация того же email → 409', async () => {
     const res = await app.inject({
       method: 'POST',

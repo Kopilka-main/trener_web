@@ -50,6 +50,26 @@ describe.skipIf(!url)('client-auth (isolation)', () => {
     expect(body.link).toBeNull();
   });
 
+  it('register → token в теле → Bearer на /me (нативные клиенты)', async () => {
+    const reg = await app.inject({
+      method: 'POST',
+      url: '/api/client/auth/register',
+      payload: { email: 'cbearer@b.co', password: 'longenough1', firstName: 'И', lastName: 'К' },
+    });
+    expect(reg.statusCode).toBe(201);
+    const token = reg.json<{ token: string }>().token;
+    expect(typeof token).toBe('string');
+    expect(token.length).toBeGreaterThan(10);
+
+    const me = await app.inject({
+      method: 'GET',
+      url: '/api/client/auth/me',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(me.statusCode).toBe(200);
+    expect(me.json<{ account: { email: string } }>().account.email).toBe('cbearer@b.co');
+  });
+
   it('повторный register того же email → 409', async () => {
     const res = await app.inject({
       method: 'POST',
