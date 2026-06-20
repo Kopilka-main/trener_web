@@ -1,7 +1,9 @@
+import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../api/trainer_client_card.dart';
 import '../api/trainer_clients.dart';
 
 enum _Tab { active, archived }
@@ -107,12 +109,17 @@ class _ClientTile extends StatelessWidget {
 }
 
 /// Карточка клиента: контакты, теги, заметки + быстрый переход в чат.
-class ClientDetailScreen extends StatelessWidget {
+const List<String> _ruMonths = <String>[
+  'янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
+];
+String _date(DateTime? d) => d == null ? '' : '${d.day} ${_ruMonths[d.month - 1]} ${d.year}';
+
+class ClientDetailScreen extends ConsumerWidget {
   const ClientDetailScreen({super.key, required this.client});
   final Client client;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final ColorScheme cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: Text(client.fullName.isNotEmpty ? client.fullName : 'Клиент')),
@@ -172,17 +179,230 @@ class ClientDetailScreen extends StatelessWidget {
             const SizedBox(height: 6),
             Text(client.notes!.trim(), style: const TextStyle(fontSize: 15)),
           ],
-          const SizedBox(height: 28),
+          const SizedBox(height: 20),
           FilledButton.icon(
             onPressed: () => context.push(
                 '/chat/${client.id}?name=${Uri.encodeComponent(client.fullName)}'),
             icon: const Icon(Icons.chat_bubble_outline, size: 18),
             label: const Text('Открыть чат'),
-            style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(48)),
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
           ),
+          const SizedBox(height: 20),
+          _Section(title: 'Баланс', child: _PackagesBlock(clientId: client.id)),
+          const SizedBox(height: 16),
+          _Section(
+            title: 'Замеры',
+            action: _RequestMeasureButton(clientId: client.id),
+            child: _MeasurementsBlock(clientId: client.id),
+          ),
+          const SizedBox(height: 16),
+          _Section(title: 'Тренировки', child: _WorkoutsBlock(clientId: client.id)),
+          const SizedBox(height: 24),
         ],
       ),
+    );
+  }
+}
+
+/// Заголовок секции + опциональная кнопка действия справа.
+class _Section extends StatelessWidget {
+  const _Section({required this.title, required this.child, this.action});
+  final String title;
+  final Widget child;
+  final Widget? action;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Text(title.toUpperCase(),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: c.inkMutedXl)),
+            const Spacer(),
+            ?action,
+          ],
+        ),
+        const SizedBox(height: 8),
+        child,
+      ],
+    );
+  }
+}
+
+class _Empty extends StatelessWidget {
+  const _Empty(this.text);
+  final String text;
+  @override
+  Widget build(BuildContext context) =>
+      Text(text, style: TextStyle(fontSize: 13, color: context.colors.inkMuted));
+}
+
+class _PackagesBlock extends ConsumerWidget {
+  const _PackagesBlock({required this.clientId});
+  final String clientId;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppColors c = context.colors;
+    final AsyncValue<List<TPackage>> pkgs = ref.watch(clientPackagesProvider(clientId));
+    return pkgs.when(
+      loading: () => const _Empty('Загрузка…'),
+      error: (Object e, _) => const _Empty('Не удалось загрузить'),
+      data: (List<TPackage> all) {
+        final List<TPackage> active = all.where((TPackage p) => p.isActive).toList();
+        if (active.isEmpty) return const _Empty('Активных пакетов нет');
+        return Column(
+          children: active.map((TPackage p) => Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(p.workoutType?.isNotEmpty == true ? p.workoutType! : 'Пакет',
+                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                          if (p.endsAt != null)
+                            Text('до ${_date(DateTime.tryParse(p.endsAt!)?.toLocal())}',
+                                style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: <Widget>[
+                        Text('${p.remaining}',
+                            style: AppFonts.display(size: 22, color: p.remaining > 0 ? c.accent : c.danger)),
+                        Text('осталось', style: AppFonts.mono(size: 9, color: c.inkMutedXl, weight: FontWeight.w700)),
+                      ],
+                    ),
+                  ],
+                ),
+              )).toList(),
+        );
+      },
+    );
+  }
+}
+
+class _MeasurementsBlock extends ConsumerWidget {
+  const _MeasurementsBlock({required this.clientId});
+  final String clientId;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppColors c = context.colors;
+    final AsyncValue<List<TMeasurement>> ms = ref.watch(clientMeasurementsProvider(clientId));
+    return ms.when(
+      loading: () => const _Empty('Загрузка…'),
+      error: (Object e, _) => const _Empty('Не удалось загрузить'),
+      data: (List<TMeasurement> all) {
+        if (all.isEmpty) return const _Empty('Замеров пока нет');
+        final TMeasurement last = all.first;
+        final List<String> chips = <String>[
+          if (last.weightKg != null) '${last.weightKg} кг',
+          if (last.bodyFatPct != null) '${last.bodyFatPct}% жира',
+          ...last.metrics.entries.map((MapEntry<String, num> e) => '${e.key} ${e.value}'),
+        ];
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(_date(last.date), style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: chips
+                    .map((String s) => Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(color: c.chip, borderRadius: BorderRadius.circular(10)),
+                          child: Text(s, style: TextStyle(fontSize: 13, color: c.ink)),
+                        ))
+                    .toList(),
+              ),
+              if (all.length > 1) ...<Widget>[
+                const SizedBox(height: 8),
+                Text('Всего замеров: ${all.length}',
+                    style: TextStyle(fontSize: 12, color: c.inkMutedXl)),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _RequestMeasureButton extends ConsumerWidget {
+  const _RequestMeasureButton({required this.clientId});
+  final String clientId;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return TextButton.icon(
+      onPressed: () async {
+        final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+        try {
+          await ref.read(trainerClientCardApiProvider).requestMeasurements(clientId, null);
+          m.showSnackBar(const SnackBar(content: Text('Запрос на замеры отправлен')));
+        } catch (_) {
+          m.showSnackBar(const SnackBar(content: Text('Не удалось отправить запрос')));
+        }
+      },
+      icon: const Icon(Icons.straighten, size: 16),
+      label: const Text('Запросить'),
+    );
+  }
+}
+
+class _WorkoutsBlock extends ConsumerWidget {
+  const _WorkoutsBlock({required this.clientId});
+  final String clientId;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppColors c = context.colors;
+    final AsyncValue<List<TWorkout>> ws = ref.watch(clientWorkoutsCardProvider(clientId));
+    return ws.when(
+      loading: () => const _Empty('Загрузка…'),
+      error: (Object e, _) => const _Empty('Не удалось загрузить'),
+      data: (List<TWorkout> all) {
+        final List<TWorkout> done = all.where((TWorkout w) => w.status == 'completed').take(10).toList();
+        if (done.isEmpty) return const _Empty('Проведённых тренировок нет');
+        return Column(
+          children: done.map((TWorkout w) => Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+                child: Row(
+                  children: <Widget>[
+                    Icon(Icons.fitness_center, size: 18, color: c.inkMuted),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(w.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                          Text(
+                            <String>[
+                              if (w.completedAt != null) _date(w.completedAt),
+                              '${w.exerciseCount} упр.',
+                              if (w.createdByClient) 'своя',
+                            ].join(' · '),
+                            style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              )).toList(),
+        );
+      },
     );
   }
 }
