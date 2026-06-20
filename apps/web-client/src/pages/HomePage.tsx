@@ -7,6 +7,7 @@ import {
   BookOpen,
   CalendarDays,
   Dumbbell,
+  Flame,
   MessageSquare,
   Settings,
   TrendingUp,
@@ -55,6 +56,26 @@ function diffShort(future: Date, now: Date): string {
   return `${totalH}Ч ${m}М`;
 }
 
+const RU_MONTHS_SHORT = [
+  'янв',
+  'фев',
+  'мар',
+  'апр',
+  'мая',
+  'июн',
+  'июл',
+  'авг',
+  'сен',
+  'окт',
+  'ноя',
+  'дек',
+];
+/** 'YYYY-MM-DD…' → '31 дек 2026' для подписи даты окончания пакета. */
+function formatRuDate(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return `${String(d ?? '')} ${RU_MONTHS_SHORT[(m ?? 1) - 1] ?? ''} ${String(y ?? '')}`;
+}
+
 type Metric = { v: string; s: string | string[] };
 type TileKey = 'workouts' | 'calendar' | 'chat' | 'progress' | 'knowledge' | 'notifications';
 
@@ -81,6 +102,14 @@ export function HomePage() {
     (w) => w.status === 'completed' && !w.createdByClient,
   ).length;
   const paidBalance = paidLessons - completedTrainerWorkouts;
+  // Дата окончания пакета (период), которую задаёт тренер. Берём самую позднюю среди
+  // активных пакетов с датой окончания — до неё действует доступ.
+  const packageEndsAt =
+    packages
+      .filter((p) => p.status === 'active' && p.endsAt)
+      .map((p) => p.endsAt as string)
+      .sort()
+      .at(-1) ?? null;
   const chatMessages = useClientMessages().data?.messages ?? [];
   const trainer = useClientTrainer().data;
   // Открытые задачи от тренера — тоже «требуют внимания» в плитке уведомлений.
@@ -248,6 +277,16 @@ export function HomePage() {
                   тренировок
                 </span>
               </button>
+              {packageEndsAt && (
+                <div className="flex items-center gap-1.5 pb-2 text-[13px] font-semibold text-ink-muted">
+                  <Flame
+                    size={15}
+                    strokeWidth={2.2}
+                    className="shrink-0 text-[var(--color-accent-text)]"
+                  />
+                  <span>до {formatRuDate(packageEndsAt)}</span>
+                </div>
+              )}
               {nextSession && nextSessionDate && (
                 <button
                   type="button"
