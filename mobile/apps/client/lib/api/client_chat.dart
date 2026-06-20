@@ -60,3 +60,15 @@ final Provider<ClientChatApi> clientChatApiProvider =
 
 final FutureProvider<ClientChatData> clientChatProvider =
     FutureProvider<ClientChatData>((ref) => ref.read(clientChatApiProvider).load());
+
+/// Имя тренера для шапки чата (или null, если не подключён/ошибка).
+final FutureProvider<String?> clientTrainerNameProvider = FutureProvider<String?>((ref) async {
+  try {
+    final Map<String, dynamic> r = await ref.read(apiClientProvider).getJson('/api/client/trainer');
+    final Map<String, dynamic> t = (r['trainer'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+    final String name = '${t['firstName'] ?? ''} ${t['lastName'] ?? ''}'.trim();
+    return name.isEmpty ? null : name;
+  } catch (_) {
+    return null;
+  }
+});

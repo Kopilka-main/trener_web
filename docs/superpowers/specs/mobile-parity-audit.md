@@ -34,7 +34,7 @@
 | WorkoutsListPage   | workouts_screen          | ⚠️     | проверить шаблоны/повтор/группировку                |
 | RunWorkoutPage     | active_workout_screen    | ⚠️     | проверить таймер отдыха, reorder, KB-пикер          |
 | WorkoutDetailPage  | workouts_screen (Detail) | ⚠️     |                                                     |
-| ChatPage           | chat_screen              | ⚠️     | проверить jump-to-pinned, highlight                 |
+| ChatPage           | chat_screen              | ✅     | аудит пройден; jump/highlight P2 отложено           |
 | NotificationsPage  | notifications_screen     | ⚠️     | confirm открывает шит vs переход; measurement-tasks |
 | KnowledgePage      | knowledge_screen         | ⚠️     | группы мышц/фильтры?                                |
 | ExerciseDetailPage | knowledge (Detail)       | ⚠️     | нет графика                                         |
@@ -108,3 +108,19 @@
 - ⏸ Точное центрирование первого занятия в дне (сейчас −150px, не center).
 
 Статус: **паритет по функциям достигнут**, P2 — косметика прокрутки.
+
+### Чат клиента — ChatPage.tsx ↔ chat_screen.dart + chat_thread_view.dart
+
+Аудит субагентом: 11 расхождений (1 ложное — `?replyToId` валиден в Dart 3). Закрыто:
+
+- ✅ **P0** «Не подключён к тренеру» — ветка с переходом на /connect.
+- ✅ **P0** Авто-отметка прочтения при новом сообщении тренера — трекинг
+  last-trainer-msg-id, markRead при изменении.
+- ✅ **P1** Имя тренера в шапке — `clientTrainerNameProvider` (/api/client/trainer).
+- ✅ Поллинг 4с (как в вебе), закрытие клавиатуры по тапу в ленте.
+
+Отложено (P2):
+
+- ⏸ Прыжок к закреплённому/из цитаты к оригиналу + подсветка (нужен scroll-to-id
+  в reverse-ленте). Аватар тренера в шапке (нужна авторизованная загрузка картинки).
+- ⏸ Плавный авто-рост поля ввода (сейчас до 5 строк сразу).

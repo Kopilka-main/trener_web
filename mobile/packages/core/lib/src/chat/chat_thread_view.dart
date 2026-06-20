@@ -85,7 +85,10 @@ class _ChatThreadViewState extends State<ChatThreadView> {
           }),
         ),
         Expanded(
-          child: widget.messages.isEmpty
+          // Тап по ленте убирает клавиатуру (как в вебе).
+          child: GestureDetector(
+            onTap: () => FocusScope.of(context).unfocus(),
+            child: widget.messages.isEmpty
               ? _Empty(onRefresh: widget.onRefresh)
               : RefreshIndicator(
                   onRefresh: widget.onRefresh ?? () async {},
@@ -124,6 +127,7 @@ class _ChatThreadViewState extends State<ChatThreadView> {
                     },
                   ),
                 ),
+          ),
         ),
         if (_replyTo != null) _ReplyPanel(
           message: _replyTo!,
