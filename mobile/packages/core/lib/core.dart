@@ -1,7 +1,9 @@
-/// Общий слой мобильных приложений Trener.
-///
-/// Здесь будут модели (зеркало Zod-контрактов), API-клиент (Dio + Bearer),
-/// авторизация и хранение токена, тема и пуши. Пока — только тема.
+/// Общий слой мобильных приложений Trener: API-клиент, авторизация/сессия, тема.
+/// Модели и пуши добавятся по мере роста фаз.
 library;
 
+export 'src/api/api_client.dart';
+export 'src/api/api_provider.dart';
+export 'src/auth/session.dart';
+export 'src/auth/token_store.dart';
 export 'src/theme/app_theme.dart';

@@ -1,27 +1,47 @@
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import 'router.dart';
 
 void main() {
-  runApp(const ProviderScope(child: ClientApp()));
+  runApp(
+    ProviderScope(
+      overrides: <Override>[
+        baseUrlProvider.overrideWithValue('https://my.fitbond.ru'),
+      ],
+      child: const ClientApp(),
+    ),
+  );
 }
 
-/// Клиентское приложение Trener. Пока — каркас с фирменной темой;
-/// экраны входа и главной добавляются в следующих шагах фазы 1.
-class ClientApp extends StatelessWidget {
+/// Клиентское приложение Trener: фирменная тема, токен-сессия, роутер
+/// вход → главная.
+class ClientApp extends ConsumerStatefulWidget {
   const ClientApp({super.key});
 
   @override
+  ConsumerState<ClientApp> createState() => _ClientAppState();
+}
+
+class _ClientAppState extends ConsumerState<ClientApp> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(sessionProvider.notifier).bootstrap();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    final GoRouter router = ref.watch(routerProvider);
+    return MaterialApp.router(
       title: 'Trener — клиент',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(AppAccents.client),
-      home: const Scaffold(
-        body: Center(
-          child: Text('Trener · клиент', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-        ),
-      ),
+      routerConfig: router,
     );
   }
 }
