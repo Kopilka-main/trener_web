@@ -54,6 +54,26 @@ export function makePushRepo(db: Db) {
         });
     },
 
+    async listDeviceTokensByClientAccount(clientAccountId: string): Promise<string[]> {
+      const rows = await db
+        .select({ token: deviceTokens.token })
+        .from(deviceTokens)
+        .where(eq(deviceTokens.clientAccountId, clientAccountId));
+      return rows.map((r) => r.token);
+    },
+
+    async listDeviceTokensByTrainer(trainerId: string): Promise<string[]> {
+      const rows = await db
+        .select({ token: deviceTokens.token })
+        .from(deviceTokens)
+        .where(eq(deviceTokens.trainerId, trainerId));
+      return rows.map((r) => r.token);
+    },
+
+    async deleteDeviceToken(token: string): Promise<void> {
+      await db.delete(deviceTokens).where(eq(deviceTokens.token, token));
+    },
+
     async listByClientAccount(clientAccountId: string): Promise<StoredSubscription[]> {
       return db
         .select({

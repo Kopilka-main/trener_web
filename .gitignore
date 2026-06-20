@@ -32,3 +32,7 @@ npm-debug.log*
 # Системные
 .DS_Store
 Thumbs.db
+
+# Секреты (service-account FCM и пр.) — не коммитим
+secrets/
+*-firebase-adminsdk-*.json

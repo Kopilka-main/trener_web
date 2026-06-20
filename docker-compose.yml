@@ -32,11 +32,14 @@ services:
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@fitbond.ru}
       # Папка глобального медиа каталога упражнений (картинки/видео).
       CATALOG_MEDIA_DIR: /data/catalog
+      # FCM (нативные пуши): путь к service-account ключу. Без файла push мягко отключён.
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/fcm-service-account.json
     depends_on:
       postgres: { condition: service_healthy }
     volumes:
       - uploads:/data/uploads
       - catalog:/data/catalog
+      - ./secrets/fcm-service-account.json:/run/secrets/fcm-service-account.json:ro
 
   nginx:
     image: ${WEB_IMAGE:-trener-web:local}

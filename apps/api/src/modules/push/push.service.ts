@@ -9,13 +9,38 @@ export type PushSender = (sub: StoredSubscription, payload: string) => Promise<S
 export type PushDeps = {
   newId: () => string;
   now: () => Date;
-  publicKey: string; // '' => push отключён (нет VAPID-ключей)
+  publicKey: string; // '' => web push отключён (нет VAPID-ключей)
   send: PushSender;
+  // Отправка FCM на список device-токенов нативных приложений. No-op, если не настроено.
+  sendFcm?: (tokens: string[], payload: PushPayload) => Promise<void>;
+  fcmEnabled?: boolean;
   log?: (msg: string, err?: unknown) => void;
 };
 
 export function makePushService(repo: PushRepo, deps: PushDeps) {
   const enabled = deps.publicKey !== '';
+  const fcmEnabled = deps.fcmEnabled ?? false;
+  const anyEnabled = enabled || fcmEnabled;
+  const sendFcm = deps.sendFcm ?? (async () => {});
+
+  async function sendDevices(tokens: string[], payload: PushPayload): Promise<void> {
+    if (tokens.length === 0) return;
+    try {
+      await sendFcm(tokens, payload);
+    } catch (err) {
+      deps.log?.('[push] fcm send failed', err);
+    }
+  }
+
+  // Отправить владельцу во ВСЕ каналы: web-push подписки + FCM device-токены.
+  async function sendAllClient(clientAccountId: string, payload: PushPayload): Promise<void> {
+    await sendToSubs(await repo.listByClientAccount(clientAccountId), payload);
+    await sendDevices(await repo.listDeviceTokensByClientAccount(clientAccountId), payload);
+  }
+  async function sendAllTrainer(trainerId: string, payload: PushPayload): Promise<void> {
+    await sendToSubs(await repo.listByTrainer(trainerId), payload);
+    await sendDevices(await repo.listDeviceTokensByTrainer(trainerId), payload);
+  }
 
   async function sendToSubs(subs: StoredSubscription[], payload: PushPayload): Promise<void> {
     if (subs.length === 0) return;
@@ -33,8 +58,8 @@ export function makePushService(repo: PushRepo, deps: PushDeps) {
   }
 
   async function notifyClientAccount(clientAccountId: string, payload: PushPayload): Promise<void> {
-    if (!enabled) return;
-    await sendToSubs(await repo.listByClientAccount(clientAccountId), payload);
+    if (!anyEnabled) return;
+    await sendAllClient(clientAccountId, payload);
   }
 
   return {
@@ -63,7 +88,7 @@ export function makePushService(repo: PushRepo, deps: PushDeps) {
 
     // Триггер по clients.id (чат тренер→клиент): резолвит accountId и шлёт.
     async notifyByClientId(clientId: string, payload: PushPayload): Promise<void> {
-      if (!enabled) return;
+      if (!anyEnabled) return;
       const accountId = await repo.accountIdByClientId(clientId);
       if (!accountId) return;
       await notifyClientAccount(accountId, payload);
@@ -71,8 +96,8 @@ export function makePushService(repo: PushRepo, deps: PushDeps) {
 
     // Триггер тренеру (чат клиент→тренер) на все его устройства.
     async notifyTrainer(trainerId: string, payload: PushPayload): Promise<void> {
-      if (!enabled) return;
-      await sendToSubs(await repo.listByTrainer(trainerId), payload);
+      if (!anyEnabled) return;
+      await sendAllTrainer(trainerId, payload);
     },
 
     // Пуш КЛИЕНТУ с подстановкой имени ТРЕНЕРА: build(имяТренера) → payload.
@@ -81,11 +106,11 @@ export function makePushService(repo: PushRepo, deps: PushDeps) {
       trainerId: string,
       build: (trainerName: string) => PushPayload,
     ): Promise<void> {
-      if (!enabled) return;
+      if (!anyEnabled) return;
       const accountId = await repo.accountIdByClientId(clientId);
       if (!accountId) return;
       const name = (await repo.trainerName(trainerId)) ?? 'Тренер';
-      await sendToSubs(await repo.listByClientAccount(accountId), build(name));
+      await sendAllClient(accountId, build(name));
     },
 
     // Пуш ТРЕНЕРУ с подстановкой имени КЛИЕНТА: build(имяКлиента) → payload.
@@ -94,9 +119,9 @@ export function makePushService(repo: PushRepo, deps: PushDeps) {
       clientId: string,
       build: (clientName: string) => PushPayload,
     ): Promise<void> {
-      if (!enabled) return;
+      if (!anyEnabled) return;
       const name = (await repo.clientName(clientId)) ?? 'Клиент';
-      await sendToSubs(await repo.listByTrainer(trainerId), build(name));
+      await sendAllTrainer(trainerId, build(name));
     },
   };
 }
