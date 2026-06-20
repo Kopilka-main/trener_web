@@ -26,7 +26,7 @@ function formatTime(iso: string): string {
 }
 
 /** Свайп сообщения влево → ответить. Вертикальный скролл не перехватывается (touch-action: pan-y). */
-const SWIPE_TRIGGER = 56;
+const SWIPE_TRIGGER = 40;
 function SwipeToReply({
   onReply,
   disabled,
@@ -58,7 +58,7 @@ function SwipeToReply({
       if (Math.abs(ddx) > 12 && Math.abs(ddx) > Math.abs(ddy)) horizontal.current = true;
       else return;
     }
-    setDx(Math.max(-90, Math.min(0, ddx)));
+    setDx(Math.max(-64, Math.min(0, ddx)));
   }
   function end() {
     if (dx <= -SWIPE_TRIGGER) onReply();

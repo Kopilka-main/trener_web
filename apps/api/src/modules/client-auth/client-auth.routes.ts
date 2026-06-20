@@ -11,9 +11,13 @@ import {
 import type { ClientAuthService, ClientSession, AvatarUploadInput } from './client-auth.service.js';
 import type { Storage } from '../../files/storage.js';
 import { CLIENT_SESSION_COOKIE, requireClient } from '../../plugins/client-context.js';
+import { bearerToken } from '../../plugins/tenant-context.js';
 import { AppError, notFound, unauthorized } from '../../errors.js';
 
 const registerResponse = z.object({ account: clientAccountResponseSchema });
+// Ответ логина/регистрации клиента: профиль + сессионный токен (для нативных клиентов
+// через Authorization: Bearer; веб продолжает пользоваться httpOnly-cookie).
+const authResponse = z.object({ account: clientAccountResponseSchema, token: z.string() });
 
 // Порт раздачи файла по id (HTTP-слой не импортирует repo/db — граница слоёв).
 // Модуль передаёт files-repo, структурно совместимый с этим типом.
@@ -78,22 +82,22 @@ export function clientAuthRoutes(
 
   typed.post(
     '/api/client/auth/register',
-    { schema: { body: clientRegisterRequestSchema, response: { 201: registerResponse } } },
+    { schema: { body: clientRegisterRequestSchema, response: { 201: authResponse } } },
     async (req, reply) => {
       const { account, session } = await svc.register(req.body);
       setSessionCookie(reply, session);
       void reply.status(201);
-      return { account };
+      return { account, token: session.token };
     },
   );
 
   typed.post(
     '/api/client/auth/login',
-    { schema: { body: clientLoginRequestSchema, response: { 200: registerResponse } } },
+    { schema: { body: clientLoginRequestSchema, response: { 200: authResponse } } },
     async (req, reply) => {
       const { account, session } = await svc.login(req.body);
       setSessionCookie(reply, session);
-      return { account };
+      return { account, token: session.token };
     },
   );
 
@@ -101,7 +105,7 @@ export function clientAuthRoutes(
     '/api/client/auth/logout',
     { schema: { response: { 200: z.object({ ok: z.literal(true) }) } } },
     async (req, reply) => {
-      const token = req.cookies[CLIENT_SESSION_COOKIE];
+      const token = req.cookies[CLIENT_SESSION_COOKIE] ?? bearerToken(req.headers.authorization);
       if (token) await svc.logout(token);
       void reply.clearCookie(CLIENT_SESSION_COOKIE, { path: '/' });
       return { ok: true as const };

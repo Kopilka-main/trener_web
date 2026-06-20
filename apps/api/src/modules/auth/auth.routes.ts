@@ -8,10 +8,13 @@ import {
   updateTrainerRequestSchema,
 } from '@trener/shared';
 import type { AuthService, AvatarUploadInput, Session } from './auth.service.js';
-import { SESSION_COOKIE } from '../../plugins/tenant-context.js';
+import { SESSION_COOKIE, bearerToken } from '../../plugins/tenant-context.js';
 import { AppError, unauthorized } from '../../errors.js';
 
 const meResponse = z.object({ trainer: trainerResponseSchema });
+// Ответ логина/регистрации: профиль + сессионный токен (для нативных клиентов через
+// Authorization: Bearer; веб продолжает пользоваться httpOnly-cookie).
+const authResponse = z.object({ trainer: trainerResponseSchema, token: z.string() });
 
 export function authRoutes(app: FastifyInstance, svc: AuthService, isProd: boolean): void {
   const typed = app.withTypeProvider<ZodTypeProvider>();
@@ -62,22 +65,22 @@ export function authRoutes(app: FastifyInstance, svc: AuthService, isProd: boole
 
   typed.post(
     '/api/auth/register',
-    { schema: { body: registerRequestSchema, response: { 201: meResponse } } },
+    { schema: { body: registerRequestSchema, response: { 201: authResponse } } },
     async (req, reply) => {
       const { trainer, session } = await svc.register(req.body);
       setSessionCookie(reply, session);
       void reply.status(201);
-      return { trainer };
+      return { trainer, token: session.token };
     },
   );
 
   typed.post(
     '/api/auth/login',
-    { schema: { body: loginRequestSchema, response: { 200: meResponse } } },
+    { schema: { body: loginRequestSchema, response: { 200: authResponse } } },
     async (req, reply) => {
       const { trainer, session } = await svc.login(req.body);
       setSessionCookie(reply, session);
-      return { trainer };
+      return { trainer, token: session.token };
     },
   );
 
@@ -85,7 +88,7 @@ export function authRoutes(app: FastifyInstance, svc: AuthService, isProd: boole
     '/api/auth/logout',
     { schema: { response: { 200: z.object({ ok: z.literal(true) }) } } },
     async (req, reply) => {
-      const token = req.cookies[SESSION_COOKIE];
+      const token = req.cookies[SESSION_COOKIE] ?? bearerToken(req.headers.authorization);
       if (token) await svc.logout(token);
       void reply.clearCookie(SESSION_COOKIE, { path: '/' });
       return { ok: true as const };

@@ -4,6 +4,13 @@ import { unauthorized } from '../errors.js';
 
 export const SESSION_COOKIE = 'sid';
 
+/** Токен сессии из заголовка `Authorization: Bearer <token>` (для нативных клиентов). */
+export function bearerToken(authorization: string | undefined): string | undefined {
+  if (!authorization) return undefined;
+  const m = /^Bearer\s+(.+)$/i.exec(authorization.trim());
+  return m ? m[1] : undefined;
+}
+
 declare module 'fastify' {
   interface FastifyRequest {
     trainerId?: string;
@@ -20,7 +27,8 @@ export type TenantContextOpts = {
 const plugin: FastifyPluginAsync<TenantContextOpts> = (app, opts) => {
   const now = opts.now ?? (() => new Date());
   app.addHook('onRequest', async (req) => {
-    const token = req.cookies[SESSION_COOKIE];
+    // Веб — httpOnly-cookie; нативные приложения — заголовок Authorization: Bearer.
+    const token = req.cookies[SESSION_COOKIE] ?? bearerToken(req.headers.authorization);
     if (!token) return;
     const session = await opts.findSession(token);
     if (!session) return;

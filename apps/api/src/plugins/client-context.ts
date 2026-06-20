@@ -1,6 +1,7 @@
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { unauthorized } from '../errors.js';
+import { bearerToken } from './tenant-context.js';
 
 export const CLIENT_SESSION_COOKIE = 'client_sid';
 
@@ -20,7 +21,8 @@ export type ClientContextOpts = {
 const plugin: FastifyPluginAsync<ClientContextOpts> = (app, opts) => {
   const now = opts.now ?? (() => new Date());
   app.addHook('onRequest', async (req) => {
-    const token = req.cookies[CLIENT_SESSION_COOKIE];
+    // Веб — httpOnly-cookie; нативные приложения — заголовок Authorization: Bearer.
+    const token = req.cookies[CLIENT_SESSION_COOKIE] ?? bearerToken(req.headers.authorization);
     if (!token) return;
     const session = await opts.findSession(token);
     if (!session) return;
