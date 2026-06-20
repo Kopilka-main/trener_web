@@ -8,6 +8,7 @@ import 'screens/chat_screen.dart';
 import 'screens/connect_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/notifications_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/splash_screen.dart';
@@ -56,7 +57,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
       GoRoute(path: '/progress', builder: (_, _) => const StubScreen(title: 'Прогресс')),
       GoRoute(path: '/knowledge', builder: (_, _) => const StubScreen(title: 'База знаний')),
-      GoRoute(path: '/notifications', builder: (_, _) => const StubScreen(title: 'Уведомления')),
+      GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),
     ],
   );
 });
