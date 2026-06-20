@@ -57,6 +57,11 @@ class ApiClient {
     return _asMap(r.data);
   }
 
+  Future<Map<String, dynamic>> deleteJson(String path, [Object? body]) async {
+    final Response<dynamic> r = await _dio.delete<dynamic>(path, data: body);
+    return _asMap(r.data);
+  }
+
   Map<String, dynamic> _asMap(dynamic data) {
     if (data is Map<String, dynamic>) return data;
     return <String, dynamic>{};

@@ -48,13 +48,20 @@ class WorkoutSet {
 
 /// Упражнение тренировки с набором подходов.
 class WorkoutExercise {
-  WorkoutExercise({required this.position, required this.name, required this.sets});
+  WorkoutExercise({
+    required this.position,
+    required this.exerciseId,
+    required this.name,
+    required this.sets,
+  });
   final int position;
+  final String exerciseId;
   final String name;
   final List<WorkoutSet> sets;
 
   factory WorkoutExercise.fromJson(Map<String, dynamic> j) => WorkoutExercise(
         position: (j['position'] as num?)?.toInt() ?? 0,
+        exerciseId: j['exerciseId'] as String? ?? '',
         name: j['exerciseName'] as String? ?? 'Упражнение',
         sets: ((j['sets'] as List<dynamic>?) ?? <dynamic>[])
             .cast<Map<String, dynamic>>()
@@ -171,11 +178,33 @@ class ClientWorkoutsApi {
   }
 
   /// Создать пустую собственную тренировку (draft, createdByClient).
-  Future<Workout> create(String name) async {
+  Future<Workout> create(String name) => createFromPlan(name, <Map<String, dynamic>>[]);
+
+  /// Создать собственную тренировку по готовому плану (шаблон/повтор).
+  Future<Workout> createFromPlan(String name, List<Map<String, dynamic>> exercises) async {
     final Map<String, dynamic> r = await _api.postJson(
       '/api/client/workouts',
-      <String, dynamic>{'name': name, 'exercises': <dynamic>[]},
+      <String, dynamic>{'name': name, 'exercises': exercises},
     );
+    return _unwrap(r);
+  }
+
+  Future<void> deleteWorkout(String wid) async {
+    await _api.deleteJson('/api/client/workouts/$wid');
+  }
+
+  /// Переставить упражнения (order — старые позиции в новом порядке).
+  Future<Workout> reorderExercises(String wid, List<int> order) async {
+    final Map<String, dynamic> r = await _api.patchJson(
+      '/api/client/workouts/$wid/exercises',
+      <String, dynamic>{'order': order},
+    );
+    return _unwrap(r);
+  }
+
+  Future<Workout> removeExercise(String wid, int position) async {
+    final Map<String, dynamic> r =
+        await _api.deleteJson('/api/client/workouts/$wid/exercises/$position');
     return _unwrap(r);
   }
 
