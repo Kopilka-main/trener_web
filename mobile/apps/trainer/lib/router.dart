@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/register_screen.dart';
 import 'screens/splash_screen.dart';
 
 /// Роутер с редиректом по статусу сессии: пока неизвестно → сплеш,
@@ -21,13 +22,16 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       final AuthStatus status = ref.read(sessionProvider).status;
       final String loc = state.matchedLocation;
       if (status == AuthStatus.unknown) return loc == '/splash' ? null : '/splash';
-      if (status == AuthStatus.unauthenticated) return loc == '/login' ? null : '/login';
-      if (loc == '/login' || loc == '/splash') return '/home';
+      if (status == AuthStatus.unauthenticated) {
+        return (loc == '/login' || loc == '/register') ? null : '/login';
+      }
+      if (loc == '/login' || loc == '/register' || loc == '/splash') return '/home';
       return null;
     },
     routes: <RouteBase>[
       GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+      GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
       GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
     ],
   );

@@ -32,6 +32,19 @@ class TrainerApi {
     await _ref.read(sessionProvider.notifier).setToken(res['token'] as String);
   }
 
+  Future<void> register(String email, String password, String firstName, String lastName) async {
+    final Map<String, dynamic> res = await _api.postJson(
+      '/api/auth/register',
+      <String, String>{
+        'email': email,
+        'password': password,
+        'firstName': firstName,
+        'lastName': lastName,
+      },
+    );
+    await _ref.read(sessionProvider.notifier).setToken(res['token'] as String);
+  }
+
   Future<TrainerProfile> me() async {
     final Map<String, dynamic> res = await _api.getJson('/api/auth/me');
     return TrainerProfile.fromJson(res['trainer'] as Map<String, dynamic>);

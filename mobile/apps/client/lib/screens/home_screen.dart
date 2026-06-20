@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../api/client_auth.dart';
 import '../api/client_home.dart';
@@ -25,6 +26,11 @@ class HomeScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Главная'),
         actions: <Widget>[
+          IconButton(
+            tooltip: 'Подключиться к тренеру',
+            icon: const Icon(Icons.person_add_alt),
+            onPressed: () => context.push('/connect'),
+          ),
           IconButton(
             tooltip: 'Выйти',
             icon: const Icon(Icons.logout),

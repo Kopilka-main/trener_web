@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../api/client_auth.dart';
 
@@ -75,6 +76,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ? const SizedBox(
                           height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Text('Войти'),
+                ),
+                TextButton(
+                  onPressed: () => context.go('/register'),
+                  child: const Text('Регистрация'),
                 ),
               ],
             ),
