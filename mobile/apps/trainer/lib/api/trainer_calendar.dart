@@ -122,8 +122,8 @@ class TrainerCalendarApi {
   /// Занятия за широкий диапазон (−60…+90 дней) с подставленными именами клиентов.
   Future<List<Session>> load() async {
     final DateTime now = DateTime.now();
-    final String from = _isoDate(now.subtract(const Duration(days: 90)));
-    final String to = _isoDate(now.add(const Duration(days: 180)));
+    final String from = _isoDate(now.subtract(const Duration(days: 120)));
+    final String to = _isoDate(now.add(const Duration(days: 240)));
 
     final List<Map<String, dynamic>> r = await Future.wait(<Future<Map<String, dynamic>>>[
       _api.getJson('/api/sessions?from=$from&to=$to'),

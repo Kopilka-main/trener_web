@@ -371,9 +371,9 @@ class _WeekViewState extends State<_WeekView> {
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
     final DateTime anchorWeek = calStartOfWeek(widget.anchor);
-    // Окно недель вокруг опорной: −6 … +26.
+    // Окно недель вокруг опорной: −16 … +34 (≈ −112…+238 дней) под диапазон загрузки.
     final List<DateTime> weeks =
-        List<DateTime>.generate(33, (int i) => calAddDays(anchorWeek, (i - 6) * 7));
+        List<DateTime>.generate(51, (int i) => calAddDays(anchorWeek, (i - 16) * 7));
 
     return Column(
       children: <Widget>[

@@ -2,6 +2,9 @@ import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:go_router/go_router.dart';
+
+import '../api/client_auth.dart';
 import '../api/client_calendar.dart';
 
 /// Календарь клиента: переиспользуемый SessionsCalendar (День/Неделя/Месяц) +
@@ -12,6 +15,7 @@ class CalendarScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<List<Session>> sessions = ref.watch(clientSessionsProvider);
+    final bool linked = ref.watch(clientLinkedProvider).valueOrNull ?? true;
     final AppColors c = context.colors;
 
     return Scaffold(
@@ -25,7 +29,9 @@ class CalendarScreen extends ConsumerWidget {
               child: Text('Календарь', style: AppFonts.display(size: 24, color: c.ink)),
             ),
             Expanded(
-              child: sessions.when(
+              child: !linked
+                  ? _NotLinked()
+                  : sessions.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (Object e, _) => _Retry(onRetry: () => ref.invalidate(clientSessionsProvider)),
                 data: (List<Session> all) {
@@ -61,6 +67,34 @@ class _Retry extends StatelessWidget {
           const SizedBox(height: 12),
           FilledButton(onPressed: onRetry, child: const Text('Повторить')),
         ],
+      ),
+    );
+  }
+}
+
+/// Клиент не подключён к тренеру — как в вебе: пояснение + переход к подключению.
+class _NotLinked extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              'Вы пока не подключены к тренеру. Подключите его, чтобы здесь появились занятия.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: c.inkMuted),
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () => context.push('/connect'),
+              child: const Text('Подключить тренера'),
+            ),
+          ],
+        ),
       ),
     );
   }

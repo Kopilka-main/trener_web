@@ -73,3 +73,13 @@ final Provider<ClientApi> clientApiProvider =
 
 final FutureProvider<ClientAccount> clientMeProvider =
     FutureProvider<ClientAccount>((ref) => ref.read(clientApiProvider).me());
+
+/// Подключён ли клиент к тренеру (link != null в /me). false при ошибке.
+final FutureProvider<bool> clientLinkedProvider = FutureProvider<bool>((ref) async {
+  try {
+    final Map<String, dynamic> r = await ref.read(apiClientProvider).getJson('/api/client/auth/me');
+    return r['link'] != null;
+  } catch (_) {
+    return false;
+  }
+});

@@ -121,8 +121,8 @@ class ClientCalendarApi {
   /// Занятия за широкий диапазон (−60…+90 дней), фильтрация на клиенте.
   Future<List<Session>> load() async {
     final DateTime now = DateTime.now();
-    final String from = _isoDate(now.subtract(const Duration(days: 90)));
-    final String to = _isoDate(now.add(const Duration(days: 180)));
+    final String from = _isoDate(now.subtract(const Duration(days: 120)));
+    final String to = _isoDate(now.add(const Duration(days: 240)));
     final Map<String, dynamic> r = await _api.getJson('/api/client/sessions?from=$from&to=$to');
     final List<dynamic> raw = (r['sessions'] as List<dynamic>?) ?? <dynamic>[];
     final List<Session> list =
