@@ -54,6 +54,11 @@ export function makePushService(repo: PushRepo, deps: PushDeps) {
       await repo.deleteByEndpoint(endpoint);
     },
 
+    // Регистрация FCM device-токена нативного приложения (iOS/Android).
+    async registerDevice(owner: SubOwner, token: string, platform: string): Promise<void> {
+      await repo.upsertDeviceToken(deps.newId(), owner, token, platform, deps.now());
+    },
+
     notifyClientAccount,
 
     // Триггер по clients.id (чат тренер→клиент): резолвит accountId и шлёт.

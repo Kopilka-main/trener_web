@@ -25,3 +25,10 @@ export const pushVapidResponseSchema = z.object({
   publicKey: z.string(),
 });
 export type PushVapidResponse = z.infer<typeof pushVapidResponseSchema>;
+
+// Регистрация FCM device-токена нативного приложения (iOS/Android).
+export const registerDeviceTokenRequestSchema = z.object({
+  token: z.string().min(1).max(4096),
+  platform: z.enum(['android', 'ios']),
+});
+export type RegisterDeviceTokenRequest = z.infer<typeof registerDeviceTokenRequestSchema>;

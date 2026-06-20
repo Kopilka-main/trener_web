@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
-import { pushSubscriptions, clients, trainers } from '../../db/schema.js';
+import { pushSubscriptions, deviceTokens, clients, trainers } from '../../db/schema.js';
 
 export type StoredSubscription = { endpoint: string; p256dh: string; auth: string };
 // Владелец подписки: ровно один из двух.
@@ -32,6 +32,26 @@ export function makePushRepo(db: Db) {
 
     async deleteByEndpoint(endpoint: string): Promise<void> {
       await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint));
+    },
+
+    // Upsert FCM device-токена по token: то же устройство перепривязывается к
+    // текущему владельцу (клиент/тренер).
+    async upsertDeviceToken(
+      id: string,
+      owner: SubOwner,
+      token: string,
+      platform: string,
+      now: Date,
+    ): Promise<void> {
+      const clientAccountId = 'clientAccountId' in owner ? owner.clientAccountId : null;
+      const trainerId = 'trainerId' in owner ? owner.trainerId : null;
+      await db
+        .insert(deviceTokens)
+        .values({ id, clientAccountId, trainerId, token, platform, createdAt: now })
+        .onConflictDoUpdate({
+          target: deviceTokens.token,
+          set: { clientAccountId, trainerId, platform },
+        });
     },
 
     async listByClientAccount(clientAccountId: string): Promise<StoredSubscription[]> {

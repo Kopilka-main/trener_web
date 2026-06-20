@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1046807300841",
+    "project_id": "fitflow-crm-26411",
+    "storage_bucket": "fitflow-crm-26411.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1046807300841:android:9b0b53f4993f8d65d3be78",
+        "android_client_info": {
+          "package_name": "ru.fitbond.trener_client"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBs1Mh5EBeYSmrbj2cgTckxMrWEnScANWg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1046807300841:android:228372eea2aee7f5d3be78",
+        "android_client_info": {
+          "package_name": "ru.fitbond.trener_trainer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBs1Mh5EBeYSmrbj2cgTckxMrWEnScANWg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

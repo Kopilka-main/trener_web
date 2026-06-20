@@ -5,6 +5,7 @@ import {
   pushSubscribeRequestSchema,
   pushUnsubscribeRequestSchema,
   pushVapidResponseSchema,
+  registerDeviceTokenRequestSchema,
 } from '@trener/shared';
 import type { PushService } from './push.service.js';
 import { requireClient } from '../../plugins/client-context.js';
@@ -51,6 +52,23 @@ export function clientPushRoutes(app: FastifyInstance, svc: PushService): void {
       return { ok: true as const };
     },
   );
+
+  // Регистрация FCM device-токена клиентского приложения.
+  typed.post(
+    '/api/client/push/device',
+    {
+      preHandler: requireClient,
+      schema: { body: registerDeviceTokenRequestSchema, response: { 200: okSchema } },
+    },
+    async (req) => {
+      await svc.registerDevice(
+        { clientAccountId: accountId(req) },
+        req.body.token,
+        req.body.platform,
+      );
+      return { ok: true as const };
+    },
+  );
 }
 
 // Тренерские роуты push: подписка привязана к trainers.id (req.trainerId).
@@ -88,6 +106,19 @@ export function trainerPushRoutes(app: FastifyInstance, svc: PushService): void 
     },
     async (req) => {
       await svc.unsubscribe(req.body.endpoint);
+      return { ok: true as const };
+    },
+  );
+
+  // Регистрация FCM device-токена тренерского приложения.
+  typed.post(
+    '/api/push/device',
+    {
+      preHandler: requireAuth,
+      schema: { body: registerDeviceTokenRequestSchema, response: { 200: okSchema } },
+    },
+    async (req) => {
+      await svc.registerDevice({ trainerId: trainerId(req) }, req.body.token, req.body.platform);
       return { ok: true as const };
     },
   );

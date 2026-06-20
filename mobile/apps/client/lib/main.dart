@@ -10,6 +10,7 @@ void main() {
     ProviderScope(
       overrides: <Override>[
         baseUrlProvider.overrideWithValue('https://my.fitbond.ru'),
+        pushRegisterPathProvider.overrideWithValue('/api/client/push/device'),
       ],
       child: const ClientApp(),
     ),
@@ -36,6 +37,13 @@ class _ClientAppState extends ConsumerState<ClientApp> {
 
   @override
   Widget build(BuildContext context) {
+    // При входе — инициализируем пуши (один раз на переход в authenticated).
+    ref.listen<SessionState>(sessionProvider, (SessionState? prev, SessionState next) {
+      if (next.status == AuthStatus.authenticated &&
+          prev?.status != AuthStatus.authenticated) {
+        ref.read(pushServiceProvider).init();
+      }
+    });
     final GoRouter router = ref.watch(routerProvider);
     return MaterialApp.router(
       title: 'Trener — клиент',

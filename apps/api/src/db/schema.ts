@@ -666,6 +666,31 @@ export const pushSubscriptions = pgTable(
   ],
 );
 
+// FCM device-токены нативных приложений (iOS/Android). token уникален — повторная
+// регистрация того же устройства обновляет владельца/платформу. Владелец ровно один:
+// client_account_id XOR trainer_id (как у web-push подписок).
+export const deviceTokens = pgTable(
+  'device_tokens',
+  {
+    id: text('id').primaryKey(),
+    clientAccountId: text('client_account_id').references(() => clientAccounts.id, {
+      onDelete: 'cascade',
+    }),
+    trainerId: text('trainer_id').references(() => trainers.id, { onDelete: 'cascade' }),
+    token: text('token').notNull().unique(),
+    platform: text('platform').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('idx_device_tokens_account').on(t.clientAccountId),
+    index('idx_device_tokens_trainer').on(t.trainerId),
+    check(
+      'device_tokens_owner_chk',
+      sql`(${t.clientAccountId} IS NOT NULL) <> (${t.trainerId} IS NOT NULL)`,
+    ),
+  ],
+);
+
 // Дедупликация запланированных (по времени) push: ключ вроде `soon:<sessionId>`,
 // `bday:<clientId>:<year>` — пишется один раз, повторный tick планировщика не дублирует.
 export const pushReminders = pgTable('push_reminders', {
