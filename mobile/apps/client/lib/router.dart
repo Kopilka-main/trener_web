@@ -10,6 +10,8 @@ import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/splash_screen.dart';
+import 'screens/workouts_screen.dart';
+import 'api/client_workouts.dart';
 
 /// Роутер с редиректом по статусу сессии: пока неизвестно → сплеш,
 /// не авторизован → вход, авторизован → главная.
@@ -38,6 +40,16 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
       GoRoute(path: '/calendar', builder: (_, _) => const CalendarScreen()),
       GoRoute(path: '/chat', builder: (_, _) => const ChatScreen()),
+      GoRoute(path: '/workouts', builder: (_, _) => const WorkoutsScreen()),
+      GoRoute(
+        path: '/workout/:id',
+        builder: (BuildContext context, GoRouterState state) {
+          final Object? extra = state.extra;
+          if (extra is Workout) return WorkoutDetailScreen(workout: extra);
+          // Прямой переход без объекта (например, deep link) — вернёмся к списку.
+          return const WorkoutsScreen();
+        },
+      ),
       GoRoute(path: '/connect', builder: (_, _) => const ConnectScreen()),
     ],
   );

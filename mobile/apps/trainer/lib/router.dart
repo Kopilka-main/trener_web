@@ -3,8 +3,10 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'api/trainer_clients.dart';
 import 'screens/calendar_screen.dart';
 import 'screens/chat_screen.dart';
+import 'screens/clients_screen.dart';
 import 'screens/conversations_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
@@ -37,6 +39,15 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
       GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
       GoRoute(path: '/calendar', builder: (_, _) => const CalendarScreen()),
+      GoRoute(path: '/clients', builder: (_, _) => const ClientsScreen()),
+      GoRoute(
+        path: '/client/:id',
+        builder: (BuildContext context, GoRouterState state) {
+          final Object? extra = state.extra;
+          if (extra is Client) return ClientDetailScreen(client: extra);
+          return const ClientsScreen();
+        },
+      ),
       GoRoute(path: '/chats', builder: (_, _) => const ConversationsScreen()),
       GoRoute(
         path: '/chat/:clientId',

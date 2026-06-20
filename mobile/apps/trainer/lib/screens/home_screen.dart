@@ -54,7 +54,13 @@ class HomeScreen extends ConsumerWidget {
                 crossAxisSpacing: 12,
                 childAspectRatio: 1.5,
                 children: <Widget>[
-                  _Tile(title: 'Клиенты', value: d.activeClients, sub: 'активных', icon: Icons.group_outlined),
+                  _Tile(
+                    title: 'Клиенты',
+                    value: d.activeClients,
+                    sub: 'активных',
+                    icon: Icons.group_outlined,
+                    onTap: () => context.push('/clients'),
+                  ),
                   _Tile(
                     title: 'Календарь',
                     value: d.plannedSessions,

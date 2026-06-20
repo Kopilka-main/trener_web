@@ -70,7 +70,13 @@ class HomeScreen extends ConsumerWidget {
                 crossAxisSpacing: 12,
                 childAspectRatio: 1.5,
                 children: <Widget>[
-                  _Tile(title: 'Тренировки', value: d.completedWorkouts, sub: 'завершено', icon: Icons.fitness_center),
+                  _Tile(
+                    title: 'Тренировки',
+                    value: d.completedWorkouts,
+                    sub: 'завершено',
+                    icon: Icons.fitness_center,
+                    onTap: () => context.push('/workouts'),
+                  ),
                   _Tile(
                     title: 'Календарь',
                     value: d.plannedSessions,
