@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../api/trainer_auth.dart';
 import '../api/trainer_home.dart';
@@ -54,7 +55,13 @@ class HomeScreen extends ConsumerWidget {
                 childAspectRatio: 1.5,
                 children: <Widget>[
                   _Tile(title: 'Клиенты', value: d.activeClients, sub: 'активных', icon: Icons.group_outlined),
-                  _Tile(title: 'Календарь', value: d.plannedSessions, sub: 'на 30 дней', icon: Icons.calendar_today),
+                  _Tile(
+                    title: 'Календарь',
+                    value: d.plannedSessions,
+                    sub: 'на 30 дней',
+                    icon: Icons.calendar_today,
+                    onTap: () => context.push('/calendar'),
+                  ),
                   _Tile(title: 'Чат', value: d.unread, sub: 'новых', icon: Icons.chat_bubble_outline),
                 ],
               ),
@@ -91,16 +98,26 @@ class _Hero extends StatelessWidget {
 }
 
 class _Tile extends StatelessWidget {
-  const _Tile({required this.title, required this.value, required this.sub, required this.icon});
+  const _Tile({
+    required this.title,
+    required this.value,
+    required this.sub,
+    required this.icon,
+    this.onTap,
+  });
   final String title;
   final int value;
   final String sub;
   final IconData icon;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: Padding(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -119,6 +136,7 @@ class _Tile extends StatelessWidget {
             ),
             Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
           ],
+        ),
         ),
       ),
     );

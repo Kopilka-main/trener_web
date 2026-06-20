@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'screens/calendar_screen.dart';
 import 'screens/connect_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
@@ -34,6 +35,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
       GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
+      GoRoute(path: '/calendar', builder: (_, _) => const CalendarScreen()),
       GoRoute(path: '/connect', builder: (_, _) => const ConnectScreen()),
     ],
   );
