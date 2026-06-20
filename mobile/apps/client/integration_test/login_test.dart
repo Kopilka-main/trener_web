@@ -40,5 +40,10 @@ void main() {
     }
 
     expect(find.text('Mobile Client'), findsOneWidget);
+
+    // Даём фоновой инициализации пушей (getToken → регистрация device-токена) время
+    // завершиться, чтобы устройство попало в device_tokens на сервере.
+    await Future<void>.delayed(const Duration(seconds: 8));
+    await tester.pump();
   });
 }
