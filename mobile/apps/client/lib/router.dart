@@ -11,6 +11,7 @@ import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/splash_screen.dart';
+import 'screens/stub_screen.dart';
 import 'screens/workouts_screen.dart';
 import 'api/client_workouts.dart';
 
@@ -53,6 +54,9 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/connect', builder: (_, _) => const ConnectScreen()),
       GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
+      GoRoute(path: '/progress', builder: (_, _) => const StubScreen(title: 'Прогресс')),
+      GoRoute(path: '/knowledge', builder: (_, _) => const StubScreen(title: 'База знаний')),
+      GoRoute(path: '/notifications', builder: (_, _) => const StubScreen(title: 'Уведомления')),
     ],
   );
 });

@@ -1,3 +1,4 @@
+import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,79 +16,158 @@ String _formatRuDate(String iso) {
   return '${int.tryParse(p[2]) ?? p[2]} ${_ruMonths[(m - 1).clamp(0, 11)]} ${p[0]}';
 }
 
+String _pad2(int n) => n.toString().padLeft(2, '0');
+
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<HomeData> home = ref.watch(clientHomeProvider);
+    final AppColors c = context.colors;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Главная'),
-        actions: <Widget>[
-          IconButton(
-            tooltip: 'Профиль',
-            icon: const Icon(Icons.person_outline),
-            onPressed: () => context.push('/settings'),
+      body: SafeArea(
+        child: home.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (Object e, _) => Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const Text('Не удалось загрузить главную'),
+                const SizedBox(height: 12),
+                FilledButton(
+                    onPressed: () => ref.invalidate(clientHomeProvider),
+                    child: const Text('Повторить')),
+              ],
+            ),
           ),
-        ],
-      ),
-      body: home.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              const Text('Не удалось загрузить главную'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(clientHomeProvider),
-                child: const Text('Повторить'),
-              ),
-            ],
-          ),
-        ),
-        data: (HomeData d) => RefreshIndicator(
-          onRefresh: () async => ref.invalidate(clientHomeProvider),
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: <Widget>[
-              Text(d.name, style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 12),
-              _Hero(value: d.paidBalance, endsAt: d.packageEndsAt),
-              const SizedBox(height: 20),
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 1.5,
-                children: <Widget>[
-                  _Tile(
-                    title: 'Тренировки',
-                    value: d.completedWorkouts,
-                    sub: 'завершено',
-                    icon: Icons.fitness_center,
-                    onTap: () => context.push('/workouts'),
+          data: (HomeData d) => RefreshIndicator(
+            onRefresh: () async => ref.invalidate(clientHomeProvider),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+              children: <Widget>[
+                // Шапка: имя + шестерёнка.
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(d.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
+                    ),
+                    IconButton(
+                      onPressed: () => context.push('/settings'),
+                      icon: Icon(Icons.settings_outlined, size: 28, color: c.inkMuted),
+                      tooltip: 'Профиль',
+                    ),
+                  ],
+                ),
+                // Hero: счётчик оплаченных тренировок.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: <Widget>[
+                          Text(
+                            d.paidBalance < 0 ? '${d.paidBalance}' : _pad2(d.paidBalance),
+                            style: AppFonts.display(
+                                size: 64,
+                                color: d.paidBalance < 0 ? c.danger : c.accent,
+                                letterSpacing: -2),
+                          ),
+                          const SizedBox(width: 12),
+                          Flexible(
+                            child: Text('количество\nтренировок',
+                                style: TextStyle(
+                                    fontSize: 22,
+                                    height: 1.1,
+                                    fontWeight: FontWeight.bold,
+                                    color: c.ink)),
+                          ),
+                        ],
+                      ),
+                      if (d.packageEndsAt != null) ...<Widget>[
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Icon(Icons.local_fire_department, size: 15, color: c.accent),
+                            const SizedBox(width: 5),
+                            Text('до ${_formatRuDate(d.packageEndsAt!)}',
+                                style: TextStyle(
+                                    fontSize: 13, fontWeight: FontWeight.w600, color: c.inkMuted)),
+                          ],
+                        ),
+                      ],
+                    ],
                   ),
-                  _Tile(
-                    title: 'Календарь',
-                    value: d.plannedSessions,
-                    sub: 'на 30 дней',
-                    icon: Icons.calendar_today,
-                    onTap: () => context.push('/calendar'),
-                  ),
-                  _Tile(
-                    title: 'Чат',
-                    value: d.unread,
-                    sub: 'новых',
-                    icon: Icons.chat_bubble_outline,
-                    onTap: () => context.push('/chat'),
-                  ),
-                ],
-              ),
-            ],
+                ),
+                const SizedBox(height: 12),
+                // Сетка плиток 2×3.
+                GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  mainAxisSpacing: 8,
+                  crossAxisSpacing: 8,
+                  childAspectRatio: 1.15,
+                  children: <Widget>[
+                    _Tile(
+                      title: 'Тренировки',
+                      sub: 'журнал занятий',
+                      value: _pad2(d.completedWorkouts),
+                      metric: 'завершено',
+                      icon: Icons.fitness_center,
+                      onTap: () => context.push('/workouts'),
+                    ),
+                    _Tile(
+                      title: 'Календарь',
+                      sub: 'расписание',
+                      value: _pad2(d.plannedSessions),
+                      metric: 'на 30 дней',
+                      icon: Icons.calendar_today,
+                      onTap: () => context.push('/calendar'),
+                    ),
+                    _Tile(
+                      title: 'Чат',
+                      sub: 'тренер на связи',
+                      value: _pad2(d.unread),
+                      metric: 'новых',
+                      icon: Icons.chat_bubble_outline,
+                      primary: d.unread > 0,
+                      onTap: () => context.push('/chat'),
+                    ),
+                    _Tile(
+                      title: 'Прогресс',
+                      sub: 'рекорды и графики',
+                      value: '—',
+                      metric: 'скоро',
+                      icon: Icons.trending_up,
+                      onTap: () => context.push('/progress'),
+                    ),
+                    _Tile(
+                      title: 'База знаний',
+                      sub: 'упражнения',
+                      value: '—',
+                      metric: 'скоро',
+                      icon: Icons.menu_book_outlined,
+                      onTap: () => context.push('/knowledge'),
+                    ),
+                    _Tile(
+                      title: 'Уведомления',
+                      sub: 'всё тихо',
+                      value: '—',
+                      metric: 'скоро',
+                      icon: Icons.notifications_none,
+                      onTap: () => context.push('/notifications'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -95,88 +175,77 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-class _Hero extends StatelessWidget {
-  const _Hero({required this.value, required this.endsAt});
-  final int value;
-  final String? endsAt;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color accent = Theme.of(context).colorScheme.primary;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: <Widget>[
-            Text(
-              value < 0 ? '$value' : value.toString().padLeft(2, '0'),
-              style: TextStyle(fontSize: 64, height: 1, fontWeight: FontWeight.w800, color: accent),
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              'количество\nтренировок',
-              style: TextStyle(fontSize: 20, height: 1.1, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        if (endsAt != null) ...<Widget>[
-          const SizedBox(height: 6),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Icon(Icons.local_fire_department, size: 16, color: accent),
-              const SizedBox(width: 4),
-              Text('до ${_formatRuDate(endsAt!)}',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            ],
-          ),
-        ],
-      ],
-    );
-  }
-}
-
+/// Плитка дашборда в стиле веба: иконка ↖, стрелка ↗, крупное число (display) +
+/// mono-метка, заголовок, подпись. primary → акцентная заливка.
 class _Tile extends StatelessWidget {
   const _Tile({
     required this.title,
-    required this.value,
     required this.sub,
+    required this.value,
+    required this.metric,
     required this.icon,
-    this.onTap,
+    required this.onTap,
+    this.primary = false,
   });
   final String title;
-  final int value;
   final String sub;
+  final String value;
+  final String metric;
   final IconData icon;
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
+  final bool primary;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-        padding: const EdgeInsets.all(14),
+    final AppColors c = context.colors;
+    final Color bg = primary ? c.accent : c.card;
+    final Color fg = primary ? c.accentOn : c.ink;
+    final Color sub2 = primary ? c.accentOn.withValues(alpha: 0.65) : c.inkMutedXl;
+    final Color metricColor = primary ? c.accentOn.withValues(alpha: 0.7) : c.inkMuted;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(18),
+          border: primary ? null : Border.all(color: c.line),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: <Widget>[
-            Icon(icon, size: 20),
+            Row(
+              children: <Widget>[
+                Icon(icon, size: 20, color: fg),
+                const Spacer(),
+                Icon(Icons.north_east, size: 14, color: primary ? c.accentOn.withValues(alpha: 0.7) : c.inkMutedXl),
+              ],
+            ),
+            const Spacer(),
             Row(
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: <Widget>[
-                Text(value.toString().padLeft(2, '0'),
-                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800)),
-                const SizedBox(width: 6),
-                Text(sub, style: Theme.of(context).textTheme.bodySmall),
+                Text(value, style: AppFonts.display(size: 34, color: fg, letterSpacing: -1)),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(metric.toUpperCase(),
+                      maxLines: 2,
+                      style: AppFonts.mono(size: 10, color: metricColor, weight: FontWeight.w700)),
+                ),
               ],
             ),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: fg)),
+            Text(sub,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: sub2)),
           ],
-        ),
         ),
       ),
     );

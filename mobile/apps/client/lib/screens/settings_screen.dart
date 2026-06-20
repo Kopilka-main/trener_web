@@ -1,3 +1,4 @@
+import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -59,6 +60,8 @@ class SettingsScreen extends ConsumerWidget {
               onTap: () => context.push('/connect'),
             ),
             const Divider(),
+            const _ThemeSwitch(),
+            const Divider(),
             ListTile(
               leading: Icon(Icons.logout, color: cs.error),
               title: Text('Выйти', style: TextStyle(color: cs.error)),
@@ -82,6 +85,42 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
     if (ok == true) await ref.read(clientApiProvider).logout();
+  }
+}
+
+/// Переключатель темы: Система / Светлая / Тёмная.
+class _ThemeSwitch extends ConsumerWidget {
+  const _ThemeSwitch();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ThemeMode mode = ref.watch(themeModeProvider);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              const Icon(Icons.brightness_6_outlined, size: 22),
+              const SizedBox(width: 12),
+              const Text('Тема', style: TextStyle(fontSize: 16)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SegmentedButton<ThemeMode>(
+            segments: const <ButtonSegment<ThemeMode>>[
+              ButtonSegment<ThemeMode>(value: ThemeMode.system, label: Text('Система')),
+              ButtonSegment<ThemeMode>(value: ThemeMode.light, label: Text('Светлая')),
+              ButtonSegment<ThemeMode>(value: ThemeMode.dark, label: Text('Тёмная')),
+            ],
+            selected: <ThemeMode>{mode},
+            onSelectionChanged: (Set<ThemeMode> s) =>
+                ref.read(themeModeProvider.notifier).set(s.first),
+          ),
+        ],
+      ),
+    );
   }
 }
 

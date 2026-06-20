@@ -1,3 +1,4 @@
+import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -49,6 +50,8 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
             const Divider(),
+            const _ThemeSwitch(),
+            const Divider(),
             ListTile(
               leading: Icon(Icons.logout, color: cs.error),
               title: Text('Выйти', style: TextStyle(color: cs.error)),
@@ -60,17 +63,54 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
-    final bool? ok = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext ctx) => AlertDialog(
-        title: const Text('Выйти из аккаунта?'),
-        actions: <Widget>[
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Выйти')),
+}
+
+/// Переключатель темы: Система / Светлая / Тёмная.
+class _ThemeSwitch extends ConsumerWidget {
+  const _ThemeSwitch();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ThemeMode mode = ref.watch(themeModeProvider);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: const <Widget>[
+              Icon(Icons.brightness_6_outlined, size: 22),
+              SizedBox(width: 12),
+              Text('Тема', style: TextStyle(fontSize: 16)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SegmentedButton<ThemeMode>(
+            segments: const <ButtonSegment<ThemeMode>>[
+              ButtonSegment<ThemeMode>(value: ThemeMode.system, label: Text('Система')),
+              ButtonSegment<ThemeMode>(value: ThemeMode.light, label: Text('Светлая')),
+              ButtonSegment<ThemeMode>(value: ThemeMode.dark, label: Text('Тёмная')),
+            ],
+            selected: <ThemeMode>{mode},
+            onSelectionChanged: (Set<ThemeMode> s) =>
+                ref.read(themeModeProvider.notifier).set(s.first),
+          ),
         ],
       ),
     );
-    if (ok == true) await ref.read(trainerApiProvider).logout();
   }
+}
+
+Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
+  final bool? ok = await showDialog<bool>(
+    context: context,
+    builder: (BuildContext ctx) => AlertDialog(
+      title: const Text('Выйти из аккаунта?'),
+      actions: <Widget>[
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Выйти')),
+      ],
+    ),
+  );
+  if (ok == true) await ref.read(trainerApiProvider).logout();
 }
