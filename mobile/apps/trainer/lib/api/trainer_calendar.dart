@@ -148,13 +148,66 @@ class TrainerCalendarApi {
 
   /// Сменить статус занятия (провести/отменить/вернуть в план).
   Future<void> setStatus(String id, SessionStatus status) async {
-    final String s = switch (status) {
-      SessionStatus.completed => 'completed',
-      SessionStatus.cancelled => 'cancelled',
-      _ => 'planned',
-    };
-    await _api.patchJson('/api/sessions/$id', <String, String>{'status': s});
+    await _api.patchJson('/api/sessions/$id', <String, String>{'status': _statusStr(status)});
   }
+
+  /// Создать занятие. clientId опционален (можно блок без клиента).
+  Future<void> create({
+    String? clientId,
+    required String date,
+    required String startTime,
+    required int durationMin,
+    String? title,
+    String? location,
+    required bool isOnline,
+  }) async {
+    await _api.postJson('/api/sessions', <String, dynamic>{
+      'clientId': ?clientId,
+      'date': date,
+      'startTime': startTime,
+      'durationMin': durationMin,
+      'title': ?_nullIfEmpty(title),
+      'location': ?_nullIfEmpty(location),
+      'isOnline': isOnline,
+    });
+  }
+
+  /// Обновить занятие (частично). Передаём только нужные поля.
+  Future<void> update(
+    String id, {
+    String? clientId,
+    String? date,
+    String? startTime,
+    int? durationMin,
+    String? title,
+    String? location,
+    bool? isOnline,
+    SessionStatus? status,
+  }) async {
+    await _api.patchJson('/api/sessions/$id', <String, dynamic>{
+      'clientId': ?clientId,
+      'date': ?date,
+      'startTime': ?startTime,
+      'durationMin': ?durationMin,
+      // title/location могут стать пустыми — шлём явно (null допустим).
+      if (title != null) 'title': title.trim().isEmpty ? null : title.trim(),
+      if (location != null) 'location': location.trim().isEmpty ? null : location.trim(),
+      'isOnline': ?isOnline,
+      if (status != null) 'status': _statusStr(status),
+    });
+  }
+
+  Future<void> delete(String id) async {
+    await _api.deleteJson('/api/sessions/$id');
+  }
+
+  static String _statusStr(SessionStatus s) => switch (s) {
+        SessionStatus.completed => 'completed',
+        SessionStatus.cancelled => 'cancelled',
+        _ => 'planned',
+      };
+
+  static String? _nullIfEmpty(String? s) => (s == null || s.trim().isEmpty) ? null : s.trim();
 }
 
 final Provider<TrainerCalendarApi> trainerCalendarApiProvider =

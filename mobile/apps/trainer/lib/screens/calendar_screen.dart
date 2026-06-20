@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/trainer_calendar.dart';
+import 'session_form.dart';
 
 /// Календарь тренера: SessionsCalendar (День/Неделя/Месяц) с именами клиентов +
 /// шит занятия с подтверждением клиента и действиями «Провести»/«Отменить».
@@ -15,6 +16,10 @@ class CalendarScreen extends ConsumerWidget {
     final AppColors c = context.colors;
 
     return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => showSessionForm(context, ref),
+        child: const Icon(Icons.add),
+      ),
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -28,7 +33,9 @@ class CalendarScreen extends ConsumerWidget {
               child: sessions.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (Object e, _) => _Retry(onRetry: () => ref.invalidate(trainerSessionsProvider)),
-                data: (List<Session> all) {
+                data: (List<Session> raw) {
+                  // Онлайн-занятия не показываются в тренерском календаре (как в вебе).
+                  final List<Session> all = raw.where((Session s) => !s.isOnline).toList();
                   final Map<String, Session> byId = <String, Session>{for (final Session s in all) s.id: s};
                   return SessionsCalendar(
                     sessions: all.map((Session s) => s.toCal()).toList(),
@@ -88,6 +95,12 @@ class _SessionSheet extends ConsumerStatefulWidget {
 
 class _SessionSheetState extends ConsumerState<_SessionSheet> {
   bool _busy = false;
+
+  Future<void> _edit() async {
+    final NavigatorState nav = Navigator.of(context);
+    final bool changed = await showSessionForm(context, ref, session: widget.session);
+    if (changed && mounted) nav.pop();
+  }
 
   Future<void> _setStatus(SessionStatus status, String done) async {
     setState(() => _busy = true);
@@ -157,6 +170,13 @@ class _SessionSheetState extends ConsumerState<_SessionSheet> {
             decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
             child: Text(confLabel,
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.inkMuted)),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _busy ? null : _edit,
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: const Text('Изменить занятие'),
+            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
           ),
           if (isPlanned) ...<Widget>[
             const SizedBox(height: 16),
