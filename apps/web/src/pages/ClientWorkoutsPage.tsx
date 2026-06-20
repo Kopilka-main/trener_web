@@ -151,9 +151,11 @@ export function ClientWorkoutsPage() {
               <CurrentCard clientId={id} workout={currentWorkout} />
             ) : (
               <EmptyCurrent
+                onCreateEmpty={createEmpty}
                 onPickTemplate={() => setPicker('template')}
                 onPickHistory={() => setPicker('history')}
                 hasHistory={history.length > 0}
+                pending={createWorkout.isPending}
               />
             )}
           </section>
@@ -164,7 +166,7 @@ export function ClientWorkoutsPage() {
             <SectionTitle title={`История тренировок · ${history.length}`} />
             {historyGroups.map(([dateKey, items]) => (
               <div key={dateKey} className="flex flex-col gap-2">
-                <div className="px-1 font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.04em] text-ink-mutedxl">
+                <div className="px-1 font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.04em] text-accent-text">
                   {formatGroupDate(dateKey)}
                 </div>
                 <ul className="flex flex-col gap-2">
@@ -239,19 +241,30 @@ function CurrentCard({ clientId, workout }: { clientId: string; workout: Workout
 
 /** Пустое состояние ближайшей тренировки (как на макете). */
 function EmptyCurrent({
+  onCreateEmpty,
   onPickTemplate,
   onPickHistory,
   hasHistory,
+  pending,
 }: {
+  onCreateEmpty: () => void;
   onPickTemplate: () => void;
   onPickHistory: () => void;
   hasHistory: boolean;
+  pending: boolean;
 }) {
   return (
     <div className="rounded-3xl border-2 border-dashed border-line p-5 text-center">
-      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-chip text-ink">
+      {/* «+» — сразу создать пустую тренировку (черновик) и перейти к добавлению упражнений. */}
+      <button
+        type="button"
+        onClick={onCreateEmpty}
+        disabled={pending}
+        aria-label="Создать пустую тренировку"
+        className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-chip text-ink active:scale-95 disabled:opacity-50"
+      >
         <Plus size={20} />
-      </div>
+      </button>
       <div className="mt-3 text-[15px] font-semibold text-ink">Тренировка не запланирована</div>
       <div className="mx-auto mt-1 max-w-[280px] text-[12px] text-ink-muted">
         Выберите готовую из базы знаний или повторите одну из прошлых тренировок.

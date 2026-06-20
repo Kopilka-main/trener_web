@@ -192,7 +192,7 @@ export function WorkoutsListPage() {
           </h2>
           {groupByDate(completed).map((g) => (
             <section key={g.label} className="flex flex-col gap-2">
-              <h3 className="px-1 text-[11px] font-semibold uppercase tracking-wide text-ink-mutedxl">
+              <h3 className="px-1 text-[11px] font-semibold uppercase tracking-wide text-accent-text">
                 {g.label}
               </h3>
               <ul className="flex flex-col gap-2">
