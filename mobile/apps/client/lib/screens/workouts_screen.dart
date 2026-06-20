@@ -3,6 +3,43 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/client_workouts.dart';
+import 'active_workout_screen.dart';
+
+/// Создать собственную тренировку: запросить имя → создать draft → открыть проведение.
+Future<void> _createWorkout(BuildContext context, WidgetRef ref) async {
+  // Захватываем messenger/nav до await — context не используется после async gap.
+  final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+  final NavigatorState nav = Navigator.of(context);
+  final TextEditingController ctrl = TextEditingController(text: 'Моя тренировка');
+  final String? name = await showDialog<String>(
+    context: context,
+    builder: (BuildContext ctx) => AlertDialog(
+      title: const Text('Новая тренировка'),
+      content: TextField(
+        controller: ctrl,
+        autofocus: true,
+        decoration: const InputDecoration(labelText: 'Название'),
+      ),
+      actions: <Widget>[
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+        FilledButton(
+          onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+          child: const Text('Создать'),
+        ),
+      ],
+    ),
+  );
+  ctrl.dispose();
+  if (name == null || name.isEmpty) return;
+  try {
+    final Workout w = await ref.read(clientWorkoutsApiProvider).create(name);
+    ref.invalidate(clientWorkoutsProvider);
+    await nav.push(MaterialPageRoute<void>(builder: (_) => ActiveWorkoutScreen(workout: w)));
+    ref.invalidate(clientWorkoutsProvider);
+  } catch (_) {
+    messenger.showSnackBar(const SnackBar(content: Text('Не удалось создать тренировку')));
+  }
+}
 
 const List<String> _ruMonths = <String>[
   'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
@@ -32,6 +69,11 @@ class WorkoutsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Тренировки')),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _createWorkout(context, ref),
+        icon: const Icon(Icons.add),
+        label: const Text('Новая'),
+      ),
       body: workouts.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object e, _) => Center(
@@ -90,12 +132,12 @@ class WorkoutsScreen extends ConsumerWidget {
   }
 }
 
-class _WorkoutCard extends StatelessWidget {
+class _WorkoutCard extends ConsumerWidget {
   const _WorkoutCard({required this.workout});
   final Workout workout;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final String subtitle = workout.completedAt != null
         ? _ruDate(workout.completedAt!)
@@ -104,7 +146,19 @@ class _WorkoutCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () => context.push('/workout/${workout.id}', extra: workout),
+        onTap: () {
+          // Собственная незавершённая тренировка → экран проведения; иначе просмотр.
+          final bool live = workout.createdByClient &&
+              (workout.status == WorkoutStatus.draft || workout.status == WorkoutStatus.active);
+          if (live) {
+            Navigator.of(context)
+                .push(MaterialPageRoute<void>(
+                    builder: (_) => ActiveWorkoutScreen(workout: workout)))
+                .then((_) => ref.invalidate(clientWorkoutsProvider));
+          } else {
+            context.push('/workout/${workout.id}', extra: workout);
+          }
+        },
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(

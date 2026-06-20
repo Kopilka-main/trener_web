@@ -17,6 +17,19 @@ void main() {
   );
 }
 
+/// Маппинг url из пуша в маршрут тренера. Бэк шлёт `/clients/<id>/chat` при
+/// новом сообщении от клиента — открываем соответствующий тред.
+void _openFromPush(GoRouter router, String? url) {
+  if (url == null || url.isEmpty) return;
+  final RegExpMatch? m = RegExp(r'/clients/([^/]+)/chat').firstMatch(url);
+  if (m != null) {
+    router.go('/chats');
+    router.push('/chat/${m.group(1)}');
+  } else {
+    router.go('/chats');
+  }
+}
+
 /// Тренерское приложение Trener: фирменная тема, токен-сессия, роутер
 /// вход → главная.
 class TrainerApp extends ConsumerStatefulWidget {
@@ -37,14 +50,14 @@ class _TrainerAppState extends ConsumerState<TrainerApp> {
 
   @override
   Widget build(BuildContext context) {
+    final GoRouter router = ref.watch(routerProvider);
     // При входе — инициализируем пуши (один раз на переход в authenticated).
     ref.listen<SessionState>(sessionProvider, (SessionState? prev, SessionState next) {
       if (next.status == AuthStatus.authenticated &&
           prev?.status != AuthStatus.authenticated) {
-        ref.read(pushServiceProvider).init();
+        ref.read(pushServiceProvider).init(onTap: (String? url) => _openFromPush(router, url));
       }
     });
-    final GoRouter router = ref.watch(routerProvider);
     return MaterialApp.router(
       title: 'Trener — тренер',
       debugShowCheckedModeBanner: false,

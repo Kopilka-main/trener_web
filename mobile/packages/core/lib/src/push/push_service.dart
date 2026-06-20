@@ -19,7 +19,10 @@ class PushService {
   final ApiClient _api;
   final String _registerPath;
 
-  Future<void> init() async {
+  /// [onTap] вызывается при открытии приложения по тапу на пуш — с `url` из
+  /// data-полей сообщения (например '/chat' или '/clients/<id>/chat'). Приложение
+  /// само маппит url в свой маршрут.
+  Future<void> init({void Function(String? url)? onTap}) async {
     try {
       await Firebase.initializeApp();
       final FirebaseMessaging messaging = FirebaseMessaging.instance;
@@ -27,6 +30,16 @@ class PushService {
       final String? token = await messaging.getToken();
       if (token != null) await _register(token);
       messaging.onTokenRefresh.listen(_register);
+
+      if (onTap != null) {
+        // Холодный старт по тапу на пуш (приложение было закрыто).
+        final RemoteMessage? initial = await messaging.getInitialMessage();
+        if (initial != null) onTap(initial.data['url'] as String?);
+        // Тап по пушу, когда приложение в фоне.
+        FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage m) {
+          onTap(m.data['url'] as String?);
+        });
+      }
     } catch (_) {
       // Нет конфигурации/разрешения/сети — тихо пропускаем.
     }

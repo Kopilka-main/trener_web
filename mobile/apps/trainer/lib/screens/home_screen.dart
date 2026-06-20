@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../api/trainer_auth.dart';
 import '../api/trainer_home.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -16,9 +15,9 @@ class HomeScreen extends ConsumerWidget {
         title: const Text('Главная'),
         actions: <Widget>[
           IconButton(
-            tooltip: 'Выйти',
-            icon: const Icon(Icons.logout),
-            onPressed: () => ref.read(trainerApiProvider).logout(),
+            tooltip: 'Профиль',
+            icon: const Icon(Icons.person_outline),
+            onPressed: () => context.push('/settings'),
           ),
         ],
       ),

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../api/client_auth.dart';
 import '../api/client_home.dart';
 
 const List<String> _ruMonths = <String>[
@@ -27,14 +26,9 @@ class HomeScreen extends ConsumerWidget {
         title: const Text('Главная'),
         actions: <Widget>[
           IconButton(
-            tooltip: 'Подключиться к тренеру',
-            icon: const Icon(Icons.person_add_alt),
-            onPressed: () => context.push('/connect'),
-          ),
-          IconButton(
-            tooltip: 'Выйти',
-            icon: const Icon(Icons.logout),
-            onPressed: () => ref.read(clientApiProvider).logout(),
+            tooltip: 'Профиль',
+            icon: const Icon(Icons.person_outline),
+            onPressed: () => context.push('/settings'),
           ),
         ],
       ),

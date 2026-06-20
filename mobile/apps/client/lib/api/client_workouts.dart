@@ -108,7 +108,36 @@ class Workout {
   int get totalSets => exercises.fold<int>(0, (int a, WorkoutExercise e) => a + e.sets.length);
 }
 
-/// Доступ к тренировкам клиента: список (назначенные + история).
+/// Упражнение из каталога (для добавления в свою тренировку).
+class CatalogExercise {
+  CatalogExercise({
+    required this.id,
+    required this.name,
+    required this.category,
+    required this.defaultReps,
+    required this.defaultWeightKg,
+    required this.defaultTimeSec,
+  });
+
+  final String id;
+  final String name;
+  final String category;
+  final num? defaultReps;
+  final num? defaultWeightKg;
+  final num? defaultTimeSec;
+
+  factory CatalogExercise.fromJson(Map<String, dynamic> j) => CatalogExercise(
+        id: j['id'] as String? ?? '',
+        name: j['name'] as String? ?? 'Упражнение',
+        category: j['category'] as String? ?? '',
+        defaultReps: j['defaultReps'] as num?,
+        defaultWeightKg: j['defaultWeightKg'] as num?,
+        defaultTimeSec: j['defaultTimeSec'] as num?,
+      );
+}
+
+/// Доступ к тренировкам клиента: список, каталог и весь цикл проведения
+/// собственной тренировки (создать → добавить упражнения → старт → лог → завершить).
 class ClientWorkoutsApi {
   ClientWorkoutsApi(this._ref);
   final Ref _ref;
@@ -126,6 +155,78 @@ class ClientWorkoutsApi {
             .compareTo(a.completedAt ?? DateTime.fromMillisecondsSinceEpoch(0)));
     return list;
   }
+
+  Future<Workout> _unwrap(Map<String, dynamic> r) =>
+      Future<Workout>.value(Workout.fromJson((r['workout'] as Map<String, dynamic>?) ?? <String, dynamic>{}));
+
+  Future<List<CatalogExercise>> catalog() async {
+    final Map<String, dynamic> r = await _api.getJson('/api/client/exercises');
+    final List<CatalogExercise> list = ((r['exercises'] as List<dynamic>?) ?? <dynamic>[])
+        .cast<Map<String, dynamic>>()
+        .map(CatalogExercise.fromJson)
+        .toList();
+    list.sort((CatalogExercise a, CatalogExercise b) =>
+        a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return list;
+  }
+
+  /// Создать пустую собственную тренировку (draft, createdByClient).
+  Future<Workout> create(String name) async {
+    final Map<String, dynamic> r = await _api.postJson(
+      '/api/client/workouts',
+      <String, dynamic>{'name': name, 'exercises': <dynamic>[]},
+    );
+    return _unwrap(r);
+  }
+
+  /// Добавить упражнение с `setCount` плановыми подходами (по дефолтам каталога).
+  Future<Workout> addExercise(String wid, CatalogExercise ex, int setCount) async {
+    final Map<String, dynamic> plannedSet = <String, dynamic>{
+      'plannedReps': ?ex.defaultReps,
+      'plannedWeightKg': ?ex.defaultWeightKg,
+      'plannedTimeSec': ?ex.defaultTimeSec,
+    };
+    final Map<String, dynamic> r = await _api.postJson(
+      '/api/client/workouts/$wid/exercises',
+      <String, dynamic>{
+        'exerciseId': ex.id,
+        'sets': List<Map<String, dynamic>>.generate(setCount, (_) => Map<String, dynamic>.from(plannedSet)),
+      },
+    );
+    return _unwrap(r);
+  }
+
+  Future<Workout> start(String wid) async {
+    final Map<String, dynamic> r = await _api.postJson('/api/client/workouts/$wid/start');
+    return _unwrap(r);
+  }
+
+  /// Обновить подход (position:setIndex): факт повторов/веса и/или отметку выполнения.
+  Future<Workout> updateSet(
+    String wid,
+    int position,
+    int setIndex, {
+    num? actualReps,
+    num? actualWeightKg,
+    bool? done,
+  }) async {
+    final Map<String, dynamic> body = <String, dynamic>{
+      'actualReps': ?actualReps,
+      'actualWeightKg': ?actualWeightKg,
+      'done': ?done,
+    };
+    final Map<String, dynamic> r =
+        await _api.patchJson('/api/client/workouts/$wid/sets/$position:$setIndex', body);
+    return _unwrap(r);
+  }
+
+  Future<Workout> complete(String wid, {int? rpe}) async {
+    final Map<String, dynamic> r = await _api.postJson(
+      '/api/client/workouts/$wid/complete',
+      <String, dynamic>{'rpe': ?rpe},
+    );
+    return _unwrap(r);
+  }
 }
 
 final Provider<ClientWorkoutsApi> clientWorkoutsApiProvider =
@@ -133,3 +234,6 @@ final Provider<ClientWorkoutsApi> clientWorkoutsApiProvider =
 
 final FutureProvider<List<Workout>> clientWorkoutsProvider =
     FutureProvider<List<Workout>>((ref) => ref.read(clientWorkoutsApiProvider).load());
+
+final FutureProvider<List<CatalogExercise>> clientCatalogProvider =
+    FutureProvider<List<CatalogExercise>>((ref) => ref.read(clientWorkoutsApiProvider).catalog());

@@ -37,14 +37,17 @@ class _ClientAppState extends ConsumerState<ClientApp> {
 
   @override
   Widget build(BuildContext context) {
+    final GoRouter router = ref.watch(routerProvider);
     // При входе — инициализируем пуши (один раз на переход в authenticated).
     ref.listen<SessionState>(sessionProvider, (SessionState? prev, SessionState next) {
       if (next.status == AuthStatus.authenticated &&
           prev?.status != AuthStatus.authenticated) {
-        ref.read(pushServiceProvider).init();
+        ref.read(pushServiceProvider).init(onTap: (String? url) {
+          // Все клиентские пуши ведут в чат с тренером.
+          if (url != null && url.isNotEmpty) router.go('/chat');
+        });
       }
     });
-    final GoRouter router = ref.watch(routerProvider);
     return MaterialApp.router(
       title: 'Trener — клиент',
       debugShowCheckedModeBanner: false,
