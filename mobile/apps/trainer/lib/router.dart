@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'screens/calendar_screen.dart';
+import 'screens/chat_screen.dart';
+import 'screens/conversations_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
@@ -35,6 +37,14 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
       GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
       GoRoute(path: '/calendar', builder: (_, _) => const CalendarScreen()),
+      GoRoute(path: '/chats', builder: (_, _) => const ConversationsScreen()),
+      GoRoute(
+        path: '/chat/:clientId',
+        builder: (BuildContext context, GoRouterState state) => ChatScreen(
+          clientId: state.pathParameters['clientId'] ?? '',
+          clientName: state.uri.queryParameters['name'] ?? 'Клиент',
+        ),
+      ),
     ],
   );
 });
