@@ -19,6 +19,7 @@ class WorkoutSet {
     required this.plannedReps,
     required this.plannedWeightKg,
     required this.plannedTimeSec,
+    required this.plannedRestSec,
     required this.actualReps,
     required this.actualWeightKg,
     required this.actualTimeSec,
@@ -29,16 +30,20 @@ class WorkoutSet {
   final num? plannedReps;
   final num? plannedWeightKg;
   final num? plannedTimeSec;
+  final num? plannedRestSec;
   final num? actualReps;
   final num? actualWeightKg;
   final num? actualTimeSec;
   final bool done;
+
+  bool get hasFact => actualReps != null || actualWeightKg != null || actualTimeSec != null;
 
   factory WorkoutSet.fromJson(Map<String, dynamic> j) => WorkoutSet(
         setIndex: (j['setIndex'] as num?)?.toInt() ?? 0,
         plannedReps: j['plannedReps'] as num?,
         plannedWeightKg: j['plannedWeightKg'] as num?,
         plannedTimeSec: j['plannedTimeSec'] as num?,
+        plannedRestSec: j['plannedRestSec'] as num?,
         actualReps: j['actualReps'] as num?,
         actualWeightKg: j['actualWeightKg'] as num?,
         actualTimeSec: j['actualTimeSec'] as num?,
@@ -76,6 +81,7 @@ class Workout {
     required this.id,
     required this.name,
     required this.status,
+    required this.startedAt,
     required this.completedAt,
     required this.durationSec,
     required this.rpe,
@@ -87,6 +93,7 @@ class Workout {
   final String id;
   final String name;
   final WorkoutStatus status;
+  final DateTime? startedAt;
   final DateTime? completedAt;
   final int? durationSec;
   final num? rpe;
@@ -96,10 +103,12 @@ class Workout {
 
   factory Workout.fromJson(Map<String, dynamic> j) {
     final String? ca = j['completedAt'] as String?;
+    final String? sa = j['startedAt'] as String?;
     return Workout(
       id: j['id'] as String? ?? '',
       name: (j['name'] as String? ?? '').trim().isNotEmpty ? j['name'] as String : 'Тренировка',
       status: _statusFrom(j['status'] as String?),
+      startedAt: sa != null ? DateTime.tryParse(sa)?.toLocal() : null,
       completedAt: ca != null ? DateTime.tryParse(ca)?.toLocal() : null,
       durationSec: (j['durationSec'] as num?)?.toInt(),
       rpe: j['rpe'] as num?,
@@ -115,31 +124,49 @@ class Workout {
   int get totalSets => exercises.fold<int>(0, (int a, WorkoutExercise e) => a + e.sets.length);
 }
 
-/// Упражнение из каталога (для добавления в свою тренировку).
+/// Упражнение из каталога (для добавления в свою тренировку + карточка инфо).
 class CatalogExercise {
   CatalogExercise({
     required this.id,
     required this.name,
     required this.category,
+    required this.subgroup,
     required this.defaultReps,
     required this.defaultWeightKg,
     required this.defaultTimeSec,
+    required this.restSec,
+    required this.description,
+    required this.equipment,
+    required this.primaryMuscles,
+    required this.secondaryMuscles,
   });
 
   final String id;
   final String name;
   final String category;
+  final String? subgroup;
   final num? defaultReps;
   final num? defaultWeightKg;
   final num? defaultTimeSec;
+  final num? restSec;
+  final String? description;
+  final String? equipment;
+  final String? primaryMuscles;
+  final String? secondaryMuscles;
 
   factory CatalogExercise.fromJson(Map<String, dynamic> j) => CatalogExercise(
         id: j['id'] as String? ?? '',
         name: j['name'] as String? ?? 'Упражнение',
         category: j['category'] as String? ?? '',
+        subgroup: j['subgroup'] as String?,
         defaultReps: j['defaultReps'] as num?,
         defaultWeightKg: j['defaultWeightKg'] as num?,
         defaultTimeSec: j['defaultTimeSec'] as num?,
+        restSec: j['restSec'] as num?,
+        description: j['description'] as String?,
+        equipment: j['equipment'] as String?,
+        primaryMuscles: j['primaryMuscles'] as String?,
+        secondaryMuscles: j['secondaryMuscles'] as String?,
       );
 }
 
@@ -208,19 +235,20 @@ class ClientWorkoutsApi {
     return _unwrap(r);
   }
 
-  /// Добавить упражнение с `setCount` плановыми подходами (по дефолтам каталога).
-  Future<Workout> addExercise(String wid, CatalogExercise ex, int setCount) async {
-    final Map<String, dynamic> plannedSet = <String, dynamic>{
-      'plannedReps': ?ex.defaultReps,
-      'plannedWeightKg': ?ex.defaultWeightKg,
-      'plannedTimeSec': ?ex.defaultTimeSec,
-    };
+  /// Добавить упражнение одним плановым подходом из дефолтов каталога
+  /// (зеркало buildPlannedSet: время в приоритете, иначе повторы+вес; плюс отдых).
+  Future<Workout> addExercise(String wid, CatalogExercise ex) async {
+    final Map<String, dynamic> set = <String, dynamic>{};
+    if (ex.defaultTimeSec != null) {
+      set['plannedTimeSec'] = ex.defaultTimeSec;
+    } else {
+      if (ex.defaultReps != null) set['plannedReps'] = ex.defaultReps;
+      if (ex.defaultWeightKg != null) set['plannedWeightKg'] = ex.defaultWeightKg;
+    }
+    if (ex.restSec != null) set['plannedRestSec'] = ex.restSec;
     final Map<String, dynamic> r = await _api.postJson(
       '/api/client/workouts/$wid/exercises',
-      <String, dynamic>{
-        'exerciseId': ex.id,
-        'sets': List<Map<String, dynamic>>.generate(setCount, (_) => Map<String, dynamic>.from(plannedSet)),
-      },
+      <String, dynamic>{'exerciseId': ex.id, 'sets': <Map<String, dynamic>>[set]},
     );
     return _unwrap(r);
   }
@@ -230,29 +258,25 @@ class ClientWorkoutsApi {
     return _unwrap(r);
   }
 
-  /// Обновить подход (position:setIndex): факт повторов/веса и/или отметку выполнения.
+  /// Обновить подход (position:setIndex). Любое поле опционально: факт
+  /// (повторы/вес/время), план (для редактора черновика) и/или отметку.
+  /// nullable-поля передаём через [body] явно, чтобы можно было ОЧИСТИТЬ значение
+  /// (null отправляется на сервер, а не опускается).
   Future<Workout> updateSet(
     String wid,
     int position,
-    int setIndex, {
-    num? actualReps,
-    num? actualWeightKg,
-    bool? done,
-  }) async {
-    final Map<String, dynamic> body = <String, dynamic>{
-      'actualReps': ?actualReps,
-      'actualWeightKg': ?actualWeightKg,
-      'done': ?done,
-    };
+    int setIndex,
+    Map<String, dynamic> body,
+  ) async {
     final Map<String, dynamic> r =
         await _api.patchJson('/api/client/workouts/$wid/sets/$position:$setIndex', body);
     return _unwrap(r);
   }
 
-  Future<Workout> complete(String wid, {int? rpe}) async {
+  Future<Workout> complete(String wid, {int? durationSec, int? rpe}) async {
     final Map<String, dynamic> r = await _api.postJson(
       '/api/client/workouts/$wid/complete',
-      <String, dynamic>{'rpe': ?rpe},
+      <String, dynamic>{'durationSec': ?durationSec, 'rpe': ?rpe},
     );
     return _unwrap(r);
   }
