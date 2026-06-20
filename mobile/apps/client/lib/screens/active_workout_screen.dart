@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/client_workouts.dart';
+import '../stats/workout_stats.dart';
 
 // ─── Утилиты ───
 
@@ -225,7 +226,20 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
               Text('План тренировки. Нажмите «Начать», чтобы провести.',
                   style: TextStyle(fontSize: 13, color: c.inkMuted)),
               const SizedBox(height: 12),
-              ...exs.map((WorkoutExercise ex) => _ExerciseCard(
+              // Перестановка упражнений перетаскиванием (как SortableList в вебе).
+              ReorderableListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: exs.length,
+                onReorderItem: (int oldI, int newI) {
+                  final List<int> order = exs.map((WorkoutExercise e) => e.position).toList();
+                  final int moved = order.removeAt(oldI);
+                  order.insert(newI, moved);
+                  _run(() => _api.reorderExercises(_w.id, order));
+                },
+                itemBuilder: (BuildContext ctx, int i) {
+                  final WorkoutExercise ex = exs[i];
+                  return _ExerciseCard(
                     key: ValueKey<int>(ex.position),
                     title: labels[ex.position] ?? ex.name,
                     child: Column(
@@ -247,7 +261,9 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                       }).toList(),
                     ),
                     onRemove: () => _run(() => _api.removeExercise(_w.id, ex.position)),
-                  )),
+                  );
+                },
+              ),
               const SizedBox(height: 8),
               _AddExerciseButton(onTap: _busy ? null : _addExercise),
             ],
@@ -749,7 +765,14 @@ class _ExercisePickerState extends ConsumerState<_ExercisePicker> {
             child: catalog.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (Object e, _) => Center(child: Text('Не удалось загрузить каталог', style: TextStyle(color: c.inkMuted))),
-              data: (List<CatalogExercise> all) {
+              data: (List<CatalogExercise> catalogAll) {
+                // Доступны только упражнения из базы знаний — те, что были на
+                // проведённых тренировках (как в вебе).
+                final List<Workout> done = ref.watch(clientWorkoutsProvider).valueOrNull ?? <Workout>[];
+                final Set<String> kbIds =
+                    aggregateExerciseOverview(done).map((ExerciseOverview e) => e.exerciseId).toSet();
+                final List<CatalogExercise> all =
+                    catalogAll.where((CatalogExercise e) => kbIds.contains(e.id)).toList();
                 final List<String> groups = <String>{
                   for (final CatalogExercise e in all)
                     if (e.category.isNotEmpty) e.category,

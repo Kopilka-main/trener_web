@@ -366,6 +366,7 @@ class _HistoryRowState extends ConsumerState<_HistoryRow> {
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
     final Workout w = widget.workout;
+    final Map<int, String> labels = _exerciseLabels(w.exercises);
     final bool canRepeat = w.exercises.any((WorkoutExercise ex) => ex.sets.any((WorkoutSet s) => s.done));
     return Container(
       decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
@@ -439,7 +440,7 @@ class _HistoryRowState extends ConsumerState<_HistoryRow> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
                             Expanded(
-                              child: Text(ex.name,
+                              child: Text(labels[ex.position] ?? ex.name,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -479,6 +480,26 @@ class _HistoryRowState extends ConsumerState<_HistoryRow> {
       ),
     );
   }
+}
+
+/// Метки упражнений: повторяющиеся имена нумеруются «Имя 1», «Имя 2»… (по position).
+Map<int, String> _exerciseLabels(List<WorkoutExercise> exs) {
+  final Map<String, int> total = <String, int>{};
+  for (final WorkoutExercise e in exs) {
+    total[e.name] = (total[e.name] ?? 0) + 1;
+  }
+  final Map<String, int> seen = <String, int>{};
+  final Map<int, String> out = <int, String>{};
+  for (final WorkoutExercise e in <WorkoutExercise>[...exs]..sort((a, b) => a.position - b.position)) {
+    if ((total[e.name] ?? 0) > 1) {
+      final int n = (seen[e.name] ?? 0) + 1;
+      seen[e.name] = n;
+      out[e.position] = '${e.name} $n';
+    } else {
+      out[e.position] = e.name;
+    }
+  }
+  return out;
 }
 
 String _exerciseSummary(WorkoutExercise ex) {

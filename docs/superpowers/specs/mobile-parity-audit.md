@@ -31,8 +31,8 @@
 | ConnectPage        | connect_screen           | ✅     |                                                                     |
 | HomePage           | home_screen              | ✅     | след.занятие, records/база, не-подключён, тренер в шапке; аватар P2 |
 | CalendarPage       | calendar_screen          | ✅     | аудит пройден; P2 отложено (см. журнал)                             |
-| WorkoutsListPage   | workouts_screen          | ⚠️     | проверить шаблоны/повтор/группировку                                |
-| RunWorkoutPage     | active_workout_screen    | ⚠️     | проверить таймер отдыха, reorder, KB-пикер                          |
+| WorkoutsListPage   | workouts_screen          | ✅     | + нумерация повторяющихся упражнений в истории                      |
+| RunWorkoutPage     | active_workout_screen    | ✅     | + drag-перестановка черновика, KB-фильтр пикера; подгруппы P2       |
 | WorkoutDetailPage  | workouts_screen (Detail) | ⚠️     |                                                                     |
 | ChatPage           | chat_screen              | ✅     | аудит пройден; jump/highlight P2 отложено                           |
 | NotificationsPage  | notifications_screen     | ✅     | measure-задачи + прочтение чата при уходе; inline-шит P2            |
