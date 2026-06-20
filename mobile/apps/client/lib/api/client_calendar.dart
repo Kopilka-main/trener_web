@@ -86,6 +86,27 @@ class Session {
   /// Нужно ли действие клиента: запланировано и ещё не подтверждено/отклонено.
   bool get needsAction =>
       status == SessionStatus.planned && confirmation == ClientConfirmation.pending;
+
+  /// Проекция в общую модель календаря (core SessionsCalendar).
+  CalSession toCal() => CalSession(
+        id: id,
+        date: date,
+        startTime: startTime,
+        durationMin: durationMin,
+        isOnline: isOnline,
+        location: location,
+        label: title?.trim().isNotEmpty == true ? title! : 'Занятие',
+        status: switch (status) {
+          SessionStatus.completed => CalStatus.completed,
+          SessionStatus.cancelled => CalStatus.cancelled,
+          _ => CalStatus.planned,
+        },
+        confirmation: switch (confirmation) {
+          ClientConfirmation.confirmed => CalConfirmation.confirmed,
+          ClientConfirmation.declined => CalConfirmation.declined,
+          _ => CalConfirmation.pending,
+        },
+      );
 }
 
 String _isoDate(DateTime d) =>
@@ -100,8 +121,8 @@ class ClientCalendarApi {
   /// Занятия за широкий диапазон (−60…+90 дней), фильтрация на клиенте.
   Future<List<Session>> load() async {
     final DateTime now = DateTime.now();
-    final String from = _isoDate(now.subtract(const Duration(days: 60)));
-    final String to = _isoDate(now.add(const Duration(days: 90)));
+    final String from = _isoDate(now.subtract(const Duration(days: 90)));
+    final String to = _isoDate(now.add(const Duration(days: 180)));
     final Map<String, dynamic> r = await _api.getJson('/api/client/sessions?from=$from&to=$to');
     final List<dynamic> raw = (r['sessions'] as List<dynamic>?) ?? <dynamic>[];
     final List<Session> list =
