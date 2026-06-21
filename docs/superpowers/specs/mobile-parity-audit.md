@@ -40,7 +40,7 @@
 | ExerciseDetailPage | knowledge (Detail)                    | ✅     | PR + история по сессиям (графика нет и в вебе)                                  |
 | StatsPage          | progress_screen                       | ⚠️     | карточки+рекорды вместо графиков; нет вкладки замеров (P1/P2)                   |
 | ProfilePage        | settings_screen + profile_edit_screen | ✅     | имя/ДР/био/контакты/аватар — просмотр+правка (PATCH+фото); код, тема, выход     |
-| TrainerPage        | —                                     | ❌     | профиль тренера глазами клиента                                                 |
+| TrainerPage        | trainer_screen                        | ✅     | профиль тренера (аватар/спец./био/контакты) + отключение; вход из шапки дома    |
 
 ## Матрица покрытия — ТРЕНЕР (`apps/web` → `mobile/apps/trainer`)
 

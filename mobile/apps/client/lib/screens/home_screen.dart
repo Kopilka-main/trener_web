@@ -70,16 +70,20 @@ class HomeScreen extends ConsumerWidget {
                 Row(
                   children: <Widget>[
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(d.linked && trainerName != null ? trainerName : d.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
-                          if (d.linked && trainerName != null)
-                            Text('тренер', style: TextStyle(fontSize: 11, color: c.inkMuted)),
-                        ],
+                      child: GestureDetector(
+                        onTap: d.linked && trainerName != null ? () => context.push('/trainer') : null,
+                        behavior: HitTestBehavior.opaque,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(d.linked && trainerName != null ? trainerName : d.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
+                            if (d.linked && trainerName != null)
+                              Text('тренер · профиль', style: TextStyle(fontSize: 11, color: c.inkMuted)),
+                          ],
+                        ),
                       ),
                     ),
                     IconButton(

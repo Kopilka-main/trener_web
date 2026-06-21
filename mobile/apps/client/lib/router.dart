@@ -14,6 +14,7 @@ import 'screens/progress_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/splash_screen.dart';
+import 'screens/trainer_screen.dart';
 import 'screens/workouts_screen.dart';
 import 'api/client_workouts.dart';
 
@@ -55,6 +56,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(path: '/connect', builder: (_, _) => const ConnectScreen()),
+      GoRoute(path: '/trainer', builder: (_, _) => const TrainerScreen()),
       GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
       GoRoute(path: '/progress', builder: (_, _) => const ProgressScreen()),
       GoRoute(path: '/knowledge', builder: (_, _) => const KnowledgeScreen()),
