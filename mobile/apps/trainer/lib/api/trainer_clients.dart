@@ -36,6 +36,7 @@ class Client {
     required this.contacts,
     required this.hasAccount,
     required this.birthDate,
+    required this.avatarFileId,
   });
 
   final String id;
@@ -49,6 +50,7 @@ class Client {
   final List<ClientContact> contacts;
   final bool hasAccount;
   final String? birthDate; // YYYY-MM-DD
+  final String? avatarFileId;
 
   String get fullName => '$firstName $lastName'.trim();
 
@@ -73,6 +75,7 @@ class Client {
             .toList(),
         hasAccount: (j['accountId'] as String?) != null,
         birthDate: j['birthDate'] as String?,
+        avatarFileId: j['avatarFileId'] as String?,
       );
 }
 

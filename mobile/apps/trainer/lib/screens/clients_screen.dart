@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/trainer_accounting.dart';
+import '../api/trainer_calendar.dart';
 import '../api/trainer_client_card.dart';
 import '../api/trainer_client_stats.dart';
 import '../api/trainer_clients.dart';
@@ -13,110 +14,316 @@ import 'assign_workout_screen.dart';
 import 'client_edit_screen.dart';
 import 'client_medical_screen.dart';
 
-enum _Tab { active, archived }
+enum _Format { all, online, gym }
 
-final StateProvider<_Tab> _tabProvider = StateProvider<_Tab>((_) => _Tab.active);
+const List<String> _ruMonthsGen = <String>[
+  'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+];
 
-class ClientsScreen extends ConsumerWidget {
+String _isoToday() {
+  final DateTime n = DateTime.now();
+  return '${n.year.toString().padLeft(4, '0')}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
+}
+
+/// Ближайшее запланированное занятие на клиента: clientId → Session (минимум по date+time, не раньше сегодня).
+Map<String, Session> _nextSessionByClient(List<Session> sessions) {
+  final String today = _isoToday();
+  final Map<String, Session> out = <String, Session>{};
+  for (final Session s in sessions) {
+    if (s.status != SessionStatus.planned) continue;
+    if (s.date.compareTo(today) < 0) continue;
+    if (s.clientId.isEmpty) continue;
+    final Session? cur = out[s.clientId];
+    if (cur == null ||
+        s.date.compareTo(cur.date) < 0 ||
+        (s.date == cur.date && s.startTime.compareTo(cur.startTime) < 0)) {
+      out[s.clientId] = s;
+    }
+  }
+  return out;
+}
+
+/// Заголовок группы по дате занятия: Сегодня / Завтра / «3 июня».
+String _groupLabel(String date) {
+  final DateTime now = DateTime.now();
+  final String today = _isoToday();
+  final String tomorrow =
+      '${now.add(const Duration(days: 1)).year.toString().padLeft(4, '0')}-${now.add(const Duration(days: 1)).month.toString().padLeft(2, '0')}-${now.add(const Duration(days: 1)).day.toString().padLeft(2, '0')}';
+  if (date == today) return 'Сегодня';
+  if (date == tomorrow) return 'Завтра';
+  final DateTime? d = DateTime.tryParse(date);
+  return d != null ? '${d.day} ${_ruMonthsGen[d.month - 1]}' : date;
+}
+
+class ClientsScreen extends ConsumerStatefulWidget {
   const ClientsScreen({super.key});
+  @override
+  ConsumerState<ClientsScreen> createState() => _ClientsScreenState();
+}
+
+class _ClientsScreenState extends ConsumerState<ClientsScreen> {
+  String _query = '';
+  bool _sortBySession = false; // false → алфавит, true → по ближайшему занятию
+  _Format _format = _Format.all;
+
+  bool _matchesQuery(Client c) {
+    if (_query.isEmpty) return true;
+    final String hay = <String>[
+      c.fullName,
+      if (c.phone != null) c.phone!,
+      ...c.tags,
+    ].join(' ').toLowerCase();
+    return hay.contains(_query);
+  }
+
+  bool _matchesFormat(Client c) => switch (_format) {
+        _Format.all => true,
+        _Format.online => c.isOnline,
+        _Format.gym => !c.isOnline,
+      };
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
     final AsyncValue<List<Client>> clients = ref.watch(trainerClientsProvider);
-    final _Tab tab = ref.watch(_tabProvider);
+    final Map<String, Session> nextByClient =
+        _nextSessionByClient(ref.watch(trainerSessionsProvider).valueOrNull ?? <Session>[]);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Клиенты')),
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.of(context).push<bool>(
           MaterialPageRoute<bool>(builder: (_) => const ClientEditScreen()),
         ),
         child: const Icon(Icons.person_add_alt),
       ),
-      body: clients.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              const Text('Не удалось загрузить клиентов'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(trainerClientsProvider),
-                child: const Text('Повторить'),
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Text('Клиенты', style: AppFonts.display(size: 24, color: c.ink)),
+            ),
+            // Поиск.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: TextField(
+                onChanged: (String v) => setState(() => _query = v.trim().toLowerCase()),
+                decoration: InputDecoration(
+                  hintText: 'Поиск по имени, тегу',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  isDense: true,
+                  filled: true,
+                  fillColor: c.card,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                ),
               ),
-            ],
-          ),
-        ),
-        data: (List<Client> all) {
-          final List<Client> filtered = all.where((Client c) {
-            return tab == _Tab.active
-                ? c.status == ClientStatus.active
-                : c.status == ClientStatus.archived;
-          }).toList();
-          return RefreshIndicator(
-            onRefresh: () async => ref.invalidate(trainerClientsProvider),
-            child: filtered.isEmpty
-                ? ListView(
-                    children: <Widget>[
-                      SizedBox(height: MediaQuery.of(context).size.height * 0.3),
-                      Center(
-                        child: Text(
-                          tab == _Tab.active ? 'Нет активных клиентов' : 'Архив пуст',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
+            ),
+            // Сортировка + фильтр формата.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(
+                children: <Widget>[
+                  GestureDetector(
+                    onTap: () => setState(() => _sortBySession = !_sortBySession),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                      decoration: BoxDecoration(
+                          color: c.card, borderRadius: BorderRadius.circular(20), border: Border.all(color: c.line)),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Icon(_sortBySession ? Icons.sort_by_alpha : Icons.calendar_month_outlined,
+                              size: 15, color: c.inkMuted),
+                          const SizedBox(width: 6),
+                          Text(_sortBySession ? 'По алфавиту' : 'По занятию',
+                              style: AppFonts.mono(size: 11, color: c.inkMuted, weight: FontWeight.w600)),
+                        ],
                       ),
-                    ],
-                  )
-                : ListView.separated(
-                    itemCount: filtered.length,
-                    separatorBuilder: (_, _) => const Divider(height: 1, indent: 72),
-                    itemBuilder: (BuildContext ctx, int i) => _ClientTile(client: filtered[i]),
+                    ),
                   ),
-          );
-        },
-      ),
-      bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-        child: SegmentedButton<_Tab>(
-          segments: const <ButtonSegment<_Tab>>[
-            ButtonSegment<_Tab>(value: _Tab.active, label: Text('Активные')),
-            ButtonSegment<_Tab>(value: _Tab.archived, label: Text('Архив')),
+                  const Spacer(),
+                  _FormatSeg(value: _format, onChanged: (_Format f) => setState(() => _format = f)),
+                ],
+              ),
+            ),
+            Expanded(
+              child: clients.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (Object e, _) => Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text('Не удалось загрузить клиентов', style: TextStyle(color: c.inkMuted)),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                          onPressed: () => ref.invalidate(trainerClientsProvider),
+                          child: const Text('Повторить')),
+                    ],
+                  ),
+                ),
+                data: (List<Client> all) {
+                  final List<Client> filtered =
+                      all.where((Client x) => _matchesQuery(x) && _matchesFormat(x)).toList();
+                  if (filtered.isEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(_query.isEmpty ? 'Пока нет клиентов. Добавьте первого.' : 'Никого не нашлось.',
+                            textAlign: TextAlign.center, style: TextStyle(color: c.inkMuted)),
+                      ),
+                    );
+                  }
+                  return RefreshIndicator(
+                    onRefresh: () async {
+                      ref.invalidate(trainerClientsProvider);
+                      ref.invalidate(trainerSessionsProvider);
+                    },
+                    child: _sortBySession
+                        ? _sessionList(filtered, nextByClient)
+                        : _alphaList(filtered, nextByClient),
+                  );
+                },
+              ),
+            ),
           ],
-          selected: <_Tab>{tab},
-          onSelectionChanged: (Set<_Tab> s) => ref.read(_tabProvider.notifier).state = s.first,
         ),
       ),
     );
   }
+
+  Widget _alphaList(List<Client> clients, Map<String, Session> next) {
+    final List<Client> sorted = <Client>[...clients]
+      ..sort((Client a, Client b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
+      itemCount: sorted.length,
+      itemBuilder: (BuildContext ctx, int i) => _ClientRow(client: sorted[i], next: next[sorted[i].id]),
+    );
+  }
+
+  Widget _sessionList(List<Client> clients, Map<String, Session> next) {
+    // Клиенты с занятием — по (date,time); без занятия — в конец.
+    final List<Client> withS = clients.where((Client c) => next[c.id] != null).toList()
+      ..sort((Client a, Client b) {
+        final Session sa = next[a.id]!;
+        final Session sb = next[b.id]!;
+        final int byDate = sa.date.compareTo(sb.date);
+        return byDate != 0 ? byDate : sa.startTime.compareTo(sb.startTime);
+      });
+    final List<Client> without = clients.where((Client c) => next[c.id] == null).toList()
+      ..sort((Client a, Client b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
+
+    final List<Widget> items = <Widget>[];
+    String? lastHeader;
+    for (final Client cl in withS) {
+      final String h = _groupLabel(next[cl.id]!.date);
+      if (h != lastHeader) {
+        items.add(_GroupHeader(text: h));
+        lastHeader = h;
+      }
+      items.add(_ClientRow(client: cl, next: next[cl.id]));
+    }
+    if (without.isNotEmpty) {
+      items.add(const _GroupHeader(text: 'Без занятий'));
+      items.addAll(without.map((Client cl) => _ClientRow(client: cl, next: null)));
+    }
+    return ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 96), children: items);
+  }
 }
 
-class _ClientTile extends StatelessWidget {
-  const _ClientTile({required this.client});
-  final Client client;
-
+class _FormatSeg extends StatelessWidget {
+  const _FormatSeg({required this.value, required this.onChanged});
+  final _Format value;
+  final ValueChanged<_Format> onChanged;
   @override
   Widget build(BuildContext context) {
-    final ColorScheme cs = Theme.of(context).colorScheme;
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: cs.primary.withValues(alpha: 0.18),
-        child: Text(client.initials,
-            style: TextStyle(color: cs.primary, fontWeight: FontWeight.w700, fontSize: 14)),
+    final AppColors c = context.colors;
+    Widget seg(String label, _Format f) {
+      final bool active = value == f;
+      return GestureDetector(
+        onTap: () => onChanged(f),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+              color: active ? c.accent : Colors.transparent, borderRadius: BorderRadius.circular(16)),
+          child: Text(label,
+              style: AppFonts.mono(size: 11, color: active ? c.accentOn : c.inkMuted, weight: FontWeight.w600)),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(18), border: Border.all(color: c.line)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: <Widget>[
+        seg('Все', _Format.all),
+        seg('Онлайн', _Format.online),
+        seg('Зал', _Format.gym),
+      ]),
+    );
+  }
+}
+
+class _GroupHeader extends StatelessWidget {
+  const _GroupHeader({required this.text});
+  final String text;
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(2, 12, 2, 6),
+        child: Text(text.toUpperCase(),
+            style: AppFonts.mono(size: 11, color: context.colors.inkMutedXl, weight: FontWeight.w700)),
+      );
+}
+
+class _ClientRow extends ConsumerWidget {
+  const _ClientRow({required this.client, required this.next});
+  final Client client;
+  final Session? next;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppColors c = context.colors;
+    final String? fileId = client.avatarFileId;
+    final String? url = fileId != null
+        ? '${ref.read(baseUrlProvider).replaceAll(RegExp(r'/$'), '')}/api/files/$fileId'
+        : null;
+    final String subtitle = next != null
+        ? '${_groupLabel(next!.date)}, ${next!.startTime}'
+        : (client.phone?.trim().isNotEmpty == true ? client.phone!.trim() : 'без телефона');
+    return Opacity(
+      opacity: client.status == ClientStatus.archived ? 0.6 : 1,
+      child: GestureDetector(
+        onTap: () => context.push('/client/${client.id}', extra: client),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
+          child: Row(
+            children: <Widget>[
+              AuthedAvatar(url: url, token: ref.watch(sessionProvider).token, initials: client.initials, radius: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(client.fullName.isNotEmpty ? client.fullName : 'Без имени',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                    Text(subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, size: 18, color: c.inkMutedXl),
+            ],
+          ),
+        ),
       ),
-      title: Text(client.fullName.isNotEmpty ? client.fullName : 'Без имени',
-          maxLines: 1, overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text(
-        <String>[
-          client.isOnline ? 'Онлайн' : 'Очно',
-          if (client.phone?.trim().isNotEmpty == true) client.phone!.trim(),
-        ].join(' · '),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      trailing: Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
-      onTap: () => context.push('/client/${client.id}', extra: client),
     );
   }
 }
