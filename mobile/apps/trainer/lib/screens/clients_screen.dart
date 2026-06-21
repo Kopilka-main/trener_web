@@ -479,12 +479,11 @@ class ClientDetailScreen extends ConsumerWidget {
     ];
 
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-      ),
-      body: RefreshIndicator(
+      // Без AppBar/стрелки назад: шапка-контент (аватар + имя) как в вебе.
+      // Возврат — системным жестом/кнопкой назад.
+      body: SafeArea(
+        bottom: false,
+        child: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(trainerClientProvider(c.id));
           ref.invalidate(clientPackagesProvider(c.id));
@@ -586,6 +585,7 @@ class ClientDetailScreen extends ConsumerWidget {
               Text(c.notes!.trim(), style: TextStyle(fontSize: 14, height: 1.5, color: col.ink)),
             ],
           ],
+        ),
         ),
       ),
     );
@@ -689,14 +689,34 @@ class _HubTileView extends StatelessWidget {
 }
 
 /// Большая acid-fill CTA: иконка гантели + «текущая + история» + тройной шеврон.
-class _WorkoutsCta extends StatelessWidget {
+class _WorkoutsCta extends StatefulWidget {
   const _WorkoutsCta({required this.onTap});
   final VoidCallback onTap;
+  @override
+  State<_WorkoutsCta> createState() => _WorkoutsCtaState();
+}
+
+class _WorkoutsCtaState extends State<_WorkoutsCta> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  /// Треугольная волна 0→1→0 от нормализованной фазы.
+  double _wave(double t) {
+    final double x = ((t % 1.0) + 1.0) % 1.0;
+    return x < 0.5 ? x * 2 : (1 - x) * 2;
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
     return GestureDetector(
-      onTap: onTap,
+      onTap: widget.onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         decoration: BoxDecoration(color: c.accent, borderRadius: BorderRadius.circular(20)),
@@ -720,15 +740,22 @@ class _WorkoutsCta extends StatelessWidget {
                 ],
               ),
             ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                for (int i = 0; i < 3; i++)
-                  Transform.translate(
-                    offset: Offset(-8.0 * i, 0),
-                    child: Icon(Icons.chevron_right, size: 22, color: c.accentOn),
-                  ),
-              ],
+            // «Бегущие» шевроны: волна прозрачности слева→направо + лёгкий сдвиг.
+            AnimatedBuilder(
+              animation: _ctrl,
+              builder: (BuildContext context, _) => Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  for (int i = 0; i < 3; i++)
+                    Transform.translate(
+                      offset: Offset(-8.0 * i + 3 * _wave(_ctrl.value - i * 0.18), 0),
+                      child: Opacity(
+                        opacity: 0.3 + 0.7 * _wave(_ctrl.value - i * 0.18),
+                        child: Icon(Icons.chevron_right, size: 22, color: c.accentOn),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ],
         ),
@@ -825,12 +852,16 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
   }
 
   /// Создать черновик и открыть редактор. [exercises] — план (пустой/из шаблона).
-  Future<void> _createAndOpen(String name, List<Map<String, dynamic>> exercises) async {
+  /// [excluded] — историческая запись (постфактум, без влияния на баланс/календарь).
+  Future<void> _createAndOpen(String name, List<Map<String, dynamic>> exercises,
+      {bool excluded = false}) async {
     if (_busy) return;
     setState(() => _busy = true);
     final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
     try {
-      final String id = await ref.read(trainerAssignApiProvider).assignReturningId(_cid, name, exercises);
+      final String id = await ref
+          .read(trainerAssignApiProvider)
+          .assignReturningId(_cid, name, exercises, excludedFromBalance: excluded);
       ref.invalidate(clientWorkoutsCardProvider(_cid));
       if (!mounted) return;
       setState(() => _busy = false);
@@ -842,33 +873,23 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
     }
   }
 
-  /// Отменить назначенную тренировку (черновик/активную) — удалить.
+  /// Удалить назначенную тренировку (черновик/активную) у клиента.
   Future<void> _cancelWorkout(TWorkout w) async {
-    final bool? ok = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext ctx) => AlertDialog(
-        title: const Text('Отменить тренировку?'),
-        content: Text('«${w.name}» будет удалена у клиента.'),
-        actions: <Widget>[
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Нет')),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: context.colors.danger),
-            child: const Text('Отменить'),
-          ),
-        ],
-      ),
+    final bool ok = await confirmDelete(
+      context,
+      title: 'Удалить тренировку?',
+      message: '«${w.name}» будет удалена у клиента.',
     );
-    if (ok != true) return;
+    if (!ok) return;
     try {
       await ref.read(trainerWorkoutsApiProvider).delete(_cid, w.id);
       ref.invalidate(clientWorkoutsCardProvider(_cid));
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Не удалось отменить')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Не удалось удалить')));
     }
   }
 
-  Future<void> _pickTemplate() async {
+  Future<void> _pickTemplate({bool excluded = false}) async {
     final WorkoutTemplate? t = await showModalBottomSheet<WorkoutTemplate>(
       context: context,
       backgroundColor: context.colors.bg,
@@ -890,7 +911,176 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
               ],
             })
         .toList();
-    await _createAndOpen(t.name, ex);
+    await _createAndOpen(t.name, ex, excluded: excluded);
+  }
+
+  /// Ретроспективно зафиксировать уже проведённую тренировку: лист вариантов
+  /// (пустая / из базы / повторить из истории). Созданный черновик помечается
+  /// excludedFromBalance и финализируется в редакторе датой. Зеркало веб
+  /// HistoryComposeSheet.
+  Future<void> _addToHistoryCompose(List<TWorkout> history) async {
+    final String? choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: context.colors.bg,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (BuildContext ctx) {
+        final AppColors c = ctx.colors;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Text('Добавить в историю',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.ink)),
+                const SizedBox(height: 6),
+                Text(
+                  'Зафиксируйте уже проведённую тренировку. Она не запускается, не влияет на '
+                  'баланс пакета и не попадает в календарь.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: c.inkMuted, height: 1.4),
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, 'empty'),
+                  style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+                  child: const Text('Создать пустую'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx, 'template'),
+                  style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+                  child: const Text('Выбрать из базы'),
+                ),
+                if (history.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 8),
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, 'history'),
+                    style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+                    child: const Text('Повторить из истории'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (choice == null || !mounted) return;
+    switch (choice) {
+      case 'empty':
+        await _createAndOpen('Новая тренировка', <Map<String, dynamic>>[], excluded: true);
+      case 'template':
+        await _pickTemplate(excluded: true);
+      case 'history':
+        await _pickHistory(history, excluded: true);
+    }
+  }
+
+  /// Повтор из истории: выбрать проведённую тренировку, собрать план из её ФАКТА
+  /// (пропущенные подходы исключаются) и создать новую запись.
+  Future<void> _pickHistory(List<TWorkout> history, {bool excluded = false}) async {
+    final TWorkout? picked = await showModalBottomSheet<TWorkout>(
+      context: context,
+      backgroundColor: context.colors.bg,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (BuildContext ctx) {
+        final AppColors c = ctx.colors;
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: Text('Повторить из истории',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.ink)),
+                ),
+                Flexible(
+                  child: ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                    shrinkWrap: true,
+                    itemCount: history.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (BuildContext _, int i) {
+                      final TWorkout w = history[i];
+                      final DateTime? d = w.completedAt;
+                      final String date = d != null
+                          ? '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}'
+                          : '';
+                      return GestureDetector(
+                        onTap: () => Navigator.pop(ctx, w),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+                          child: Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Text(w.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                                    Text(<String>[if (date.isNotEmpty) date, '${w.exerciseCount} упр.'].join(' · '),
+                                        style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+                                  ],
+                                ),
+                              ),
+                              Icon(Icons.chevron_right, size: 20, color: c.inkMuted),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (picked == null || !mounted) return;
+    // Полная тренировка нужна ради подходов (в карточке только счётчик).
+    try {
+      final Workout full = await ref.read(trainerWorkoutsApiProvider).fetch(_cid, picked.id);
+      final List<Map<String, dynamic>> plan = _repeatPlan(full);
+      await _createAndOpen(full.name, plan, excluded: excluded);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Не удалось повторить тренировку')));
+      }
+    }
+  }
+
+  /// План «точь-в-точь» из ФАКТА выполненной тренировки: для каждого упражнения
+  /// берём выполненные подходы (actual → planned), пропущенные исключаем.
+  List<Map<String, dynamic>> _repeatPlan(Workout w) {
+    final List<Map<String, dynamic>> out = <Map<String, dynamic>>[];
+    for (final WorkoutExercise ex in w.exercises) {
+      final List<Map<String, dynamic>> sets = <Map<String, dynamic>>[];
+      for (final WorkoutSet s in ex.sets.where((WorkoutSet s) => s.done)) {
+        final num? reps = s.actualReps ?? s.plannedReps;
+        final num? weight = s.actualWeightKg ?? s.plannedWeightKg;
+        final num? time = s.actualTimeSec ?? s.plannedTimeSec;
+        sets.add(<String, dynamic>{
+          'plannedReps': ?reps,
+          'plannedWeightKg': ?weight,
+          'plannedTimeSec': ?time,
+          'plannedRestSec': ?s.plannedRestSec,
+        });
+      }
+      if (sets.isNotEmpty) {
+        out.add(<String, dynamic>{'exerciseId': ex.exerciseId, 'sets': sets});
+      }
+    }
+    return out;
   }
 
   @override
@@ -940,6 +1130,27 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
                 const SizedBox(height: 8),
                 ..._historyGrouped(c, history),
               ],
+              // Ретро-запись уже проведённой тренировки в историю клиента.
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: _busy ? null : () => _addToHistoryCompose(history),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: c.line, width: 2),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      Icon(Icons.add, size: 18, color: c.inkMuted),
+                      const SizedBox(width: 8),
+                      Text('Добавить в историю',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.inkMuted)),
+                    ],
+                  ),
+                ),
+              ),
             ],
           );
         },
