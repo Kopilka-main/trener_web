@@ -22,18 +22,23 @@ class _WorkoutPick {
 }
 
 /// План из шаблона → тело exercises для POST /clients/:id/workouts.
+/// sets=N в шаблоне разворачиваем в N отдельных подходов (как в вебе) — иначе
+/// тоннаж/счётчик подходов считались бы по одному подходу.
 List<Map<String, dynamic>> _bodyFromTemplate(WorkoutTemplate t) => t.exercises
-    .map((TemplateExercise e) => <String, dynamic>{
-          'exerciseId': e.exerciseId,
-          'sets': <Map<String, dynamic>>[
-            <String, dynamic>{
-              'plannedReps': ?e.reps,
-              'plannedWeightKg': ?e.weightKg,
-              'plannedTimeSec': ?e.timeSec,
-              'plannedRestSec': ?e.restSec,
-            },
-          ],
-        })
+    .expand((TemplateExercise e) => List<Map<String, dynamic>>.generate(
+          e.sets < 1 ? 1 : e.sets,
+          (_) => <String, dynamic>{
+            'exerciseId': e.exerciseId,
+            'sets': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'plannedReps': ?e.reps,
+                'plannedWeightKg': ?e.weightKg,
+                'plannedTimeSec': ?e.timeSec,
+                'plannedRestSec': ?e.restSec,
+              },
+            ],
+          },
+        ))
     .toList();
 
 String _iso(DateTime d) =>
@@ -51,6 +56,7 @@ Future<bool> showSessionForm(
   Session? session,
   DateTime? defaultDate,
   TimeOfDay? defaultTime,
+  String? defaultClientId,
 }) async {
   final bool? changed = await showModalBottomSheet<bool>(
     context: context,
@@ -61,23 +67,26 @@ Future<bool> showSessionForm(
       session: session,
       defaultDate: defaultDate ?? DateTime.now(),
       defaultTime: defaultTime,
+      defaultClientId: defaultClientId,
     ),
   );
   return changed ?? false;
 }
 
 class _SessionForm extends ConsumerStatefulWidget {
-  const _SessionForm({required this.session, required this.defaultDate, this.defaultTime});
+  const _SessionForm(
+      {required this.session, required this.defaultDate, this.defaultTime, this.defaultClientId});
   final Session? session;
   final DateTime defaultDate;
   final TimeOfDay? defaultTime;
+  final String? defaultClientId;
 
   @override
   ConsumerState<_SessionForm> createState() => _SessionFormState();
 }
 
 class _SessionFormState extends ConsumerState<_SessionForm> {
-  late String? _clientId = widget.session?.clientId;
+  late String? _clientId = widget.session?.clientId ?? widget.defaultClientId;
   late DateTime _date =
       widget.session != null ? calParseIso(widget.session!.date) : widget.defaultDate;
   late TimeOfDay _time = widget.session != null

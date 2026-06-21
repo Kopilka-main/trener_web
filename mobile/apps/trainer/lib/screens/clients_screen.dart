@@ -14,8 +14,10 @@ import '../api/trainer_clients.dart';
 import '../api/trainer_medical.dart';
 import '../api/trainer_workouts.dart';
 import 'active_workout_screen.dart';
+import 'calendar_screen.dart';
 import 'client_edit_screen.dart';
 import 'client_medical_screen.dart';
+import 'exercise_progress.dart';
 
 enum _Format { all, online, gym }
 
@@ -423,7 +425,9 @@ class ClientDetailScreen extends ConsumerWidget {
         badge: (plannedSessions > 0 || sessions.isNotEmpty)
             ? _Badge.calendar(planned: plannedSessions, calBalance: calBalance)
             : null,
-        onTap: () => context.push('/calendar'),
+        onTap: () => Navigator.of(context).push<void>(MaterialPageRoute<void>(
+          builder: (_) => CalendarScreen(clientId: c.id, clientName: c.fullName),
+        )),
       ),
       _HubTile(
         key: 'chat',
@@ -898,18 +902,22 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
       builder: (_) => const _TemplatePickerSheet(),
     );
     if (t == null) return;
+    // sets=N в шаблоне → N отдельных подходов (как в вебе), иначе тоннаж занижен.
     final List<Map<String, dynamic>> ex = t.exercises
-        .map((TemplateExercise e) => <String, dynamic>{
-              'exerciseId': e.exerciseId,
-              'sets': <Map<String, dynamic>>[
-                <String, dynamic>{
-                  'plannedReps': ?e.reps,
-                  'plannedWeightKg': ?e.weightKg,
-                  'plannedTimeSec': ?e.timeSec,
-                  'plannedRestSec': ?e.restSec,
-                },
-              ],
-            })
+        .expand((TemplateExercise e) => List<Map<String, dynamic>>.generate(
+              e.sets < 1 ? 1 : e.sets,
+              (_) => <String, dynamic>{
+                'exerciseId': e.exerciseId,
+                'sets': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'plannedReps': ?e.reps,
+                    'plannedWeightKg': ?e.weightKg,
+                    'plannedTimeSec': ?e.timeSec,
+                    'plannedRestSec': ?e.restSec,
+                  },
+                ],
+              },
+            ))
         .toList();
     await _createAndOpen(t.name, ex, excluded: excluded);
   }
@@ -1654,7 +1662,9 @@ class _ClientStatsScreenState extends ConsumerState<ClientStatsScreen> {
   Widget _body(AppColors c) {
     switch (_tab) {
       case _ProgTab.exercises:
-        return ListView(padding: const EdgeInsets.all(16), children: <Widget>[_StatsBlock(clientId: widget.client.id)]);
+        return ListView(
+            padding: const EdgeInsets.all(16),
+            children: <Widget>[ExerciseProgressTab(clientId: widget.client.id)]);
       case _ProgTab.measure:
         return ListView(
           padding: const EdgeInsets.all(16),
@@ -2398,91 +2408,6 @@ class _RequestMeasureButton extends ConsumerWidget {
   }
 }
 
-String _dur(int sec) {
-  if (sec <= 0) return '0';
-  final int h = sec ~/ 3600;
-  final int m = (sec % 3600) ~/ 60;
-  return h > 0 ? '$h ч ${m > 0 ? '$m м' : ''}'.trim() : '$m м';
-}
-
-class _StatsBlock extends ConsumerWidget {
-  const _StatsBlock({required this.clientId});
-  final String clientId;
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final AppColors c = context.colors;
-    final AsyncValue<ClientStatsData> stats = ref.watch(clientStatsProvider(clientId));
-    return stats.when(
-      loading: () => const _Empty('Загрузка…'),
-      error: (Object e, _) => const _Empty('Не удалось загрузить'),
-      data: (ClientStatsData s) {
-        if (s.completedWorkouts == 0) return const _Empty('Нет проведённых тренировок');
-        final List<(String, String)> cells = <(String, String)>[
-          ('${s.completedWorkouts}', 'тренировок'),
-          ('${s.tonnageKg}', 'кг тоннаж'),
-          ('${s.doneSets}', 'подходов'),
-          ('${s.totalReps}', 'повторов'),
-          (s.avgRpe != null ? '${s.avgRpe}' : '—', 'средний RPE'),
-          (_dur(s.totalDurationSec), 'в зале'),
-        ];
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-              childAspectRatio: 1.7,
-              children: cells
-                  .map(((String, String) cell) => Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: c.card,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: c.line),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(cell.$1, style: AppFonts.display(size: 26, color: c.accent, letterSpacing: -1)),
-                            ),
-                            Text(cell.$2.toUpperCase(),
-                                style: AppFonts.mono(size: 9, color: c.inkMuted, weight: FontWeight.w700)),
-                          ],
-                        ),
-                      ))
-                  .toList(),
-            ),
-            if (s.records.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 8),
-              ...s.records.take(8).map((StatRecord r) => Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Row(
-                      children: <Widget>[
-                        Icon(Icons.emoji_events, size: 16, color: c.accent),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(r.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 14, color: c.ink)),
-                        ),
-                        Text(r.isTimeBased ? '${r.value} с' : '${r.value} кг',
-                            style: AppFonts.mono(size: 13, color: c.ink)),
-                      ],
-                    ),
-                  )),
-            ],
-          ],
-        );
-      },
-    );
-  }
-}
+// Сводные плитки заменены пер-упражнение обзором (ExerciseProgressTab) —
+// зеркало веб ExercisesTab. ClientStatsData/StatRecord остались для бейджа хаба.
 

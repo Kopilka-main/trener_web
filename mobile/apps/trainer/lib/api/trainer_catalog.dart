@@ -29,6 +29,7 @@ class TemplateExercise {
   TemplateExercise({
     required this.exerciseId,
     required this.exerciseName,
+    required this.sets,
     required this.reps,
     required this.weightKg,
     required this.timeSec,
@@ -36,6 +37,9 @@ class TemplateExercise {
   });
   final String exerciseId;
   final String exerciseName;
+  /// Число подходов (count). В шаблоне «3 подхода» хранится как sets=3 на одной
+  /// записи — при назначении разворачиваем в N подходов.
+  final int sets;
   final num? reps;
   final num? weightKg;
   final num? timeSec;
@@ -44,6 +48,7 @@ class TemplateExercise {
   factory TemplateExercise.fromJson(Map<String, dynamic> j) => TemplateExercise(
         exerciseId: j['exerciseId'] as String? ?? '',
         exerciseName: j['exerciseName'] as String? ?? 'Упражнение',
+        sets: ((j['sets'] as num?)?.toInt() ?? 1).clamp(1, 99),
         reps: j['reps'] as num?,
         weightKg: j['weightKg'] as num?,
         timeSec: j['timeSec'] as num?,
@@ -52,7 +57,7 @@ class TemplateExercise {
 
   Map<String, dynamic> toPayload() => <String, dynamic>{
         'exerciseId': exerciseId,
-        'sets': 1,
+        'sets': sets,
         'reps': reps,
         'weightKg': weightKg,
         'timeSec': timeSec,
