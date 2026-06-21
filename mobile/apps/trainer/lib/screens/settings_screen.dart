@@ -88,7 +88,7 @@ class SettingsScreen extends ConsumerWidget {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final AppColors c = context.colors;
     return Scaffold(
-      appBar: AppBar(title: const Text('Профиль')),
+      appBar: AppBar(title: const Text('Профиль'), automaticallyImplyLeading: false),
       body: me.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object e, _) => Center(

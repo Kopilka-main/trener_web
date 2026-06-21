@@ -386,6 +386,13 @@ class _ExerciseSelectState extends ConsumerState<_ExerciseSelect> {
   String _query = '';
   String _group = '';
   String _subgroup = '';
+  final TextEditingController _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -425,21 +432,34 @@ class _ExerciseSelectState extends ConsumerState<_ExerciseSelect> {
                       e.subgroup!,
                 }.toList()
                 ..sort());
-          final List<TExercise> list = all.where((TExercise e) {
+          final List<TExercise> filtered = all.where((TExercise e) {
             if (_group.isNotEmpty && e.category != _group) return false;
             if (_subgroup.isNotEmpty && e.subgroup != _subgroup) return false;
-            if (_query.isNotEmpty && !e.name.toLowerCase().contains(_query)) return false;
             return true;
           }).toList();
+          // Поиск/ранжирование как в вебе (rankBySearch): ё→е, слова в любом
+          // порядке, префикс/подстрока/опечатка, сортировка по релевантности.
+          final List<TExercise> list = rankBySearch(filtered, _query, (TExercise e) => e.name);
           return Column(
             children: <Widget>[
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                 child: TextField(
-                  onChanged: (String v) => setState(() => _query = v.trim().toLowerCase()),
+                  controller: _searchCtrl,
+                  onChanged: (String v) => setState(() => _query = v),
                   decoration: InputDecoration(
                     hintText: 'Поиск упражнения',
                     prefixIcon: const Icon(Icons.search, size: 20),
+                    suffixIcon: _query.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.close, size: 18),
+                            tooltip: 'Очистить',
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              setState(() => _query = '');
+                            },
+                          ),
                     filled: true,
                     fillColor: c.card,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
@@ -477,6 +497,7 @@ class _ExerciseSelectState extends ConsumerState<_ExerciseSelect> {
                   ),
                 ),
               // Второй уровень — подгруппы выбранной группы.
+              if (subgroups.isNotEmpty) const SizedBox(height: 8),
               if (subgroups.isNotEmpty)
                 SizedBox(
                   height: 34,

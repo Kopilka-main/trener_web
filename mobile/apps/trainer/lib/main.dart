@@ -10,6 +10,7 @@ void main() {
   // Полный перехват ошибок Dart → журнал (файл crash.log + logcat APPCRASH).
   runGuarded(() async {
     // Тему грузим ДО первого кадра — иначе перескок light→dark на старте.
+    // (Шрифты забандлены в ассеты core → грузятся синхронно, прогрев не нужен.)
     final ThemeMode themeMode = await loadThemeMode();
     runApp(
       ProviderScope(

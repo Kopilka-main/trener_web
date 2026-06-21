@@ -21,6 +21,13 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
   String _query = '';
   String _group = '';
   String _subgroup = ''; // второй уровень (только вкладка «Упражнения»)
+  final TextEditingController _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,10 +69,21 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: TextField(
-                onChanged: (String v) => setState(() => _query = v.trim().toLowerCase()),
+                controller: _searchCtrl,
+                onChanged: (String v) => setState(() => _query = v),
                 decoration: InputDecoration(
                   hintText: 'Поиск',
                   prefixIcon: const Icon(Icons.search, size: 20),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          tooltip: 'Очистить',
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            setState(() => _query = '');
+                          },
+                        ),
                   filled: true,
                   fillColor: c.card,
                   isDense: true,
@@ -100,16 +118,17 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
                 all
                     .where((TExercise e) => e.category == _group && (e.subgroup?.isNotEmpty == true))
                     .map((TExercise e) => e.subgroup!));
-        final List<TExercise> list = all.where((TExercise e) {
+        final List<TExercise> filtered = all.where((TExercise e) {
           if (_group.isNotEmpty && e.category != _group) return false;
           if (_subgroup.isNotEmpty && e.subgroup != _subgroup) return false;
-          if (_query.isNotEmpty && !e.name.toLowerCase().contains(_query)) return false;
           return true;
         }).toList();
+        final List<TExercise> list = rankBySearch(filtered, _query, (TExercise e) => e.name);
         if (all.isEmpty) return _empty(c, 'Пока нет упражнений. Добавьте первое.');
         return Column(
           children: <Widget>[
             _groupChips(c, groups),
+            if (subgroups.isNotEmpty) const SizedBox(height: 6),
             if (subgroups.isNotEmpty) _subgroupChips(c, subgroups),
             Expanded(
               child: list.isEmpty
@@ -186,11 +205,12 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
             if (t.categoryTag?.isNotEmpty == true) t.categoryTag!,
         }.toList()
           ..sort();
-        final List<WorkoutTemplate> list = all.where((WorkoutTemplate t) {
+        final List<WorkoutTemplate> filtered = all.where((WorkoutTemplate t) {
           if (_group.isNotEmpty && t.categoryTag != _group) return false;
-          if (_query.isNotEmpty && !t.name.toLowerCase().contains(_query)) return false;
           return true;
         }).toList();
+        final List<WorkoutTemplate> list =
+            rankBySearch(filtered, _query, (WorkoutTemplate t) => t.name);
         if (all.isEmpty) return _empty(c, 'Пока нет тренировок. Создайте первую.');
         return Column(
           children: <Widget>[

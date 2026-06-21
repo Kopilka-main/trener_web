@@ -29,7 +29,7 @@ class ConversationsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<List<Conversation>> convos = ref.watch(trainerConversationsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Чаты')),
+      appBar: AppBar(title: const Text('Чаты'), automaticallyImplyLeading: false),
       body: convos.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object e, _) => Center(
