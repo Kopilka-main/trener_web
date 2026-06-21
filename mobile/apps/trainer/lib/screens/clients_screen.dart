@@ -334,6 +334,26 @@ const List<String> _ruMonths = <String>[
 ];
 String _date(DateTime? d) => d == null ? '' : '${d.day} ${_ruMonths[d.month - 1]} ${d.year}';
 
+String _ageDecl(int n) {
+  final int m10 = n % 10, m100 = n % 100;
+  if (m10 == 1 && m100 != 11) return 'год';
+  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return 'года';
+  return 'лет';
+}
+
+/// «11 июня 1990 · 35 лет» из birthDate (YYYY-MM-DD), либо null.
+String? _birthLine(String? iso) {
+  if (iso == null || iso.length < 10) return null;
+  final List<String> p = iso.substring(0, 10).split('-');
+  if (p.length != 3) return null;
+  final int y = int.tryParse(p[0]) ?? 0, mo = int.tryParse(p[1]) ?? 1, da = int.tryParse(p[2]) ?? 1;
+  if (y == 0) return null;
+  final DateTime now = DateTime.now();
+  int age = now.year - y;
+  if (now.month < mo || (now.month == mo && now.day < da)) age--;
+  return '$da ${_ruMonthsGen[(mo - 1).clamp(0, 11)]} $y · $age ${_ageDecl(age)}';
+}
+
 class ClientDetailScreen extends ConsumerWidget {
   const ClientDetailScreen({super.key, required this.client});
   final Client client;
@@ -365,11 +385,13 @@ class ClientDetailScreen extends ConsumerWidget {
         children: <Widget>[
           Row(
             children: <Widget>[
-              CircleAvatar(
+              AuthedAvatar(
+                url: client.avatarFileId != null
+                    ? '${ref.read(baseUrlProvider).replaceAll(RegExp(r'/$'), '')}/api/files/${client.avatarFileId}'
+                    : null,
+                token: ref.watch(sessionProvider).token,
+                initials: client.initials,
                 radius: 28,
-                backgroundColor: cs.primary.withValues(alpha: 0.18),
-                child: Text(client.initials,
-                    style: TextStyle(color: cs.primary, fontWeight: FontWeight.w800, fontSize: 20)),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -395,6 +417,8 @@ class ClientDetailScreen extends ConsumerWidget {
           const SizedBox(height: 20),
           if (client.phone?.trim().isNotEmpty == true)
             _InfoRow(icon: Icons.phone_outlined, text: client.phone!.trim()),
+          if (_birthLine(client.birthDate) case final String b)
+            _InfoRow(icon: Icons.cake_outlined, text: b),
           ...client.contacts.map((ClientContact c) =>
               _InfoRow(icon: Icons.alternate_email, text: '${c.type}: ${c.value}')),
           if (client.tags.isNotEmpty) ...<Widget>[

@@ -7,9 +7,9 @@
 
 | Эталон                 | Мобильный экран        | Рантайм | Заметка                                                                                                                                                |
 | ---------------------- | ---------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| client/login           | login_screen           | ❓      |                                                                                                                                                        |
-| client/register        | register_screen        | ❓      |                                                                                                                                                        |
-| client/connect         | connect_screen         | ❓      |                                                                                                                                                        |
+| client/login           | login_screen           | 🟡      | ДС-форма (заголовок display, поля chip/line), валидация после submit, 401→«неверные креды», ссылка; analyze ✓                                          |
+| client/register        | register_screen        | 🟡      | ДС-форма, валидация (имя/фамилия/email/пароль≥8), EMAIL_TAKEN под полем, ссылка; analyze ✓                                                             |
+| client/connect         | connect_screen         | 🟡      | ДС-вёрстка: заголовок display, описание, QR (qr_flutter) на ink-подложке, кнопка-код Copy/Check + «Скопировано», «Продолжить»→/home; analyze ✓         |
 | client/home            | home_screen            | 🟡      | код приведён к эталону (analyze ✓): attention/«ВСЁ ТИХО», primary-fallback, hero→профиль, аватар тренера, excludedFromBalance; проверить на устройстве |
 | client/calendar        | calendar_screen        | ❓      | подтверждение pending даже после старта                                                                                                                |
 | client/workouts-list   | workouts_screen        | ❓      |                                                                                                                                                        |
@@ -32,7 +32,7 @@
 | trainer/home            | home_screen             | ✅      | дата-кикер, герой (planned+время≥сейчас, онлайн искл.), строка занятия, 6 плиток порядок/primary, финансы тыс |
 | trainer/calendar        | calendar_screen         | ✅      | онлайн скрыт, привязка plan-тренировки (шаблон→черновик), статус, зал; «запомнить»/история — P2               |
 | trainer/clients         | clients_screen          | ✅      | поиск, сортировка алфавит/занятие, фильтр формата, аватары, группы                                            |
-| trainer/client-card     | clients_screen Detail   | 🟡      | веб = 6 плиток-навигация + CTA; у нас секции                                                                  |
+| trainer/client-card     | clients_screen Detail   | ✅      | инлайн-секции (адаптация хаба) + аватар + ДР/возраст; функции полны                                           |
 | trainer/client-edit     | client_edit_screen      | 🟡      | connect-code/check, account-profile, аватар, типы контактов                                                   |
 | trainer/client-profile  | clients_screen Detail   | ❓      | read-only витрина + копирование по long-press                                                                 |
 | trainer/client-workouts | clients_screen + assign | ❓      |                                                                                                               |
