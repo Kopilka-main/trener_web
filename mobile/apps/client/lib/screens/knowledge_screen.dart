@@ -46,10 +46,6 @@ const List<String> _ruMonths = <String>[
 /// «12 июн» — день + ru-месяц (зеркало web shortDate, без года).
 String _date(DateTime? d) => d == null ? '' : '${d.day} ${_ruMonths[d.month - 1]}';
 
-String _pr(ExerciseOverview e) {
-  if (e.isTimeBased) return e.maxTimeSec != null ? '${e.maxTimeSec} с' : '—';
-  return e.maxWeightKg != null ? '${e.maxWeightKg} кг' : '—';
-}
 
 /// База знаний клиента — read-only зеркало тренерской: поиск, табы «Тренировки /
 /// Упражнения», двухуровневые чипы (группа → подгруппа). Тренировки — проведённые
@@ -203,10 +199,6 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
                       ex: ex,
                       cat: ce,
                       thumbUrl: catalogMediaUrl(base, ce?.thumbUrl ?? ce?.imageUrl),
-                      subtitle: <String>[
-                        if (ce?.category.isNotEmpty == true) ce!.category,
-                        if (ce?.subgroup?.isNotEmpty == true) ce!.subgroup!,
-                      ].join(' · '),
                       onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
                           builder: (_) => ExerciseDetailScreen(exerciseId: ex.exerciseId))),
                     );
@@ -406,26 +398,25 @@ class _Chip extends StatelessWidget {
   }
 }
 
+/// Карточка упражнения — один-в-один с тренерской (thumb 64 + имя + метрики).
 class _ExRow extends StatelessWidget {
-  const _ExRow({required this.ex, required this.cat, required this.thumbUrl, required this.subtitle, required this.onTap});
+  const _ExRow({required this.ex, required this.cat, required this.thumbUrl, required this.onTap});
   final ExerciseOverview ex;
   final CatalogExercise? cat;
   final String? thumbUrl;
-  final String subtitle;
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
-    final String pr = 'PR ${_pr(ex)}';
     return GestureDetector(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
+        padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
+        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
         child: Row(
           children: <Widget>[
-            CatalogThumb(url: thumbUrl, size: 48),
+            CatalogThumb(url: thumbUrl, size: 64, radius: 10),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -434,26 +425,9 @@ class _ExRow extends StatelessWidget {
                   Text(ex.name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, height: 1.2, color: c.ink)),
-                  if (subtitle.isNotEmpty) ...<Widget>[
-                    const SizedBox(height: 2),
-                    Text(subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12, color: c.inkMuted)),
-                  ],
-                  // Иконки-метрики из каталога (как у тренера).
-                  if (cat != null) ...<Widget>[
-                    const SizedBox(height: 4),
-                    _CatMetrics(ex: cat!),
-                  ],
-                  const SizedBox(height: 2),
-                  Text(
-                    <String>[pr, if (ex.lastDate != null) _date(ex.lastDate)].join(' · '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500),
-                  ),
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                  const SizedBox(height: 4),
+                  _CatMetrics(cat: cat),
                 ],
               ),
             ),
@@ -465,15 +439,17 @@ class _ExRow extends StatelessWidget {
   }
 }
 
-/// Иконки-метрики упражнения из каталога: повторы/вес/время/отдых (как у тренера).
+/// Подпись карточки: категория + повторы/вес/время/отдых (зеркало тренерского
+/// _MetricsRow). Значения берём из каталога; если упражнения нет — пусто.
 class _CatMetrics extends StatelessWidget {
-  const _CatMetrics({required this.ex});
-  final CatalogExercise ex;
+  const _CatMetrics({required this.cat});
+  final CatalogExercise? cat;
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
+    final CatalogExercise? ex = cat;
     Widget metric(IconData icon, num? v) => Padding(
-          padding: const EdgeInsets.only(right: 12),
+          padding: const EdgeInsets.only(right: 10),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
@@ -486,10 +462,22 @@ class _CatMetrics extends StatelessWidget {
         );
     return Row(
       children: <Widget>[
-        metric(Icons.repeat, ex.defaultReps),
-        metric(Icons.fitness_center, ex.defaultWeightKg),
-        metric(Icons.timer_outlined, ex.defaultTimeSec),
-        metric(Icons.bedtime_outlined, ex.restSec),
+        if (ex?.category.isNotEmpty == true)
+          Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: Text(ex!.category,
+                style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w600)),
+          ),
+        Expanded(
+          child: Row(
+            children: <Widget>[
+              metric(Icons.repeat, ex?.defaultReps),
+              metric(Icons.fitness_center, ex?.defaultWeightKg),
+              metric(Icons.timer_outlined, ex?.defaultTimeSec),
+              metric(Icons.bedtime_outlined, ex?.restSec),
+            ],
+          ),
+        ),
       ],
     );
   }
