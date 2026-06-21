@@ -16,6 +16,8 @@ class TExercise {
     this.equipment,
     this.primaryMuscles,
     this.secondaryMuscles,
+    this.isGlobal = false,
+    this.note,
   });
   final String id;
   final String name;
@@ -29,6 +31,8 @@ class TExercise {
   final String? equipment;
   final String? primaryMuscles;
   final String? secondaryMuscles;
+  final bool isGlobal;
+  final String? note;
 
   factory TExercise.fromJson(Map<String, dynamic> j) => TExercise(
         id: j['id'] as String? ?? '',
@@ -43,6 +47,8 @@ class TExercise {
         equipment: j['equipment'] as String?,
         primaryMuscles: j['primaryMuscles'] as String?,
         secondaryMuscles: j['secondaryMuscles'] as String?,
+        isGlobal: j['isGlobal'] as bool? ?? false,
+        note: j['note'] as String?,
       );
 
   /// Один плановый подход из дефолтов (время в приоритете, иначе повторы+вес; + отдых).

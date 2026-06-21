@@ -63,9 +63,9 @@
 | MessagesPage       | conversations_screen    | ✅     |                                                                                                            |
 | ClientChatPage     | chat_screen             | ✅     |                                                                                                            |
 | NotificationsPage  | notifications_screen    | ⚠️     | actionable по занятиям (отклонён/сегодня/ждёт/подтв.); ДР/балансы P2                                       |
-| KnowledgeBasePage  | —                       | ❌     | каталог упражнений тренера                                                                                 |
-| ExerciseEditPage   | —                       | ❌     | создание/правка упражнения                                                                                 |
-| TemplateEditPage   | —                       | ❌     | шаблоны тренировок                                                                                         |
+| KnowledgeBasePage  | knowledge_screen        | ✅     | вкладки Тренировки/Упражнения, чипы групп, поиск, FAB; вход из шапки главной                               |
+| ExerciseEditPage   | exercise_edit_screen    | ✅     | группа/подгруппа/имя/описание/дефолты/отдых; системное → личная копия; удаление                            |
+| TemplateEditPage   | template_edit_screen    | ✅     | шаг выбора (счётчик подходов) + детали/тип/порядок/правка позиций; удаление                                |
 | AccountingPage     | —                       | ❌     | бухгалтерия/доходы                                                                                         |
 | ProfilePage        | settings_screen         | ⚠️     | аватар, редактирование                                                                                     |
 

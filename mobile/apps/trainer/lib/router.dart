@@ -9,6 +9,7 @@ import 'screens/chat_screen.dart';
 import 'screens/clients_screen.dart';
 import 'screens/conversations_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/knowledge_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/login_screen.dart';
@@ -43,6 +44,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/calendar', builder: (_, _) => const CalendarScreen()),
       GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
       GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),
+      GoRoute(path: '/knowledge', builder: (_, _) => const KnowledgeScreen()),
       GoRoute(path: '/clients', builder: (_, _) => const ClientsScreen()),
       GoRoute(
         path: '/client/:id',

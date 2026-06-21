@@ -44,6 +44,11 @@ class HomeScreen extends ConsumerWidget {
                           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
                     ),
                     IconButton(
+                      onPressed: () => context.push('/knowledge'),
+                      icon: Icon(Icons.menu_book_outlined, size: 26, color: c.inkMuted),
+                      tooltip: 'База знаний',
+                    ),
+                    IconButton(
                       onPressed: () => context.push('/settings'),
                       icon: Icon(Icons.settings_outlined, size: 28, color: c.inkMuted),
                       tooltip: 'Профиль',
