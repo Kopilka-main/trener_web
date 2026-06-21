@@ -105,6 +105,16 @@ class TrainerChatApi {
     }
   }
 
+  /// Удалить одно сообщение из диалога.
+  Future<bool> deleteMessage(String clientId, String messageId) async {
+    try {
+      await _api.deleteJson('/api/clients/$clientId/messages/$messageId');
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> markRead(String clientId) async {
     try {
       await _api.postJson('/api/clients/$clientId/messages/read');

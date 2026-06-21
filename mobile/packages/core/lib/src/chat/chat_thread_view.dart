@@ -23,6 +23,7 @@ class ChatThreadView extends StatefulWidget {
     this.onPin,
     this.onUnpin,
     this.onTask,
+    this.onDelete,
   });
 
   final List<ChatMessage> messages;
@@ -45,6 +46,7 @@ class ChatThreadView extends StatefulWidget {
   final Future<void> Function(ChatMessage message)? onPin;
   final Future<void> Function(ChatMessage message)? onUnpin;
   final Future<void> Function(ChatMessage message)? onTask;
+  final Future<void> Function(ChatMessage message)? onDelete;
 
   @override
   State<ChatThreadView> createState() => _ChatThreadViewState();
@@ -52,14 +54,33 @@ class ChatThreadView extends StatefulWidget {
 
 class _ChatThreadViewState extends State<ChatThreadView> {
   final TextEditingController _ctrl = TextEditingController();
+  final ScrollController _scroll = ScrollController();
+  final Map<String, GlobalKey> _keys = <String, GlobalKey>{};
   bool _sending = false;
   ChatMessage? _replyTo;
   int _pinIdx = 0;
+  String? _highlightId; // подсветка сообщения при переходе по цитате
+
+  GlobalKey _keyFor(String id) => _keys.putIfAbsent(id, () => GlobalKey());
 
   @override
   void dispose() {
     _ctrl.dispose();
+    _scroll.dispose();
     super.dispose();
+  }
+
+  /// Переход к исходному сообщению по тапу на цитату ответа: прокручиваем к нему
+  /// и кратко подсвечиваем. Если сообщение далеко (ещё не построено) — игнор.
+  Future<void> _jumpTo(String id) async {
+    final BuildContext? ctx = _keys[id]?.currentContext;
+    if (ctx == null) return;
+    await Scrollable.ensureVisible(ctx,
+        duration: const Duration(milliseconds: 300), alignment: 0.4, curve: Curves.easeInOut);
+    if (!mounted) return;
+    setState(() => _highlightId = id);
+    await Future<void>.delayed(const Duration(milliseconds: 1300));
+    if (mounted) setState(() => _highlightId = null);
   }
 
   Future<void> _send() async {
@@ -123,6 +144,16 @@ class _ChatThreadViewState extends State<ChatThreadView> {
                   widget.onTask?.call(m);
                 },
               ),
+            if (widget.onDelete != null)
+              _ActionTile(
+                icon: Icons.delete_outline,
+                label: 'Удалить',
+                danger: true,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  widget.onDelete?.call(m);
+                },
+              ),
           ],
         ),
       ),
@@ -154,23 +185,36 @@ class _ChatThreadViewState extends State<ChatThreadView> {
               : RefreshIndicator(
                   onRefresh: widget.onRefresh ?? () async {},
                   child: ListView.builder(
+                    controller: _scroll,
                     reverse: true,
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                     itemCount: ordered.length,
                     itemBuilder: (BuildContext ctx, int i) {
                       final ChatMessage m = ordered[i];
-                      final Widget bubble = _Bubble(
-                        message: m,
-                        myRole: widget.myRole,
-                        otherReadAt: widget.otherReadAt,
-                        onCompleteTask: widget.onCompleteTask,
+                      final bool hl = _highlightId == m.id;
+                      final Widget keyed = KeyedSubtree(
+                        key: _keyFor(m.id),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          decoration: BoxDecoration(
+                            color: hl ? context.colors.accent.withValues(alpha: 0.12) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: _Bubble(
+                            message: m,
+                            myRole: widget.myRole,
+                            otherReadAt: widget.otherReadAt,
+                            onCompleteTask: widget.onCompleteTask,
+                            onJumpTo: _jumpTo,
+                          ),
+                        ),
                       );
-                      if (m.kind == MessageKind.system) return bubble;
-                      // Долгое нажатие → меню действий (ответить/закрепить/задача).
+                      if (m.kind == MessageKind.system) return keyed;
+                      // Долгое нажатие → меню действий (ответить/закрепить/задача/удалить).
                       return GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onLongPress: () => _showActions(m),
-                        child: bubble,
+                        child: keyed,
                       );
                     },
                   ),
@@ -195,16 +239,18 @@ class _ChatThreadViewState extends State<ChatThreadView> {
 
 /// Пункт меню действий (долгое нажатие на сообщение).
 class _ActionTile extends StatelessWidget {
-  const _ActionTile({required this.icon, required this.label, required this.onTap});
+  const _ActionTile({required this.icon, required this.label, required this.onTap, this.danger = false});
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final bool danger;
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
+    final Color color = danger ? c.danger : c.ink;
     return ListTile(
-      leading: Icon(icon, size: 22, color: c.ink),
-      title: Text(label, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: c.ink)),
+      leading: Icon(icon, size: 22, color: color),
+      title: Text(label, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: color)),
       onTap: onTap,
     );
   }
@@ -281,11 +327,13 @@ class _Bubble extends StatelessWidget {
     required this.myRole,
     required this.otherReadAt,
     required this.onCompleteTask,
+    this.onJumpTo,
   });
   final ChatMessage message;
   final SenderRole myRole;
   final DateTime? otherReadAt;
   final Future<void> Function(String id)? onCompleteTask;
+  final Future<void> Function(String id)? onJumpTo;
 
   String _time(DateTime t) =>
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
@@ -381,7 +429,15 @@ class _Bubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            if (message.replyTo != null) _ReplyQuote(reply: message.replyTo!, myRole: myRole, onColor: textColor),
+            if (message.replyTo != null)
+              _ReplyQuote(
+                reply: message.replyTo!,
+                myRole: myRole,
+                onColor: textColor,
+                onTap: (onJumpTo != null && message.replyTo!.id.isNotEmpty)
+                    ? () => onJumpTo!(message.replyTo!.id)
+                    : null,
+              ),
             Text(message.body, style: TextStyle(fontSize: 14, color: textColor)),
             const SizedBox(height: 2),
             Row(
@@ -405,13 +461,16 @@ class _Bubble extends StatelessWidget {
 }
 
 class _ReplyQuote extends StatelessWidget {
-  const _ReplyQuote({required this.reply, required this.myRole, required this.onColor});
+  const _ReplyQuote({required this.reply, required this.myRole, required this.onColor, this.onTap});
   final ReplyPreview reply;
   final SenderRole myRole;
   final Color onColor;
+  final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       margin: const EdgeInsets.only(bottom: 4),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -429,6 +488,7 @@ class _ReplyQuote extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 11, color: onColor.withValues(alpha: 0.9))),
         ],
+      ),
       ),
     );
   }

@@ -50,14 +50,38 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return ok;
   }
 
+  void _snack(String text) {
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
   Future<void> _pin(ChatMessage m) async {
-    await ref.read(trainerChatApiProvider).pin(widget.clientId, m.id);
-    ref.invalidate(trainerChatMessagesProvider(widget.clientId));
+    final bool ok = await ref.read(trainerChatApiProvider).pin(widget.clientId, m.id);
+    if (ok) {
+      ref.invalidate(trainerChatMessagesProvider(widget.clientId));
+    } else {
+      _snack('Не удалось закрепить (обновите сервер)');
+    }
   }
 
   Future<void> _unpin(ChatMessage m) async {
-    await ref.read(trainerChatApiProvider).unpin(widget.clientId, m.id);
-    ref.invalidate(trainerChatMessagesProvider(widget.clientId));
+    final bool ok = await ref.read(trainerChatApiProvider).unpin(widget.clientId, m.id);
+    if (ok) {
+      ref.invalidate(trainerChatMessagesProvider(widget.clientId));
+    } else {
+      _snack('Не удалось открепить');
+    }
+  }
+
+  /// Удалить сообщение (с подтверждением).
+  Future<void> _delete(ChatMessage m) async {
+    if (!await confirmDelete(context, title: 'Удалить сообщение?')) return;
+    final bool ok = await ref.read(trainerChatApiProvider).deleteMessage(widget.clientId, m.id);
+    if (ok) {
+      ref.invalidate(trainerChatMessagesProvider(widget.clientId));
+      ref.invalidate(trainerConversationsProvider);
+    } else {
+      _snack('Не удалось удалить (обновите сервер)');
+    }
   }
 
   /// «Задача» из сообщения: создаём задачу с чекбоксом из текста сообщения.
@@ -99,6 +123,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           onPin: _pin,
           onUnpin: _unpin,
           onTask: _task,
+          onDelete: _delete,
           onRefresh: () async => ref.invalidate(trainerChatMessagesProvider(widget.clientId)),
         ),
       ),
