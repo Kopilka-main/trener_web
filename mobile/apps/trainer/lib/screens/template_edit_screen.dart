@@ -86,6 +86,18 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
     super.dispose();
   }
 
+  /// Добавить упражнение из каталога (пикер) в шаблон.
+  Future<void> _addExercise() async {
+    final TExercise? ex = await showModalBottomSheet<TExercise>(
+      context: context,
+      backgroundColor: context.colors.bg,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => const _AddExercisePicker(),
+    );
+    if (ex != null) setState(() => _addFromCatalog(ex, 1));
+  }
+
   void _addFromCatalog(TExercise ex, int count) {
     final bool timeBased = ex.defaultTimeSec != null && ex.defaultReps == null;
     for (int i = 0; i < count; i++) {
@@ -317,6 +329,27 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
               );
             },
           ),
+          const SizedBox(height: 8),
+          // Добавить упражнение из каталога.
+          GestureDetector(
+            onTap: _addExercise,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: c.line, width: 2),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Icon(Icons.add, size: 16, color: c.inkMuted),
+                  const SizedBox(width: 6),
+                  Text('Добавить упражнение',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.inkMuted)),
+                ],
+              ),
+            ),
+          ),
           if (_isEdit) ...<Widget>[
             const SizedBox(height: 16),
             OutlinedButton.icon(
@@ -436,6 +469,136 @@ class _PositionCardState extends State<_PositionCard> {
               const SizedBox(width: 8),
               _Num(label: 'Отдых, с', ctrl: _rest, onChanged: (String v) { p.restSec = _n(v); widget.onChanged(); }),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Пикер одного упражнения из каталога (для «Добавить упражнение» в шаблон).
+class _AddExercisePicker extends ConsumerStatefulWidget {
+  const _AddExercisePicker();
+  @override
+  ConsumerState<_AddExercisePicker> createState() => _AddExercisePickerState();
+}
+
+class _AddExercisePickerState extends ConsumerState<_AddExercisePicker> {
+  String _query = '';
+  String _group = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    final String base = ref.read(baseUrlProvider);
+    final AsyncValue<List<TExercise>> catalog = ref.watch(trainerCatalogProvider);
+    return SizedBox(
+      height: MediaQuery.of(context).size.height * 0.82,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Text('Добавить упражнение',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.ink)),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: TextField(
+              onChanged: (String v) => setState(() => _query = v.trim().toLowerCase()),
+              decoration: InputDecoration(
+                hintText: 'Поиск упражнения',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                filled: true,
+                fillColor: c.card,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+              ),
+            ),
+          ),
+          Expanded(
+            child: catalog.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (Object e, _) => Center(child: Text('Не удалось загрузить каталог', style: TextStyle(color: c.inkMuted))),
+              data: (List<TExercise> all) {
+                final List<String> groups = <String>{
+                  for (final TExercise e in all)
+                    if (e.category.isNotEmpty) e.category,
+                }.toList()
+                  ..sort();
+                final List<TExercise> list = all.where((TExercise e) {
+                  if (_group.isNotEmpty && e.category != _group) return false;
+                  if (_query.isNotEmpty && !e.name.toLowerCase().contains(_query)) return false;
+                  return true;
+                }).toList();
+                return Column(
+                  children: <Widget>[
+                    if (groups.isNotEmpty)
+                      SizedBox(
+                        height: 38,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          children: <Widget>[
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _Chip(label: 'Все', active: _group.isEmpty, onTap: () => setState(() => _group = '')),
+                            ),
+                            ...groups.map((String g) => Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: _Chip(label: g, active: _group == g, onTap: () => setState(() => _group = g)),
+                                )),
+                          ],
+                        ),
+                      ),
+                    Expanded(
+                      child: list.isEmpty
+                          ? Center(child: Text('Ничего не найдено', style: TextStyle(color: c.inkMuted)))
+                          : ListView.builder(
+                              padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+                              itemCount: list.length,
+                              itemBuilder: (BuildContext ctx, int i) {
+                                final TExercise ex = list[i];
+                                return GestureDetector(
+                                  onTap: () => Navigator.pop(context, ex),
+                                  child: Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
+                                    decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+                                    child: Row(
+                                      children: <Widget>[
+                                        CatalogThumb(url: catalogMediaUrl(base, ex.thumbUrl ?? ex.imageUrl), size: 48, radius: 10),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: <Widget>[
+                                              Text(ex.name,
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                                              if (ex.category.isNotEmpty || ex.subgroup != null)
+                                                Text(
+                                                  <String>[
+                                                    if (ex.category.isNotEmpty) ex.category,
+                                                    if (ex.subgroup?.isNotEmpty == true) ex.subgroup!,
+                                                  ].join(' · '),
+                                                  style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                        Icon(Icons.add, size: 20, color: c.accent),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         ],
       ),
