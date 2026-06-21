@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/trainer_assign.dart';
 import '../api/trainer_client_card.dart';
+import '../api/trainer_client_stats.dart';
 import '../api/trainer_workouts.dart';
 import 'template_edit_screen.dart' show ExerciseSelect;
 
@@ -37,15 +39,6 @@ String _plannedText(WorkoutSet s) {
     if (s.plannedReps != null) '${s.plannedReps}',
     if (s.plannedWeightKg != null) '× ${s.plannedWeightKg} кг',
     if (s.plannedTimeSec != null) '${s.plannedTimeSec} с',
-  ];
-  return p.isEmpty ? '—' : p.join(' ');
-}
-
-String _actualText(WorkoutSet s) {
-  final List<String> p = <String>[
-    if (s.actualReps != null) '${s.actualReps}',
-    if (s.actualWeightKg != null) '× ${s.actualWeightKg} кг',
-    if (s.actualTimeSec != null) '${s.actualTimeSec} с',
   ];
   return p.isEmpty ? '—' : p.join(' ');
 }
@@ -110,9 +103,11 @@ class _ConductorState extends ConsumerState<_Conductor> {
   bool _busy = false;
   String? _editing; // ключ "pos-idx" редактируемого подхода
   bool _doneExpanded = false;
+  bool _demoExpanded = true; // демонстрация следующего подхода (фото/видео)
   Timer? _ticker;
   ({String key, int left})? _rest;
   Timer? _restTimer;
+  final AudioPlayer _player = AudioPlayer();
   // Дата исторической записи (excludedFromBalance) — по умолчанию сегодня.
   DateTime _historyDate = DateTime.now();
 
@@ -131,7 +126,24 @@ class _ConductorState extends ConsumerState<_Conductor> {
   void dispose() {
     _ticker?.cancel();
     _restTimer?.cancel();
+    _player.dispose();
     super.dispose();
+  }
+
+  /// Короткий сигнал таймера отдыха (двойной — по завершении). Только если звук
+  /// включён в настройках. Ошибки воспроизведения молча игнорируем.
+  Future<void> _beep({bool twice = false}) async {
+    if (!ref.read(workoutSoundEnabledProvider)) return;
+    try {
+      await _player.stop();
+      await _player.play(AssetSource('sounds/beep.wav'));
+      if (twice) {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        await _player.play(AssetSource('sounds/beep.wav'));
+      }
+    } catch (_) {
+      // звук недоступен — не критично
+    }
   }
 
   int get _elapsed {
@@ -184,7 +196,13 @@ class _ConductorState extends ConsumerState<_Conductor> {
       if (left <= 0) {
         t.cancel();
         setState(() => _rest = null);
+        _beep(twice: true); // отдых закончен → двойной сигнал
+        HapticFeedback.mediumImpact();
       } else {
+        if (left == 10) {
+          _beep(); // за 10 с до конца → короткий сигнал
+          HapticFeedback.lightImpact();
+        }
         setState(() => _rest = (key: _rest!.key, left: left));
       }
     });
@@ -336,6 +354,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
     try {
       await _api.addToHistory(_clientId, _w.id, _isoDate(_historyDate));
       ref.invalidate(clientWorkoutsCardProvider(_clientId));
+      ref.invalidate(clientStatsProvider(_clientId)); // запись сразу учтётся в прогрессе
       if (!mounted) return;
       nav.pop();
       m.showSnackBar(const SnackBar(content: Text('Добавлено в историю')));
@@ -405,12 +424,47 @@ class _ConductorState extends ConsumerState<_Conductor> {
         ),
         SafeArea(
           minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: FilledButton(
-            onPressed:
-                (_busy || exs.isEmpty) ? null : () => _run(() => _api.start(_clientId, _w.id)),
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
-            child: Text(exs.isEmpty ? 'Добавьте упражнение' : 'Начать тренировку'),
-          ),
+          child: _w.excludedFromBalance
+              // Историческая запись: выбор даты + «Добавить в историю» (вместо «Начать»).
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    InkWell(
+                      onTap: _busy ? null : _pickHistoryDate,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: c.card,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: c.line),
+                        ),
+                        child: Row(
+                          children: <Widget>[
+                            Icon(Icons.event_outlined, size: 18, color: c.inkMuted),
+                            const SizedBox(width: 10),
+                            Text('Дата', style: TextStyle(fontSize: 14, color: c.inkMuted)),
+                            const Spacer(),
+                            Text(_isoDate(_historyDate),
+                                style: AppFonts.mono(size: 14, color: c.ink, weight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    FilledButton(
+                      onPressed: (_busy || exs.isEmpty) ? null : _addToHistory,
+                      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+                      child: Text(exs.isEmpty ? 'Добавьте упражнение' : 'Добавить в историю'),
+                    ),
+                  ],
+                )
+              : FilledButton(
+                  onPressed:
+                      (_busy || exs.isEmpty) ? null : () => _run(() => _api.start(_clientId, _w.id)),
+                  style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+                  child: Text(exs.isEmpty ? 'Добавьте упражнение' : 'Начать тренировку'),
+                ),
         ),
       ],
     );
@@ -429,6 +483,22 @@ class _ConductorState extends ConsumerState<_Conductor> {
       ..sort((a, b) => a.position - b.position);
     final List<WorkoutExercise> pending = (_w.exercises.where((WorkoutExercise e) => !isDoneEx(e)).toList())
       ..sort((a, b) => a.position - b.position);
+
+    // Демонстрация следующего подхода: медиа первого незавершённого упражнения.
+    final WorkoutExercise? nextEx = pending.isEmpty ? null : pending.first;
+    final TExercise? nextData = nextEx == null
+        ? null
+        : (ref.watch(trainerCatalogProvider).valueOrNull ?? const <TExercise>[])
+            .where((TExercise e) => e.id == nextEx.exerciseId)
+            .firstOrNull;
+    final String base = ref.read(baseUrlProvider);
+    final String? nextImg =
+        nextData == null ? null : catalogMediaUrl(base, nextData.imageUrl ?? nextData.thumbUrl);
+    final String? nextVid = nextData == null ? null : catalogMediaUrl(base, nextData.videoUrl);
+    final bool nextHasMedia =
+        (nextImg != null && nextImg.isNotEmpty) || (nextVid != null && nextVid.isNotEmpty);
+    final WorkoutSet? nextSet = nextEx?.sets.where((WorkoutSet s) => !s.done).firstOrNull;
+    final String nextPlan = nextSet != null ? _plannedText(nextSet) : '';
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
@@ -468,6 +538,68 @@ class _ConductorState extends ConsumerState<_Conductor> {
           ),
         ),
         const SizedBox(height: 12),
+        // Демонстрация следующего подхода: имя + план + фото/видео (как в вебе).
+        if (nextEx != null && nextHasMedia) ...<Widget>[
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            // Отдых идёт → обычный фон; отдых закончен (готов к подходу) → акцент.
+            decoration: BoxDecoration(
+                color: _rest == null ? c.accent : c.card, borderRadius: BorderRadius.circular(16)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => setState(() => _demoExpanded = !_demoExpanded),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text('СЛЕДУЮЩЕЕ УПРАЖНЕНИЕ',
+                                style: AppFonts.mono(
+                                    size: 10,
+                                    color: _rest == null
+                                        ? c.accentOn.withValues(alpha: 0.7)
+                                        : c.inkMutedXl,
+                                    weight: FontWeight.w700)),
+                            const SizedBox(height: 2),
+                            Text(
+                              <String>[
+                                labels[nextEx.position] ?? nextEx.name,
+                                if (nextPlan.isNotEmpty && nextPlan != '—') nextPlan,
+                              ].join(' · '),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: _rest == null ? c.accentOn : c.ink),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(_demoExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                          color: _rest == null ? c.accentOn : c.inkMuted),
+                    ],
+                  ),
+                ),
+                if (_demoExpanded) ...<Widget>[
+                  const SizedBox(height: 10),
+                  CatalogMediaView(
+                    imageUrl: nextImg,
+                    videoUrl: nextVid,
+                    height: 200,
+                    showToggle: true,
+                    title: '',
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         GestureDetector(
           onTap: () => setState(() => _doneExpanded = !_doneExpanded),
           child: Container(
@@ -499,11 +631,32 @@ class _ConductorState extends ConsumerState<_Conductor> {
                 ),
               )),
         const SizedBox(height: 4),
-        ...pending.map((WorkoutExercise ex) => _ExerciseCard(
+        // Незавершённые: карточки с drag-handle для перестановки (как в плане).
+        ReorderableListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
+          itemCount: pending.length,
+          onReorderItem: (int oldI, int newI) {
+            final List<int> pend = pending.map((WorkoutExercise e) => e.position).toList();
+            final int moved = pend.removeAt(oldI);
+            pend.insert(newI, moved);
+            final List<int> order = <int>[
+              ...completed.map((WorkoutExercise e) => e.position),
+              ...pend,
+            ];
+            _run(() => _api.reorderExercises(_clientId, _w.id, order));
+          },
+          itemBuilder: (BuildContext ctx, int i) {
+            final WorkoutExercise ex = pending[i];
+            return _ActiveExerciseCard(
               key: ValueKey<int>(ex.position),
+              listIndex: i,
               title: labels[ex.position] ?? ex.name,
               child: Column(children: ex.sets.map((WorkoutSet s) => _activeSetRow(ex, s)).toList()),
-            )),
+            );
+          },
+        ),
         const SizedBox(height: 8),
         _AddExerciseButton(onTap: _busy ? null : _addExercise),
         if (_w.exercises.isNotEmpty && pending.isEmpty) ...<Widget>[
@@ -538,8 +691,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
       child: Row(
         children: <Widget>[
           Expanded(
-            child: Text(s.hasFact ? _actualText(s) : _plannedText(s),
-                style: AppFonts.mono(size: 19, color: c.inkMuted, weight: FontWeight.w500)),
+            child: _SetMetrics(set: s, showActual: s.hasFact || s.done),
           ),
           _CircleBtn(
             icon: Icons.edit,
@@ -556,6 +708,92 @@ class _ConductorState extends ConsumerState<_Conductor> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ─── Карточка упражнения активной тренировки ───
+/// Раскладка: [drag-handle] → название → подходы (метрики + кнопки управления).
+class _ActiveExerciseCard extends StatelessWidget {
+  const _ActiveExerciseCard({
+    super.key,
+    required this.title,
+    required this.listIndex,
+    required this.child,
+  });
+  final String title;
+  final int listIndex;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(10, 10, 14, 10),
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              ReorderableDragStartListener(
+                index: listIndex,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Icon(Icons.drag_indicator, size: 20, color: c.inkMutedXl),
+                ),
+              ),
+              Expanded(
+                child: Text(title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Padding(padding: const EdgeInsets.only(left: 26), child: child),
+        ],
+      ),
+    );
+  }
+}
+
+/// Метрики подхода иконками как в базе знаний: повторы/вес/время/отдых.
+class _SetMetrics extends StatelessWidget {
+  const _SetMetrics({required this.set, this.showActual = false});
+  final WorkoutSet set;
+  final bool showActual;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    final num? reps = showActual ? (set.actualReps ?? set.plannedReps) : set.plannedReps;
+    final num? weight = showActual ? (set.actualWeightKg ?? set.plannedWeightKg) : set.plannedWeightKg;
+    final num? time = showActual ? (set.actualTimeSec ?? set.plannedTimeSec) : set.plannedTimeSec;
+    final num? rest = set.plannedRestSec;
+
+    Widget metric(IconData icon, num? v) => Padding(
+          padding: const EdgeInsets.only(right: 14),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(icon, size: 15, color: c.inkMutedXl),
+              const SizedBox(width: 4),
+              Text('${(v ?? 0).toInt()}',
+                  style: AppFonts.mono(size: 15, color: c.inkMuted, weight: FontWeight.w600)),
+            ],
+          ),
+        );
+
+    return Row(
+      children: <Widget>[
+        metric(Icons.repeat, reps),
+        metric(Icons.fitness_center, weight),
+        metric(Icons.timer_outlined, time),
+        metric(Icons.bedtime_outlined, rest),
+      ],
     );
   }
 }
@@ -710,9 +948,9 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-// ─── Карточка упражнения (активная тренировка) ───
+// ─── Карточка завершённого упражнения (активная тренировка) ───
 class _ExerciseCard extends StatelessWidget {
-  const _ExerciseCard({super.key, required this.title, required this.child});
+  const _ExerciseCard({required this.title, required this.child});
   final String title;
   final Widget child;
 
