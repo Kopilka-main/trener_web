@@ -378,13 +378,31 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                 ),
               )),
         const SizedBox(height: 4),
-        // Невыполненные.
-        ...pending.map((WorkoutExercise ex) => _ExerciseCard(
+        // Невыполненные — с перестановкой перетаскиванием (как у тренера).
+        ReorderableListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: pending.length,
+          onReorderItem: (int oldI, int newI) {
+            final List<int> pend = pending.map((WorkoutExercise e) => e.position).toList();
+            final int moved = pend.removeAt(oldI);
+            pend.insert(newI, moved);
+            final List<int> order = <int>[
+              ...completed.map((WorkoutExercise e) => e.position),
+              ...pend,
+            ];
+            _run(() => _api.reorderExercises(_w.id, order));
+          },
+          itemBuilder: (BuildContext ctx, int i) {
+            final WorkoutExercise ex = pending[i];
+            return _ExerciseCard(
               key: ValueKey<int>(ex.position),
               title: labels[ex.position] ?? ex.name,
               thumbUrl: thumbFor(ex),
               child: Column(children: ex.sets.map((WorkoutSet s) => _activeSetRow(ex, s, labels)).toList()),
-            )),
+            );
+          },
+        ),
         const SizedBox(height: 8),
         _AddExerciseButton(onTap: _busy ? null : _addExercise),
         if (_w.exercises.isNotEmpty && pending.isEmpty) ...<Widget>[
