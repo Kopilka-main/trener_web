@@ -30,15 +30,6 @@ Map<int, String> _exerciseLabels(List<WorkoutExercise> exs) {
   return out;
 }
 
-String _plannedText(WorkoutSet s) {
-  final List<String> p = <String>[
-    if (s.plannedReps != null) '${s.plannedReps}',
-    if (s.plannedWeightKg != null) '× ${s.plannedWeightKg} кг',
-    if (s.plannedTimeSec != null) '${s.plannedTimeSec} с',
-  ];
-  return p.isEmpty ? '—' : p.join(' ');
-}
-
 String _formatDuration(int totalSec) {
   final int sec = totalSec % 60;
   final int m = totalSec ~/ 60;
@@ -154,6 +145,29 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
     }
   }
 
+  /// Сохранить плановый подход без busy-блокировки (правка полей в черновике),
+  /// чтобы не блокировать кнопку «Начать».
+  Future<void> _savePlanned(WorkoutExercise ex, WorkoutSet s, Map<String, dynamic> body) async {
+    try {
+      final Workout updated = await _api.updateSet(_w.id, ex.position, s.setIndex, body);
+      if (mounted) setState(() => _w = updated);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Не удалось сохранить изменение')));
+      }
+    }
+  }
+
+  /// Инфо-карточка упражнения из каталога (по тапу на «i»).
+  void _showInfoForExercise(WorkoutExercise ex) {
+    final String base = ref.read(baseUrlProvider);
+    final CatalogExercise? ce = (ref.read(clientCatalogProvider).valueOrNull ?? <CatalogExercise>[])
+        .where((CatalogExercise e) => e.id == ex.exerciseId)
+        .firstOrNull;
+    if (ce != null) _showInfo(context, ce, base);
+  }
+
   Future<void> _toggleDone(WorkoutExercise ex, WorkoutSet s) async {
     final bool next = !s.done;
     final Map<String, dynamic> body = <String, dynamic>{'done': next};
@@ -221,10 +235,11 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
               Text('План тренировки. Нажмите «Начать», чтобы провести.',
                   style: TextStyle(fontSize: 13, color: c.inkMuted)),
               const SizedBox(height: 12),
-              // Перестановка упражнений перетаскиванием (как SortableList в вебе).
+              // Карточки плана — как у тренера: drag-handle, инфо, 4 поля плана.
               ReorderableListView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
+                buildDefaultDragHandles: false,
                 itemCount: exs.length,
                 onReorderItem: (int oldI, int newI) {
                   final List<int> order = exs.map((WorkoutExercise e) => e.position).toList();
@@ -234,27 +249,17 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                 },
                 itemBuilder: (BuildContext ctx, int i) {
                   final WorkoutExercise ex = exs[i];
-                  return _ExerciseCard(
+                  final WorkoutSet? first = ex.sets.isNotEmpty ? ex.sets.first : null;
+                  return _DraftCard(
                     key: ValueKey<int>(ex.position),
+                    index: i + 1,
+                    listIndex: i,
                     title: labels[ex.position] ?? ex.name,
-                    child: Column(
-                      children: ex.sets.map((WorkoutSet s) {
-                        final String key = '${ex.position}-${s.setIndex}';
-                        if (_editing == key) {
-                          return _SetEditor(
-                            planned: true,
-                            set: s,
-                            onCancel: () => setState(() => _editing = null),
-                            onSave: (Map<String, dynamic> body) =>
-                                _run(() => _api.updateSet(_w.id, ex.position, s.setIndex, body)),
-                          );
-                        }
-                        return _PlanRow(
-                          text: _plannedText(s),
-                          onEdit: () => setState(() => _editing = key),
-                        );
-                      }).toList(),
-                    ),
+                    set: first,
+                    onSave: first == null
+                        ? (_) {}
+                        : (Map<String, dynamic> body) => _savePlanned(ex, first, body),
+                    onInfo: () => _showInfoForExercise(ex),
                     onRemove: () => _run(() => _api.removeExercise(_w.id, ex.position)),
                   );
                 },
@@ -495,13 +500,11 @@ class _SetParams extends StatelessWidget {
   }
 }
 
-// ─── Карточка упражнения ───
+// ─── Карточка упражнения (активная тренировка) ───
 class _ExerciseCard extends StatelessWidget {
-  const _ExerciseCard(
-      {super.key, required this.title, required this.child, this.onRemove, this.thumbUrl});
+  const _ExerciseCard({super.key, required this.title, required this.child, this.thumbUrl});
   final String title;
   final Widget child;
-  final VoidCallback? onRemove;
   final String? thumbUrl;
 
   @override
@@ -526,13 +529,6 @@ class _ExerciseCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
               ),
-              if (onRemove != null)
-                GestureDetector(
-                  onTap: () async {
-                    if (await confirmDelete(context, title: 'Удалить упражнение?')) onRemove!();
-                  },
-                  child: Icon(Icons.delete_outline, size: 18, color: c.inkMuted),
-                ),
             ],
           ),
           const SizedBox(height: 6),
@@ -543,21 +539,131 @@ class _ExerciseCard extends StatelessWidget {
   }
 }
 
-class _PlanRow extends StatelessWidget {
-  const _PlanRow({required this.text, required this.onEdit});
-  final String text;
-  final VoidCallback onEdit;
+/// Карточка позиции черновика — один-в-один с тренерской: drag-handle, название,
+/// инфо, удаление + 4 поля плана (повторы/вес/время/отдых) с инлайн-правкой.
+/// Поля сохраняются при потере фокуса группы и по «готово» на клавиатуре.
+class _DraftCard extends StatefulWidget {
+  const _DraftCard({
+    super.key,
+    required this.index,
+    required this.listIndex,
+    required this.title,
+    required this.set,
+    required this.onSave,
+    required this.onInfo,
+    required this.onRemove,
+  });
+  final int index;
+  final int listIndex;
+  final String title;
+  final WorkoutSet? set;
+  final void Function(Map<String, dynamic> body) onSave;
+  final VoidCallback onInfo;
+  final VoidCallback onRemove;
+
+  @override
+  State<_DraftCard> createState() => _DraftCardState();
+}
+
+class _DraftCardState extends State<_DraftCard> {
+  late final TextEditingController _reps;
+  late final TextEditingController _weight;
+  late final TextEditingController _time;
+  late final TextEditingController _rest;
+
+  @override
+  void initState() {
+    super.initState();
+    final WorkoutSet? s = widget.set;
+    _reps = TextEditingController(text: s?.plannedReps?.toString() ?? '');
+    _weight = TextEditingController(text: s?.plannedWeightKg?.toString() ?? '');
+    _time = TextEditingController(text: s?.plannedTimeSec?.toString() ?? '');
+    _rest = TextEditingController(text: s?.plannedRestSec?.toString() ?? '');
+  }
+
+  @override
+  void dispose() {
+    _reps.dispose();
+    _weight.dispose();
+    _time.dispose();
+    _rest.dispose();
+    super.dispose();
+  }
+
+  num? _n(String s) => num.tryParse(s.trim().replaceAll(',', '.'));
+
+  void _persist() {
+    if (widget.set == null) return;
+    widget.onSave(<String, dynamic>{
+      'plannedReps': _n(_reps.text),
+      'plannedWeightKg': _n(_weight.text),
+      'plannedTimeSec': _n(_time.text),
+      'plannedRestSec': _n(_rest.text),
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(10, 10, 14, 12),
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Expanded(
-            child: Text(text, style: AppFonts.mono(size: 19, color: c.inkMuted, weight: FontWeight.w500)),
+          Row(
+            children: <Widget>[
+              ReorderableDragStartListener(
+                index: widget.listIndex,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Icon(Icons.drag_indicator, size: 20, color: c.inkMutedXl),
+                ),
+              ),
+              Expanded(
+                child: Text('${widget.index}. ${widget.title}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
+              ),
+              GestureDetector(
+                onTap: widget.onInfo,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Icon(Icons.info_outline, size: 18, color: c.inkMuted),
+                ),
+              ),
+              GestureDetector(
+                onTap: () async {
+                  if (await confirmDelete(context, title: 'Удалить упражнение?')) widget.onRemove();
+                },
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 2),
+                  child: Icon(Icons.delete_outline, size: 18, color: c.inkMuted),
+                ),
+              ),
+            ],
           ),
-          _CircleBtn(icon: Icons.edit, onTap: onEdit, bg: c.cardElevated, fg: c.inkMuted),
+          if (widget.set != null) ...<Widget>[
+            const SizedBox(height: 8),
+            Focus(
+              onFocusChange: (bool hasFocus) {
+                if (!hasFocus) _persist();
+              },
+              child: Row(
+                children: <Widget>[
+                  _NumField(label: 'Повторы', ctrl: _reps, onSubmitted: (_) => _persist()),
+                  const SizedBox(width: 8),
+                  _NumField(label: 'Вес, кг', ctrl: _weight, onSubmitted: (_) => _persist()),
+                  const SizedBox(width: 8),
+                  _NumField(label: 'Время, с', ctrl: _time, onSubmitted: (_) => _persist()),
+                  const SizedBox(width: 8),
+                  _NumField(label: 'Отдых, с', ctrl: _rest, onSubmitted: (_) => _persist()),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -755,9 +861,10 @@ class _SetEditorState extends State<_SetEditor> {
 }
 
 class _NumField extends StatelessWidget {
-  const _NumField({required this.label, required this.ctrl});
+  const _NumField({required this.label, required this.ctrl, this.onSubmitted});
   final String label;
   final TextEditingController ctrl;
+  final ValueChanged<String>? onSubmitted;
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
@@ -774,6 +881,8 @@ class _NumField extends StatelessWidget {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
               textAlign: TextAlign.center,
+              textInputAction: TextInputAction.done,
+              onSubmitted: onSubmitted,
               style: AppFonts.mono(size: 15, color: c.ink, weight: FontWeight.w500),
               decoration: InputDecoration(
                 isDense: true,
