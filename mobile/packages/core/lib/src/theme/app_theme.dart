@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
+/// Семейства фирменных шрифтов — забандлены в ассеты пакета core (грузятся
+/// синхронно при старте, без рантайм-загрузки → нет мерцания/задержки).
+/// SpaceGrotesk/JetBrainsMono — вариативные (ось wght), Flutter маппит fontWeight.
+const String kFontSans = 'packages/core/SpaceGrotesk';
+const String kFontDisplay = 'packages/core/BowlbyOne';
+const String kFontMono = 'packages/core/JetBrainsMono';
 
 /// Токены дизайн-системы «GYM Acid Flow» — зеркало packages/theme/theme.css.
 /// Светлая тема по умолчанию (тёплый белый + розовый акцент); тёмная — кислотный
@@ -110,7 +116,8 @@ abstract final class AppFonts {
     double height = 1,
     double letterSpacing = -0.5,
   }) =>
-      GoogleFonts.bowlbyOne(
+      TextStyle(
+        fontFamily: kFontDisplay,
         fontSize: size,
         color: color,
         height: height,
@@ -124,7 +131,8 @@ abstract final class AppFonts {
     double letterSpacing = 0.5,
     double height = 1.1,
   }) =>
-      GoogleFonts.jetBrainsMono(
+      TextStyle(
+        fontFamily: kFontMono,
         fontSize: size,
         color: color,
         fontWeight: weight,
@@ -151,9 +159,10 @@ ThemeData buildAppTheme(AppColors c) {
     outlineVariant: c.line,
   );
 
-  final TextTheme base = GoogleFonts.spaceGroteskTextTheme(
-    c.brightness == Brightness.dark ? ThemeData.dark().textTheme : ThemeData.light().textTheme,
-  ).apply(bodyColor: c.ink, displayColor: c.ink);
+  final TextTheme base =
+      (c.brightness == Brightness.dark ? ThemeData.dark() : ThemeData.light())
+          .textTheme
+          .apply(fontFamily: kFontSans, bodyColor: c.ink, displayColor: c.ink);
 
   return ThemeData(
     useMaterial3: true,
@@ -168,7 +177,8 @@ ThemeData buildAppTheme(AppColors c) {
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
-      titleTextStyle: GoogleFonts.spaceGrotesk(
+      titleTextStyle: TextStyle(
+        fontFamily: kFontSans,
         fontSize: 20,
         fontWeight: FontWeight.w700,
         color: c.ink,
@@ -183,6 +193,8 @@ ThemeData buildAppTheme(AppColors c) {
       ),
       margin: EdgeInsets.zero,
     ),
+    // Все FAB-кнопки добавления — круглые (M3 по умолчанию даёт скруглённый квадрат).
+    floatingActionButtonTheme: const FloatingActionButtonThemeData(shape: CircleBorder()),
     dividerTheme: DividerThemeData(color: c.line, thickness: 1, space: 1),
     chipTheme: ChipThemeData(
       backgroundColor: c.chip,

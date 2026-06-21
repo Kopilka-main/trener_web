@@ -30,7 +30,8 @@ class AuthedImage extends StatelessWidget {
 }
 
 /// Круглый аватар из приватного файла (GET /api/files/:id, Bearer-токен).
-/// Кэшируется на диск. Если URL/токена нет или ошибка — инициалы на фоне акцента.
+/// Кэшируется на диск. Если URL/токена нет или ошибка — инициалы на нейтральном
+/// фоне (не акцентном).
 class AuthedAvatar extends StatelessWidget {
   const AuthedAvatar({
     super.key,
@@ -49,11 +50,11 @@ class AuthedAvatar extends StatelessWidget {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final Widget fallback = CircleAvatar(
       radius: radius,
-      backgroundColor: cs.primary.withValues(alpha: 0.18),
+      backgroundColor: cs.surfaceContainerHighest,
       child: initials.trim().isEmpty
-          ? Icon(Icons.person, color: cs.primary, size: radius * 0.92)
+          ? Icon(Icons.person, color: cs.onSurfaceVariant, size: radius * 0.92)
           : Text(initials,
-              style: TextStyle(color: cs.primary, fontSize: radius * 0.72, fontWeight: FontWeight.w800)),
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: radius * 0.72, fontWeight: FontWeight.w800)),
     );
     if (url == null || url!.isEmpty) return fallback;
     return ClipOval(
