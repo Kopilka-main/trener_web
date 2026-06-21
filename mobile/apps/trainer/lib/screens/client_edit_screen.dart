@@ -48,7 +48,7 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
   late final TextEditingController _last = TextEditingController(text: widget.client?.lastName ?? '');
   late final TextEditingController _notes = TextEditingController(text: widget.client?.notes ?? '');
   late bool _online = widget.client?.isOnline ?? false;
-  late ClientStatus _status = widget.client?.status ?? ClientStatus.active;
+  late final ClientStatus _status = widget.client?.status ?? ClientStatus.active;
   late DateTime? _birth = (widget.client?.birthDate != null && widget.client!.birthDate!.length >= 10)
       ? DateTime.tryParse(widget.client!.birthDate!.substring(0, 10))
       : null;
@@ -196,11 +196,22 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
       final Map<String, dynamic> p = await ref.read(trainerClientsApiProvider).accountProfile(_accountId!);
       if (!mounted) return;
       setState(() {
-        if ((p['firstName'] as String?)?.isNotEmpty == true && _first.text.trim().isEmpty) _first.text = p['firstName'] as String;
-        if ((p['lastName'] as String?)?.isNotEmpty == true && _last.text.trim().isEmpty) _last.text = p['lastName'] as String;
+        if ((p['firstName'] as String?)?.isNotEmpty == true) _first.text = p['firstName'] as String;
+        if ((p['lastName'] as String?)?.isNotEmpty == true) _last.text = p['lastName'] as String;
         final String? bd = p['birthDate'] as String?;
-        if (bd != null && _birth == null) _birth = DateTime.tryParse(bd.substring(0, 10));
+        if (bd != null && bd.length >= 10) _birth = DateTime.tryParse(bd.substring(0, 10));
+        // Дописываем недостающие контакты (без дублей по type+value).
+        final List<dynamic> cs = (p['contacts'] as List<dynamic>?) ?? <dynamic>[];
+        for (final dynamic raw in cs) {
+          final Map<String, dynamic> ct = raw as Map<String, dynamic>;
+          final String type = ct['type'] as String? ?? '';
+          final String value = ct['value'] as String? ?? '';
+          if (value.trim().isEmpty) continue;
+          final bool exists = _contacts.any((_EditContact e) => e.type == type && e.value.text.trim() == value.trim());
+          if (!exists) _contacts.add(_EditContact(type: type, value: TextEditingController(text: value)));
+        }
       });
+      m.showSnackBar(const SnackBar(content: Text('Данные подставлены')));
     } catch (_) {
       m.showSnackBar(const SnackBar(content: Text('Не удалось получить данные')));
     }
@@ -359,17 +370,6 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
               _SegBtn(label: 'Онлайн', active: _online, onTap: () => setState(() => _online = true)),
             ],
           ),
-          if (_isEdit) ...<Widget>[
-            const SizedBox(height: 16),
-            _Label('Статус'),
-            Row(
-              children: <Widget>[
-                _SegBtn(label: 'Активный', active: _status == ClientStatus.active, onTap: () => setState(() => _status = ClientStatus.active)),
-                const SizedBox(width: 8),
-                _SegBtn(label: 'В архиве', active: _status == ClientStatus.archived, onTap: () => setState(() => _status = ClientStatus.archived)),
-              ],
-            ),
-          ],
           const SizedBox(height: 16),
           // ── Связь ──
           _Label('Связь'),

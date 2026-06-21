@@ -1323,6 +1323,8 @@ class ClientProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AppColors col = context.colors;
+    // Свежий снимок (после правки данные обновляются без возврата старого объекта).
+    final Client c = ref.watch(trainerClientProvider(client.id)).valueOrNull ?? client;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Профиль'),
@@ -1332,7 +1334,7 @@ class ClientProfileScreen extends ConsumerWidget {
             icon: const Icon(Icons.edit_outlined),
             onPressed: () async {
               final bool? changed = await Navigator.of(context).push<bool>(
-                MaterialPageRoute<bool>(builder: (_) => ClientEditScreen(client: client)),
+                MaterialPageRoute<bool>(builder: (_) => ClientEditScreen(client: c)),
               );
               if (changed == true) {
                 ref.invalidate(trainerClientsProvider);
@@ -1350,24 +1352,23 @@ class ClientProfileScreen extends ConsumerWidget {
             child: Column(
               children: <Widget>[
                 AuthedAvatar(
-                  url: client.avatarFileId != null
-                      ? '${ref.read(baseUrlProvider).replaceAll(RegExp(r'/$'), '')}/api/files/${client.avatarFileId}'
+                  url: c.avatarFileId != null
+                      ? '${ref.read(baseUrlProvider).replaceAll(RegExp(r'/$'), '')}/api/files/${c.avatarFileId}'
                       : null,
                   token: ref.watch(sessionProvider).token,
-                  initials: client.initials,
+                  initials: c.initials,
                   radius: 44,
                 ),
                 const SizedBox(height: 12),
-                Text(client.fullName.isNotEmpty ? client.fullName : 'Без имени',
+                Text(c.fullName.isNotEmpty ? c.fullName : 'Без имени',
                     style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: col.ink)),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   alignment: WrapAlignment.center,
                   children: <Widget>[
-                    _ProfileChip(client.isOnline ? 'Онлайн' : 'Спортзал'),
-                    if (_ageOnly(client.birthDate) case final String age) _ProfileChip(age),
-                    if (client.status == ClientStatus.archived) _ProfileChip('Архив'),
+                    _ProfileChip(c.isOnline ? 'Онлайн' : 'Спортзал'),
+                    if (_ageOnly(c.birthDate) case final String age) _ProfileChip(age),
                   ],
                 ),
               ],
@@ -1375,25 +1376,25 @@ class ClientProfileScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 20),
           // Раздел «Данные».
-          if (client.phone?.trim().isNotEmpty == true || client.contacts.isNotEmpty ||
-              client.birthDate != null || client.accountId != null) ...<Widget>[
+          if (c.phone?.trim().isNotEmpty == true || c.contacts.isNotEmpty ||
+              c.birthDate != null || c.accountId != null) ...<Widget>[
             _SettingsLabel('Данные'),
-            if (client.phone?.trim().isNotEmpty == true)
-              _DataRow(icon: Icons.phone_outlined, type: 'Телефон', value: client.phone!.trim()),
-            ...client.contacts.map((ClientContact ct) =>
+            if (c.phone?.trim().isNotEmpty == true)
+              _DataRow(icon: Icons.phone_outlined, type: 'Телефон', value: c.phone!.trim()),
+            ...c.contacts.map((ClientContact ct) =>
                 _DataRow(icon: Icons.alternate_email, type: ct.type, value: ct.value)),
-            if (_birthLine(client.birthDate) case final String b)
+            if (_birthLine(c.birthDate) case final String b)
               _DataRow(icon: Icons.cake_outlined, type: 'Дата рождения', value: b),
-            if (client.accountId?.isNotEmpty == true)
-              _DataRow(icon: Icons.link, type: 'Клиентский ID', value: client.accountId!, copyable: true),
+            if (c.accountId?.isNotEmpty == true)
+              _DataRow(icon: Icons.link, type: 'Клиентский ID', value: c.accountId!, copyable: true),
           ],
-          if (client.tags.isNotEmpty) ...<Widget>[
+          if (c.tags.isNotEmpty) ...<Widget>[
             const SizedBox(height: 16),
             _SettingsLabel('Теги'),
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: client.tags
+              children: c.tags
                   .map((String t) => Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                         decoration: BoxDecoration(color: col.chip, borderRadius: BorderRadius.circular(18)),
@@ -1402,10 +1403,10 @@ class ClientProfileScreen extends ConsumerWidget {
                   .toList(),
             ),
           ],
-          if (client.notes?.trim().isNotEmpty == true) ...<Widget>[
+          if (c.notes?.trim().isNotEmpty == true) ...<Widget>[
             const SizedBox(height: 16),
             _SettingsLabel('Заметки'),
-            Text(client.notes!.trim(), style: TextStyle(fontSize: 14, height: 1.5, color: col.ink)),
+            Text(c.notes!.trim(), style: TextStyle(fontSize: 14, height: 1.5, color: col.ink)),
           ],
         ],
       ),

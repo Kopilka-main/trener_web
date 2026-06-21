@@ -1,5 +1,6 @@
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -64,6 +65,13 @@ class _TrainerAppState extends ConsumerState<TrainerApp> {
       theme: buildAppTheme(AppColors.light),
       darkTheme: buildAppTheme(AppColors.dark),
       themeMode: ref.watch(themeModeProvider),
+      locale: const Locale('ru'),
+      supportedLocales: const <Locale>[Locale('ru'), Locale('en')],
+      localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       routerConfig: router,
     );
   }
