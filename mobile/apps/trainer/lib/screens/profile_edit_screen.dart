@@ -4,8 +4,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../api/trainer_auth.dart';
+import '../api/trainer_gyms.dart';
 
-const List<String> _contactTypes = <String>['Телефон', 'WhatsApp', 'Telegram', 'MAX', 'Instagram', 'Прочее'];
+class _ContactType {
+  const _ContactType(this.label, this.icon);
+  final String label;
+  final IconData icon;
+}
+
+const List<_ContactType> _contactTypeDefs = <_ContactType>[
+  _ContactType('Телефон', Icons.phone_outlined),
+  _ContactType('Email', Icons.mail_outline),
+  _ContactType('Telegram', Icons.send_outlined),
+  _ContactType('WhatsApp', Icons.chat_outlined),
+  _ContactType('MAX', Icons.chat_bubble_outline),
+  _ContactType('Instagram', Icons.camera_alt_outlined),
+  _ContactType('ВКонтакте', Icons.groups_outlined),
+];
+
+IconData _iconForType(String type) =>
+    _contactTypeDefs.firstWhere((_ContactType t) => t.label == type, orElse: () => _contactTypeDefs.first).icon;
 
 String _iso(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -258,82 +276,55 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          Row(
-            children: <Widget>[
-              _Label('Контакты'),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: () => setState(() =>
-                    _contacts.add(_EditContact(type: _contactTypes.first, value: TextEditingController()))),
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('Добавить'),
-              ),
-            ],
-          ),
-          ..._contacts.asMap().entries.map((MapEntry<int, _EditContact> e) => _contactCard(c, e.key, e.value)),
+          // ── Связь (типизированные контакты) ──
+          _Label('Связь'),
+          ..._contacts.asMap().entries.map((MapEntry<int, _EditContact> e) => _contactRow(c, e.key, e.value)),
+          ..._contactTypeDefs.map((_ContactType t) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: GestureDetector(
+                  onTap: () => setState(() => _contacts.add(_EditContact(type: t.label, value: TextEditingController()))),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+                    child: Row(
+                      children: <Widget>[
+                        CircleAvatar(radius: 16, backgroundColor: c.accent, child: Icon(Icons.add, size: 18, color: c.accentOn)),
+                        const SizedBox(width: 12),
+                        Text('добавить ${t.label}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                      ],
+                    ),
+                  ),
+                ),
+              )),
+          const SizedBox(height: 16),
+          // ── Залы ──
+          const _GymsEditSection(),
         ],
       ),
     );
   }
 
-  Widget _contactCard(AppColors c, int i, _EditContact ct) {
+  Widget _contactRow(AppColors c, int i, _EditContact ct) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(12, 10, 8, 12),
+      padding: const EdgeInsets.fromLTRB(14, 6, 8, 6),
       decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: SizedBox(
-                  height: 34,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: _contactTypes
-                        .map((String t) => Padding(
-                              padding: const EdgeInsets.only(right: 6),
-                              child: GestureDetector(
-                                onTap: () => setState(() => ct.type = t),
-                                child: Container(
-                                  alignment: Alignment.center,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  decoration: BoxDecoration(
-                                      color: ct.type == t ? c.accent : c.chip, borderRadius: BorderRadius.circular(18)),
-                                  child: Text(t,
-                                      style: AppFonts.mono(
-                                          size: 11, color: ct.type == t ? c.accentOn : c.inkMuted, weight: FontWeight.w600)),
-                                ),
-                              ),
-                            ))
-                        .toList(),
-                  ),
-                ),
-              ),
-              GestureDetector(
-                onTap: () => setState(() {
-                  _contacts.removeAt(i).value.dispose();
-                }),
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 4),
-                  child: Icon(Icons.close, size: 18, color: c.inkMuted),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          TextField(
-            controller: ct.value,
-            decoration: InputDecoration(
-              isDense: true,
-              hintText: 'Значение',
-              filled: true,
-              fillColor: c.bg,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c.line)),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c.line)),
+          Icon(_iconForType(ct.type), size: 18, color: c.inkMuted),
+          const SizedBox(width: 10),
+          SizedBox(width: 76, child: Text(ct.type, style: TextStyle(fontSize: 13, color: c.inkMuted))),
+          Expanded(
+            child: TextField(
+              controller: ct.value,
+              decoration: const InputDecoration(isDense: true, border: InputBorder.none, hintText: 'значение'),
             ),
+          ),
+          GestureDetector(
+            onTap: () => setState(() {
+              _contacts.removeAt(i).value.dispose();
+            }),
+            child: Padding(padding: const EdgeInsets.all(6), child: Icon(Icons.close, size: 18, color: c.inkMuted)),
           ),
         ],
       ),
@@ -369,4 +360,94 @@ class _Label extends StatelessWidget {
             style: TextStyle(
                 fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: context.colors.inkMutedXl)),
       );
+}
+
+/// Управление залами в профиле тренера: список + добавление/удаление.
+class _GymsEditSection extends ConsumerStatefulWidget {
+  const _GymsEditSection();
+  @override
+  ConsumerState<_GymsEditSection> createState() => _GymsEditSectionState();
+}
+
+class _GymsEditSectionState extends ConsumerState<_GymsEditSection> {
+  final TextEditingController _name = TextEditingController();
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  Future<void> _add() async {
+    final String name = _name.text.trim();
+    if (name.isEmpty || _busy) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(trainerGymsApiProvider).create(name: name);
+      ref.invalidate(trainerGymsProvider);
+      if (!mounted) return;
+      setState(() {
+        _name.clear();
+        _busy = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _delete(String id) async {
+    try {
+      await ref.read(trainerGymsApiProvider).delete(id);
+      ref.invalidate(trainerGymsProvider);
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    final List<Gym> gyms = ref.watch(trainerGymsProvider).valueOrNull ?? <Gym>[];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const _Label('Залы'),
+        ...gyms.map((Gym g) => Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+              child: Row(
+                children: <Widget>[
+                  Icon(Icons.fitness_center, size: 18, color: c.inkMuted),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(g.name, style: TextStyle(fontSize: 15, color: c.ink))),
+                  GestureDetector(
+                    onTap: () => _delete(g.id),
+                    child: Icon(Icons.delete_outline, size: 18, color: c.inkMuted),
+                  ),
+                ],
+              ),
+            )),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: TextField(
+                controller: _name,
+                onSubmitted: (_) => _add(),
+                decoration: InputDecoration(
+                  hintText: 'добавить зал',
+                  isDense: true,
+                  filled: true,
+                  fillColor: c.card,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(onPressed: _busy ? null : _add, child: const Text('Добавить')),
+          ],
+        ),
+      ],
+    );
+  }
 }

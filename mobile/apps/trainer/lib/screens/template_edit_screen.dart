@@ -385,6 +385,7 @@ class _ExerciseSelectState extends ConsumerState<_ExerciseSelect> {
   late final Map<String, int> _counts = Map<String, int>.from(widget.initialCounts);
   String _query = '';
   String _group = '';
+  String _subgroup = '';
 
   @override
   Widget build(BuildContext context) {
@@ -415,8 +416,18 @@ class _ExerciseSelectState extends ConsumerState<_ExerciseSelect> {
               if (e.category.isNotEmpty) e.category,
           }.toList()
             ..sort();
+          // Подгруппы выбранной группы (присутствующие в каталоге) — второй уровень чипов.
+          final List<String> subgroups = _group.isEmpty
+              ? <String>[]
+              : (<String>{
+                  for (final TExercise e in all)
+                    if (e.category == _group && (e.subgroup?.trim().isNotEmpty ?? false))
+                      e.subgroup!,
+                }.toList()
+                ..sort());
           final List<TExercise> list = all.where((TExercise e) {
             if (_group.isNotEmpty && e.category != _group) return false;
+            if (_subgroup.isNotEmpty && e.subgroup != _subgroup) return false;
             if (_query.isNotEmpty && !e.name.toLowerCase().contains(_query)) return false;
             return true;
           }).toList();
@@ -444,11 +455,48 @@ class _ExerciseSelectState extends ConsumerState<_ExerciseSelect> {
                     children: <Widget>[
                       Padding(
                         padding: const EdgeInsets.only(right: 8),
-                        child: _Chip(label: 'Все', active: _group.isEmpty, onTap: () => setState(() => _group = '')),
+                        child: _Chip(
+                            label: 'Все',
+                            active: _group.isEmpty,
+                            onTap: () => setState(() {
+                                  _group = '';
+                                  _subgroup = '';
+                                })),
                       ),
                       ...groups.map((String g) => Padding(
                             padding: const EdgeInsets.only(right: 8),
-                            child: _Chip(label: g, active: _group == g, onTap: () => setState(() => _group = g)),
+                            child: _Chip(
+                                label: g,
+                                active: _group == g,
+                                onTap: () => setState(() {
+                                      _group = g;
+                                      _subgroup = '';
+                                    })),
+                          )),
+                    ],
+                  ),
+                ),
+              // Второй уровень — подгруппы выбранной группы.
+              if (subgroups.isNotEmpty)
+                SizedBox(
+                  height: 34,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
+                    children: <Widget>[
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: _Chip(
+                            label: 'Все',
+                            active: _subgroup.isEmpty,
+                            onTap: () => setState(() => _subgroup = '')),
+                      ),
+                      ...subgroups.map((String s) => Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: _Chip(
+                                label: s,
+                                active: _subgroup == s,
+                                onTap: () => setState(() => _subgroup = s)),
                           )),
                     ],
                   ),
@@ -470,19 +518,44 @@ class _ExerciseSelectState extends ConsumerState<_ExerciseSelect> {
                       ),
                       child: Row(
                         children: <Widget>[
-                          CatalogThumb(url: catalogMediaUrl(base, ex.thumbUrl ?? ex.imageUrl), size: 42),
-                          const SizedBox(width: 10),
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text(ex.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
-                                if (ex.category.isNotEmpty)
-                                  Text(ex.category, style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
-                              ],
+                            child: GestureDetector(
+                              onTap: () => _showExerciseInfo(context, ex, base),
+                              behavior: HitTestBehavior.opaque,
+                              child: Row(
+                                children: <Widget>[
+                                  CatalogThumb(
+                                      url: catalogMediaUrl(base, ex.thumbUrl ?? ex.imageUrl),
+                                      size: 42),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Text(ex.name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w600,
+                                                color: c.ink)),
+                                        if (ex.category.isNotEmpty ||
+                                            (ex.subgroup?.isNotEmpty ?? false))
+                                          Text(
+                                              <String>[
+                                                if (ex.category.isNotEmpty) ex.category,
+                                                if (ex.subgroup?.trim().isNotEmpty ?? false)
+                                                  ex.subgroup!,
+                                              ].join(' · '),
+                                              style: AppFonts.mono(
+                                                  size: 12,
+                                                  color: c.inkMuted,
+                                                  weight: FontWeight.w500)),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                           _Round(icon: Icons.remove, onTap: n == 0 ? null : () => setState(() {
@@ -507,6 +580,99 @@ class _ExerciseSelectState extends ConsumerState<_ExerciseSelect> {
       ),
     );
   }
+}
+
+/// Карточка-подсказка об упражнении (по тапу в выборе): видео/фото с
+/// переключателем, название, описание, группы мышц.
+void _showExerciseInfo(BuildContext context, TExercise ex, String base) {
+  final AppColors c = context.colors;
+  final String? img = catalogMediaUrl(base, ex.imageUrl ?? ex.thumbUrl);
+  final String? video = catalogMediaUrl(base, ex.videoUrl);
+  final List<MapEntry<String, String>> chars = <MapEntry<String, String>>[
+    if ((ex.equipment ?? '').trim().isNotEmpty)
+      MapEntry<String, String>('Оборудование', ex.equipment!.trim()),
+    if ((ex.primaryMuscles ?? '').trim().isNotEmpty)
+      MapEntry<String, String>('Целевые мышцы', ex.primaryMuscles!.trim()),
+    if ((ex.secondaryMuscles ?? '').trim().isNotEmpty)
+      MapEntry<String, String>('Дополнительно', ex.secondaryMuscles!.trim()),
+  ];
+  final bool hasDesc = (ex.description ?? '').trim().isNotEmpty;
+
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: c.bg,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    builder: (BuildContext ctx) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.7,
+      minChildSize: 0.4,
+      maxChildSize: 0.92,
+      builder: (BuildContext ctx, ScrollController sc) => ListView(
+        controller: sc,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        children: <Widget>[
+          if (img != null || video != null)
+            CatalogMediaView(imageUrl: img, videoUrl: video, height: 200, showToggle: true),
+          const SizedBox(height: 14),
+          Text(ex.name, style: AppFonts.display(size: 22, color: c.ink)),
+          if (ex.category.isNotEmpty || (ex.subgroup?.isNotEmpty ?? false)) ...<Widget>[
+            const SizedBox(height: 4),
+            Text(
+                <String>[
+                  if (ex.category.isNotEmpty) ex.category,
+                  if (ex.subgroup?.trim().isNotEmpty ?? false) ex.subgroup!,
+                ].join(' · '),
+                style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w600)),
+          ],
+          const SizedBox(height: 16),
+          Text('ОПИСАНИЕ',
+              style: AppFonts.mono(size: 11, color: c.inkMutedXl, weight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          Text(hasDesc ? ex.description!.trim() : 'Описание не задано',
+              style: TextStyle(
+                  fontSize: 14, height: 1.45, color: hasDesc ? c.ink : c.inkMuted)),
+          if (chars.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 18),
+            Text('ГРУППЫ МЫШЦ',
+                style: AppFonts.mono(size: 11, color: c.inkMutedXl, weight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            Container(
+              decoration: BoxDecoration(
+                color: c.card,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: c.line),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: <Widget>[
+                  for (int i = 0; i < chars.length; i++) ...<Widget>[
+                    if (i > 0) Divider(height: 1, thickness: 1, color: c.line),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          SizedBox(
+                              width: 120,
+                              child: Text(chars[i].key,
+                                  style: TextStyle(fontSize: 13, color: c.inkMuted))),
+                          Expanded(
+                              child: Text(chars[i].value,
+                                  style: TextStyle(fontSize: 14, color: c.ink))),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
 }
 
 // ─── Общие виджеты ───
