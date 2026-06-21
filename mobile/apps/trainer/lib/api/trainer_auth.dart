@@ -1,19 +1,48 @@
 import 'package:core/core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Профиль тренера (срез — только то, что нужно главной).
+/// Контакт тренера (тип + значение).
+class TrainerContact {
+  TrainerContact({required this.type, required this.value});
+  final String type;
+  final String value;
+  factory TrainerContact.fromJson(Map<String, dynamic> j) =>
+      TrainerContact(type: j['type'] as String? ?? '', value: j['value'] as String? ?? '');
+  Map<String, String> toJson() => <String, String>{'type': type, 'value': value};
+}
+
+/// Профиль тренера.
 class TrainerProfile {
-  TrainerProfile({required this.firstName, required this.lastName, required this.email});
+  TrainerProfile({
+    required this.firstName,
+    required this.lastName,
+    required this.email,
+    required this.title,
+    required this.bio,
+    required this.birthDate,
+    required this.contacts,
+  });
 
   factory TrainerProfile.fromJson(Map<String, dynamic> j) => TrainerProfile(
         firstName: (j['firstName'] as String?) ?? '',
         lastName: (j['lastName'] as String?) ?? '',
         email: (j['email'] as String?) ?? '',
+        title: j['title'] as String?,
+        bio: j['bio'] as String?,
+        birthDate: j['birthDate'] as String?,
+        contacts: ((j['contacts'] as List<dynamic>?) ?? <dynamic>[])
+            .cast<Map<String, dynamic>>()
+            .map(TrainerContact.fromJson)
+            .toList(),
       );
 
   final String firstName;
   final String lastName;
   final String email;
+  final String? title;
+  final String? bio;
+  final String? birthDate;
+  final List<TrainerContact> contacts;
 
   String get fullName => '$firstName $lastName'.trim();
 }
@@ -47,6 +76,12 @@ class TrainerApi {
 
   Future<TrainerProfile> me() async {
     final Map<String, dynamic> res = await _api.getJson('/api/auth/me');
+    return TrainerProfile.fromJson(res['trainer'] as Map<String, dynamic>);
+  }
+
+  /// Обновить профиль (PATCH /api/auth/me). Передаём только заполняемые поля.
+  Future<TrainerProfile> updateProfile(Map<String, dynamic> body) async {
+    final Map<String, dynamic> res = await _api.patchJson('/api/auth/me', body);
     return TrainerProfile.fromJson(res['trainer'] as Map<String, dynamic>);
   }
 

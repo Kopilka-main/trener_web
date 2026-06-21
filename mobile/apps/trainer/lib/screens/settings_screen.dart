@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/trainer_auth.dart';
+import 'profile_edit_screen.dart';
 
-/// Профиль и настройки тренера: данные аккаунта и выход.
+/// Профиль и настройки тренера: данные аккаунта, редактирование, тема и выход.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -12,6 +13,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<TrainerProfile> me = ref.watch(trainerMeProvider);
     final ColorScheme cs = Theme.of(context).colorScheme;
+    final AppColors c = context.colors;
     return Scaffold(
       appBar: AppBar(title: const Text('Профиль')),
       body: me.when(
@@ -39,6 +41,10 @@ class SettingsScreen extends ConsumerWidget {
                     children: <Widget>[
                       Text(a.fullName.isNotEmpty ? a.fullName : 'Аккаунт',
                           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                      if (a.title?.isNotEmpty == true) ...<Widget>[
+                        const SizedBox(height: 2),
+                        Text(a.title!, style: TextStyle(fontSize: 13, color: c.accent, fontWeight: FontWeight.w600)),
+                      ],
                       if (a.email.isNotEmpty) ...<Widget>[
                         const SizedBox(height: 4),
                         Text(a.email, style: TextStyle(color: cs.onSurfaceVariant)),
@@ -46,9 +52,37 @@ class SettingsScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
+                IconButton(
+                  onPressed: () async {
+                    await Navigator.of(context).push<bool>(
+                      MaterialPageRoute<bool>(builder: (_) => ProfileEditScreen(profile: a)),
+                    );
+                  },
+                  icon: Icon(Icons.edit_outlined, size: 22, color: c.inkMuted),
+                  tooltip: 'Редактировать',
+                ),
               ],
             ),
-            const SizedBox(height: 24),
+            if (a.bio?.isNotEmpty == true) ...<Widget>[
+              const SizedBox(height: 14),
+              Text(a.bio!, style: TextStyle(fontSize: 14, height: 1.4, color: c.ink)),
+            ],
+            if (a.contacts.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 14),
+              ...a.contacts.map((TrainerContact ct) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: <Widget>[
+                        SizedBox(
+                          width: 100,
+                          child: Text(ct.type, style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w600)),
+                        ),
+                        Expanded(child: Text(ct.value, style: TextStyle(fontSize: 14, color: c.ink))),
+                      ],
+                    ),
+                  )),
+            ],
+            const SizedBox(height: 16),
             const Divider(),
             const _ThemeSwitch(),
             const Divider(),
@@ -62,7 +96,6 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
   }
-
 }
 
 /// Переключатель темы: Система / Светлая / Тёмная.

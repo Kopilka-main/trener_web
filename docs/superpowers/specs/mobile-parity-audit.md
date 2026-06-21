@@ -44,30 +44,30 @@
 
 ## Матрица покрытия — ТРЕНЕР (`apps/web` → `mobile/apps/trainer`)
 
-| Веб-страница       | Мобильный экран         | Статус | Заметки                                                                                                             |
-| ------------------ | ----------------------- | ------ | ------------------------------------------------------------------------------------------------------------------- |
-| LoginPage          | login_screen            | ✅     |                                                                                                                     |
-| RegisterPage       | register_screen         | ✅     |                                                                                                                     |
-| HomePage           | home_screen             | ⚠️     | сверить плитки/метрики                                                                                              |
-| CalendarPage       | calendar_screen         | ⚠️     | create/edit есть; сверить prefs, planned-workout, виды                                                              |
-| ClientsPage        | clients_screen          | ✅     | + создание клиента (FAB); фильтры активные/архив                                                                    |
-| ClientCardPage     | clients_screen (Detail) | ✅     | баланс/замеры/история/назначение/правка; вкладки P2                                                                 |
-| ClientEditPage     | client_edit_screen      | ✅     | имя/телефон/формат/статус/заметки + код подключения                                                                 |
-| ClientProfilePage  | —                       | ⚠️     | часть карточки                                                                                                      |
-| ClientWorkoutsPage | assign_workout_screen   | ⚠️     | назначение тренировки готово (план+пикер); управление/правка — позже                                                |
-| ActiveWorkoutPage  | active_workout_screen   | ✅     | проведение: draft→старт→лог подходов→отдых→завершение; пикер из полного каталога, добавл/удал/перестановка          |
-| ClientStatsPage    | clients_screen (Stats)  | ✅     | сводка + рекорды в карточке                                                                                         |
-| ClientMedicalPage  | client_medical_screen   | ✅     | заметки (дата+текст) список/создание/удаление, индикатор файла; загрузка файла P2 (нужен нативный пикер)            |
-| ClientPaymentsPage | clients_screen (Баланс) | ⚠️     | пакеты + добавление; детальная история платежей P2                                                                  |
-| ClientCalendarPage | —                       | ⚠️     | календарь клиента (слит в общий)                                                                                    |
-| MessagesPage       | conversations_screen    | ✅     |                                                                                                                     |
-| ClientChatPage     | chat_screen             | ✅     |                                                                                                                     |
-| NotificationsPage  | notifications_screen    | ⚠️     | actionable по занятиям (отклонён/сегодня/ждёт/подтв.); ДР/балансы P2                                                |
-| KnowledgeBasePage  | knowledge_screen        | ✅     | вкладки Тренировки/Упражнения, чипы групп, поиск, FAB; вход из шапки главной                                        |
-| ExerciseEditPage   | exercise_edit_screen    | ✅     | группа/подгруппа/имя/описание/дефолты/отдых; системное → личная копия; удаление                                     |
-| TemplateEditPage   | template_edit_screen    | ✅     | шаг выбора (счётчик подходов) + детали/тип/порядок/правка позиций; удаление                                         |
-| AccountingPage     | accounting_screen       | ✅     | период (мес/кв/год/произв.), вкладки Сводка/Доходы/Расходы, фильтр по категориям, добавление/удаление; теги/залы P2 |
-| ProfilePage        | settings_screen         | ⚠️     | аватар, редактирование                                                                                              |
+| Веб-страница       | Мобильный экран                       | Статус | Заметки                                                                                                             |
+| ------------------ | ------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------- |
+| LoginPage          | login_screen                          | ✅     |                                                                                                                     |
+| RegisterPage       | register_screen                       | ✅     |                                                                                                                     |
+| HomePage           | home_screen                           | ⚠️     | сверить плитки/метрики                                                                                              |
+| CalendarPage       | calendar_screen                       | ⚠️     | create/edit есть; сверить prefs, planned-workout, виды                                                              |
+| ClientsPage        | clients_screen                        | ✅     | + создание клиента (FAB); фильтры активные/архив                                                                    |
+| ClientCardPage     | clients_screen (Detail)               | ✅     | баланс/замеры/история/назначение/правка; вкладки P2                                                                 |
+| ClientEditPage     | client_edit_screen                    | ✅     | имя/телефон/формат/статус/заметки + код подключения                                                                 |
+| ClientProfilePage  | —                                     | ⚠️     | часть карточки                                                                                                      |
+| ClientWorkoutsPage | assign_workout_screen                 | ⚠️     | назначение тренировки готово (план+пикер); управление/правка — позже                                                |
+| ActiveWorkoutPage  | active_workout_screen                 | ✅     | проведение: draft→старт→лог подходов→отдых→завершение; пикер из полного каталога, добавл/удал/перестановка          |
+| ClientStatsPage    | clients_screen (Stats)                | ✅     | сводка + рекорды в карточке                                                                                         |
+| ClientMedicalPage  | client_medical_screen                 | ✅     | заметки (дата+текст) список/создание/удаление, индикатор файла; загрузка файла P2 (нужен нативный пикер)            |
+| ClientPaymentsPage | clients_screen (Баланс)               | ⚠️     | пакеты + добавление; детальная история платежей P2                                                                  |
+| ClientCalendarPage | —                                     | ⚠️     | календарь клиента (слит в общий)                                                                                    |
+| MessagesPage       | conversations_screen                  | ✅     |                                                                                                                     |
+| ClientChatPage     | chat_screen                           | ✅     |                                                                                                                     |
+| NotificationsPage  | notifications_screen                  | ⚠️     | actionable по занятиям (отклонён/сегодня/ждёт/подтв.); ДР/балансы P2                                                |
+| KnowledgeBasePage  | knowledge_screen                      | ✅     | вкладки Тренировки/Упражнения, чипы групп, поиск, FAB; вход из шапки главной                                        |
+| ExerciseEditPage   | exercise_edit_screen                  | ✅     | группа/подгруппа/имя/описание/дефолты/отдых; системное → личная копия; удаление                                     |
+| TemplateEditPage   | template_edit_screen                  | ✅     | шаг выбора (счётчик подходов) + детали/тип/порядок/правка позиций; удаление                                         |
+| AccountingPage     | accounting_screen                     | ✅     | период (мес/кв/год/произв.), вкладки Сводка/Доходы/Расходы, фильтр по категориям, добавление/удаление; теги/залы P2 |
+| ProfilePage        | settings_screen + profile_edit_screen | ✅     | имя/специализация/ДР/био/контакты — просмотр+правка (PATCH); тема, выход. Аватар + залы P2                          |
 
 ## Шаблон по-экранного разбора
 
