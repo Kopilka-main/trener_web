@@ -88,6 +88,8 @@ class SettingsScreen extends ConsumerWidget {
             const Divider(),
             const _GymsSection(),
             const Divider(),
+            const _PushToggle(),
+            const Divider(),
             const _ThemeSwitch(),
             const Divider(),
             ListTile(
@@ -97,6 +99,75 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Тумблер push-уведомлений: запрашивает разрешение и регистрирует токен.
+class _PushToggle extends ConsumerStatefulWidget {
+  const _PushToggle();
+  @override
+  ConsumerState<_PushToggle> createState() => _PushToggleState();
+}
+
+class _PushToggleState extends ConsumerState<_PushToggle> {
+  bool _enabled = false;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final bool on = await ref.read(pushServiceProvider).isEnabled();
+    if (mounted) setState(() => _enabled = on);
+  }
+
+  Future<void> _onChanged(bool v) async {
+    if (_busy) return;
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    if (!v) {
+      // Android не даёт отозвать разрешение из приложения.
+      m.showSnackBar(const SnackBar(content: Text('Отключить уведомления можно в настройках телефона')));
+      return;
+    }
+    setState(() => _busy = true);
+    final bool ok = await ref.read(pushServiceProvider).enable();
+    if (!mounted) return;
+    setState(() {
+      _enabled = ok;
+      _busy = false;
+    });
+    if (!ok) {
+      m.showSnackBar(const SnackBar(content: Text('Разрешите уведомления в настройках телефона')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text('УВЕДОМЛЕНИЯ', style: AppFonts.mono(size: 11, color: c.inkMutedXl, weight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Row(
+            children: <Widget>[
+              const Icon(Icons.notifications_outlined, size: 22),
+              const SizedBox(width: 12),
+              const Expanded(child: Text('Push-уведомления', style: TextStyle(fontSize: 16))),
+              if (_busy)
+                const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+              else
+                Switch(value: _enabled, onChanged: _onChanged),
+            ],
+          ),
+        ],
       ),
     );
   }

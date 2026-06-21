@@ -52,6 +52,36 @@ class PushService {
       // регистрация токена — best-effort
     }
   }
+
+  /// Включены ли уведомления (разрешение выдано).
+  Future<bool> isEnabled() async {
+    try {
+      await Firebase.initializeApp();
+      final NotificationSettings s = await FirebaseMessaging.instance.getNotificationSettings();
+      return s.authorizationStatus == AuthorizationStatus.authorized ||
+          s.authorizationStatus == AuthorizationStatus.provisional;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Запросить разрешение и зарегистрировать токен. true — если разрешение выдано.
+  Future<bool> enable() async {
+    try {
+      await Firebase.initializeApp();
+      final FirebaseMessaging m = FirebaseMessaging.instance;
+      final NotificationSettings s = await m.requestPermission();
+      final bool ok = s.authorizationStatus == AuthorizationStatus.authorized ||
+          s.authorizationStatus == AuthorizationStatus.provisional;
+      if (ok) {
+        final String? token = await m.getToken();
+        if (token != null) await _register(token);
+      }
+      return ok;
+    } catch (_) {
+      return false;
+    }
+  }
 }
 
 final Provider<PushService> pushServiceProvider = Provider<PushService>(

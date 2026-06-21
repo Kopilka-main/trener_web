@@ -63,8 +63,10 @@ class HomeScreen extends ConsumerWidget {
             ),
           ),
           data: (HomeData d) {
-            final bool alertsPrimary = d.alerts > 0;
-            final bool msgPrimary = !alertsPrimary && d.unread > 0;
+            // Один acid-fill: непрочитанные сообщения в приоритете (как в вебе),
+            // иначе — уведомления. Плитка «Сообщения» акцентна при unread > 0.
+            final bool msgPrimary = d.unread > 0;
+            final bool alertsPrimary = !msgPrimary && d.alerts > 0;
             return RefreshIndicator(
               onRefresh: () async => ref.invalidate(trainerHomeProvider),
               child: CustomScrollView(
