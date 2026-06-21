@@ -35,6 +35,7 @@ class Client {
     required this.tags,
     required this.contacts,
     required this.hasAccount,
+    required this.birthDate,
   });
 
   final String id;
@@ -47,6 +48,7 @@ class Client {
   final List<String> tags;
   final List<ClientContact> contacts;
   final bool hasAccount;
+  final String? birthDate; // YYYY-MM-DD
 
   String get fullName => '$firstName $lastName'.trim();
 
@@ -70,6 +72,7 @@ class Client {
             .map(ClientContact.fromJson)
             .toList(),
         hasAccount: (j['accountId'] as String?) != null,
+        birthDate: j['birthDate'] as String?,
       );
 }
 
@@ -128,6 +131,17 @@ class TrainerClientsApi {
       'notes': notes == null || notes.trim().isEmpty ? null : notes.trim(),
     });
   }
+
+  /// Балансы абонементов по клиентам: clientId → остаток занятий.
+  Future<Map<String, num>> balances() async {
+    final Map<String, dynamic> r = await _api.getJson('/api/packages/balances');
+    final Map<String, num> out = <String, num>{};
+    for (final dynamic e in (r['balances'] as List<dynamic>?) ?? <dynamic>[]) {
+      final Map<String, dynamic> b = e as Map<String, dynamic>;
+      out[b['clientId'] as String? ?? ''] = (b['remaining'] as num?) ?? 0;
+    }
+    return out;
+  }
 }
 
 final Provider<TrainerClientsApi> trainerClientsApiProvider =
@@ -135,3 +149,6 @@ final Provider<TrainerClientsApi> trainerClientsApiProvider =
 
 final FutureProvider<List<Client>> trainerClientsProvider =
     FutureProvider<List<Client>>((ref) => ref.read(trainerClientsApiProvider).load());
+
+final FutureProvider<Map<String, num>> trainerBalancesProvider =
+    FutureProvider<Map<String, num>>((ref) => ref.read(trainerClientsApiProvider).balances());

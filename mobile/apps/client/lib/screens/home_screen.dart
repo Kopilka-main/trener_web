@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../api/client_auth.dart';
 import '../api/client_chat.dart';
 import '../api/client_home.dart';
 
@@ -86,11 +87,29 @@ class HomeScreen extends ConsumerWidget {
                         ),
                       ),
                     ),
-                    IconButton(
-                      onPressed: () => context.push('/settings'),
-                      icon: Icon(Icons.settings_outlined, size: 28, color: c.inkMuted),
-                      tooltip: 'Профиль',
-                    ),
+                    Builder(builder: (BuildContext context) {
+                      final ClientAccount? acc = ref.watch(clientMeProvider).valueOrNull;
+                      final String? fileId = acc?.avatarFileId;
+                      if (fileId == null) {
+                        return IconButton(
+                          onPressed: () => context.push('/settings'),
+                          icon: Icon(Icons.settings_outlined, size: 28, color: c.inkMuted),
+                          tooltip: 'Профиль',
+                        );
+                      }
+                      return GestureDetector(
+                        onTap: () => context.push('/settings'),
+                        child: Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: AuthedAvatar(
+                            url: ref.read(clientApiProvider).avatarUrl(fileId),
+                            token: ref.watch(sessionProvider).token,
+                            initials: acc?.initials ?? '',
+                            radius: 18,
+                          ),
+                        ),
+                      );
+                    }),
                   ],
                 ),
                 // Hero: счётчик / CTA подключения.

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/trainer_accounting.dart';
 import '../api/trainer_clients.dart';
+import '../api/trainer_gyms.dart';
 
 // ─── Утилиты ───
 const List<String> _ruMonthsShort = <String>[
@@ -44,6 +45,7 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
 
   // Фильтры списков.
   String _catFilter = '';
+  String _tagFilter = '';
 
   DateTime get _from {
     switch (_mode) {
@@ -226,6 +228,7 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
           onTap: () => setState(() {
             _tab = t;
             _catFilter = '';
+            _tagFilter = '';
           }),
           child: Container(
             margin: const EdgeInsets.only(right: 8),
@@ -314,7 +317,11 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
         final List<Income> ranged = all.where((Income e) => _inRange(e.date)).toList()
           ..sort((Income a, Income b) => (b.date ?? DateTime(0)).compareTo(a.date ?? DateTime(0)));
         final List<String> cats = ranged.map((Income e) => e.category).toSet().toList()..sort();
-        final List<Income> list = _catFilter.isEmpty ? ranged : ranged.where((Income e) => e.category == _catFilter).toList();
+        final List<Income> list = ranged.where((Income e) {
+          if (_catFilter.isNotEmpty && e.category != _catFilter) return false;
+          if (_tagFilter.isNotEmpty && !e.tags.contains(_tagFilter)) return false;
+          return true;
+        }).toList();
         final num subtotal = list.fold<num>(0, (num a, Income e) => a + e.amount);
         return Column(
           children: <Widget>[
@@ -332,7 +339,7 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
                     if (e.note?.isNotEmpty == true) e.note!,
                   ].join(' · ');
                   return _entryRow(c, primary, e.category, meta, e.amount, sign: '+', color: c.accent,
-                      onDelete: e.isPackage ? null : () => _deleteIncome(e.id));
+                      tags: e.tags, onDelete: e.isPackage ? null : () => _deleteIncome(e.id));
                 },
               ),
             ),
@@ -352,7 +359,11 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
         final List<Expense> ranged = all.where((Expense e) => _inRange(e.date)).toList()
           ..sort((Expense a, Expense b) => (b.date ?? DateTime(0)).compareTo(a.date ?? DateTime(0)));
         final List<String> cats = ranged.map((Expense e) => e.category).toSet().toList()..sort();
-        final List<Expense> list = _catFilter.isEmpty ? ranged : ranged.where((Expense e) => e.category == _catFilter).toList();
+        final List<Expense> list = ranged.where((Expense e) {
+          if (_catFilter.isNotEmpty && e.category != _catFilter) return false;
+          if (_tagFilter.isNotEmpty && !e.tags.contains(_tagFilter)) return false;
+          return true;
+        }).toList();
         final num subtotal = list.fold<num>(0, (num a, Expense e) => a + e.amount);
         return Column(
           children: <Widget>[
@@ -365,7 +376,7 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
                 itemBuilder: (BuildContext ctx, int i) {
                   final Expense e = list[i];
                   return _entryRow(c, e.category, e.category, e.note ?? '', e.amount,
-                      sign: '−', color: c.inkMuted, onDelete: () => _deleteExpense(e.id));
+                      sign: '−', color: c.inkMuted, tags: e.tags, onDelete: () => _deleteExpense(e.id));
                 },
               ),
             ),
@@ -402,7 +413,7 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
       );
 
   Widget _entryRow(AppColors c, String primary, String kicker, String meta, num amount,
-      {required String sign, required Color color, VoidCallback? onDelete}) {
+      {required String sign, required Color color, List<String> tags = const <String>[], VoidCallback? onDelete}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
@@ -421,6 +432,24 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
                 if (meta.isNotEmpty)
                   Text(meta, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: c.inkMuted)),
+                if (tags.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: tags
+                          .map((String t) => GestureDetector(
+                                onTap: () => setState(() => _tagFilter = _tagFilter == t ? '' : t),
+                                child: Text('#$t',
+                                    style: AppFonts.mono(
+                                        size: 11,
+                                        color: _tagFilter == t ? c.accent : c.inkMutedXl,
+                                        weight: FontWeight.w600)),
+                              ))
+                          .toList(),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -530,6 +559,46 @@ class _Chip extends StatelessWidget {
   }
 }
 
+/// Выбор зала для расхода (опционально).
+class _GymPicker extends ConsumerWidget {
+  const _GymPicker({required this.selected, required this.onPick});
+  final String? selected;
+  final ValueChanged<String?> onPick;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final List<Gym> gyms = ref.watch(trainerGymsProvider).valueOrNull ?? <Gym>[];
+    if (gyms.isEmpty) return const SizedBox.shrink();
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: <Widget>[
+        _Pill(label: 'Без зала', active: selected == null, onTap: () => onPick(null)),
+        ...gyms.map((Gym g) => _Pill(label: g.name, active: selected == g.id, onTap: () => onPick(g.id))),
+      ],
+    );
+  }
+}
+
+class _Pill extends StatelessWidget {
+  const _Pill({required this.label, required this.active, required this.onTap});
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(color: active ? c.accent : c.chip, borderRadius: BorderRadius.circular(18)),
+        child: Text(label,
+            style: AppFonts.mono(size: 11, color: active ? c.accentOn : c.inkMuted, weight: FontWeight.w600)),
+      ),
+    );
+  }
+}
+
 /// Форма добавления дохода/расхода (категория, сумма, дата, заметка).
 class _AddEntrySheet extends ConsumerStatefulWidget {
   const _AddEntrySheet({required this.isIncome, required this.categories});
@@ -544,6 +613,8 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
   late String _category = widget.categories.first;
   final TextEditingController _amount = TextEditingController();
   final TextEditingController _note = TextEditingController();
+  final TextEditingController _tags = TextEditingController();
+  String? _gymId;
   DateTime _date = DateTime.now();
   bool _busy = false;
 
@@ -551,8 +622,15 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
   void dispose() {
     _amount.dispose();
     _note.dispose();
+    _tags.dispose();
     super.dispose();
   }
+
+  List<String> _parseTags() => _tags.text
+      .split(RegExp(r'[,\s]+'))
+      .map((String s) => s.replaceAll('#', '').trim())
+      .where((String s) => s.isNotEmpty)
+      .toList();
 
   Future<void> _save() async {
     final num? amount = num.tryParse(_amount.text.trim().replaceAll(',', '.'));
@@ -560,11 +638,14 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
     setState(() => _busy = true);
     final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
     final NavigatorState nav = Navigator.of(context);
+    final List<String> tags = _parseTags();
     final Map<String, dynamic> body = <String, dynamic>{
       'category': _category,
       'amount': amount,
       'date': _iso(_date),
       'note': _note.text.trim().isEmpty ? null : _note.text.trim(),
+      if (tags.isNotEmpty) 'tags': tags,
+      if (!widget.isIncome && _gymId != null) 'gymId': _gymId,
     };
     try {
       final TrainerAccountingApi api = ref.read(trainerAccountingApiProvider);
@@ -654,6 +735,20 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
             ),
           ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _tags,
+            decoration: InputDecoration(
+              hintText: 'Теги через пробел: #абонемент #нал',
+              filled: true,
+              fillColor: c.card,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+            ),
+          ),
+          if (!widget.isIncome) ...<Widget>[
+            const SizedBox(height: 10),
+            _GymPicker(selected: _gymId, onPick: (String? id) => setState(() => _gymId = id)),
+          ],
           const SizedBox(height: 14),
           FilledButton(
             onPressed: _busy ? null : _save,

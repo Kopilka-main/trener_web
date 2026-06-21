@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../api/trainer_accounting.dart';
 import '../api/trainer_client_card.dart';
 import '../api/trainer_client_stats.dart';
 import '../api/trainer_clients.dart';
@@ -448,37 +449,67 @@ class _PackagesBlock extends ConsumerWidget {
       error: (Object e, _) => const _Empty('Не удалось загрузить'),
       data: (List<TPackage> all) {
         final List<TPackage> active = all.where((TPackage p) => p.isActive).toList();
-        if (active.isEmpty) return const _Empty('Активных пакетов нет');
+        // История платежей: доходы, привязанные к этому клиенту.
+        final List<Income> payments = (ref.watch(trainerIncomesProvider).valueOrNull ?? <Income>[])
+            .where((Income e) => e.clientId == clientId)
+            .toList()
+          ..sort((Income a, Income b) => (b.date ?? DateTime(0)).compareTo(a.date ?? DateTime(0)));
+        if (active.isEmpty && payments.isEmpty) return const _Empty('Активных пакетов нет');
         return Column(
-          children: active.map((TPackage p) => Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
-                child: Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            ...active.map((TPackage p) => Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(p.workoutType?.isNotEmpty == true ? p.workoutType! : 'Пакет',
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                            if (p.endsAt != null)
+                              Text('до ${_date(DateTime.tryParse(p.endsAt!)?.toLocal())}',
+                                  style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: <Widget>[
-                          Text(p.workoutType?.isNotEmpty == true ? p.workoutType! : 'Пакет',
-                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
-                          if (p.endsAt != null)
-                            Text('до ${_date(DateTime.tryParse(p.endsAt!)?.toLocal())}',
-                                style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+                          Text('${p.remaining}',
+                              style: AppFonts.display(size: 22, color: p.remaining > 0 ? c.accent : c.danger)),
+                          Text('осталось', style: AppFonts.mono(size: 9, color: c.inkMutedXl, weight: FontWeight.w700)),
                         ],
                       ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                    ],
+                  ),
+                )),
+            if (payments.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 4),
+              Text('ИСТОРИЯ ПЛАТЕЖЕЙ',
+                  style: AppFonts.mono(size: 10, color: c.inkMutedXl, weight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              ...payments.take(8).map((Income e) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 5),
+                    child: Row(
                       children: <Widget>[
-                        Text('${p.remaining}',
-                            style: AppFonts.display(size: 22, color: p.remaining > 0 ? c.accent : c.danger)),
-                        Text('осталось', style: AppFonts.mono(size: 9, color: c.inkMutedXl, weight: FontWeight.w700)),
+                        Text(_date(e.date), style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(e.title ?? e.category,
+                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 13, color: c.ink)),
+                        ),
+                        Text('+${e.amount.round()} ₽',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.accent)),
                       ],
                     ),
-                  ],
-                ),
-              )).toList(),
+                  )),
+            ],
+          ],
         );
       },
     );
