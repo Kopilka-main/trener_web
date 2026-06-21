@@ -127,6 +127,22 @@ export function chatRoutes(
     },
   );
 
+  // Удалить одно сообщение диалога (тренер).
+  typed.delete(
+    '/api/clients/:id/messages/:messageId',
+    {
+      preHandler: clientPreHandler,
+      schema: {
+        params: z.object({ id: z.string(), messageId: z.string() }),
+        response: { 200: z.object({ ok: z.literal(true) }) },
+      },
+    },
+    async (req) => {
+      await svc.deleteMessage(trainerId(req), req.params.id, req.params.messageId);
+      return { ok: true as const };
+    },
+  );
+
   typed.post(
     '/api/clients/:id/messages',
     {

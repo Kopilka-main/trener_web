@@ -176,6 +176,11 @@ export function makeChatService(repo: ChatRepo, deps: ChatDeps) {
       await repo.unpinMessage(trainerId, clientId, messageId);
     },
 
+    // Удалить одно сообщение диалога (тренер).
+    async deleteMessage(trainerId: string, clientId: string, messageId: string): Promise<void> {
+      await repo.deleteMessage(trainerId, clientId, messageId);
+    },
+
     async markRead(trainerId: string, clientId: string): Promise<void> {
       await repo.markRead(trainerId, clientId, deps.now());
     },

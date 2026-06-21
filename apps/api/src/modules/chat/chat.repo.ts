@@ -281,6 +281,15 @@ export function makeChatRepo(db: Db) {
         .where(and(eq(messages.id, messageId), eq(messages.conversationId, conversation.id)));
     },
 
+    // Удалить одно сообщение диалога. Идемпотентно. Цитаты/закреп на него → NULL (FK).
+    async deleteMessage(trainerId: string, clientId: string, messageId: string): Promise<void> {
+      const conversation = await findConversation(trainerId, clientId);
+      if (!conversation) return;
+      await db
+        .delete(messages)
+        .where(and(eq(messages.id, messageId), eq(messages.conversationId, conversation.id)));
+    },
+
     // Короткая цитата сообщения диалога (для ответа на отправку). Нет/не своё → null.
     async getReplyBrief(
       trainerId: string,
