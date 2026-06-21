@@ -7,6 +7,13 @@ import '../api/trainer_home.dart';
 
 String _pad2(int n) => n.toString().padLeft(2, '0');
 
+/// Прибыль за месяц коротко: тысячи → «12к», иначе число.
+String _profit(num v) {
+  final int n = v.round();
+  if (n.abs() >= 1000) return '${n < 0 ? '−' : ''}${(n.abs() / 1000).toStringAsFixed(n.abs() >= 10000 ? 0 : 1)}к';
+  return '$n';
+}
+
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -42,16 +49,6 @@ class HomeScreen extends ConsumerWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
-                    ),
-                    IconButton(
-                      onPressed: () => context.push('/accounting'),
-                      icon: Icon(Icons.account_balance_wallet_outlined, size: 24, color: c.inkMuted),
-                      tooltip: 'Бухгалтерия',
-                    ),
-                    IconButton(
-                      onPressed: () => context.push('/knowledge'),
-                      icon: Icon(Icons.menu_book_outlined, size: 26, color: c.inkMuted),
-                      tooltip: 'База знаний',
                     ),
                     IconButton(
                       onPressed: () => context.push('/settings'),
@@ -115,10 +112,27 @@ class HomeScreen extends ConsumerWidget {
                     _Tile(
                       title: 'Уведомления',
                       sub: 'что требует внимания',
-                      value: '↗',
-                      metric: 'открыть',
+                      value: _pad2(d.alerts),
+                      metric: 'алертов',
                       icon: Icons.notifications_none,
+                      primary: d.alerts > 0,
                       onTap: () => context.push('/notifications'),
+                    ),
+                    _Tile(
+                      title: 'Финансы',
+                      sub: 'прибыль за месяц',
+                      value: _profit(d.monthlyProfit),
+                      metric: 'за месяц',
+                      icon: Icons.account_balance_wallet_outlined,
+                      onTap: () => context.push('/accounting'),
+                    ),
+                    _Tile(
+                      title: 'База знаний',
+                      sub: 'упражнения и шаблоны',
+                      value: _pad2(d.knowledgeCount),
+                      metric: 'упражнений',
+                      icon: Icons.menu_book_outlined,
+                      onTap: () => context.push('/knowledge'),
                     ),
                   ],
                 ),

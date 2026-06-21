@@ -48,8 +48,8 @@
 | ------------------ | ------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------- |
 | LoginPage          | login_screen                          | ✅     |                                                                                                                 |
 | RegisterPage       | register_screen                       | ✅     |                                                                                                                 |
-| HomePage           | home_screen                           | ⚠️     | сверить плитки/метрики                                                                                          |
-| CalendarPage       | calendar_screen                       | ⚠️     | create/edit есть; сверить prefs, planned-workout, виды                                                          |
+| HomePage           | home_screen                           | ✅     | 6 плиток: клиенты/календарь/чат/уведомления(алерты)/финансы(профит)/база знаний                                 |
+| CalendarPage       | calendar_screen                       | ✅     | день/неделя/месяц, create/edit/delete, быстрый выбор зала; planned-workout linking и «запомнить» prefs — P2     |
 | ClientsPage        | clients_screen                        | ✅     | + создание клиента (FAB); фильтры активные/архив                                                                |
 | ClientCardPage     | clients_screen (Detail)               | ✅     | баланс/замеры/история/назначение/правка; вкладки P2                                                             |
 | ClientEditPage     | client_edit_screen                    | ✅     | имя/телефон/формат/статус/заметки + код подключения                                                             |

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/trainer_calendar.dart';
 import '../api/trainer_clients.dart';
+import '../api/trainer_gyms.dart';
 
 String _iso(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -228,6 +229,7 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
                 controller: _location,
                 decoration: const InputDecoration(labelText: 'Место (необязательно)', border: OutlineInputBorder()),
               ),
+              _GymQuickPick(onPick: (String name) => setState(() => _location.text = name)),
             ],
             const SizedBox(height: 20),
             Row(
@@ -277,6 +279,36 @@ class _PickerField extends StatelessWidget {
       child: InputDecorator(
         decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
         child: Text(value),
+      ),
+    );
+  }
+}
+
+/// Быстрый выбор зала: чипы из настроенных залов подставляют название в «Место».
+class _GymQuickPick extends ConsumerWidget {
+  const _GymQuickPick({required this.onPick});
+  final ValueChanged<String> onPick;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppColors c = context.colors;
+    final List<Gym> gyms = ref.watch(trainerGymsProvider).valueOrNull ?? <Gym>[];
+    if (gyms.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: gyms
+            .map((Gym g) => GestureDetector(
+                  onTap: () => onPick(g.name),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(color: c.chip, borderRadius: BorderRadius.circular(18)),
+                    child: Text(g.name,
+                        style: AppFonts.mono(size: 11, color: c.inkMuted, weight: FontWeight.w600)),
+                  ),
+                ))
+            .toList(),
       ),
     );
   }
