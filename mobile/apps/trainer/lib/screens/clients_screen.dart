@@ -354,27 +354,529 @@ String? _birthLine(String? iso) {
   return '$da ${_ruMonthsGen[(mo - 1).clamp(0, 11)]} $y · $age ${_ageDecl(age)}';
 }
 
+/// Карточка клиента как хаб (зеркало web ClientCardPage): шапка, теги, большая
+/// CTA «Тренировки», сетка из 6 плиток-разделов, контакты, заметки. Все рабочие
+/// действия (пакеты/замеры/медкарта/статистика/назначение/чат) достижимы через
+/// плитки → пушащиеся под-экраны разделов.
 class ClientDetailScreen extends ConsumerWidget {
   const ClientDetailScreen({super.key, required this.client});
   final Client client;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final ColorScheme cs = Theme.of(context).colorScheme;
+    final AppColors col = context.colors;
+    // Свежий снимок клиента (статус подключения/теги/заметки). До загрузки —
+    // переданный из списка `client`, чтобы карточка отрисовалась мгновенно.
+    final Client c = ref.watch(trainerClientProvider(client.id)).valueOrNull ?? client;
+
+    final bool isArchived = c.status == ClientStatus.archived;
+    final String name = c.fullName.isNotEmpty ? c.fullName : 'Без имени';
+    final String? avatarUrl = c.avatarFileId != null
+        ? '${ref.read(baseUrlProvider).replaceAll(RegExp(r'/$'), '')}/api/files/${c.avatarFileId}'
+        : null;
+
+    // Бейджи: paidBalance / calBalance / achievements (формулы — зеркало web).
+    final List<TPackage> pkgs = ref.watch(clientPackagesProvider(c.id)).valueOrNull ?? <TPackage>[];
+    final List<TWorkout> workouts = ref.watch(clientWorkoutsCardProvider(c.id)).valueOrNull ?? <TWorkout>[];
+    final ClientStatsData? stats = ref.watch(clientStatsProvider(c.id)).valueOrNull;
+    final List<Session> sessions = (ref.watch(trainerSessionsProvider).valueOrNull ?? <Session>[])
+        .where((Session s) => s.clientId == c.id)
+        .toList();
+
+    final int paidLessons = pkgs.where((TPackage p) => p.isActive).fold(0, (int a, TPackage p) => a + p.lessonsPaid);
+    final int completedWorkouts =
+        workouts.where((TWorkout w) => w.status == 'completed' && !w.createdByClient).length;
+    final int paidBalance = paidLessons - completedWorkouts;
+    final int plannedSessions = sessions.where((Session s) => s.status == SessionStatus.planned).length;
+    final int calBalance = paidBalance - plannedSessions;
+    final int achievements = stats?.records.length ?? 0;
+    final bool connected = c.isConnected;
+
+    void openProfile() => Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(builder: (_) => ClientProfileScreen(client: c)),
+        );
+
+    Future<void> openConnectDialog() async {
+      final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+      final String? code = await _showConnectDialog(context);
+      if (code == null || code.trim().isEmpty) return;
+      try {
+        await ref.read(trainerClientsApiProvider).connectAccount(c.id, code.trim());
+        ref.invalidate(trainerClientsProvider);
+        ref.invalidate(trainerClientProvider(c.id));
+        if (!context.mounted) return;
+        context.push('/chat/${c.id}?name=${Uri.encodeComponent(c.fullName)}');
+      } catch (_) {
+        m.showSnackBar(const SnackBar(content: Text('Не удалось подключить клиента')));
+      }
+    }
+
+    final List<_HubTile> tiles = <_HubTile>[
+      _HubTile(
+        key: 'calendar',
+        icon: Icons.calendar_today_outlined,
+        label: 'Календарь',
+        sub: 'занятия клиента',
+        badge: (plannedSessions > 0 || sessions.isNotEmpty)
+            ? _Badge.calendar(planned: plannedSessions, calBalance: calBalance)
+            : null,
+        onTap: () => context.push('/calendar'),
+      ),
+      _HubTile(
+        key: 'chat',
+        icon: Icons.chat_bubble_outline,
+        label: 'Написать',
+        sub: 'чат с клиентом',
+        locked: !connected,
+        onTap: connected
+            ? () => context.push('/chat/${c.id}?name=${Uri.encodeComponent(c.fullName)}')
+            : openConnectDialog,
+      ),
+      _HubTile(
+        key: 'stats',
+        icon: Icons.bar_chart_outlined,
+        label: 'Прогресс',
+        sub: 'рекорды и история',
+        badge: achievements > 0 ? _Badge.achievements(achievements) : null,
+        onTap: () => Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(builder: (_) => ClientStatsScreen(client: c)),
+        ),
+      ),
+      _HubTile(
+        key: 'payments',
+        icon: Icons.account_balance_wallet_outlined,
+        label: 'Оплата',
+        sub: 'пакеты и расходы',
+        badge: _Badge.balance(paidBalance),
+        onTap: () => Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(builder: (_) => ClientPaymentsScreen(client: c)),
+        ),
+      ),
+      _HubTile(
+        key: 'medcard',
+        icon: Icons.description_outlined,
+        label: 'Медкарта',
+        sub: 'файлы и заметки',
+        onTap: () async {
+          await Navigator.of(context).push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => ClientMedicalScreen(clientId: c.id, clientName: c.fullName),
+            ),
+          );
+          ref.invalidate(clientMedicalProvider(c.id));
+        },
+      ),
+      _HubTile(
+        key: 'profile',
+        icon: Icons.person_outline,
+        label: 'Профиль',
+        sub: 'контакты и данные',
+        onTap: openProfile,
+      ),
+    ];
+
+    return Scaffold(
+      appBar: AppBar(title: Text(name)),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(trainerClientProvider(c.id));
+          ref.invalidate(clientPackagesProvider(c.id));
+          ref.invalidate(clientWorkoutsCardProvider(c.id));
+          ref.invalidate(clientStatsProvider(c.id));
+          ref.invalidate(trainerSessionsProvider);
+        },
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+          children: <Widget>[
+            // Шапка: аватар 64 + имя 26 + чип «Архив».
+            Row(
+              children: <Widget>[
+                Opacity(
+                  opacity: isArchived ? 0.55 : 1,
+                  child: AuthedAvatar(
+                    url: avatarUrl,
+                    token: ref.watch(sessionProvider).token,
+                    initials: c.initials,
+                    radius: 32,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Row(
+                    children: <Widget>[
+                      Flexible(
+                        child: Text(name,
+                            style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, height: 1.05, color: col.ink)),
+                      ),
+                      if (isArchived) ...<Widget>[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                          decoration: BoxDecoration(color: col.chip, borderRadius: BorderRadius.circular(999)),
+                          child: Text('АРХИВ',
+                              style: AppFonts.mono(size: 11, color: col.inkMuted, weight: FontWeight.w700)),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            // Теги.
+            if (c.tags.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: c.tags
+                    .map((String t) => Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(color: col.chip, borderRadius: BorderRadius.circular(999)),
+                          child: Text(t.startsWith('#') ? t : '#$t', style: TextStyle(fontSize: 13, color: col.ink)),
+                        ))
+                    .toList(),
+              ),
+            ],
+            // Большая primary-плитка: переход к тренировкам.
+            const SizedBox(height: 20),
+            _WorkoutsCta(
+              onTap: () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(builder: (_) => ClientWorkoutsScreen(client: c)),
+              ),
+            ),
+            // Сетка плиток-разделов (2 колонки, естественная высота).
+            const SizedBox(height: 12),
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 1.4,
+              children: tiles.map((_HubTile t) => _HubTileView(tile: t)).toList(),
+            ),
+            // Контакты: телефон + дата рождения.
+            if (c.phone?.trim().isNotEmpty == true || c.birthDate != null) ...<Widget>[
+              const SizedBox(height: 20),
+              if (c.phone?.trim().isNotEmpty == true)
+                _ContactRow(
+                  icon: Icons.phone_outlined,
+                  iconColor: col.accent,
+                  text: c.phone!.trim(),
+                  textColor: col.ink,
+                ),
+              if (_birthLine(c.birthDate) case final String b) ...<Widget>[
+                if (c.phone?.trim().isNotEmpty == true) const SizedBox(height: 12),
+                _ContactRow(icon: Icons.cake_outlined, iconColor: col.inkMuted, text: b, textColor: col.ink),
+              ],
+            ],
+            // Заметки.
+            if (c.notes?.trim().isNotEmpty == true) ...<Widget>[
+              const SizedBox(height: 24),
+              Text('ЗАМЕТКИ', style: AppFonts.mono(size: 11, color: col.inkMutedXl, weight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              Text(c.notes!.trim(), style: TextStyle(fontSize: 14, height: 1.5, color: col.ink)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Бейдж плитки-раздела: значение + цвет + опциональная иконка-тренд.
+class _Badge {
+  const _Badge({required this.text, required this.danger, this.trend = false});
+  final String text;
+  final bool danger;
+  final bool trend;
+
+  factory _Badge.balance(int v) =>
+      _Badge(text: v > 0 ? '+$v' : '$v', danger: v < 0);
+
+  factory _Badge.calendar({required int planned, required int calBalance}) =>
+      _Badge(text: '$planned / ${calBalance > 0 ? '+$calBalance' : '$calBalance'}', danger: calBalance < 0);
+
+  factory _Badge.achievements(int v) => _Badge(text: '$v', danger: false, trend: true);
+}
+
+class _HubTile {
+  const _HubTile({
+    required this.key,
+    required this.icon,
+    required this.label,
+    required this.sub,
+    required this.onTap,
+    this.badge,
+    this.locked = false,
+  });
+  final String key;
+  final IconData icon;
+  final String label;
+  final String sub;
+  final VoidCallback onTap;
+  final _Badge? badge;
+  final bool locked;
+}
+
+class _HubTileView extends StatelessWidget {
+  const _HubTileView({required this.tile});
+  final _HubTile tile;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    final Color iconColor = tile.locked ? c.inkMuted : c.ink;
+    return Opacity(
+      opacity: tile.locked ? 0.6 : 1,
+      child: GestureDetector(
+        onTap: tile.onTap,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: c.card,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: c.line),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Icon(tile.icon, size: 22, color: iconColor),
+                  const Spacer(),
+                  if (tile.locked)
+                    Icon(Icons.link_off, size: 18, color: c.danger)
+                  else if (tile.badge != null)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: <Widget>[
+                        Text(tile.badge!.text,
+                            style: AppFonts.display(
+                                size: 22, color: tile.badge!.danger ? c.danger : c.accent, letterSpacing: -0.5)),
+                        if (tile.badge!.trend) ...<Widget>[
+                          const SizedBox(width: 2),
+                          Icon(Icons.trending_up, size: 16, color: c.accent),
+                        ],
+                      ],
+                    ),
+                ],
+              ),
+              const Spacer(),
+              Text(tile.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: c.ink)),
+              Text(tile.sub,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11, color: c.inkMuted)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Большая acid-fill CTA: иконка гантели + «текущая + история» + тройной шеврон.
+class _WorkoutsCta extends StatelessWidget {
+  const _WorkoutsCta({required this.onTap});
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        decoration: BoxDecoration(color: c.accent, borderRadius: BorderRadius.circular(20)),
+        child: Row(
+          children: <Widget>[
+            Container(
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(color: Colors.black12, shape: BoxShape.circle),
+              child: Icon(Icons.fitness_center, size: 22, color: c.accentOn),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text('Перейти к тренировкам',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.accentOn)),
+                  Text('текущая + история',
+                      style: TextStyle(fontSize: 12, color: c.accentOn.withValues(alpha: 0.7))),
+                ],
+              ),
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                for (int i = 0; i < 3; i++)
+                  Transform.translate(
+                    offset: Offset(-8.0 * i, 0),
+                    child: Icon(Icons.chevron_right, size: 22, color: c.accentOn),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ContactRow extends StatelessWidget {
+  const _ContactRow({
+    required this.icon,
+    required this.iconColor,
+    required this.text,
+    required this.textColor,
+  });
+  final IconData icon;
+  final Color iconColor;
+  final String text;
+  final Color textColor;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
+        child: Row(
+          children: <Widget>[
+            Icon(icon, size: 18, color: iconColor),
+            const SizedBox(width: 12),
+            Expanded(child: Text(text, style: TextStyle(fontSize: 15, color: textColor))),
+          ],
+        ),
+    );
+  }
+}
+
+/// Диалог подключения чата: ввод кода (accountId) клиентского приложения.
+Future<String?> _showConnectDialog(BuildContext context) {
+  final TextEditingController code = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (BuildContext ctx) {
+      final AppColors c = ctx.colors;
+      return AlertDialog(
+        backgroundColor: c.card,
+        title: Text('Нет связи с клиентом', style: TextStyle(color: c.ink)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text('Чтобы писать клиенту, укажите его клиентский номер (ID) из приложения клиента.',
+                style: TextStyle(fontSize: 13, color: c.inkMuted)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: code,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'ID клиента', border: OutlineInputBorder()),
+            ),
+          ],
+        ),
+        actions: <Widget>[
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(code.text.trim()),
+            child: const Text('Подключить'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+/// Раздел «Тренировки»: список (к проведению + история) + «Назначить».
+class ClientWorkoutsScreen extends ConsumerWidget {
+  const ClientWorkoutsScreen({super.key, required this.client});
+  final Client client;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Тренировки')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: <Widget>[
+          _Section(
+            title: 'Тренировки',
+            action: _AssignButton(clientId: client.id, clientName: client.fullName),
+            child: _WorkoutsBlock(clientId: client.id),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Раздел «Оплата»: баланс/пакеты + история платежей + «Добавить».
+class ClientPaymentsScreen extends ConsumerWidget {
+  const ClientPaymentsScreen({super.key, required this.client});
+  final Client client;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Оплата')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: <Widget>[
+          _Section(
+            title: 'Баланс',
+            action: _AddPackageButton(clientId: client.id),
+            child: _PackagesBlock(clientId: client.id),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Раздел «Прогресс»: сводная статистика + рекорды.
+class ClientStatsScreen extends ConsumerWidget {
+  const ClientStatsScreen({super.key, required this.client});
+  final Client client;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Прогресс')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: <Widget>[
+          _Section(title: 'Статистика', child: _StatsBlock(clientId: client.id)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Раздел «Профиль»: контакты/данные + замеры + правка через ClientEditScreen.
+class ClientProfileScreen extends ConsumerWidget {
+  const ClientProfileScreen({super.key, required this.client});
+  final Client client;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppColors col = context.colors;
     return Scaffold(
       appBar: AppBar(
-        title: Text(client.fullName.isNotEmpty ? client.fullName : 'Клиент'),
+        title: const Text('Профиль'),
         actions: <Widget>[
           IconButton(
-            tooltip: 'Редактировать',
+            tooltip: 'Править',
             icon: const Icon(Icons.edit_outlined),
             onPressed: () async {
               final bool? changed = await Navigator.of(context).push<bool>(
                 MaterialPageRoute<bool>(builder: (_) => ClientEditScreen(client: client)),
               );
-              if (changed == true && context.mounted) {
+              if (changed == true) {
                 ref.invalidate(trainerClientsProvider);
-                Navigator.of(context).pop();
+                ref.invalidate(trainerClientProvider(client.id));
               }
             },
           ),
@@ -383,76 +885,22 @@ class ClientDetailScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              AuthedAvatar(
-                url: client.avatarFileId != null
-                    ? '${ref.read(baseUrlProvider).replaceAll(RegExp(r'/$'), '')}/api/files/${client.avatarFileId}'
-                    : null,
-                token: ref.watch(sessionProvider).token,
-                initials: client.initials,
-                radius: 28,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(client.fullName.isNotEmpty ? client.fullName : 'Без имени',
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 4),
-                    Text(
-                      <String>[
-                        client.isOnline ? 'Онлайн' : 'Очно',
-                        client.status == ClientStatus.active ? 'активный' : 'в архиве',
-                        if (!client.hasAccount) 'без аккаунта',
-                      ].join(' · '),
-                      style: TextStyle(color: cs.onSurfaceVariant),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
           if (client.phone?.trim().isNotEmpty == true)
             _InfoRow(icon: Icons.phone_outlined, text: client.phone!.trim()),
           if (_birthLine(client.birthDate) case final String b)
             _InfoRow(icon: Icons.cake_outlined, text: b),
-          ...client.contacts.map((ClientContact c) =>
-              _InfoRow(icon: Icons.alternate_email, text: '${c.type}: ${c.value}')),
-          if (client.tags.isNotEmpty) ...<Widget>[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: client.tags
-                  .map((String t) => Chip(
-                        label: Text(t),
-                        visualDensity: VisualDensity.compact,
-                      ))
-                  .toList(),
+          ...client.contacts.map((ClientContact ct) =>
+              _InfoRow(icon: Icons.alternate_email, text: '${ct.type}: ${ct.value}')),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: _InfoRow(
+              icon: Icons.info_outline,
+              text: <String>[
+                client.isOnline ? 'Онлайн' : 'Очно',
+                client.status == ClientStatus.active ? 'активный' : 'в архиве',
+                if (!client.hasAccount) 'без аккаунта',
+              ].join(' · '),
             ),
-          ],
-          if (client.notes?.trim().isNotEmpty == true) ...<Widget>[
-            const SizedBox(height: 16),
-            Text('Заметки', style: Theme.of(context).textTheme.labelLarge),
-            const SizedBox(height: 6),
-            Text(client.notes!.trim(), style: const TextStyle(fontSize: 15)),
-          ],
-          const SizedBox(height: 20),
-          FilledButton.icon(
-            onPressed: () => context.push(
-                '/chat/${client.id}?name=${Uri.encodeComponent(client.fullName)}'),
-            icon: const Icon(Icons.chat_bubble_outline, size: 18),
-            label: const Text('Открыть чат'),
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-          ),
-          const SizedBox(height: 20),
-          _Section(
-            title: 'Баланс',
-            action: _AddPackageButton(clientId: client.id),
-            child: _PackagesBlock(clientId: client.id),
           ),
           const SizedBox(height: 16),
           _Section(
@@ -460,21 +908,12 @@ class ClientDetailScreen extends ConsumerWidget {
             action: _RequestMeasureButton(clientId: client.id),
             child: _MeasurementsBlock(clientId: client.id),
           ),
-          const SizedBox(height: 16),
-          _Section(
-            title: 'Мед.карта',
-            action: _MedicalButton(clientId: client.id, clientName: client.fullName),
-            child: _MedicalBlock(clientId: client.id, clientName: client.fullName),
-          ),
-          const SizedBox(height: 16),
-          _Section(title: 'Статистика', child: _StatsBlock(clientId: client.id)),
-          const SizedBox(height: 16),
-          _Section(
-            title: 'Тренировки',
-            action: _AssignButton(clientId: client.id, clientName: client.fullName),
-            child: _WorkoutsBlock(clientId: client.id),
-          ),
-          const SizedBox(height: 24),
+          if (client.notes?.trim().isNotEmpty == true) ...<Widget>[
+            const SizedBox(height: 16),
+            Text('ЗАМЕТКИ', style: AppFonts.mono(size: 11, color: col.inkMutedXl, weight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            Text(client.notes!.trim(), style: TextStyle(fontSize: 14, height: 1.5, color: col.ink)),
+          ],
         ],
       ),
     );
@@ -1027,79 +1466,6 @@ class _WorkoutsBlock extends ConsumerWidget {
                     ),
                   )),
           ],
-        );
-      },
-    );
-  }
-}
-
-class _MedicalButton extends ConsumerWidget {
-  const _MedicalButton({required this.clientId, required this.clientName});
-  final String clientId;
-  final String clientName;
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return TextButton.icon(
-      onPressed: () async {
-        await Navigator.of(context).push<void>(
-          MaterialPageRoute<void>(
-            builder: (_) => ClientMedicalScreen(clientId: clientId, clientName: clientName),
-          ),
-        );
-        ref.invalidate(clientMedicalProvider(clientId));
-      },
-      icon: const Icon(Icons.open_in_new, size: 16),
-      label: const Text('Открыть'),
-    );
-  }
-}
-
-class _MedicalBlock extends ConsumerWidget {
-  const _MedicalBlock({required this.clientId, required this.clientName});
-  final String clientId;
-  final String clientName;
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final AppColors c = context.colors;
-    final AsyncValue<List<MedicalRecord>> recs = ref.watch(clientMedicalProvider(clientId));
-    return recs.when(
-      loading: () => const _Empty('Загрузка…'),
-      error: (Object e, _) => const _Empty('Не удалось загрузить'),
-      data: (List<MedicalRecord> list) {
-        if (list.isEmpty) return const _Empty('Записей нет');
-        final MedicalRecord latest = list.first;
-        return GestureDetector(
-          onTap: () async {
-            await Navigator.of(context).push<void>(
-              MaterialPageRoute<void>(
-                builder: (_) => ClientMedicalScreen(clientId: clientId, clientName: clientName),
-              ),
-            );
-            ref.invalidate(clientMedicalProvider(clientId));
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-            decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
-            child: Row(
-              children: <Widget>[
-                Icon(Icons.medical_information_outlined, size: 18, color: c.inkMuted),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(latest.note,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.ink)),
-                      Text('${list.length} записей', style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
-                    ],
-                  ),
-                ),
-                Icon(Icons.chevron_right, size: 18, color: c.inkMutedXl),
-              ],
-            ),
-          ),
         );
       },
     );

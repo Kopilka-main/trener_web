@@ -67,9 +67,15 @@ class HomeScreen extends ConsumerWidget {
             final bool msgPrimary = !alertsPrimary && d.unread > 0;
             return RefreshIndicator(
               onRefresh: () async => ref.invalidate(trainerHomeProvider),
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-                children: <Widget>[
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: <Widget>[
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
                   // Дата-кикер + шестерёнка.
                   Row(
                     children: <Widget>[
@@ -141,14 +147,17 @@ class HomeScreen extends ConsumerWidget {
                     )
                   else
                     const SizedBox(height: 6),
-                  GridView.count(
-                    crossAxisCount: 2,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8,
-                    childAspectRatio: 1.15,
-                    children: <Widget>[
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Сетка плиток 2×3 — тянется на всю оставшуюся высоту (web flex-1 grid-rows-3).
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                      child: _TileGrid(
+                        tiles: <Widget>[
                       _Tile(
                         title: 'Клиенты',
                         sub: 'активные',
@@ -200,7 +209,9 @@ class HomeScreen extends ConsumerWidget {
                         primary: alertsPrimary,
                         onTap: () => context.push('/notifications'),
                       ),
-                    ],
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -208,6 +219,33 @@ class HomeScreen extends ConsumerWidget {
           },
         ),
       ),
+    );
+  }
+}
+
+/// Сетка 2×3 из ровно 6 плиток, тянущаяся на всю высоту: три равных ряда
+/// (каждый — Expanded), по две равные плитки в ряду. Зеркало web `grid-rows-3 flex-1`.
+class _TileGrid extends StatelessWidget {
+  const _TileGrid({required this.tiles});
+  final List<Widget> tiles;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: <Widget>[
+        for (int r = 0; r < 3; r++) ...<Widget>[
+          if (r > 0) const SizedBox(height: 8),
+          Expanded(
+            child: Row(
+              children: <Widget>[
+                Expanded(child: tiles[r * 2]),
+                const SizedBox(width: 8),
+                Expanded(child: tiles[r * 2 + 1]),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

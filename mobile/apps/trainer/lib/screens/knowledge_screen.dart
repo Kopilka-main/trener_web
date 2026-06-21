@@ -20,6 +20,7 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
   bool _templatesTab = true;
   String _query = '';
   String _group = '';
+  String _subgroup = ''; // второй уровень (только вкладка «Упражнения»)
 
   @override
   Widget build(BuildContext context) {
@@ -52,8 +53,8 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
                 decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
                 child: Row(
                   children: <Widget>[
-                    _Seg(label: 'Тренировки', active: _templatesTab, onTap: () => setState(() { _templatesTab = true; _group = ''; })),
-                    _Seg(label: 'Упражнения', active: !_templatesTab, onTap: () => setState(() { _templatesTab = false; _group = ''; })),
+                    _Seg(label: 'Тренировки', active: _templatesTab, onTap: () => setState(() { _templatesTab = true; _group = ''; _subgroup = ''; })),
+                    _Seg(label: 'Упражнения', active: !_templatesTab, onTap: () => setState(() { _templatesTab = false; _group = ''; _subgroup = ''; })),
                   ],
                 ),
               ),
@@ -91,8 +92,17 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
             if (e.category.isNotEmpty) e.category,
         }.toList()
           ..sort();
+        // Подгруппы текущей группы: по таксономии + фактически присутствующие.
+        final List<String> subgroups = _group.isEmpty
+            ? const <String>[]
+            : _orderedSubgroups(
+                _group,
+                all
+                    .where((TExercise e) => e.category == _group && (e.subgroup?.isNotEmpty == true))
+                    .map((TExercise e) => e.subgroup!));
         final List<TExercise> list = all.where((TExercise e) {
           if (_group.isNotEmpty && e.category != _group) return false;
+          if (_subgroup.isNotEmpty && e.subgroup != _subgroup) return false;
           if (_query.isNotEmpty && !e.name.toLowerCase().contains(_query)) return false;
           return true;
         }).toList();
@@ -100,6 +110,7 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
         return Column(
           children: <Widget>[
             _groupChips(c, groups),
+            if (subgroups.isNotEmpty) _subgroupChips(c, subgroups),
             Expanded(
               child: list.isEmpty
                   ? _empty(c, 'Ничего не нашлось.')
@@ -117,11 +128,11 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
                           },
                           child: Container(
                             margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
                             decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
                             child: Row(
                               children: <Widget>[
-                                CatalogThumb(url: catalogMediaUrl(base, ex.thumbUrl ?? ex.imageUrl), size: 46),
+                                CatalogThumb(url: catalogMediaUrl(base, ex.thumbUrl ?? ex.imageUrl), size: 64, radius: 10),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
@@ -131,14 +142,8 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
-                                      Text(
-                                        <String>[
-                                          if (ex.category.isNotEmpty) ex.category,
-                                          if (ex.subgroup?.isNotEmpty == true) ex.subgroup!,
-                                          if (ex.isGlobal) 'системное',
-                                        ].join(' · '),
-                                        style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500),
-                                      ),
+                                      const SizedBox(height: 4),
+                                      _MetricsRow(ex: ex),
                                     ],
                                   ),
                                 ),
@@ -153,6 +158,20 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
           ],
         );
       },
+    );
+  }
+
+  Widget _subgroupChips(AppColors c, List<String> subs) {
+    return SizedBox(
+      height: 38,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: <Widget>[
+          _Chip(label: 'Все', active: _subgroup.isEmpty, onTap: () => setState(() => _subgroup = '')),
+          ...subs.map((String s) => _Chip(label: s, active: _subgroup == s, onTap: () => setState(() => _subgroup = s))),
+        ],
+      ),
     );
   }
 
@@ -246,11 +265,20 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         children: <Widget>[
-          _Chip(label: 'Все', active: _group.isEmpty, onTap: () => setState(() => _group = '')),
-          ...groups.map((String g) => _Chip(label: g, active: _group == g, onTap: () => setState(() => _group = g))),
+          _Chip(label: 'Все', active: _group.isEmpty, onTap: () => setState(() { _group = ''; _subgroup = ''; })),
+          ...groups.map((String g) => _Chip(label: g, active: _group == g, onTap: () => setState(() { _group = g; _subgroup = ''; }))),
         ],
       ),
     );
+  }
+
+  /// Подгруппы по таксономии группы (известные — в порядке, прочие — в конец).
+  List<String> _orderedSubgroups(String group, Iterable<String> present) {
+    final Set<String> set = present.where((String s) => s.isNotEmpty).toSet();
+    final List<String> order = subgroupsFor(group);
+    final List<String> ordered = order.where(set.contains).toList();
+    final List<String> extras = set.where((String s) => !order.contains(s)).toList()..sort();
+    return <String>[...ordered, ...extras];
   }
 
   Widget _empty(AppColors c, String text) =>
@@ -266,6 +294,46 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
           ],
         ),
       );
+}
+
+/// Подпись карточки упражнения: категория + повторы/вес/время/отдых (как в вебе).
+class _MetricsRow extends StatelessWidget {
+  const _MetricsRow({required this.ex});
+  final TExercise ex;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    Widget metric(IconData icon, num? v) => Padding(
+          padding: const EdgeInsets.only(right: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(icon, size: 13, color: c.inkMutedXl),
+              const SizedBox(width: 3),
+              Text('${(v ?? 0).toInt()}', style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w600)),
+            ],
+          ),
+        );
+    return Row(
+      children: <Widget>[
+        if (ex.category.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: Text(ex.category, style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w600)),
+          ),
+        Expanded(
+          child: Row(
+            children: <Widget>[
+              metric(Icons.repeat, ex.defaultReps),
+              metric(Icons.fitness_center, ex.defaultWeightKg),
+              metric(Icons.timer_outlined, ex.defaultTimeSec),
+              metric(Icons.bedtime_outlined, ex.restSec),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _Seg extends StatelessWidget {

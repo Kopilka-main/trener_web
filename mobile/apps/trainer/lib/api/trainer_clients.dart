@@ -35,6 +35,7 @@ class Client {
     required this.tags,
     required this.contacts,
     required this.hasAccount,
+    required this.accountId,
     required this.birthDate,
     required this.avatarFileId,
   });
@@ -49,8 +50,12 @@ class Client {
   final List<String> tags;
   final List<ClientContact> contacts;
   final bool hasAccount;
+  final String? accountId;
   final String? birthDate; // YYYY-MM-DD
   final String? avatarFileId;
+
+  /// Чат доступен, если код привязки задан и непустой (зеркало web `connected`).
+  bool get isConnected => (accountId ?? '').trim().isNotEmpty;
 
   String get fullName => '$firstName $lastName'.trim();
 
@@ -74,6 +79,7 @@ class Client {
             .map(ClientContact.fromJson)
             .toList(),
         hasAccount: (j['accountId'] as String?) != null,
+        accountId: j['accountId'] as String?,
         birthDate: j['birthDate'] as String?,
         avatarFileId: j['avatarFileId'] as String?,
       );
@@ -94,6 +100,17 @@ class TrainerClientsApi {
     list.sort((Client a, Client b) =>
         a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
     return list;
+  }
+
+  /// Один клиент по id (свежий снимок — для карточки/диалога подключения).
+  Future<Client> byId(String id) async {
+    final Map<String, dynamic> r = await _api.getJson('/api/clients/$id');
+    return Client.fromJson((r['client'] as Map<String, dynamic>?) ?? <String, dynamic>{});
+  }
+
+  /// Привязать код аккаунта (accountId) к клиенту — подключение чата из карточки.
+  Future<void> connectAccount(String id, String accountId) async {
+    await _api.patchJson('/api/clients/$id', <String, dynamic>{'accountId': accountId.trim()});
   }
 
   /// Создать клиента (необязательно с привязкой к аккаунту по коду).
@@ -182,6 +199,10 @@ final Provider<TrainerClientsApi> trainerClientsApiProvider =
 
 final FutureProvider<List<Client>> trainerClientsProvider =
     FutureProvider<List<Client>>((ref) => ref.read(trainerClientsApiProvider).load());
+
+/// Один клиент по id — свежий снимок для карточки (статус подключения, теги, заметки).
+final FutureProviderFamily<Client, String> trainerClientProvider =
+    FutureProvider.family<Client, String>((ref, String id) => ref.read(trainerClientsApiProvider).byId(id));
 
 final FutureProvider<Map<String, num>> trainerBalancesProvider =
     FutureProvider<Map<String, num>>((ref) => ref.read(trainerClientsApiProvider).balances());
