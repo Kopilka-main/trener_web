@@ -1542,7 +1542,7 @@ class _AddPackageButton extends ConsumerWidget {
         backgroundColor: context.colors.bg,
         isScrollControlled: true,
         showDragHandle: true,
-        builder: (_) => _AddPackageForm(clientId: clientId),
+        builder: (_) => _AddIncomeForm(clientId: clientId),
       ),
       icon: const Icon(Icons.add, size: 16),
       label: const Text('Добавить'),
@@ -1550,59 +1550,109 @@ class _AddPackageButton extends ConsumerWidget {
   }
 }
 
-class _AddPackageForm extends ConsumerStatefulWidget {
-  const _AddPackageForm({required this.clientId});
+/// Тип дохода. package/subscription → пакет; остальные → простой доход.
+enum _IncomeKind { package, subscription, online, inventory, pharma, other }
+
+const Map<_IncomeKind, String> _incomeLabels = <_IncomeKind, String>{
+  _IncomeKind.package: 'Пакет тренировок',
+  _IncomeKind.subscription: 'Абонемент',
+  _IncomeKind.online: 'Онлайн сопровождение',
+  _IncomeKind.inventory: 'Инвентарь',
+  _IncomeKind.pharma: 'Фарма',
+  _IncomeKind.other: 'Прочее',
+};
+
+/// Форма «Новый доход» (зеркало веб IncomeForm): чипы типа + поля по типу.
+class _AddIncomeForm extends ConsumerStatefulWidget {
+  const _AddIncomeForm({required this.clientId});
   final String clientId;
   @override
-  ConsumerState<_AddPackageForm> createState() => _AddPackageFormState();
+  ConsumerState<_AddIncomeForm> createState() => _AddIncomeFormState();
 }
 
-class _AddPackageFormState extends ConsumerState<_AddPackageForm> {
-  final TextEditingController _lessons = TextEditingController(text: '8');
-  final TextEditingController _total = TextEditingController();
-  final TextEditingController _type = TextEditingController();
+class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
+  _IncomeKind _kind = _IncomeKind.package;
+  final TextEditingController _lessons = TextEditingController(text: '20');
+  final TextEditingController _price = TextEditingController(); // ₽ за тренировку / период / сумма
+  final TextEditingController _note = TextEditingController();
+  DateTime _paidAt = DateTime.now();
   DateTime _starts = DateTime.now();
   DateTime? _ends;
   bool _busy = false;
 
+  bool get _isPackage => _kind == _IncomeKind.package;
+  bool get _isSubscription => _kind == _IncomeKind.subscription;
+  bool get _isPkgKind => _isPackage || _isSubscription;
+
   @override
   void dispose() {
     _lessons.dispose();
-    _total.dispose();
-    _type.dispose();
+    _price.dispose();
+    _note.dispose();
     super.dispose();
   }
 
   String _iso(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  String _fmtRu(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
+  num get _priceNum => num.tryParse(_price.text.trim().replaceAll(',', '.')) ?? 0;
+  int get _lessonsNum => int.tryParse(_lessons.text.trim()) ?? 0;
+
+  String _money(num v) {
+    final int n = v.round();
+    final String s = n.abs().toString();
+    final StringBuffer b = StringBuffer();
+    for (int i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) b.write(' ');
+      b.write(s[i]);
+    }
+    return '$b ₽';
+  }
 
   Future<void> _save() async {
-    final int lessons = int.tryParse(_lessons.text.trim()) ?? 0;
-    final num total = num.tryParse(_total.text.trim().replaceAll(',', '.')) ?? 0;
-    if (total <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Укажите сумму')));
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    final NavigatorState nav = Navigator.of(context);
+    if (_priceNum <= 0) {
+      m.showSnackBar(const SnackBar(content: Text('Укажите сумму')));
+      return;
+    }
+    if (_isSubscription && _ends == null) {
+      m.showSnackBar(const SnackBar(content: Text('Укажите дату окончания абонемента')));
       return;
     }
     setState(() => _busy = true);
-    final NavigatorState nav = Navigator.of(context);
-    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
     try {
-      await ref.read(trainerClientCardApiProvider).createPackage(
-            widget.clientId,
-            lessonsPaid: lessons,
-            totalPaid: total,
-            workoutType: _type.text,
-            startsAt: _iso(_starts),
-            endsAt: _ends != null ? _iso(_ends!) : null,
-          );
-      ref.invalidate(clientPackagesProvider(widget.clientId));
+      if (_isPkgKind) {
+        // package: lessonsPaid=N, totalPaid=N*price; subscription: lessonsPaid=0, totalPaid=цена периода.
+        final int lessons = _isPackage ? _lessonsNum : 0;
+        final num total = _isPackage ? _lessonsNum * _priceNum : _priceNum;
+        await ref.read(trainerClientCardApiProvider).createPackage(
+              widget.clientId,
+              lessonsPaid: lessons,
+              totalPaid: total,
+              workoutType: _isSubscription ? 'Абонемент' : null,
+              startsAt: _iso(_starts),
+              endsAt: _ends != null ? _iso(_ends!) : null,
+            );
+        ref.invalidate(clientPackagesProvider(widget.clientId));
+      } else {
+        await ref.read(trainerAccountingApiProvider).createIncome(<String, dynamic>{
+          'category': _incomeLabels[_kind],
+          'amount': _priceNum,
+          'date': _iso(_paidAt),
+          'clientId': widget.clientId,
+          if (_note.text.trim().isNotEmpty) 'note': _note.text.trim(),
+        });
+      }
+      ref.invalidate(trainerIncomesProvider);
       if (!mounted) return;
       nav.pop();
-      m.showSnackBar(const SnackBar(content: Text('Пакет добавлен')));
+      m.showSnackBar(const SnackBar(content: Text('Доход добавлен')));
     } catch (_) {
       if (!mounted) return;
       setState(() => _busy = false);
-      m.showSnackBar(const SnackBar(content: Text('Не удалось добавить пакет')));
+      m.showSnackBar(const SnackBar(content: Text('Не удалось сохранить')));
     }
   }
 
@@ -1611,73 +1661,154 @@ class _AddPackageFormState extends ConsumerState<_AddPackageForm> {
     final AppColors c = context.colors;
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 4, 20, 16 + MediaQuery.of(context).viewInsets.bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text('Новый пакет', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
-          const SizedBox(height: 16),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: TextField(
-                  controller: _lessons,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Тренировок', border: OutlineInputBorder()),
-                ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text('Новый доход', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
+            const SizedBox(height: 14),
+            // Чипы типа.
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _IncomeKind.values
+                  .map((_IncomeKind k) => _IncomeChip(
+                        label: _incomeLabels[k]!,
+                        active: _kind == k,
+                        onTap: () => setState(() => _kind = k),
+                      ))
+                  .toList(),
+            ),
+            const SizedBox(height: 14),
+            if (_isPkgKind) ...<Widget>[
+              Row(
+                children: <Widget>[
+                  if (_isPackage) ...<Widget>[
+                    Expanded(
+                      child: TextField(
+                        controller: _lessons,
+                        keyboardType: TextInputType.number,
+                        onChanged: (_) => setState(() {}),
+                        decoration: const InputDecoration(labelText: 'Тренировок', border: OutlineInputBorder()),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  Expanded(
+                    child: TextField(
+                      controller: _price,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                          labelText: _isPackage ? '₽ за тренировку' : 'Цена периода, ₽',
+                          border: const OutlineInputBorder()),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  controller: _total,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Сумма, ₽', border: OutlineInputBorder()),
-                ),
+              const SizedBox(height: 12),
+              _dateField(c, 'Дата оплаты', _paidAt, (DateTime d) => setState(() => _paidAt = d)),
+              const SizedBox(height: 12),
+              Row(
+                children: <Widget>[
+                  Expanded(child: _dateField(c, 'Дата начала', _starts, (DateTime d) => setState(() => _starts = d))),
+                  const SizedBox(width: 12),
+                  Expanded(child: _dateFieldOpt(c, _isSubscription ? 'Окончание' : 'Окончание (необяз.)', _ends,
+                      (DateTime? d) => setState(() => _ends = d))),
+                ],
+              ),
+            ] else ...<Widget>[
+              TextField(
+                controller: _price,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(labelText: 'Сумма, ₽', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              _dateField(c, 'Дата', _paidAt, (DateTime d) => setState(() => _paidAt = d)),
+            ],
+            const SizedBox(height: 12),
+            TextField(
+              controller: _note,
+              decoration: const InputDecoration(labelText: 'Заметка (необязательно)', border: OutlineInputBorder()),
+            ),
+            if (_isPackage) ...<Widget>[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12)),
+                child: Text('Итого пакет: ${_money(_lessonsNum * _priceNum)}',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
               ),
             ],
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _type,
-            decoration: const InputDecoration(labelText: 'Тип (необязательно)', border: OutlineInputBorder()),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () async {
-                    final DateTime? d = await showDatePicker(
-                      context: context, initialDate: _starts,
-                      firstDate: DateTime(_starts.year - 1), lastDate: DateTime(_starts.year + 2));
-                    if (d != null) setState(() => _starts = d);
-                  },
-                  child: Text('С ${_iso(_starts)}'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () async {
-                    final DateTime? d = await showDatePicker(
-                      context: context, initialDate: _ends ?? _starts,
-                      firstDate: _starts, lastDate: DateTime(_starts.year + 2));
-                    if (d != null) setState(() => _ends = d);
-                  },
-                  child: Text(_ends != null ? 'До ${_iso(_ends!)}' : 'До (необяз.)'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          FilledButton(
-            onPressed: _busy ? null : _save,
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-            child: _busy
-                ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Добавить пакет'),
-          ),
-        ],
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: _busy ? null : _save,
+              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+              child: _busy
+                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : Text(_isPackage ? 'Сохранить пакет' : _isSubscription ? 'Сохранить абонемент' : 'Сохранить доход'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _dateField(AppColors c, String label, DateTime value, ValueChanged<DateTime> onPick) {
+    return InkWell(
+      onTap: () async {
+        final DateTime? d = await showDatePicker(
+            context: context, initialDate: value, firstDate: DateTime(value.year - 2), lastDate: DateTime(value.year + 3));
+        if (d != null) onPick(d);
+      },
+      child: InputDecorator(
+        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+        child: Text(_fmtRu(value)),
+      ),
+    );
+  }
+
+  Widget _dateFieldOpt(AppColors c, String label, DateTime? value, ValueChanged<DateTime?> onPick) {
+    return InkWell(
+      onTap: () async {
+        final DateTime base = value ?? _starts;
+        final DateTime? d = await showDatePicker(
+            context: context, initialDate: base, firstDate: _starts, lastDate: DateTime(base.year + 3));
+        if (d != null) onPick(d);
+      },
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          suffixIcon: value != null
+              ? IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => onPick(null))
+              : const Icon(Icons.event),
+        ),
+        child: Text(value != null ? _fmtRu(value) : '—'),
+      ),
+    );
+  }
+}
+
+class _IncomeChip extends StatelessWidget {
+  const _IncomeChip({required this.label, required this.active, required this.onTap});
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(color: active ? c.accent : c.chip, borderRadius: BorderRadius.circular(20)),
+        child: Text(label,
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: active ? c.accentOn : c.inkMuted)),
       ),
     );
   }
