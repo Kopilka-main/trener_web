@@ -3,9 +3,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/trainer_assign.dart';
 import '../api/trainer_calendar.dart';
+import '../api/trainer_catalog.dart';
 import '../api/trainer_clients.dart';
 import '../api/trainer_gyms.dart';
+
+/// Выбор тренировки-плана для занятия: уже привязанная (existing) или шаблон.
+class _WorkoutPick {
+  _WorkoutPick.existing(this.existingId, this.name) : template = null;
+  _WorkoutPick.template(WorkoutTemplate t)
+      : template = t,
+        name = t.name,
+        existingId = null;
+  final String? existingId;
+  final WorkoutTemplate? template;
+  final String name;
+}
+
+/// План из шаблона → тело exercises для POST /clients/:id/workouts.
+List<Map<String, dynamic>> _bodyFromTemplate(WorkoutTemplate t) => t.exercises
+    .map((TemplateExercise e) => <String, dynamic>{
+          'exerciseId': e.exerciseId,
+          'sets': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'plannedReps': ?e.reps,
+              'plannedWeightKg': ?e.weightKg,
+              'plannedTimeSec': ?e.timeSec,
+              'plannedRestSec': ?e.restSec,
+            },
+          ],
+        })
+    .toList();
 
 String _iso(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -53,6 +82,10 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
   late final TextEditingController _location =
       TextEditingController(text: widget.session?.location ?? '');
   late bool _online = widget.session?.isOnline ?? false;
+  late SessionStatus _status = widget.session?.status ?? SessionStatus.planned;
+  late _WorkoutPick? _workoutPick = widget.session?.workoutId != null
+      ? _WorkoutPick.existing(widget.session!.workoutId!, 'Тренировка привязана')
+      : null;
   bool _busy = false;
 
   bool get _isEdit => widget.session != null;
@@ -76,6 +109,84 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
     super.dispose();
   }
 
+  /// Разрешить workoutId: existing → его id; шаблон → создать черновик клиенту
+  /// и взять id; нет привязки/нет клиента → null.
+  Future<String?> _resolveWorkoutId() async {
+    final _WorkoutPick? p = _workoutPick;
+    if (p == null) return null;
+    if (p.existingId != null) return p.existingId;
+    if (p.template != null && _clientId != null) {
+      return ref.read(trainerAssignApiProvider)
+          .assignReturningId(_clientId!, p.template!.name, _bodyFromTemplate(p.template!));
+    }
+    return null;
+  }
+
+  Future<void> _pickWorkout() async {
+    final WorkoutTemplate? picked = await showModalBottomSheet<WorkoutTemplate>(
+      context: context,
+      backgroundColor: context.colors.bg,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (BuildContext ctx) {
+        final AppColors c = ctx.colors;
+        final List<WorkoutTemplate> templates = ref.watch(trainerTemplatesProvider).valueOrNull ?? <WorkoutTemplate>[];
+        return SizedBox(
+          height: MediaQuery.of(ctx).size.height * 0.7,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Text('Выбрать тренировку', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.ink)),
+              ),
+              if (templates.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Text('Шаблонов нет. Создайте их в базе знаний.', style: TextStyle(color: c.inkMuted)),
+                )
+              else
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    itemCount: templates.length,
+                    itemBuilder: (BuildContext c2, int i) {
+                      final WorkoutTemplate t = templates[i];
+                      return GestureDetector(
+                        onTap: () => Navigator.pop(ctx, t),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+                          child: Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Text(t.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                                    Text('${t.exercises.length} упр.${t.categoryTag != null ? ' · ${t.categoryTag}' : ''}',
+                                        style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+                                  ],
+                                ),
+                              ),
+                              Icon(Icons.chevron_right, size: 18, color: c.inkMutedXl),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (picked != null) setState(() => _workoutPick = _WorkoutPick.template(picked));
+  }
+
   Future<void> _save() async {
     final int dur = int.tryParse(_duration.text.trim()) ?? 60;
     setState(() => _busy = true);
@@ -83,6 +194,7 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
     final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
     try {
       final TrainerCalendarApi api = ref.read(trainerCalendarApiProvider);
+      final String? workoutId = await _resolveWorkoutId();
       if (_isEdit) {
         await api.update(
           widget.session!.id,
@@ -93,6 +205,9 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
           title: _title.text,
           location: _location.text,
           isOnline: _online,
+          status: _status,
+          setWorkout: true,
+          workoutId: workoutId,
         );
       } else {
         await api.create(
@@ -103,6 +218,7 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
           title: _title.text,
           location: _location.text,
           isOnline: _online,
+          workoutId: workoutId,
         );
       }
       ref.invalidate(trainerSessionsProvider);
@@ -217,6 +333,22 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
               decoration: const InputDecoration(labelText: 'Название (необязательно)', border: OutlineInputBorder()),
             ),
             const SizedBox(height: 12),
+            // Привязка тренировки-плана (шаблон → черновик клиенту при сохранении).
+            _PickerField(
+              label: 'Тренировка (план)',
+              value: _workoutPick?.name ?? 'Не выбрана',
+              onTap: _pickWorkout,
+            ),
+            if (_workoutPick != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => setState(() => _workoutPick = null),
+                  icon: const Icon(Icons.close, size: 14),
+                  label: const Text('Отвязать'),
+                ),
+              ),
+            const SizedBox(height: 12),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Онлайн-занятие'),
@@ -230,6 +362,19 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
                 decoration: const InputDecoration(labelText: 'Место (необязательно)', border: OutlineInputBorder()),
               ),
               _GymQuickPick(onPick: (String name) => setState(() => _location.text = name)),
+            ],
+            if (_isEdit) ...<Widget>[
+              const SizedBox(height: 16),
+              Text('СТАТУС', style: AppFonts.mono(size: 10, color: c.inkMutedXl, weight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: <Widget>[
+                  _StatusChip(label: 'Запланировано', active: _status == SessionStatus.planned, onTap: () => setState(() => _status = SessionStatus.planned)),
+                  _StatusChip(label: 'Проведено', active: _status == SessionStatus.completed, onTap: () => setState(() => _status = SessionStatus.completed)),
+                  _StatusChip(label: 'Отменено', active: _status == SessionStatus.cancelled, onTap: () => setState(() => _status = SessionStatus.cancelled)),
+                ],
+              ),
             ],
             const SizedBox(height: 20),
             Row(
@@ -279,6 +424,26 @@ class _PickerField extends StatelessWidget {
       child: InputDecorator(
         decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
         child: Text(value),
+      ),
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.label, required this.active, required this.onTap});
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(color: active ? c.accent : c.chip, borderRadius: BorderRadius.circular(20)),
+        child: Text(label,
+            style: AppFonts.mono(size: 12, color: active ? c.accentOn : c.inkMuted, weight: FontWeight.w600)),
       ),
     );
   }

@@ -103,6 +103,15 @@ class TrainerAssignApi {
       <String, dynamic>{'name': name, 'exercises': exercises},
     );
   }
+
+  /// То же, но возвращает id созданного черновика (для привязки к занятию).
+  Future<String> assignReturningId(String clientId, String name, List<Map<String, dynamic>> exercises) async {
+    final Map<String, dynamic> r = await _api.postJson(
+      '/api/clients/$clientId/workouts',
+      <String, dynamic>{'name': name, 'exercises': exercises},
+    );
+    return (r['workout'] as Map<String, dynamic>?)?['id'] as String? ?? '';
+  }
 }
 
 final Provider<TrainerAssignApi> trainerAssignApiProvider =

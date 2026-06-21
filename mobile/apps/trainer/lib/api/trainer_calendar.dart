@@ -36,6 +36,7 @@ class Session {
     required this.isOnline,
     required this.note,
     required this.confirmation,
+    required this.workoutId,
   });
 
   final String id;
@@ -50,6 +51,7 @@ class Session {
   final bool isOnline;
   final String? note;
   final ClientConfirmation confirmation;
+  final String? workoutId;
 
   factory Session.fromJson(Map<String, dynamic> j, Map<String, String> names) {
     final String rawDate = j['date'] as String? ?? '';
@@ -67,6 +69,7 @@ class Session {
       isOnline: j['isOnline'] as bool? ?? false,
       note: j['note'] as String?,
       confirmation: _confirmationFrom(j['clientConfirmation'] as String?),
+      workoutId: j['workoutId'] as String?,
     );
   }
 
@@ -160,6 +163,7 @@ class TrainerCalendarApi {
     String? title,
     String? location,
     required bool isOnline,
+    String? workoutId,
   }) async {
     await _api.postJson('/api/sessions', <String, dynamic>{
       'clientId': ?clientId,
@@ -169,6 +173,7 @@ class TrainerCalendarApi {
       'title': ?_nullIfEmpty(title),
       'location': ?_nullIfEmpty(location),
       'isOnline': isOnline,
+      'workoutId': ?workoutId,
     });
   }
 
@@ -183,6 +188,8 @@ class TrainerCalendarApi {
     String? location,
     bool? isOnline,
     SessionStatus? status,
+    bool setWorkout = false,
+    String? workoutId,
   }) async {
     await _api.patchJson('/api/sessions/$id', <String, dynamic>{
       'clientId': ?clientId,
@@ -194,6 +201,8 @@ class TrainerCalendarApi {
       if (location != null) 'location': location.trim().isEmpty ? null : location.trim(),
       'isOnline': ?isOnline,
       if (status != null) 'status': _statusStr(status),
+      // setWorkout=true → шлём workoutId явно (null = отвязать).
+      if (setWorkout) 'workoutId': workoutId,
     });
   }
 
