@@ -1173,27 +1173,141 @@ class ClientPaymentsScreen extends ConsumerWidget {
   }
 }
 
-/// Раздел «Прогресс»: статистика/рекорды упражнений + замеры. Зеркало веб
-/// ClientStatsPage (вкладки Упражнения/Замеры; графики и фото — позже).
-class ClientStatsScreen extends ConsumerWidget {
+/// Раздел «Прогресс»: вкладки Упражнения / Замеры / Фото. Зеркало веб ClientStatsPage.
+class ClientStatsScreen extends ConsumerStatefulWidget {
   const ClientStatsScreen({super.key, required this.client});
   final Client client;
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ClientStatsScreen> createState() => _ClientStatsScreenState();
+}
+
+enum _ProgTab { exercises, measure, photos }
+
+class _ClientStatsScreenState extends ConsumerState<ClientStatsScreen> {
+  _ProgTab _tab = _ProgTab.exercises;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
     return Scaffold(
-      appBar: AppBar(title: Text('Прогресс · ${client.fullName}')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      appBar: AppBar(title: Text('Прогресс · ${widget.client.fullName}')),
+      body: Column(
         children: <Widget>[
-          _Section(title: 'Упражнения', child: _StatsBlock(clientId: client.id)),
-          const SizedBox(height: 16),
-          _Section(
-            title: 'Замеры',
-            action: _RequestMeasureButton(clientId: client.id),
-            child: _MeasurementsBlock(clientId: client.id),
+          // Сегмент-вкладки.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+              child: Row(
+                children: <Widget>[
+                  _ProgSeg(label: 'Упражнения', active: _tab == _ProgTab.exercises, onTap: () => setState(() => _tab = _ProgTab.exercises)),
+                  _ProgSeg(label: 'Замеры', active: _tab == _ProgTab.measure, onTap: () => setState(() => _tab = _ProgTab.measure)),
+                  _ProgSeg(label: 'Фото', active: _tab == _ProgTab.photos, onTap: () => setState(() => _tab = _ProgTab.photos)),
+                ],
+              ),
+            ),
           ),
+          Expanded(child: _body(c)),
         ],
       ),
+    );
+  }
+
+  Widget _body(AppColors c) {
+    switch (_tab) {
+      case _ProgTab.exercises:
+        return ListView(padding: const EdgeInsets.all(16), children: <Widget>[_StatsBlock(clientId: widget.client.id)]);
+      case _ProgTab.measure:
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: <Widget>[
+            Align(alignment: Alignment.centerRight, child: _RequestMeasureButton(clientId: widget.client.id)),
+            const SizedBox(height: 4),
+            _MeasurementsBlock(clientId: widget.client.id),
+          ],
+        );
+      case _ProgTab.photos:
+        return _PhotosTab(clientId: widget.client.id);
+    }
+  }
+}
+
+class _ProgSeg extends StatelessWidget {
+  const _ProgSeg({required this.label, required this.active, required this.onTap});
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(color: active ? c.accent : Colors.transparent, borderRadius: BorderRadius.circular(11)),
+          child: Text(label,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: active ? c.accentOn : c.inkMuted)),
+        ),
+      ),
+    );
+  }
+}
+
+/// Вкладка «Фото»: сетка фото прогресса клиента (просмотр), по ракурсам.
+class _PhotosTab extends ConsumerWidget {
+  const _PhotosTab({required this.clientId});
+  final String clientId;
+  static const Map<String, String> _angles = <String, String>{'front': 'Спереди', 'side': 'Сбоку', 'back': 'Сзади'};
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppColors c = context.colors;
+    final AsyncValue<List<TClientPhoto>> photos = ref.watch(clientPhotosCardProvider(clientId));
+    final String? token = ref.watch(sessionProvider).token;
+    final String base = ref.read(baseUrlProvider).replaceAll(RegExp(r'/$'), '');
+    return photos.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (Object e, _) => Center(child: Text('Не удалось загрузить фото', style: TextStyle(color: c.inkMuted))),
+      data: (List<TClientPhoto> list) {
+        if (list.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text('Фото прогресса пока нет.', textAlign: TextAlign.center, style: TextStyle(color: c.inkMuted)),
+            ),
+          );
+        }
+        return GridView.builder(
+          padding: const EdgeInsets.all(16),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3, mainAxisSpacing: 8, crossAxisSpacing: 8, childAspectRatio: 0.7),
+          itemCount: list.length,
+          itemBuilder: (BuildContext ctx, int i) {
+            final TClientPhoto p = list[i];
+            return Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                AuthedImage(url: '$base/api/files/${p.fileId}', token: token, radius: 12),
+                Positioned(
+                  left: 0, right: 0, bottom: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12))),
+                    child: Text(_angles[p.angle] ?? p.angle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

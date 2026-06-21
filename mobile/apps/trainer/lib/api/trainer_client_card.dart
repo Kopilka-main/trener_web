@@ -144,3 +144,32 @@ final FutureProviderFamily<List<TWorkout>, String> clientWorkoutsCardProvider =
 
 final FutureProviderFamily<List<TMeasurement>, String> clientMeasurementsProvider =
     FutureProvider.family<List<TMeasurement>, String>((ref, String id) => ref.read(trainerClientCardApiProvider).measurements(id));
+
+/// Фото прогресса клиента (просмотр тренером).
+class TClientPhoto {
+  TClientPhoto({required this.id, required this.date, required this.angle, required this.fileId});
+  final String id;
+  final DateTime? date;
+  final String angle;
+  final String fileId;
+  factory TClientPhoto.fromJson(Map<String, dynamic> j) {
+    final Map<String, dynamic> f = (j['file'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+    return TClientPhoto(
+      id: j['id'] as String? ?? '',
+      date: _dt(j['date'] as String?),
+      angle: j['angle'] as String? ?? 'front',
+      fileId: f['id'] as String? ?? '',
+    );
+  }
+}
+
+final FutureProviderFamily<List<TClientPhoto>, String> clientPhotosCardProvider =
+    FutureProvider.family<List<TClientPhoto>, String>((ref, String id) async {
+  final Map<String, dynamic> r = await ref.read(apiClientProvider).getJson('/api/clients/$id/progress-photos');
+  final List<TClientPhoto> list = ((r['photos'] as List<dynamic>?) ?? <dynamic>[])
+      .cast<Map<String, dynamic>>()
+      .map(TClientPhoto.fromJson)
+      .toList();
+  list.sort((TClientPhoto a, TClientPhoto b) => (b.date ?? DateTime(0)).compareTo(a.date ?? DateTime(0)));
+  return list;
+});
