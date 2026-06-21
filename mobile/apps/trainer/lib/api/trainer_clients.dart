@@ -103,6 +103,7 @@ class TrainerClientsApi {
     String? phone,
     required bool isOnline,
     String? accountId,
+    String? birthDate,
   }) async {
     final String? ph = (phone == null || phone.trim().isEmpty) ? null : phone.trim();
     final String? acc = (accountId == null || accountId.trim().isEmpty) ? null : accountId.trim();
@@ -112,6 +113,7 @@ class TrainerClientsApi {
       'phone': ph,
       'isOnline': isOnline,
       'accountId': acc,
+      'birthDate': ?birthDate,
     });
   }
 
@@ -124,6 +126,8 @@ class TrainerClientsApi {
     required bool isOnline,
     required ClientStatus status,
     String? notes,
+    bool setBirthDate = false,
+    String? birthDate,
   }) async {
     await _api.patchJson('/api/clients/$id', <String, dynamic>{
       'firstName': firstName,
@@ -132,6 +136,7 @@ class TrainerClientsApi {
       'isOnline': isOnline,
       'status': status == ClientStatus.archived ? 'archived' : 'active',
       'notes': notes == null || notes.trim().isEmpty ? null : notes.trim(),
+      if (setBirthDate) 'birthDate': birthDate,
     });
   }
 

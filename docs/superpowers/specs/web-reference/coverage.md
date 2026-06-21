@@ -33,7 +33,7 @@
 | trainer/calendar        | calendar_screen         | ✅      | онлайн скрыт, привязка plan-тренировки (шаблон→черновик), статус, зал; «запомнить»/история — P2               |
 | trainer/clients         | clients_screen          | ✅      | поиск, сортировка алфавит/занятие, фильтр формата, аватары, группы                                            |
 | trainer/client-card     | clients_screen Detail   | ✅      | инлайн-секции (адаптация хаба) + аватар + ДР/возраст; функции полны                                           |
-| trainer/client-edit     | client_edit_screen      | 🟡      | connect-code/check, account-profile, аватар, типы контактов                                                   |
+| trainer/client-edit     | client_edit_screen      | ✅      | + дата рождения; валидация кода/дозаполнение/аватар клиента/контакты — P2                                     |
 | trainer/client-profile  | clients_screen Detail   | ❓      | read-only витрина + копирование по long-press                                                                 |
 | trainer/client-workouts | clients_screen + assign | ❓      |                                                                                                               |
 | trainer/active-workout  | active_workout_screen   | ❓      | + «добавить в историю» с датой                                                                                |

@@ -25,9 +25,15 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
   final TextEditingController _code = TextEditingController();
   late bool _online = widget.client?.isOnline ?? false;
   late ClientStatus _status = widget.client?.status ?? ClientStatus.active;
+  late DateTime? _birth = (widget.client?.birthDate != null && widget.client!.birthDate!.length >= 10)
+      ? DateTime.tryParse(widget.client!.birthDate!.substring(0, 10))
+      : null;
   bool _busy = false;
 
   bool get _isEdit => widget.client != null;
+
+  String _iso(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   @override
   void dispose() {
@@ -58,6 +64,8 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
           isOnline: _online,
           status: _status,
           notes: _notes.text,
+          setBirthDate: true,
+          birthDate: _birth != null ? _iso(_birth!) : null,
         );
       } else {
         await api.create(
@@ -66,6 +74,7 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
           phone: _phone.text,
           isOnline: _online,
           accountId: _code.text,
+          birthDate: _birth != null ? _iso(_birth!) : null,
         );
       }
       ref.invalidate(trainerClientsProvider);
@@ -99,6 +108,31 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
             controller: _phone,
             keyboardType: TextInputType.phone,
             decoration: const InputDecoration(labelText: 'Телефон', border: OutlineInputBorder()),
+          ),
+          const SizedBox(height: 12),
+          InkWell(
+            onTap: () async {
+              final DateTime now = DateTime.now();
+              final DateTime? d = await showDatePicker(
+                context: context,
+                initialDate: _birth ?? DateTime(now.year - 25),
+                firstDate: DateTime(1900),
+                lastDate: now,
+              );
+              if (d != null) setState(() => _birth = d);
+            },
+            child: InputDecorator(
+              decoration: InputDecoration(
+                labelText: 'Дата рождения (необязательно)',
+                border: const OutlineInputBorder(),
+                suffixIcon: _birth != null
+                    ? IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => setState(() => _birth = null))
+                    : const Icon(Icons.event),
+              ),
+              child: Text(_birth != null
+                  ? '${_birth!.day.toString().padLeft(2, '0')}.${_birth!.month.toString().padLeft(2, '0')}.${_birth!.year}'
+                  : 'Не указана'),
+            ),
           ),
           const SizedBox(height: 12),
           SwitchListTile(
