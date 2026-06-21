@@ -12,3 +12,8 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Release signing (НЕ коммитить)
+key.properties
+**/*.jks
+**/*.keystore
