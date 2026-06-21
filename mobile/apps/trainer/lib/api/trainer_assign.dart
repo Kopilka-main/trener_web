@@ -12,6 +12,10 @@ class TExercise {
     required this.defaultWeightKg,
     required this.defaultTimeSec,
     required this.restSec,
+    this.description,
+    this.equipment,
+    this.primaryMuscles,
+    this.secondaryMuscles,
   });
   final String id;
   final String name;
@@ -21,6 +25,10 @@ class TExercise {
   final num? defaultWeightKg;
   final num? defaultTimeSec;
   final num? restSec;
+  final String? description;
+  final String? equipment;
+  final String? primaryMuscles;
+  final String? secondaryMuscles;
 
   factory TExercise.fromJson(Map<String, dynamic> j) => TExercise(
         id: j['id'] as String? ?? '',
@@ -31,6 +39,10 @@ class TExercise {
         defaultWeightKg: j['defaultWeightKg'] as num?,
         defaultTimeSec: j['defaultTimeSec'] as num?,
         restSec: j['restSec'] as num?,
+        description: j['description'] as String?,
+        equipment: j['equipment'] as String?,
+        primaryMuscles: j['primaryMuscles'] as String?,
+        secondaryMuscles: j['secondaryMuscles'] as String?,
       );
 
   /// Один плановый подход из дефолтов (время в приоритете, иначе повторы+вес; + отдых).

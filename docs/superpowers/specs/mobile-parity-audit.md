@@ -44,30 +44,30 @@
 
 ## Матрица покрытия — ТРЕНЕР (`apps/web` → `mobile/apps/trainer`)
 
-| Веб-страница       | Мобильный экран         | Статус | Заметки                                                              |
-| ------------------ | ----------------------- | ------ | -------------------------------------------------------------------- |
-| LoginPage          | login_screen            | ✅     |                                                                      |
-| RegisterPage       | register_screen         | ✅     |                                                                      |
-| HomePage           | home_screen             | ⚠️     | сверить плитки/метрики                                               |
-| CalendarPage       | calendar_screen         | ⚠️     | create/edit есть; сверить prefs, planned-workout, виды               |
-| ClientsPage        | clients_screen          | ✅     | + создание клиента (FAB); фильтры активные/архив                     |
-| ClientCardPage     | clients_screen (Detail) | ✅     | баланс/замеры/история/назначение/правка; вкладки P2                  |
-| ClientEditPage     | client_edit_screen      | ✅     | имя/телефон/формат/статус/заметки + код подключения                  |
-| ClientProfilePage  | —                       | ⚠️     | часть карточки                                                       |
-| ClientWorkoutsPage | assign_workout_screen   | ⚠️     | назначение тренировки готово (план+пикер); управление/правка — позже |
-| ActiveWorkoutPage  | —                       | ❌     | проведение тренировки тренером                                       |
-| ClientStatsPage    | clients_screen (Stats)  | ✅     | сводка + рекорды в карточке                                          |
-| ClientMedicalPage  | —                       | ❌     | мед.карта                                                            |
-| ClientPaymentsPage | clients_screen (Баланс) | ⚠️     | пакеты + добавление; детальная история платежей P2                   |
-| ClientCalendarPage | —                       | ⚠️     | календарь клиента (слит в общий)                                     |
-| MessagesPage       | conversations_screen    | ✅     |                                                                      |
-| ClientChatPage     | chat_screen             | ✅     |                                                                      |
-| NotificationsPage  | notifications_screen    | ⚠️     | actionable по занятиям (отклонён/сегодня/ждёт/подтв.); ДР/балансы P2 |
-| KnowledgeBasePage  | —                       | ❌     | каталог упражнений тренера                                           |
-| ExerciseEditPage   | —                       | ❌     | создание/правка упражнения                                           |
-| TemplateEditPage   | —                       | ❌     | шаблоны тренировок                                                   |
-| AccountingPage     | —                       | ❌     | бухгалтерия/доходы                                                   |
-| ProfilePage        | settings_screen         | ⚠️     | аватар, редактирование                                               |
+| Веб-страница       | Мобильный экран         | Статус | Заметки                                                                                                    |
+| ------------------ | ----------------------- | ------ | ---------------------------------------------------------------------------------------------------------- |
+| LoginPage          | login_screen            | ✅     |                                                                                                            |
+| RegisterPage       | register_screen         | ✅     |                                                                                                            |
+| HomePage           | home_screen             | ⚠️     | сверить плитки/метрики                                                                                     |
+| CalendarPage       | calendar_screen         | ⚠️     | create/edit есть; сверить prefs, planned-workout, виды                                                     |
+| ClientsPage        | clients_screen          | ✅     | + создание клиента (FAB); фильтры активные/архив                                                           |
+| ClientCardPage     | clients_screen (Detail) | ✅     | баланс/замеры/история/назначение/правка; вкладки P2                                                        |
+| ClientEditPage     | client_edit_screen      | ✅     | имя/телефон/формат/статус/заметки + код подключения                                                        |
+| ClientProfilePage  | —                       | ⚠️     | часть карточки                                                                                             |
+| ClientWorkoutsPage | assign_workout_screen   | ⚠️     | назначение тренировки готово (план+пикер); управление/правка — позже                                       |
+| ActiveWorkoutPage  | active_workout_screen   | ✅     | проведение: draft→старт→лог подходов→отдых→завершение; пикер из полного каталога, добавл/удал/перестановка |
+| ClientStatsPage    | clients_screen (Stats)  | ✅     | сводка + рекорды в карточке                                                                                |
+| ClientMedicalPage  | —                       | ❌     | мед.карта                                                                                                  |
+| ClientPaymentsPage | clients_screen (Баланс) | ⚠️     | пакеты + добавление; детальная история платежей P2                                                         |
+| ClientCalendarPage | —                       | ⚠️     | календарь клиента (слит в общий)                                                                           |
+| MessagesPage       | conversations_screen    | ✅     |                                                                                                            |
+| ClientChatPage     | chat_screen             | ✅     |                                                                                                            |
+| NotificationsPage  | notifications_screen    | ⚠️     | actionable по занятиям (отклонён/сегодня/ждёт/подтв.); ДР/балансы P2                                       |
+| KnowledgeBasePage  | —                       | ❌     | каталог упражнений тренера                                                                                 |
+| ExerciseEditPage   | —                       | ❌     | создание/правка упражнения                                                                                 |
+| TemplateEditPage   | —                       | ❌     | шаблоны тренировок                                                                                         |
+| AccountingPage     | —                       | ❌     | бухгалтерия/доходы                                                                                         |
+| ProfilePage        | settings_screen         | ⚠️     | аватар, редактирование                                                                                     |
 
 ## Шаблон по-экранного разбора
 

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../api/trainer_client_card.dart';
 import '../api/trainer_client_stats.dart';
 import '../api/trainer_clients.dart';
+import 'active_workout_screen.dart';
 import 'assign_workout_screen.dart';
 import 'client_edit_screen.dart';
 
@@ -667,37 +668,95 @@ class _WorkoutsBlock extends ConsumerWidget {
       loading: () => const _Empty('Загрузка…'),
       error: (Object e, _) => const _Empty('Не удалось загрузить'),
       data: (List<TWorkout> all) {
+        // К проведению: черновики (назначенные) и активные — наверху, тапаемые.
+        final List<TWorkout> toConduct =
+            all.where((TWorkout w) => w.status == 'draft' || w.status == 'active').toList();
         final List<TWorkout> done = all.where((TWorkout w) => w.status == 'completed').take(10).toList();
-        if (done.isEmpty) return const _Empty('Проведённых тренировок нет');
+        if (toConduct.isEmpty && done.isEmpty) return const _Empty('Тренировок нет');
+
+        Future<void> openConduct(TWorkout w) async {
+          await Navigator.of(context).push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => ActiveWorkoutScreen(clientId: clientId, workoutId: w.id),
+            ),
+          );
+          ref.invalidate(clientWorkoutsCardProvider(clientId));
+        }
+
         return Column(
-          children: done.map((TWorkout w) => Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
-                child: Row(
-                  children: <Widget>[
-                    Icon(Icons.fitness_center, size: 18, color: c.inkMuted),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(w.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
-                          Text(
-                            <String>[
-                              if (w.completedAt != null) _date(w.completedAt),
-                              '${w.exerciseCount} упр.',
-                              if (w.createdByClient) 'своя',
-                            ].join(' · '),
-                            style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500),
-                          ),
-                        ],
+          children: <Widget>[
+            ...toConduct.map((TWorkout w) {
+              final bool active = w.status == 'active';
+              return GestureDetector(
+                onTap: () => openConduct(w),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                  decoration: BoxDecoration(
+                    color: c.card,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: active ? c.accent : c.line),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      Icon(active ? Icons.play_circle_outline : Icons.fitness_center,
+                          size: 18, color: active ? c.accent : c.inkMuted),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(w.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                            Text(
+                              <String>[
+                                active ? 'идёт' : 'к проведению',
+                                '${w.exerciseCount} упр.',
+                                if (w.createdByClient) 'своя',
+                              ].join(' · '),
+                              style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                      Icon(Icons.chevron_right, size: 18, color: c.inkMutedXl),
+                    ],
+                  ),
                 ),
-              )).toList(),
+              );
+            }),
+            if (done.isEmpty && toConduct.isNotEmpty)
+              const SizedBox.shrink()
+            else
+              ...done.map((TWorkout w) => Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                    decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+                    child: Row(
+                      children: <Widget>[
+                        Icon(Icons.fitness_center, size: 18, color: c.inkMuted),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(w.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                              Text(
+                                <String>[
+                                  if (w.completedAt != null) _date(w.completedAt),
+                                  '${w.exerciseCount} упр.',
+                                  if (w.createdByClient) 'своя',
+                                ].join(' · '),
+                                style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  )),
+          ],
         );
       },
     );
