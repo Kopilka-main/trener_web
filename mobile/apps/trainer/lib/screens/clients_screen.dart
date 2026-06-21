@@ -1,5 +1,6 @@
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -1101,19 +1102,68 @@ class _TemplatePickerSheet extends ConsumerWidget {
   }
 }
 
-/// Раздел «Оплата»: баланс/пакеты + история платежей + «Добавить».
+/// Раздел «Оплата»: карточка баланса (проведено | оплачено−проведено) + пакеты
+/// и история платежей + добавление. Зеркало веб ClientPaymentsPage.
 class ClientPaymentsScreen extends ConsumerWidget {
   const ClientPaymentsScreen({super.key, required this.client});
   final Client client;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final AppColors c = context.colors;
+    final List<TPackage> pkgs = ref.watch(clientPackagesProvider(client.id)).valueOrNull ?? <TPackage>[];
+    final List<TWorkout> workouts = ref.watch(clientWorkoutsCardProvider(client.id)).valueOrNull ?? <TWorkout>[];
+    final int done = workouts.where((TWorkout w) => w.status == 'completed').length;
+    final int paid = pkgs.where((TPackage p) => p.isActive).fold(0, (int a, TPackage p) => a + p.lessonsPaid);
+    final int remaining = paid - done;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Оплата')),
+      appBar: AppBar(title: Text('Оплата · ${client.fullName}')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: <Widget>[
+          // Карточка баланса: проведено | баланс.
+          Container(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+            decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(18)),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text('ПРОВЕДЕНО', style: AppFonts.mono(size: 10, color: c.inkMutedXl, weight: FontWeight.w700)),
+                      const SizedBox(height: 4),
+                      Text('$done', style: AppFonts.display(size: 28, color: c.ink, letterSpacing: -1)),
+                    ],
+                  ),
+                ),
+                Container(width: 1, height: 44, color: c.line),
+                const SizedBox(width: 18),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text('БАЛАНС', style: AppFonts.mono(size: 10, color: c.inkMutedXl, weight: FontWeight.w700)),
+                      const SizedBox(height: 4),
+                      Text(remaining > 0 ? '+$remaining' : '$remaining',
+                          style: AppFonts.display(
+                              size: 28, color: remaining < 0 ? c.danger : c.accent, letterSpacing: -1)),
+                      Text(
+                          remaining > 0
+                              ? 'оплачено сверх'
+                              : remaining < 0
+                                  ? 'в долг'
+                                  : 'ровно по оплате',
+                          style: TextStyle(fontSize: 11, color: c.inkMuted)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
           _Section(
-            title: 'Баланс',
+            title: 'Пакеты и платежи',
             action: _AddPackageButton(clientId: client.id),
             child: _PackagesBlock(clientId: client.id),
           ),
@@ -1123,18 +1173,25 @@ class ClientPaymentsScreen extends ConsumerWidget {
   }
 }
 
-/// Раздел «Прогресс»: сводная статистика + рекорды.
+/// Раздел «Прогресс»: статистика/рекорды упражнений + замеры. Зеркало веб
+/// ClientStatsPage (вкладки Упражнения/Замеры; графики и фото — позже).
 class ClientStatsScreen extends ConsumerWidget {
   const ClientStatsScreen({super.key, required this.client});
   final Client client;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Прогресс')),
+      appBar: AppBar(title: Text('Прогресс · ${client.fullName}')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: <Widget>[
-          _Section(title: 'Статистика', child: _StatsBlock(clientId: client.id)),
+          _Section(title: 'Упражнения', child: _StatsBlock(clientId: client.id)),
+          const SizedBox(height: 16),
+          _Section(
+            title: 'Замеры',
+            action: _RequestMeasureButton(clientId: client.id),
+            child: _MeasurementsBlock(clientId: client.id),
+          ),
         ],
       ),
     );
@@ -1168,38 +1225,154 @@ class ClientProfileScreen extends ConsumerWidget {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: <Widget>[
-          if (client.phone?.trim().isNotEmpty == true)
-            _InfoRow(icon: Icons.phone_outlined, text: client.phone!.trim()),
-          if (_birthLine(client.birthDate) case final String b)
-            _InfoRow(icon: Icons.cake_outlined, text: b),
-          ...client.contacts.map((ClientContact ct) =>
-              _InfoRow(icon: Icons.alternate_email, text: '${ct.type}: ${ct.value}')),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: _InfoRow(
-              icon: Icons.info_outline,
-              text: <String>[
-                client.isOnline ? 'Онлайн' : 'Очно',
-                client.status == ClientStatus.active ? 'активный' : 'в архиве',
-                if (!client.hasAccount) 'без аккаунта',
-              ].join(' · '),
+          // Центрированная шапка: аватар + имя + формат/возраст.
+          Center(
+            child: Column(
+              children: <Widget>[
+                AuthedAvatar(
+                  url: client.avatarFileId != null
+                      ? '${ref.read(baseUrlProvider).replaceAll(RegExp(r'/$'), '')}/api/files/${client.avatarFileId}'
+                      : null,
+                  token: ref.watch(sessionProvider).token,
+                  initials: client.initials,
+                  radius: 44,
+                ),
+                const SizedBox(height: 12),
+                Text(client.fullName.isNotEmpty ? client.fullName : 'Без имени',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: col.ink)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  alignment: WrapAlignment.center,
+                  children: <Widget>[
+                    _ProfileChip(client.isOnline ? 'Онлайн' : 'Спортзал'),
+                    if (_ageOnly(client.birthDate) case final String age) _ProfileChip(age),
+                    if (client.status == ClientStatus.archived) _ProfileChip('Архив'),
+                  ],
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
-          _Section(
-            title: 'Замеры',
-            action: _RequestMeasureButton(clientId: client.id),
-            child: _MeasurementsBlock(clientId: client.id),
-          ),
+          const SizedBox(height: 20),
+          // Раздел «Данные».
+          if (client.phone?.trim().isNotEmpty == true || client.contacts.isNotEmpty ||
+              client.birthDate != null || client.accountId != null) ...<Widget>[
+            _SettingsLabel('Данные'),
+            if (client.phone?.trim().isNotEmpty == true)
+              _DataRow(icon: Icons.phone_outlined, type: 'Телефон', value: client.phone!.trim()),
+            ...client.contacts.map((ClientContact ct) =>
+                _DataRow(icon: Icons.alternate_email, type: ct.type, value: ct.value)),
+            if (_birthLine(client.birthDate) case final String b)
+              _DataRow(icon: Icons.cake_outlined, type: 'Дата рождения', value: b),
+            if (client.accountId?.isNotEmpty == true)
+              _DataRow(icon: Icons.link, type: 'Клиентский ID', value: client.accountId!, copyable: true),
+          ],
+          if (client.tags.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 16),
+            _SettingsLabel('Теги'),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: client.tags
+                  .map((String t) => Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(color: col.chip, borderRadius: BorderRadius.circular(18)),
+                        child: Text('#$t', style: AppFonts.mono(size: 12, color: col.inkMuted, weight: FontWeight.w600)),
+                      ))
+                  .toList(),
+            ),
+          ],
           if (client.notes?.trim().isNotEmpty == true) ...<Widget>[
             const SizedBox(height: 16),
-            Text('ЗАМЕТКИ', style: AppFonts.mono(size: 11, color: col.inkMutedXl, weight: FontWeight.w700)),
-            const SizedBox(height: 6),
+            _SettingsLabel('Заметки'),
             Text(client.notes!.trim(), style: TextStyle(fontSize: 14, height: 1.5, color: col.ink)),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Возраст коротко «35 лет» из birthDate (без даты), либо null.
+String? _ageOnly(String? iso) {
+  if (iso == null || iso.length < 10) return null;
+  final List<String> p = iso.substring(0, 10).split('-');
+  if (p.length != 3) return null;
+  final int y = int.tryParse(p[0]) ?? 0, mo = int.tryParse(p[1]) ?? 1, da = int.tryParse(p[2]) ?? 1;
+  if (y == 0) return null;
+  final DateTime now = DateTime.now();
+  int age = now.year - y;
+  if (now.month < mo || (now.month == mo && now.day < da)) age--;
+  return '$age ${_ageDecl(age)}';
+}
+
+class _ProfileChip extends StatelessWidget {
+  const _ProfileChip(this.text);
+  final String text;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(color: c.chip, borderRadius: BorderRadius.circular(18)),
+      child: Text(text, style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w600)),
+    );
+  }
+}
+
+class _SettingsLabel extends StatelessWidget {
+  const _SettingsLabel(this.text);
+  final String text;
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(text.toUpperCase(),
+            style: AppFonts.mono(size: 11, color: context.colors.inkMutedXl, weight: FontWeight.w700)),
+      );
+}
+
+/// Строка данных: иконка + тип + значение; long-press копирует.
+class _DataRow extends StatelessWidget {
+  const _DataRow({required this.icon, required this.type, required this.value, this.copyable = false});
+  final IconData icon;
+  final String type;
+  final String value;
+  final bool copyable;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return GestureDetector(
+      onLongPress: () {
+        Clipboard.setData(ClipboardData(text: value));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скопировано')));
+      },
+      onTap: copyable
+          ? () {
+              Clipboard.setData(ClipboardData(text: value));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скопировано')));
+            }
+          : null,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12)),
+        child: Row(
+          children: <Widget>[
+            Icon(icon, size: 18, color: c.inkMuted),
+            const SizedBox(width: 12),
+            Text(type, style: TextStyle(fontSize: 14, color: c.inkMuted)),
+            const Spacer(),
+            Flexible(
+              child: Text(value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: copyable ? c.accent : c.ink)),
+            ),
+            if (copyable) ...<Widget>[const SizedBox(width: 6), Icon(Icons.copy, size: 15, color: c.inkMutedXl)],
+          ],
+        ),
       ),
     );
   }
@@ -1630,23 +1803,3 @@ class _StatsBlock extends ConsumerWidget {
   }
 }
 
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.icon, required this.text});
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Icon(icon, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
-          const SizedBox(width: 12),
-          Expanded(child: Text(text, style: const TextStyle(fontSize: 15))),
-        ],
-      ),
-    );
-  }
-}

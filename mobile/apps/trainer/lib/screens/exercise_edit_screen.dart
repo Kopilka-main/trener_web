@@ -68,6 +68,17 @@ class _ExerciseEditScreenState extends ConsumerState<ExerciseEditScreen> {
     return ordered;
   }
 
+  /// Характеристики каталога (read-only): только непустые поля.
+  /// Зеркало веб ExerciseDetails: оборудование / целевые мышцы / дополнительно.
+  List<(String, String)> get _chars {
+    final TExercise? e = _src;
+    final List<(String, String)> rows = <(String, String)>[];
+    if (e?.equipment?.trim().isNotEmpty == true) rows.add(('Оборудование', e!.equipment!.trim()));
+    if (e?.primaryMuscles?.trim().isNotEmpty == true) rows.add(('Целевые мышцы', e!.primaryMuscles!.trim()));
+    if (e?.secondaryMuscles?.trim().isNotEmpty == true) rows.add(('Дополнительно', e!.secondaryMuscles!.trim()));
+    return rows;
+  }
+
   Future<void> _save() async {
     final String name = _name.text.trim();
     if (name.isEmpty || _category.isEmpty || _busy) return;
@@ -155,10 +166,6 @@ class _ExerciseEditScreenState extends ConsumerState<ExerciseEditScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: <Widget>[
-          if (img != null || video != null) ...<Widget>[
-            CatalogMediaView(imageUrl: img, videoUrl: video, height: 190),
-            const SizedBox(height: 14),
-          ],
           if (locked)
             Container(
               margin: const EdgeInsets.only(bottom: 12),
@@ -206,6 +213,33 @@ class _ExerciseEditScreenState extends ConsumerState<ExerciseEditScreen> {
             onChanged: (_) => setState(() {}),
             decoration: _dec(c, 'Жим ногами под углом 45°'),
           ),
+          if (_isEdit && (img != null || video != null)) ...<Widget>[
+            const SizedBox(height: 20),
+            CatalogMediaView(imageUrl: img, videoUrl: video, height: 200, showToggle: true),
+          ],
+          if (_isEdit) ...<Widget>[
+            if (_chars.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 20),
+              _Label('Характеристики'),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: c.card,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: c.line),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    for (int i = 0; i < _chars.length; i++) ...<Widget>[
+                      if (i > 0) const SizedBox(height: 8),
+                      _CharRow(label: _chars[i].$1, value: _chars[i].$2),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ],
           const SizedBox(height: 16),
           _Label('Описание'),
           TextField(
@@ -252,6 +286,27 @@ class _Label extends StatelessWidget {
             style: TextStyle(
                 fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: context.colors.inkMutedXl)),
       );
+}
+
+class _CharRow extends StatelessWidget {
+  const _CharRow({required this.label, required this.value});
+  final String label;
+  final String value;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        SizedBox(
+          width: 120,
+          child: Text(label, style: TextStyle(fontSize: 14, color: c.inkMuted)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Text(value, style: TextStyle(fontSize: 14, color: c.ink))),
+      ],
+    );
+  }
 }
 
 class _Chip extends StatelessWidget {
