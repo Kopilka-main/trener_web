@@ -25,30 +25,30 @@
 
 ## Тренер (`apps/web` → `mobile/apps/trainer`)
 
-| Эталон                  | Мобильный экран         | Рантайм | Заметка                                                                                         |
-| ----------------------- | ----------------------- | ------- | ----------------------------------------------------------------------------------------------- |
-| trainer/login           | login_screen            | ❓      |                                                                                                 |
-| trainer/register        | register_screen         | ❓      |                                                                                                 |
-| trainer/home            | home_screen             | 🟡      | онлайн исключать везде; формулы плиток сверить                                                  |
-| trainer/calendar        | calendar_screen         | ✅      | онлайн скрыт, привязка plan-тренировки (шаблон→черновик), статус, зал; «запомнить»/история — P2 |
-| trainer/clients         | clients_screen          | ✅      | поиск, сортировка алфавит/занятие, фильтр формата, аватары, группы                              |
-| trainer/client-card     | clients_screen Detail   | 🟡      | веб = 6 плиток-навигация + CTA; у нас секции                                                    |
-| trainer/client-edit     | client_edit_screen      | 🟡      | connect-code/check, account-profile, аватар, типы контактов                                     |
-| trainer/client-profile  | clients_screen Detail   | ❓      | read-only витрина + копирование по long-press                                                   |
-| trainer/client-workouts | clients_screen + assign | ❓      |                                                                                                 |
-| trainer/active-workout  | active_workout_screen   | ❓      | + «добавить в историю» с датой                                                                  |
-| trainer/client-stats    | clients_screen Stats    | ❓      |                                                                                                 |
-| trainer/client-medical  | client_medical_screen   | ❓      | accept image/\* + pdf                                                                           |
-| trainer/client-payments | clients_screen Баланс   | ❓      | формула баланса (все completed)                                                                 |
-| trainer/client-calendar | calendar_screen         | ❓      | слит в общий                                                                                    |
-| trainer/messages        | conversations_screen    | ❓      |                                                                                                 |
-| trainer/client-chat     | chat_screen             | ❓      | /task,/pin парсит сервер; открепить DELETE .../pin                                              |
-| trainer/notifications   | notifications_screen    | 🟡      | dismissed≠seen; точные окна дат                                                                 |
-| trainer/knowledge-base  | knowledge_screen        | ❓      | состояние в sessionStorage                                                                      |
-| trainer/exercise-edit   | exercise_edit_screen    | ❓      | системное→копия (sourceExerciseId)                                                              |
-| trainer/template-edit   | template_edit_screen    | ❓      | подход = отдельная позиция (sets:1)                                                             |
-| trainer/accounting      | accounting_screen       | ❓      | списки не фильтруются сервером по дате                                                          |
-| trainer/profile         | settings+profile_edit   | ❓      | аватар через /api/files/:id?v=                                                                  |
+| Эталон                  | Мобильный экран         | Рантайм | Заметка                                                                                                       |
+| ----------------------- | ----------------------- | ------- | ------------------------------------------------------------------------------------------------------------- |
+| trainer/login           | login_screen            | ❓      |                                                                                                               |
+| trainer/register        | register_screen         | ❓      |                                                                                                               |
+| trainer/home            | home_screen             | ✅      | дата-кикер, герой (planned+время≥сейчас, онлайн искл.), строка занятия, 6 плиток порядок/primary, финансы тыс |
+| trainer/calendar        | calendar_screen         | ✅      | онлайн скрыт, привязка plan-тренировки (шаблон→черновик), статус, зал; «запомнить»/история — P2               |
+| trainer/clients         | clients_screen          | ✅      | поиск, сортировка алфавит/занятие, фильтр формата, аватары, группы                                            |
+| trainer/client-card     | clients_screen Detail   | 🟡      | веб = 6 плиток-навигация + CTA; у нас секции                                                                  |
+| trainer/client-edit     | client_edit_screen      | 🟡      | connect-code/check, account-profile, аватар, типы контактов                                                   |
+| trainer/client-profile  | clients_screen Detail   | ❓      | read-only витрина + копирование по long-press                                                                 |
+| trainer/client-workouts | clients_screen + assign | ❓      |                                                                                                               |
+| trainer/active-workout  | active_workout_screen   | ❓      | + «добавить в историю» с датой                                                                                |
+| trainer/client-stats    | clients_screen Stats    | ❓      |                                                                                                               |
+| trainer/client-medical  | client_medical_screen   | ❓      | accept image/\* + pdf                                                                                         |
+| trainer/client-payments | clients_screen Баланс   | ❓      | формула баланса (все completed)                                                                               |
+| trainer/client-calendar | calendar_screen         | ❓      | слит в общий                                                                                                  |
+| trainer/messages        | conversations_screen    | ❓      |                                                                                                               |
+| trainer/client-chat     | chat_screen             | ❓      | /task,/pin парсит сервер; открепить DELETE .../pin                                                            |
+| trainer/notifications   | notifications_screen    | 🟡      | dismissed≠seen; точные окна дат                                                                               |
+| trainer/knowledge-base  | knowledge_screen        | ❓      | состояние в sessionStorage                                                                                    |
+| trainer/exercise-edit   | exercise_edit_screen    | ❓      | системное→копия (sourceExerciseId)                                                                            |
+| trainer/template-edit   | template_edit_screen    | ❓      | подход = отдельная позиция (sets:1)                                                                           |
+| trainer/accounting      | accounting_screen       | ❓      | списки не фильтруются сервером по дате                                                                        |
+| trainer/profile         | settings+profile_edit   | ❓      | аватар через /api/files/:id?v=                                                                                |
 
 ## Ключевые расхождения, найденные при сборке справочника
 

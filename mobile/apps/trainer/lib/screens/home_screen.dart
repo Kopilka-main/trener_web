@@ -7,11 +7,36 @@ import '../api/trainer_home.dart';
 
 String _pad2(int n) => n.toString().padLeft(2, '0');
 
-/// Прибыль за месяц коротко: тысячи → «12к», иначе число.
-String _profit(num v) {
-  final int n = v.round();
-  if (n.abs() >= 1000) return '${n < 0 ? '−' : ''}${(n.abs() / 1000).toStringAsFixed(n.abs() >= 10000 ? 0 : 1)}к';
-  return '$n';
+/// Прибыль за месяц в тысячах: «12», «−3».
+String _thousands(num v) {
+  final int n = (v / 1000).round();
+  return '${n < 0 ? '−' : ''}${n.abs()}';
+}
+
+const List<String> _dayShort = <String>['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
+const List<String> _monthGen = <String>[
+  'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+];
+
+String _dateKicker(DateTime n) =>
+    'СЕГОДНЯ · ${_dayShort[n.weekday - 1]} ${n.day} ${_monthGen[n.month - 1].toUpperCase()}';
+
+/// Короткий обратный отсчёт до занятия: «2Д», «3Ч 10М», «45М», «СЕЙЧАС».
+String _diffShort(DateTime future, DateTime now) {
+  final int ms = future.difference(now).inMilliseconds;
+  if (ms <= 0) return 'СЕЙЧАС';
+  final int totalMin = (ms / 60000).round();
+  final int totalH = totalMin ~/ 60;
+  if (totalH >= 24) {
+    final int d = totalH ~/ 24;
+    final int h = totalH % 24;
+    return h == 0 ? '$d' 'Д' : '$d' 'Д ' '$h' 'Ч';
+  }
+  final int m = totalMin % 60;
+  if (totalH == 0) return '$m' 'М';
+  if (m == 0) return '$totalH' 'Ч';
+  return '$totalH' 'Ч ' '$m' 'М';
 }
 
 class HomeScreen extends ConsumerWidget {
@@ -37,108 +62,150 @@ class HomeScreen extends ConsumerWidget {
               ],
             ),
           ),
-          data: (HomeData d) => RefreshIndicator(
-            onRefresh: () async => ref.invalidate(trainerHomeProvider),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: Text(d.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
-                    ),
-                    IconButton(
-                      onPressed: () => context.push('/settings'),
-                      icon: Icon(Icons.settings_outlined, size: 28, color: c.inkMuted),
-                      tooltip: 'Профиль',
-                    ),
-                  ],
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+          data: (HomeData d) {
+            final bool alertsPrimary = d.alerts > 0;
+            final bool msgPrimary = !alertsPrimary && d.unread > 0;
+            return RefreshIndicator(
+              onRefresh: () async => ref.invalidate(trainerHomeProvider),
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+                children: <Widget>[
+                  // Дата-кикер + шестерёнка.
+                  Row(
                     children: <Widget>[
-                      Text(_pad2(d.todaySessions),
-                          style: AppFonts.display(size: 64, color: c.accent, letterSpacing: -2)),
-                      const SizedBox(width: 12),
-                      Flexible(
-                        child: Text('тренировок\nсегодня',
-                            style: TextStyle(
-                                fontSize: 22,
-                                height: 1.1,
-                                fontWeight: FontWeight.bold,
-                                color: c.ink)),
+                      Expanded(
+                        child: Text(_dateKicker(DateTime.now()),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppFonts.mono(size: 11, color: c.inkMutedXl, weight: FontWeight.w700)),
+                      ),
+                      IconButton(
+                        onPressed: () => context.push('/settings'),
+                        icon: Icon(Icons.settings_outlined, size: 28, color: c.inkMuted),
+                        tooltip: 'Профиль',
                       ),
                     ],
                   ),
-                ),
-                GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 8,
-                  crossAxisSpacing: 8,
-                  childAspectRatio: 1.15,
-                  children: <Widget>[
-                    _Tile(
-                      title: 'Клиенты',
-                      sub: 'активные',
-                      value: _pad2(d.activeClients),
-                      metric: 'активных',
-                      icon: Icons.group_outlined,
-                      onTap: () => context.push('/clients'),
+                  // Герой: число «тренировок сегодня» → календарь.
+                  GestureDetector(
+                    onTap: () => context.push('/calendar'),
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 2, 4, 6),
+                      child: Row(
+                        children: <Widget>[
+                          Text(_pad2(d.todaySessions),
+                              style: AppFonts.display(size: 64, color: c.accent, letterSpacing: -2)),
+                          const SizedBox(width: 12),
+                          Flexible(
+                            child: Text('тренировок\nсегодня',
+                                style: TextStyle(fontSize: 22, height: 1.1, fontWeight: FontWeight.bold, color: c.ink)),
+                          ),
+                        ],
+                      ),
                     ),
-                    _Tile(
-                      title: 'Календарь',
-                      sub: 'расписание',
-                      value: _pad2(d.plannedSessions),
-                      metric: 'на 30 дней',
-                      icon: Icons.calendar_today,
+                  ),
+                  // Строка ближайшего занятия.
+                  if (d.nextAt != null)
+                    GestureDetector(
                       onTap: () => context.push('/calendar'),
-                    ),
-                    _Tile(
-                      title: 'Чат',
-                      sub: 'клиенты на связи',
-                      value: _pad2(d.unread),
-                      metric: 'новых',
-                      icon: Icons.chat_bubble_outline,
-                      primary: d.unread > 0,
-                      onTap: () => context.push('/chats'),
-                    ),
-                    _Tile(
-                      title: 'Уведомления',
-                      sub: 'что требует внимания',
-                      value: _pad2(d.alerts),
-                      metric: 'алертов',
-                      icon: Icons.notifications_none,
-                      primary: d.alerts > 0,
-                      onTap: () => context.push('/notifications'),
-                    ),
-                    _Tile(
-                      title: 'Финансы',
-                      sub: 'прибыль за месяц',
-                      value: _profit(d.monthlyProfit),
-                      metric: 'за месяц',
-                      icon: Icons.account_balance_wallet_outlined,
-                      onTap: () => context.push('/accounting'),
-                    ),
-                    _Tile(
-                      title: 'База знаний',
-                      sub: 'упражнения и шаблоны',
-                      value: _pad2(d.knowledgeCount),
-                      metric: 'упражнений',
-                      icon: Icons.menu_book_outlined,
-                      onTap: () => context.push('/knowledge'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
+                        child: Row(
+                          children: <Widget>[
+                            Flexible(
+                              child: Text(
+                                <String>[
+                                  'СЛЕД. · ${d.nextTime}',
+                                  if (d.nextName?.isNotEmpty == true) d.nextName!.toUpperCase(),
+                                  if (d.nextTitle?.isNotEmpty == true) d.nextTitle!.toUpperCase(),
+                                ].join(' · '),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppFonts.mono(size: 11, color: c.inkMuted, weight: FontWeight.w700),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(color: c.accent, borderRadius: BorderRadius.circular(4)),
+                              child: Text(_diffShort(d.nextAt!, DateTime.now()),
+                                  style: AppFonts.mono(size: 10, color: c.accentOn, weight: FontWeight.w700)),
+                            ),
+                            const SizedBox(width: 6),
+                            Icon(Icons.arrow_forward, size: 16, color: c.accent),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    const SizedBox(height: 6),
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 8,
+                    crossAxisSpacing: 8,
+                    childAspectRatio: 1.15,
+                    children: <Widget>[
+                      _Tile(
+                        title: 'Клиенты',
+                        sub: 'активные',
+                        value: _pad2(d.activeClients),
+                        metric: 'активных',
+                        icon: Icons.group_outlined,
+                        onTap: () => context.push('/clients'),
+                      ),
+                      _Tile(
+                        title: 'Календарь',
+                        sub: 'расписание',
+                        value: _pad2(d.plannedSessions),
+                        metric: 'на 30 дней',
+                        icon: Icons.calendar_today,
+                        onTap: () => context.push('/calendar'),
+                      ),
+                      _Tile(
+                        title: 'Сообщения',
+                        sub: 'клиенты на связи',
+                        value: _pad2(d.unread),
+                        metric: 'новых',
+                        icon: Icons.chat_bubble_outline,
+                        primary: msgPrimary,
+                        onTap: () => context.push('/chats'),
+                      ),
+                      _Tile(
+                        title: 'База знаний',
+                        sub: 'упражнения и шаблоны',
+                        value: _pad2(d.knowledgeCount),
+                        metric: 'в базе',
+                        icon: Icons.menu_book_outlined,
+                        onTap: () => context.push('/knowledge'),
+                      ),
+                      _Tile(
+                        title: 'Финансы',
+                        sub: 'прибыль за месяц',
+                        value: _thousands(d.monthlyProfit),
+                        metric: 'тыс ₽',
+                        icon: Icons.account_balance_wallet_outlined,
+                        valueColor: d.monthlyProfit < 0 ? c.danger : null,
+                        onTap: () => context.push('/accounting'),
+                      ),
+                      _Tile(
+                        title: 'Уведомления',
+                        sub: alertsPrimary ? 'требуют внимания' : 'нет открытых задач',
+                        value: _pad2(d.alerts),
+                        metric: alertsPrimary ? 'новых' : 'всё тихо',
+                        icon: Icons.notifications_none,
+                        primary: alertsPrimary,
+                        onTap: () => context.push('/notifications'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
@@ -155,6 +222,7 @@ class _Tile extends StatelessWidget {
     required this.icon,
     required this.onTap,
     this.primary = false,
+    this.valueColor,
   });
   final String title;
   final String sub;
@@ -163,6 +231,7 @@ class _Tile extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
   final bool primary;
+  final Color? valueColor;
 
   @override
   Widget build(BuildContext context) {
@@ -197,7 +266,7 @@ class _Tile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: <Widget>[
-                Text(value, style: AppFonts.display(size: 34, color: fg, letterSpacing: -1)),
+                Text(value, style: AppFonts.display(size: 34, color: valueColor ?? fg, letterSpacing: -1)),
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(metric.toUpperCase(),
