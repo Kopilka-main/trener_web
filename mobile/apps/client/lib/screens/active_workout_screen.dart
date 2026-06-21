@@ -39,15 +39,6 @@ String _plannedText(WorkoutSet s) {
   return p.isEmpty ? '—' : p.join(' ');
 }
 
-String _actualText(WorkoutSet s) {
-  final List<String> p = <String>[
-    if (s.actualReps != null) '${s.actualReps}',
-    if (s.actualWeightKg != null) '× ${s.actualWeightKg} кг',
-    if (s.actualTimeSec != null) '${s.actualTimeSec} с',
-  ];
-  return p.isEmpty ? '—' : p.join(' ');
-}
-
 String _formatDuration(int totalSec) {
   final int sec = totalSec % 60;
   final int m = totalSec ~/ 60;
@@ -148,15 +139,19 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
   }
 
   Future<void> _addExercise() async {
-    final CatalogExercise? ex = await showModalBottomSheet<CatalogExercise>(
+    // Мультивыбор со счётчиками (как тренерский ExerciseSelect): возвращает
+    // список упражнений, развёрнутый по количеству. Добавляем каждое по разу.
+    final List<CatalogExercise>? picks = await showModalBottomSheet<List<CatalogExercise>>(
       context: context,
       backgroundColor: context.colors.bg,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _ExercisePicker(selectedIds: _w.exercises.map((WorkoutExercise e) => e.exerciseId).toSet()),
+      builder: (_) => const _ExercisePicker(),
     );
-    if (ex == null) return;
-    await _run(() => _api.addExercise(_w.id, ex));
+    if (picks == null || picks.isEmpty) return;
+    for (final CatalogExercise ex in picks) {
+      await _run(() => _api.addExercise(_w.id, ex));
+    }
   }
 
   Future<void> _toggleDone(WorkoutExercise ex, WorkoutSet s) async {
@@ -290,6 +285,17 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
   Widget _buildActive(BuildContext context) {
     final AppColors c = context.colors;
     final Map<int, String> labels = _exerciseLabels(_w.exercises);
+    // Превью упражнения — из каталога по exerciseId.
+    final String base = ref.read(baseUrlProvider);
+    final List<CatalogExercise> catalog =
+        ref.watch(clientCatalogProvider).valueOrNull ?? <CatalogExercise>[];
+    final Map<String, CatalogExercise> byId = <String, CatalogExercise>{
+      for (final CatalogExercise e in catalog) e.id: e,
+    };
+    String? thumbFor(WorkoutExercise ex) {
+      final CatalogExercise? ce = byId[ex.exerciseId];
+      return ce == null ? null : catalogMediaUrl(base, ce.thumbUrl ?? ce.imageUrl);
+    }
     final List<WorkoutSet> allSets =
         _w.exercises.expand((WorkoutExercise e) => e.sets).toList();
     final int doneCount = allSets.where((WorkoutSet s) => s.done).length;
@@ -367,6 +373,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                 opacity: 0.8,
                 child: _ExerciseCard(
                   title: labels[ex.position] ?? ex.name,
+                  thumbUrl: thumbFor(ex),
                   child: Column(children: ex.sets.map((WorkoutSet s) => _activeSetRow(ex, s, labels)).toList()),
                 ),
               )),
@@ -375,6 +382,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
         ...pending.map((WorkoutExercise ex) => _ExerciseCard(
               key: ValueKey<int>(ex.position),
               title: labels[ex.position] ?? ex.name,
+              thumbUrl: thumbFor(ex),
               child: Column(children: ex.sets.map((WorkoutSet s) => _activeSetRow(ex, s, labels)).toList()),
             )),
         const SizedBox(height: 8),
@@ -411,10 +419,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: <Widget>[
-          Expanded(
-            child: Text(s.hasFact ? _actualText(s) : _plannedText(s),
-                style: AppFonts.mono(size: 19, color: c.inkMuted, weight: FontWeight.w500)),
-          ),
+          Expanded(child: _SetParams(set: s)),
           _CircleBtn(
             icon: Icons.edit,
             onTap: () => setState(() => _editing = key),
@@ -434,12 +439,52 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
   }
 }
 
+/// Параметры подхода с иконками: повторы / вес / время (факт приоритетнее плана).
+class _SetParams extends StatelessWidget {
+  const _SetParams({required this.set});
+  final WorkoutSet set;
+
+  static String _fmt(num n) => n == n.roundToDouble() ? n.toInt().toString() : n.toString();
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    final bool fact = set.hasFact;
+    final num? reps = fact ? set.actualReps : set.plannedReps;
+    final num? weight = fact ? set.actualWeightKg : set.plannedWeightKg;
+    final num? time = fact ? set.actualTimeSec : set.plannedTimeSec;
+
+    final List<Widget> items = <Widget>[];
+    void add(IconData ic, String val) {
+      if (items.isNotEmpty) items.add(const SizedBox(width: 14));
+      items.add(Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(ic, size: 15, color: c.inkMutedXl),
+          const SizedBox(width: 4),
+          Text(val, style: AppFonts.mono(size: 17, color: c.inkMuted, weight: FontWeight.w600)),
+        ],
+      ));
+    }
+
+    if (reps != null) add(Icons.repeat, _fmt(reps));
+    if (weight != null) add(Icons.fitness_center, '${_fmt(weight)} кг');
+    if (time != null) add(Icons.timer_outlined, '${_fmt(time)} с');
+    if (items.isEmpty) {
+      return Text('—', style: AppFonts.mono(size: 17, color: c.inkMuted));
+    }
+    return Row(children: items);
+  }
+}
+
 // ─── Карточка упражнения ───
 class _ExerciseCard extends StatelessWidget {
-  const _ExerciseCard({super.key, required this.title, required this.child, this.onRemove});
+  const _ExerciseCard(
+      {super.key, required this.title, required this.child, this.onRemove, this.thumbUrl});
   final String title;
   final Widget child;
   final VoidCallback? onRemove;
+  final String? thumbUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -453,20 +498,26 @@ class _ExerciseCard extends StatelessWidget {
         children: <Widget>[
           Row(
             children: <Widget>[
+              if (thumbUrl != null) ...<Widget>[
+                CatalogThumb(url: thumbUrl, size: 40),
+                const SizedBox(width: 10),
+              ],
               Expanded(
                 child: Text(title,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
               ),
               if (onRemove != null)
                 GestureDetector(
-                  onTap: onRemove,
+                  onTap: () async {
+                    if (await confirmDelete(context, title: 'Удалить упражнение?')) onRemove!();
+                  },
                   child: Icon(Icons.delete_outline, size: 18, color: c.inkMuted),
                 ),
             ],
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 6),
           child,
         ],
       ),
@@ -670,7 +721,12 @@ class _SetEditorState extends State<_SetEditor> {
               if (widget.onDelete != null) ...<Widget>[
                 const SizedBox(width: 8),
                 _CircleBtn(
-                    icon: Icons.delete_outline, onTap: widget.onDelete!, bg: c.cardElevated, fg: c.danger),
+                    icon: Icons.delete_outline,
+                    onTap: () async {
+                      if (await confirmDelete(context, title: 'Удалить подход?')) widget.onDelete!();
+                    },
+                    bg: c.cardElevated,
+                    fg: c.danger),
               ],
             ],
           ),
@@ -721,17 +777,44 @@ class _NumField extends StatelessWidget {
   }
 }
 
-// ─── Пикер упражнения из каталога ───
+// ─── Мультивыбор упражнений из каталога (зеркало тренерского ExerciseSelect) ───
 class _ExercisePicker extends ConsumerStatefulWidget {
-  const _ExercisePicker({required this.selectedIds});
-  final Set<String> selectedIds;
+  const _ExercisePicker();
   @override
   ConsumerState<_ExercisePicker> createState() => _ExercisePickerState();
 }
 
 class _ExercisePickerState extends ConsumerState<_ExercisePicker> {
+  final Map<String, int> _counts = <String, int>{};
   String _query = '';
   String _group = '';
+  String _subgroup = '';
+  final TextEditingController _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  /// Развернуть счётчики в список упражнений (повторно по количеству) и вернуть.
+  void _done() {
+    final List<CatalogExercise> catAll =
+        ref.read(clientCatalogProvider).valueOrNull ?? <CatalogExercise>[];
+    final Map<String, CatalogExercise> byId = <String, CatalogExercise>{
+      for (final CatalogExercise e in catAll) e.id: e,
+    };
+    final List<CatalogExercise> out = <CatalogExercise>[];
+    _counts.forEach((String id, int n) {
+      final CatalogExercise? ex = byId[id];
+      if (ex != null) {
+        for (int i = 0; i < n; i++) {
+          out.add(ex);
+        }
+      }
+    });
+    Navigator.pop(context, out);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -744,17 +827,41 @@ class _ExercisePickerState extends ConsumerState<_ExercisePicker> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-            child: Text('Добавить упражнение',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.ink)),
+            padding: const EdgeInsets.fromLTRB(20, 0, 12, 8),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text('Добавить упражнение',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.ink)),
+                ),
+                Builder(builder: (BuildContext _) {
+                  final int total = _counts.values.fold<int>(0, (int a, int b) => a + b);
+                  return TextButton(
+                    onPressed: total == 0 ? null : _done,
+                    child: Text('Готово ($total)'),
+                  );
+                }),
+              ],
+            ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: TextField(
-              onChanged: (String v) => setState(() => _query = v.trim().toLowerCase()),
+              controller: _searchCtrl,
+              onChanged: (String v) => setState(() => _query = v),
               decoration: InputDecoration(
                 hintText: 'Поиск упражнения',
                 prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: _query.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        tooltip: 'Очистить',
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() => _query = '');
+                        },
+                      ),
                 filled: true,
                 fillColor: c.card,
                 border: OutlineInputBorder(
@@ -779,11 +886,25 @@ class _ExercisePickerState extends ConsumerState<_ExercisePicker> {
                     if (e.category.isNotEmpty) e.category,
                 }.toList()
                   ..sort();
-                final List<CatalogExercise> list = all.where((CatalogExercise e) {
+                // Подгруппы выбранной группы (присутствующие в каталоге) — второй
+                // уровень чипов, как в вебе (группа → подгруппа).
+                final List<String> subgroups = _group.isEmpty
+                    ? <String>[]
+                    : (<String>{
+                        for (final CatalogExercise e in all)
+                          if (e.category == _group && (e.subgroup?.trim().isNotEmpty ?? false))
+                            e.subgroup!,
+                      }.toList()
+                      ..sort());
+                final List<CatalogExercise> filtered = all.where((CatalogExercise e) {
                   if (_group.isNotEmpty && e.category != _group) return false;
-                  if (_query.isNotEmpty && !e.name.toLowerCase().contains(_query)) return false;
+                  if (_subgroup.isNotEmpty && e.subgroup != _subgroup) return false;
                   return true;
                 }).toList();
+                // Поиск/ранжирование как в вебе (rankBySearch): ё→е, слова в любом
+                // порядке, префикс/подстрока/опечатка, сортировка по релевантности.
+                final List<CatalogExercise> list =
+                    rankBySearch(filtered, _query, (CatalogExercise e) => e.name);
                 return Column(
                   children: <Widget>[
                     if (groups.isNotEmpty)
@@ -793,11 +914,40 @@ class _ExercisePickerState extends ConsumerState<_ExercisePicker> {
                           scrollDirection: Axis.horizontal,
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           children: <Widget>[
-                            _Chip(label: 'Все', active: _group.isEmpty, onTap: () => setState(() => _group = '')),
+                            _Chip(
+                                label: 'Все',
+                                active: _group.isEmpty,
+                                onTap: () => setState(() {
+                                      _group = '';
+                                      _subgroup = '';
+                                    })),
                             ...groups.map((String g) => _Chip(
                                   label: g,
                                   active: _group == g,
-                                  onTap: () => setState(() => _group = g),
+                                  onTap: () => setState(() {
+                                    _group = g;
+                                    _subgroup = '';
+                                  }),
+                                )),
+                          ],
+                        ),
+                      ),
+                    // Второй уровень — подгруппы выбранной группы.
+                    if (subgroups.isNotEmpty)
+                      SizedBox(
+                        height: 34,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
+                          children: <Widget>[
+                            _Chip(
+                                label: 'Все',
+                                active: _subgroup.isEmpty,
+                                onTap: () => setState(() => _subgroup = '')),
+                            ...subgroups.map((String s) => _Chip(
+                                  label: s,
+                                  active: _subgroup == s,
+                                  onTap: () => setState(() => _subgroup = s),
                                 )),
                           ],
                         ),
@@ -810,71 +960,72 @@ class _ExercisePickerState extends ConsumerState<_ExercisePicker> {
                               itemCount: list.length,
                               itemBuilder: (BuildContext ctx, int i) {
                                 final CatalogExercise ex = list[i];
-                                final bool picked = widget.selectedIds.contains(ex.id);
+                                final int n = _counts[ex.id] ?? 0;
                                 return Container(
                                   margin: const EdgeInsets.only(bottom: 8),
-                                  decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
+                                  padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+                                  decoration: BoxDecoration(
+                                    color: c.card,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: n > 0 ? c.accent : c.line),
+                                  ),
                                   child: Row(
                                     children: <Widget>[
                                       Expanded(
                                         child: GestureDetector(
-                                          onTap: () => Navigator.pop(context, ex),
+                                          onTap: () => _showInfo(context, ex, base),
                                           behavior: HitTestBehavior.opaque,
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(10),
-                                            child: Row(
-                                              children: <Widget>[
-                                                CatalogThumb(
-                                                    url: catalogMediaUrl(base, ex.thumbUrl ?? ex.imageUrl),
-                                                    size: 44),
-                                                const SizedBox(width: 10),
-                                                Container(
-                                                  width: 24,
-                                                  height: 24,
-                                                  alignment: Alignment.center,
-                                                  decoration: BoxDecoration(
-                                                    color: picked ? c.accent : Colors.transparent,
-                                                    borderRadius: BorderRadius.circular(7),
-                                                    border: picked ? null : Border.all(color: c.line),
-                                                  ),
-                                                  child: picked
-                                                      ? Icon(Icons.check, size: 14, color: c.accentOn)
-                                                      : null,
+                                          child: Row(
+                                            children: <Widget>[
+                                              CatalogThumb(
+                                                  url: catalogMediaUrl(base, ex.thumbUrl ?? ex.imageUrl),
+                                                  size: 42),
+                                              const SizedBox(width: 10),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: <Widget>[
+                                                    Text(ex.name,
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow.ellipsis,
+                                                        style: TextStyle(
+                                                            fontSize: 15,
+                                                            fontWeight: FontWeight.w600,
+                                                            color: c.ink)),
+                                                    if (ex.category.isNotEmpty || ex.subgroup != null)
+                                                      Text(
+                                                        <String>[
+                                                          if (ex.category.isNotEmpty) ex.category,
+                                                          if (ex.subgroup?.isNotEmpty == true) ex.subgroup!,
+                                                        ].join(' · '),
+                                                        style: AppFonts.mono(
+                                                            size: 12, color: c.inkMuted, weight: FontWeight.w500),
+                                                      ),
+                                                  ],
                                                 ),
-                                                const SizedBox(width: 10),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: <Widget>[
-                                                      Text(ex.name,
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow.ellipsis,
-                                                          style: TextStyle(
-                                                              fontSize: 15,
-                                                              fontWeight: FontWeight.w600,
-                                                              color: c.ink)),
-                                                      if (ex.category.isNotEmpty || ex.subgroup != null)
-                                                        Text(
-                                                          <String>[
-                                                            if (ex.category.isNotEmpty) ex.category,
-                                                            if (ex.subgroup?.isNotEmpty == true) ex.subgroup!,
-                                                          ].join(' · '),
-                                                          style: AppFonts.mono(
-                                                              size: 12, color: c.inkMuted, weight: FontWeight.w500),
-                                                        ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       ),
-                                      IconButton(
-                                        onPressed: () => _showInfo(context, ex, base),
-                                        icon: Icon(Icons.info_outline, size: 18, color: c.inkMuted),
-                                        tooltip: 'Об упражнении',
-                                      ),
+                                      _Round(
+                                          icon: Icons.remove,
+                                          onTap: n == 0
+                                              ? null
+                                              : () => setState(() {
+                                                    final int next = n - 1;
+                                                    if (next <= 0) {
+                                                      _counts.remove(ex.id);
+                                                    } else {
+                                                      _counts[ex.id] = next;
+                                                    }
+                                                  })),
+                                      SizedBox(
+                                          width: 34,
+                                          child: Text('$n',
+                                              textAlign: TextAlign.center,
+                                              style: AppFonts.mono(size: 16, color: c.ink, weight: FontWeight.w700))),
+                                      _Round(icon: Icons.add, onTap: () => setState(() => _counts[ex.id] = n + 1)),
                                     ],
                                   ),
                                 );
@@ -951,6 +1102,27 @@ class _InfoLine extends StatelessWidget {
           SizedBox(width: 110, child: Text(label, style: TextStyle(fontSize: 14, color: c.inkMuted))),
           Expanded(child: Text(value, style: TextStyle(fontSize: 14, color: c.ink))),
         ],
+      ),
+    );
+  }
+}
+
+/// Круглая кнопка счётчика (+/−) в мультивыборе.
+class _Round extends StatelessWidget {
+  const _Round({required this.icon, required this.onTap});
+  final IconData icon;
+  final VoidCallback? onTap;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    final bool on = onTap != null;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(color: c.cardElevated, shape: BoxShape.circle),
+        child: Icon(icon, size: 18, color: on ? c.ink : c.inkMutedXl),
       ),
     );
   }
