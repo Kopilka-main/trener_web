@@ -449,7 +449,9 @@ class _PositionCardState extends State<_PositionCard> {
                 ),
               ),
               GestureDetector(
-                onTap: widget.onRemove,
+                onTap: () async {
+                  if (await confirmDelete(context, title: 'Удалить упражнение?')) widget.onRemove();
+                },
                 child: Padding(
                   padding: const EdgeInsets.only(left: 2),
                   child: Icon(Icons.delete_outline, size: 18, color: c.inkMuted),
@@ -781,9 +783,12 @@ class _ExerciseSelectState extends ConsumerState<ExerciseSelect> {
                     ],
                   ),
                 ),
+              // Зазор между фильтрами и списком + тонкая разделительная линия.
+              const SizedBox(height: 10),
+              Divider(height: 1, thickness: 1, color: c.line.withValues(alpha: 0.5)),
               Expanded(
                 child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
                   itemCount: list.length,
                   itemBuilder: (BuildContext ctx, int i) {
                     final TExercise ex = list[i];
