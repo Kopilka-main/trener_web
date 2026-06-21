@@ -33,7 +33,7 @@
 | CalendarPage       | calendar_screen                       | ✅     | аудит пройден; P2 отложено (см. журнал)                                                                    |
 | WorkoutsListPage   | workouts_screen                       | ✅     | + нумерация повторяющихся упражнений в истории                                                             |
 | RunWorkoutPage     | active_workout_screen                 | ✅     | + drag-перестановка черновика, KB-фильтр пикера; подгруппы P2                                              |
-| WorkoutDetailPage  | workouts_screen (Detail)              | ⚠️     |                                                                                                            |
+| WorkoutDetailPage  | workouts_screen (Detail)              | ✅     | дата/длит./RPE, заметка тренера, упражнения с подходами (повт×вес/время)                                   |
 | ChatPage           | chat_screen                           | ✅     | аудит пройден; jump/highlight P2 отложено                                                                  |
 | NotificationsPage  | notifications_screen                  | ✅     | measure-задачи + прочтение чата при уходе; inline-шит P2                                                   |
 | KnowledgePage      | knowledge_screen                      | ✅     | вкладки Тренировки/Упражнения, чипы групп, поиск, превью из каталога, PR/рекорд                            |
@@ -53,13 +53,13 @@
 | ClientsPage        | clients_screen                        | ✅     | + создание клиента (FAB); фильтры активные/архив                                                                |
 | ClientCardPage     | clients_screen (Detail)               | ✅     | баланс/замеры/история/назначение/правка; вкладки P2                                                             |
 | ClientEditPage     | client_edit_screen                    | ✅     | имя/телефон/формат/статус/заметки + код подключения                                                             |
-| ClientProfilePage  | —                                     | ⚠️     | часть карточки                                                                                                  |
-| ClientWorkoutsPage | assign_workout_screen                 | ⚠️     | назначение тренировки готово (план+пикер); управление/правка — позже                                            |
+| ClientProfilePage  | clients_screen (Detail)               | ✅     | слит в карточку клиента + client_edit (профиль/контакты/статус)                                                 |
+| ClientWorkoutsPage | clients_screen + assign + active      | ✅     | список/история в карточке, назначение (план+пикер), проведение (ActiveWorkout)                                  |
 | ActiveWorkoutPage  | active_workout_screen                 | ✅     | проведение: draft→старт→лог подходов→отдых→завершение; пикер из полного каталога, добавл/удал/перестановка      |
 | ClientStatsPage    | clients_screen (Stats)                | ✅     | сводка + рекорды в карточке                                                                                     |
 | ClientMedicalPage  | client_medical_screen                 | ✅     | заметки (дата+текст+фото-вложение) список/создание/удаление; image_picker                                       |
 | ClientPaymentsPage | clients_screen (Баланс)               | ✅     | пакеты + добавление + история платежей (доходы по клиенту)                                                      |
-| ClientCalendarPage | —                                     | ⚠️     | календарь клиента (слит в общий)                                                                                |
+| ClientCalendarPage | calendar_screen                       | ✅     | слит в общий календарь (занятия с метками клиентов)                                                             |
 | MessagesPage       | conversations_screen                  | ✅     |                                                                                                                 |
 | ClientChatPage     | chat_screen                           | ✅     |                                                                                                                 |
 | NotificationsPage  | notifications_screen                  | ✅     | занятия (отклонён/сегодня/ждёт/подтв.) + дни рождения + исчерпанные балансы                                     |
