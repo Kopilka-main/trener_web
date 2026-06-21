@@ -1083,6 +1083,24 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
     return out;
   }
 
+  /// Повторить тренировку из истории: тянем полную запись, собираем план из её
+  /// ФАКТА и создаём новый черновик (открываем его).
+  Future<void> _repeatWorkout(TWorkout w) async {
+    if (_busy) return;
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    try {
+      final Workout full = await ref.read(trainerWorkoutsApiProvider).fetch(_cid, w.id);
+      final List<Map<String, dynamic>> plan = _repeatPlan(full);
+      if (plan.isEmpty) {
+        m.showSnackBar(const SnackBar(content: Text('Нет выполненных подходов для повтора')));
+        return;
+      }
+      await _createAndOpen(full.name, plan);
+    } catch (_) {
+      m.showSnackBar(const SnackBar(content: Text('Не удалось повторить тренировку')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
@@ -1173,36 +1191,195 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
         ));
         lastDate = key;
       }
-      out.add(Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
-        child: Row(
-          children: <Widget>[
-            Icon(w.status == 'skipped' ? Icons.do_not_disturb_on_outlined : Icons.fitness_center,
-                size: 18, color: c.inkMuted),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(w.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
-                  Text(
-                    <String>[
-                      if (w.status == 'skipped') 'Пропущена' else '${w.exerciseCount} упр.',
-                      if (w.createdByClient) 'клиентская',
-                    ].join(' · '),
-                    style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+      out.add(_HistoryCard(
+        key: ValueKey<String>(w.id),
+        workout: w,
+        clientId: _cid,
+        busy: _busy,
+        onRepeat: () => _repeatWorkout(w),
       ));
     }
     return out;
+  }
+}
+
+/// Карточка истории тренировки: тап разворачивает состав (упражнения + сводка
+/// подходов), кнопка ↺ — повторить (клон выполненного в новый черновик).
+class _HistoryCard extends ConsumerStatefulWidget {
+  const _HistoryCard({
+    super.key,
+    required this.workout,
+    required this.clientId,
+    required this.onRepeat,
+    required this.busy,
+  });
+  final TWorkout workout;
+  final String clientId;
+  final VoidCallback onRepeat;
+  final bool busy;
+  @override
+  ConsumerState<_HistoryCard> createState() => _HistoryCardState();
+}
+
+class _HistoryCardState extends ConsumerState<_HistoryCard> {
+  bool _expanded = false;
+
+  String _setSummary(WorkoutSet s, {required bool actual}) {
+    final num? reps = actual ? (s.actualReps ?? s.plannedReps) : s.plannedReps;
+    final num? weight = actual ? (s.actualWeightKg ?? s.plannedWeightKg) : s.plannedWeightKg;
+    final num? time = actual ? (s.actualTimeSec ?? s.plannedTimeSec) : s.plannedTimeSec;
+    final List<String> p = <String>[
+      if (reps != null) '${reps.toInt()}',
+      if (weight != null && weight != 0) '× ${weight % 1 == 0 ? weight.toInt() : weight} кг',
+      if (time != null && time != 0) '${time.toInt()} с',
+    ];
+    return p.isEmpty ? '—' : p.join(' ');
+  }
+
+  String _exerciseSummary(WorkoutExercise ex) {
+    final WorkoutSet? first = ex.sets.isNotEmpty ? ex.sets.first : null;
+    if (first == null) return '';
+    final String head = ex.sets.length > 1 ? '${ex.sets.length}× ' : '';
+    final bool done = ex.sets.any((WorkoutSet s) => s.done);
+    return '$head${_setSummary(first, actual: done)}';
+  }
+
+  Future<void> _confirmRepeat() async {
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: const Text('Повторить тренировку?'),
+        content: Text('«${widget.workout.name}» — создадим новый черновик из выполненных подходов.'),
+        actions: <Widget>[
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Повторить')),
+        ],
+      ),
+    );
+    if (ok == true) widget.onRepeat();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    final TWorkout w = widget.workout;
+    final bool skipped = w.status == 'skipped';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 9, 10, 9),
+            child: Row(
+              children: <Widget>[
+                Icon(skipped ? Icons.do_not_disturb_on_outlined : Icons.fitness_center,
+                    size: 18, color: c.inkMuted),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => setState(() => _expanded = !_expanded),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(w.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                        Text(
+                          <String>[
+                            if (skipped) 'Пропущена' else '${w.exerciseCount} упр.',
+                            if (w.createdByClient) 'клиентская',
+                          ].join(' · '),
+                          style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (!skipped && w.exerciseCount > 0) ...<Widget>[
+                  GestureDetector(
+                    onTap: widget.busy ? null : _confirmRepeat,
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(color: c.cardElevated, shape: BoxShape.circle),
+                      child: Icon(Icons.replay, size: 18, color: c.inkMuted),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                GestureDetector(
+                  onTap: () => setState(() => _expanded = !_expanded),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(color: c.cardElevated, shape: BoxShape.circle),
+                    child: Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                        size: 18, color: c.inkMuted),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_expanded) _composition(c),
+        ],
+      ),
+    );
+  }
+
+  Widget _composition(AppColors c) {
+    final AsyncValue<Workout> full =
+        ref.watch(trainerWorkoutProvider((clientId: widget.clientId, wid: widget.workout.id)));
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line))),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+      child: full.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+        ),
+        error: (Object e, _) =>
+            Text('Не удалось загрузить состав', style: TextStyle(fontSize: 12, color: c.inkMuted)),
+        data: (Workout wd) {
+          if (wd.exercises.isEmpty) {
+            return Text('Упражнений нет', style: TextStyle(fontSize: 12, color: c.inkMuted));
+          }
+          final List<WorkoutExercise> exs = <WorkoutExercise>[...wd.exercises]
+            ..sort((a, b) => a.position - b.position);
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              for (final WorkoutExercise ex in exs)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(ex.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: c.ink)),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(_exerciseSummary(ex),
+                          style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              if (wd.trainerNote?.isNotEmpty == true) ...<Widget>[
+                const SizedBox(height: 6),
+                Text('«${wd.trainerNote}»',
+                    style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: c.inkMuted)),
+              ],
+            ],
+          );
+        },
+      ),
+    );
   }
 }
 
