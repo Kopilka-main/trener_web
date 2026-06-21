@@ -1,6 +1,7 @@
 import 'package:core/core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'active_workout_pointer.dart';
 import 'trainer_assign.dart';
 
 /// Статус тренировки (зеркало workoutStatusSchema).
@@ -89,6 +90,7 @@ class Workout {
     required this.rpe,
     required this.trainerNote,
     required this.createdByClient,
+    required this.excludedFromBalance,
     required this.exercises,
   });
 
@@ -101,6 +103,8 @@ class Workout {
   final num? rpe;
   final String? trainerNote;
   final bool createdByClient;
+  // Историческая запись (постфактум): не влияет на баланс пакета и календарь.
+  final bool excludedFromBalance;
   final List<WorkoutExercise> exercises;
 
   factory Workout.fromJson(Map<String, dynamic> j) {
@@ -116,6 +120,7 @@ class Workout {
       rpe: j['rpe'] as num?,
       trainerNote: j['trainerNote'] as String?,
       createdByClient: j['createdByClient'] as bool? ?? false,
+      excludedFromBalance: j['excludedFromBalance'] as bool? ?? false,
       exercises: ((j['exercises'] as List<dynamic>?) ?? <dynamic>[])
           .cast<Map<String, dynamic>>()
           .map(WorkoutExercise.fromJson)
@@ -142,14 +147,21 @@ class TrainerWorkoutsApi {
     return _unwrap(r);
   }
 
-  /// Удалить тренировку (отменить назначенную/черновик).
+  /// Удалить тренировку (отменить назначенную/черновик). Если удаляемая —
+  /// та, на которую указывает «Вернуться к тренировке», сбрасываем указатель.
   Future<void> delete(String clientId, String wid) async {
     await _api.deleteJson(_base(clientId, wid));
+    final ({String clientId, String workoutId, String name})? ptr = await ActiveWorkoutPointer.read();
+    if (ptr?.workoutId == wid) await ActiveWorkoutPointer.clear();
   }
 
+  /// Старт тренировки → статус active. Запоминаем указатель активной тренировки
+  /// для блока «Вернуться к тренировке» на главной.
   Future<Workout> start(String clientId, String wid) async {
     final Map<String, dynamic> r = await _api.postJson('${_base(clientId, wid)}/start');
-    return _unwrap(r);
+    final Workout w = await _unwrap(r);
+    await ActiveWorkoutPointer.save(clientId: clientId, workoutId: wid, name: w.name);
+    return w;
   }
 
   /// Обновить подход. Тренерский путь: /exercises/:pos/sets/:idx.
@@ -196,6 +208,17 @@ class TrainerWorkoutsApi {
     final Map<String, dynamic> r = await _api.postJson(
       '${_base(clientId, wid)}/complete',
       <String, dynamic>{'durationSec': ?durationSec, 'rpe': null, 'trainerNote': null},
+    );
+    await ActiveWorkoutPointer.clear();
+    return _unwrap(r);
+  }
+
+  /// Зафиксировать тренировку в истории клиента указанной датой (постфактум).
+  /// [date] — ISO YYYY-MM-DD. Бэкенд помечает запись завершённой этой датой.
+  Future<Workout> addToHistory(String clientId, String wid, String date) async {
+    final Map<String, dynamic> r = await _api.postJson(
+      '${_base(clientId, wid)}/add-to-history',
+      <String, dynamic>{'date': date},
     );
     return _unwrap(r);
   }

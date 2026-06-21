@@ -1,6 +1,8 @@
 import 'package:core/core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'active_workout_pointer.dart';
+
 /// Данные тренерской главной (срез метрик). Онлайн-занятия исключены из
 /// календарных метрик (как в вебе).
 class HomeData {
@@ -17,6 +19,10 @@ class HomeData {
     required this.nextName,
     required this.nextTitle,
     required this.nextClientId,
+    this.resumeClientId,
+    this.resumeWorkoutId,
+    this.resumeName,
+    this.resumeClientName,
   });
 
   final String name;
@@ -32,6 +38,12 @@ class HomeData {
   final String? nextName;
   final String? nextTitle;
   final String? nextClientId;
+  // Идущая (active) тренировка — для блока «Вернуться к тренировке» вместо
+  // числа тренировок сегодня. null — активной тренировки нет.
+  final String? resumeClientId;
+  final String? resumeWorkoutId;
+  final String? resumeName;
+  final String? resumeClientName;
 }
 
 String _isoDate(DateTime d) =>
@@ -127,6 +139,24 @@ class TrainerHomeApi {
     // Счётчик плитки «Уведомления» считается отдельно (trainer_notifications.dart),
     // с учётом seen/dismissed и точных окон дат — как в вебе. Здесь не дублируем.
 
+    // Идущая тренировка: берём локальный указатель и подтверждаем его статус
+    // одним лёгким запросом. Если тренировка уже не active — сбрасываем указатель.
+    String? resumeClientId, resumeWorkoutId, resumeName, resumeClientName;
+    final ({String clientId, String workoutId, String name})? ptr = await ActiveWorkoutPointer.read();
+    if (ptr != null) {
+      final Map<String, dynamic> wr = await _safe('/api/clients/${ptr.clientId}/workouts/${ptr.workoutId}');
+      final Map<String, dynamic>? wj = wr['workout'] as Map<String, dynamic>?;
+      if (wj != null && wj['status'] == 'active') {
+        resumeClientId = ptr.clientId;
+        resumeWorkoutId = ptr.workoutId;
+        final String wn = (wj['name'] as String? ?? '').trim();
+        resumeName = wn.isNotEmpty ? wn : ptr.name;
+        resumeClientName = clientNames[ptr.clientId];
+      } else {
+        await ActiveWorkoutPointer.clear();
+      }
+    }
+
     return HomeData(
       name: name.isEmpty ? (me['email'] as String? ?? '') : name,
       todaySessions: todayCount,
@@ -140,6 +170,10 @@ class TrainerHomeApi {
       nextName: next != null ? clientNames[next['clientId']] : null,
       nextTitle: next != null ? next['title'] as String? : null,
       nextClientId: next != null ? next['clientId'] as String? : null,
+      resumeClientId: resumeClientId,
+      resumeWorkoutId: resumeWorkoutId,
+      resumeName: resumeName,
+      resumeClientName: resumeClientName,
     );
   }
 

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../api/trainer_home.dart';
 import '../api/trainer_notifications.dart';
+import 'active_workout_screen.dart';
 
 String _pad2(int n) => n.toString().padLeft(2, '0');
 
@@ -99,25 +100,43 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  // Герой: число «тренировок сегодня» → календарь.
-                  GestureDetector(
-                    onTap: () => context.push('/calendar'),
-                    behavior: HitTestBehavior.opaque,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(4, 2, 4, 6),
-                      child: Row(
-                        children: <Widget>[
-                          Text(_pad2(d.todaySessions),
-                              style: AppFonts.display(size: 64, color: c.accent, letterSpacing: -2)),
-                          const SizedBox(width: 12),
-                          Flexible(
-                            child: Text('тренировок\nсегодня',
-                                style: TextStyle(fontSize: 22, height: 1.1, fontWeight: FontWeight.bold, color: c.ink)),
-                          ),
-                        ],
+                  // Герой: идёт тренировка → «Вернуться к тренировке»; иначе
+                  // число «тренировок сегодня» → календарь.
+                  if (d.resumeWorkoutId != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 2, 4, 10),
+                      child: _ResumeWorkoutHero(
+                        title: d.resumeName ?? 'Тренировка',
+                        subtitle: d.resumeClientName,
+                        onTap: () => Navigator.of(context)
+                            .push<void>(MaterialPageRoute<void>(
+                              builder: (_) => ActiveWorkoutScreen(
+                                clientId: d.resumeClientId!,
+                                workoutId: d.resumeWorkoutId!,
+                              ),
+                            ))
+                            .then((_) => ref.invalidate(trainerHomeProvider)),
+                      ),
+                    )
+                  else
+                    GestureDetector(
+                      onTap: () => context.push('/calendar'),
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(4, 2, 4, 6),
+                        child: Row(
+                          children: <Widget>[
+                            Text(_pad2(d.todaySessions),
+                                style: AppFonts.display(size: 64, color: c.accent, letterSpacing: -2)),
+                            const SizedBox(width: 12),
+                            Flexible(
+                              child: Text('тренировок\nсегодня',
+                                  style: TextStyle(fontSize: 22, height: 1.1, fontWeight: FontWeight.bold, color: c.ink)),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
                   // Строка ближайшего занятия.
                   if (d.nextAt != null)
                     GestureDetector(
@@ -224,6 +243,93 @@ class HomeScreen extends ConsumerWidget {
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+/// Герой «Вернуться к тренировке»: акцентный блок, если у тренера есть идущая
+/// (active) тренировка. Показывает название и клиента + пульсирующий «ИДЁТ».
+class _ResumeWorkoutHero extends StatefulWidget {
+  const _ResumeWorkoutHero({required this.title, required this.subtitle, required this.onTap});
+  final String title;
+  final String? subtitle;
+  final VoidCallback onTap;
+  @override
+  State<_ResumeWorkoutHero> createState() => _ResumeWorkoutHeroState();
+}
+
+class _ResumeWorkoutHeroState extends State<_ResumeWorkoutHero> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
+        ..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(color: c.accent, borderRadius: BorderRadius.circular(20)),
+        child: Row(
+          children: <Widget>[
+            Container(
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(color: Colors.black12, shape: BoxShape.circle),
+              child: Icon(Icons.play_arrow_rounded, size: 28, color: c.accentOn),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text('Вернуться к тренировке',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.accentOn)),
+                  const SizedBox(height: 2),
+                  Text(
+                    <String>[
+                      widget.title,
+                      if (widget.subtitle?.isNotEmpty == true) widget.subtitle!,
+                    ].join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: c.accentOn.withValues(alpha: 0.75)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            AnimatedBuilder(
+              animation: _ctrl,
+              builder: (BuildContext context, _) => Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Opacity(
+                    opacity: 0.35 + 0.65 * _ctrl.value,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(color: c.accentOn, shape: BoxShape.circle),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text('ИДЁТ',
+                      style: AppFonts.mono(size: 10, color: c.accentOn.withValues(alpha: 0.8), weight: FontWeight.w700)),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
