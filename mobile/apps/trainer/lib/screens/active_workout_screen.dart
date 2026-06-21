@@ -521,15 +521,16 @@ class _ConductorState extends ConsumerState<_Conductor> {
               const Spacer(),
               if (_rest != null)
                 _RestPill(left: _rest!.left, onSkip: _skipRest, color: c.accentOn)
-              else
+              // «Готово» — отметить текущий (следующий невыполненный) подход выполненным.
+              else if (nextSet != null)
                 GestureDetector(
-                  onTap: _busy ? null : _complete,
+                  onTap: _busy ? null : () => _toggleDone(nextEx!, nextSet),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
                     decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(20)),
-                    child: Text('Завершить',
+                    child: Text('Готово',
                         style: TextStyle(
                             fontSize: 14, fontWeight: FontWeight.w600, color: c.accentOn)),
                   ),
@@ -649,22 +650,27 @@ class _ConductorState extends ConsumerState<_Conductor> {
           },
           itemBuilder: (BuildContext ctx, int i) {
             final WorkoutExercise ex = pending[i];
+            final bool editingThis =
+                ex.sets.any((WorkoutSet s) => _editing == '${ex.position}-${s.setIndex}');
             return _ActiveExerciseCard(
               key: ValueKey<int>(ex.position),
               listIndex: i,
               title: labels[ex.position] ?? ex.name,
+              onDelete: editingThis
+                  ? () => _run(() => _api.removeExercise(_clientId, _w.id, ex.position))
+                  : null,
               child: Column(children: ex.sets.map((WorkoutSet s) => _activeSetRow(ex, s)).toList()),
             );
           },
         ),
         const SizedBox(height: 8),
         _AddExerciseButton(onTap: _busy ? null : _addExercise),
-        if (_w.exercises.isNotEmpty && pending.isEmpty) ...<Widget>[
+        if (_w.exercises.isNotEmpty) ...<Widget>[
           const SizedBox(height: 16),
           FilledButton(
             onPressed: _busy ? null : _complete,
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
-            child: const Text('Завершить'),
+            child: const Text('Завершить тренировку'),
           ),
         ],
       ],
@@ -689,7 +695,6 @@ class _ConductorState extends ConsumerState<_Conductor> {
               freshEx?.sets.where((WorkoutSet x) => x.setIndex == s.setIndex).firstOrNull;
           if (freshEx != null && freshSet != null) _startRest(freshEx, freshSet);
         },
-        onDelete: () => _run(() => _api.removeExercise(_clientId, _w.id, ex.position)),
       );
     }
     return Padding(
@@ -726,10 +731,12 @@ class _ActiveExerciseCard extends StatelessWidget {
     required this.title,
     required this.listIndex,
     required this.child,
+    this.onDelete,
   });
   final String title;
   final int listIndex;
   final Widget child;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -756,6 +763,17 @@ class _ActiveExerciseCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
               ),
+              // Корзина на уровне названия — видна при редактировании упражнения.
+              if (onDelete != null)
+                GestureDetector(
+                  onTap: () async {
+                    if (await confirmDelete(context, title: 'Удалить упражнение?')) onDelete!();
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: Icon(Icons.delete_outline, size: 18, color: c.danger),
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 4),
@@ -1063,12 +1081,10 @@ class _SetEditor extends StatefulWidget {
     required this.set,
     required this.onCancel,
     required this.onSave,
-    this.onDelete,
   });
   final WorkoutSet set;
   final VoidCallback onCancel;
   final void Function(Map<String, dynamic>) onSave;
-  final VoidCallback? onDelete;
 
   @override
   State<_SetEditor> createState() => _SetEditorState();
@@ -1117,20 +1133,6 @@ class _SetEditorState extends State<_SetEditor> {
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Column(
         children: <Widget>[
-          // Маленькая корзина сверху — удалить упражнение.
-          if (widget.onDelete != null)
-            Align(
-              alignment: Alignment.centerRight,
-              child: GestureDetector(
-                onTap: () async {
-                  if (await confirmDelete(context, title: 'Удалить упражнение?')) widget.onDelete!();
-                },
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Icon(Icons.delete_outline, size: 18, color: c.danger),
-                ),
-              ),
-            ),
           Row(
             children: <Widget>[
               _NumField(label: 'Повторы', ctrl: _reps),
