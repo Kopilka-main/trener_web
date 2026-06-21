@@ -4,13 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/trainer_accounting.dart';
+import '../api/trainer_assign.dart';
 import '../api/trainer_calendar.dart';
+import '../api/trainer_catalog.dart';
 import '../api/trainer_client_card.dart';
 import '../api/trainer_client_stats.dart';
 import '../api/trainer_clients.dart';
 import '../api/trainer_medical.dart';
 import 'active_workout_screen.dart';
-import 'assign_workout_screen.dart';
 import 'client_edit_screen.dart';
 import 'client_medical_screen.dart';
 
@@ -795,21 +796,305 @@ Future<String?> _showConnectDialog(BuildContext context) {
 }
 
 /// Раздел «Тренировки»: список (к проведению + история) + «Назначить».
-class ClientWorkoutsScreen extends ConsumerWidget {
+/// Тренировки клиента глазами тренера: «ближайшая» (черновик/активная) сверху,
+/// ниже история по датам; создание пустой / из шаблона / ретро-запись. Зеркало
+/// веб ClientWorkoutsPage.
+class ClientWorkoutsScreen extends ConsumerStatefulWidget {
   const ClientWorkoutsScreen({super.key, required this.client});
   final Client client;
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ClientWorkoutsScreen> createState() => _ClientWorkoutsScreenState();
+}
+
+class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
+  bool _busy = false;
+
+  String get _cid => widget.client.id;
+
+  Future<void> _openConduct(String wid) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => ActiveWorkoutScreen(clientId: _cid, workoutId: wid)),
+    );
+    ref.invalidate(clientWorkoutsCardProvider(_cid));
+  }
+
+  /// Создать черновик и открыть редактор. [exercises] — план (пустой/из шаблона).
+  Future<void> _createAndOpen(String name, List<Map<String, dynamic>> exercises) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    try {
+      final String id = await ref.read(trainerAssignApiProvider).assignReturningId(_cid, name, exercises);
+      ref.invalidate(clientWorkoutsCardProvider(_cid));
+      if (!mounted) return;
+      setState(() => _busy = false);
+      if (id.isNotEmpty) await _openConduct(id);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      m.showSnackBar(const SnackBar(content: Text('Не удалось создать тренировку')));
+    }
+  }
+
+  Future<void> _pickTemplate() async {
+    final WorkoutTemplate? t = await showModalBottomSheet<WorkoutTemplate>(
+      context: context,
+      backgroundColor: context.colors.bg,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => const _TemplatePickerSheet(),
+    );
+    if (t == null) return;
+    final List<Map<String, dynamic>> ex = t.exercises
+        .map((TemplateExercise e) => <String, dynamic>{
+              'exerciseId': e.exerciseId,
+              'sets': <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'plannedReps': ?e.reps,
+                  'plannedWeightKg': ?e.weightKg,
+                  'plannedTimeSec': ?e.timeSec,
+                  'plannedRestSec': ?e.restSec,
+                },
+              ],
+            })
+        .toList();
+    await _createAndOpen(t.name, ex);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    final AsyncValue<List<TWorkout>> ws = ref.watch(clientWorkoutsCardProvider(_cid));
     return Scaffold(
-      appBar: AppBar(title: const Text('Тренировки')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: <Widget>[
-          _Section(
-            title: 'Тренировки',
-            action: _AssignButton(clientId: client.id, clientName: client.fullName),
-            child: _WorkoutsBlock(clientId: client.id),
+      appBar: AppBar(title: Text('Тренировки · ${widget.client.fullName}')),
+      body: ws.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (Object e, _) => Center(
+          child: FilledButton(
+            onPressed: () => ref.invalidate(clientWorkoutsCardProvider(_cid)),
+            child: const Text('Повторить'),
           ),
+        ),
+        data: (List<TWorkout> all) {
+          // Ближайшая — только тренерская (не createdByClient), активная раньше черновика.
+          final List<TWorkout> current = all
+              .where((TWorkout w) => (w.status == 'active' || w.status == 'draft') && !w.createdByClient)
+              .toList()
+            ..sort((TWorkout a, TWorkout b) => a.status == 'active' ? -1 : 1);
+          final List<TWorkout> history = all.where((TWorkout w) => w.status == 'completed' || w.status == 'skipped').toList()
+            ..sort((TWorkout a, TWorkout b) => (b.completedAt ?? DateTime(0)).compareTo(a.completedAt ?? DateTime(0)));
+
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            children: <Widget>[
+              Text('БЛИЖАЙШАЯ ТРЕНИРОВКА', style: AppFonts.mono(size: 11, color: c.inkMutedXl, weight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              if (current.isNotEmpty)
+                _CurrentWorkoutCard(w: current.first, onTap: () => _openConduct(current.first.id))
+              else
+                _EmptyCurrent(
+                  busy: _busy,
+                  onCreate: () => _createAndOpen('Новая тренировка', <Map<String, dynamic>>[]),
+                  onTemplate: _pickTemplate,
+                ),
+              if (history.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 20),
+                Text('ИСТОРИЯ ТРЕНИРОВОК · ${history.length}',
+                    style: AppFonts.mono(size: 11, color: c.inkMutedXl, weight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                ..._historyGrouped(c, history),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  List<Widget> _historyGrouped(AppColors c, List<TWorkout> history) {
+    final List<Widget> out = <Widget>[];
+    String? lastDate;
+    for (final TWorkout w in history) {
+      final DateTime? d = w.completedAt;
+      final String key = d != null
+          ? '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}'
+          : 'Без даты';
+      if (key != lastDate) {
+        out.add(Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 6),
+          child: Text(key, style: AppFonts.mono(size: 12, color: c.accent, weight: FontWeight.w700)),
+        ));
+        lastDate = key;
+      }
+      out.add(Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+        child: Row(
+          children: <Widget>[
+            Icon(w.status == 'skipped' ? Icons.do_not_disturb_on_outlined : Icons.fitness_center,
+                size: 18, color: c.inkMuted),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(w.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                  Text(
+                    <String>[
+                      if (w.status == 'skipped') 'Пропущена' else '${w.exerciseCount} упр.',
+                      if (w.createdByClient) 'клиентская',
+                    ].join(' · '),
+                    style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ));
+    }
+    return out;
+  }
+}
+
+/// Карточка ближайшей (черновик/активная) тренировки + кнопка начать/продолжить.
+class _CurrentWorkoutCard extends StatelessWidget {
+  const _CurrentWorkoutCard({required this.w, required this.onTap});
+  final TWorkout w;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    final bool active = w.status == 'active';
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(w.name, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
+            const SizedBox(height: 4),
+            Text('${w.exerciseCount} упр.${active ? ' · идёт' : ''}',
+                style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+            const SizedBox(height: 12),
+            Container(
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(color: c.accent, borderRadius: BorderRadius.circular(12)),
+              child: Text(active ? 'Продолжить' : 'Начать тренировку',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.accentOn)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Пустая «ближайшая»: создать пустую / выбрать из базы.
+class _EmptyCurrent extends StatelessWidget {
+  const _EmptyCurrent({required this.busy, required this.onCreate, required this.onTemplate});
+  final bool busy;
+  final VoidCallback onCreate;
+  final VoidCallback onTemplate;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.line, width: 2),
+      ),
+      child: Column(
+        children: <Widget>[
+          GestureDetector(
+            onTap: busy ? null : onCreate,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(color: c.card, shape: BoxShape.circle, border: Border.all(color: c.line)),
+              child: busy
+                  ? const Padding(padding: EdgeInsets.all(14), child: CircularProgressIndicator(strokeWidth: 2))
+                  : Icon(Icons.add, size: 24, color: c.ink),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text('Тренировка не запланирована', style: TextStyle(fontSize: 14, color: c.inkMuted)),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: busy ? null : onTemplate,
+              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+              child: const Text('Выбрать из базы'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Шит выбора шаблона тренировки.
+class _TemplatePickerSheet extends ConsumerWidget {
+  const _TemplatePickerSheet();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppColors c = context.colors;
+    final List<WorkoutTemplate> templates = ref.watch(trainerTemplatesProvider).valueOrNull ?? <WorkoutTemplate>[];
+    return SizedBox(
+      height: MediaQuery.of(context).size.height * 0.7,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Text('Выбрать из базы', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.ink)),
+          ),
+          if (templates.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text('Шаблонов нет. Создайте их в базе знаний.', style: TextStyle(color: c.inkMuted)),
+            )
+          else
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                itemCount: templates.length,
+                itemBuilder: (BuildContext ctx, int i) {
+                  final WorkoutTemplate t = templates[i];
+                  return GestureDetector(
+                    onTap: () => Navigator.pop(ctx, t),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(t.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                                Text('${t.exercises.length} упр.${t.categoryTag != null ? ' · ${t.categoryTag}' : ''}',
+                                    style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.chevron_right, size: 18, color: c.inkMutedXl),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
         ],
       ),
     );
@@ -1338,133 +1623,6 @@ class _StatsBlock extends ConsumerWidget {
                     ),
                   )),
             ],
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _AssignButton extends ConsumerWidget {
-  const _AssignButton({required this.clientId, required this.clientName});
-  final String clientId;
-  final String clientName;
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return TextButton.icon(
-      onPressed: () async {
-        final bool? assigned = await Navigator.of(context).push<bool>(
-          MaterialPageRoute<bool>(
-            builder: (_) => AssignWorkoutScreen(clientId: clientId, clientName: clientName),
-          ),
-        );
-        if (assigned == true) ref.invalidate(clientWorkoutsCardProvider(clientId));
-      },
-      icon: const Icon(Icons.add, size: 16),
-      label: const Text('Назначить'),
-    );
-  }
-}
-
-class _WorkoutsBlock extends ConsumerWidget {
-  const _WorkoutsBlock({required this.clientId});
-  final String clientId;
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final AppColors c = context.colors;
-    final AsyncValue<List<TWorkout>> ws = ref.watch(clientWorkoutsCardProvider(clientId));
-    return ws.when(
-      loading: () => const _Empty('Загрузка…'),
-      error: (Object e, _) => const _Empty('Не удалось загрузить'),
-      data: (List<TWorkout> all) {
-        // К проведению: черновики (назначенные) и активные — наверху, тапаемые.
-        final List<TWorkout> toConduct =
-            all.where((TWorkout w) => w.status == 'draft' || w.status == 'active').toList();
-        final List<TWorkout> done = all.where((TWorkout w) => w.status == 'completed').take(10).toList();
-        if (toConduct.isEmpty && done.isEmpty) return const _Empty('Тренировок нет');
-
-        Future<void> openConduct(TWorkout w) async {
-          await Navigator.of(context).push<void>(
-            MaterialPageRoute<void>(
-              builder: (_) => ActiveWorkoutScreen(clientId: clientId, workoutId: w.id),
-            ),
-          );
-          ref.invalidate(clientWorkoutsCardProvider(clientId));
-        }
-
-        return Column(
-          children: <Widget>[
-            ...toConduct.map((TWorkout w) {
-              final bool active = w.status == 'active';
-              return GestureDetector(
-                onTap: () => openConduct(w),
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                  decoration: BoxDecoration(
-                    color: c.card,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: active ? c.accent : c.line),
-                  ),
-                  child: Row(
-                    children: <Widget>[
-                      Icon(active ? Icons.play_circle_outline : Icons.fitness_center,
-                          size: 18, color: active ? c.accent : c.inkMuted),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(w.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
-                            Text(
-                              <String>[
-                                active ? 'идёт' : 'к проведению',
-                                '${w.exerciseCount} упр.',
-                                if (w.createdByClient) 'своя',
-                              ].join(' · '),
-                              style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Icon(Icons.chevron_right, size: 18, color: c.inkMutedXl),
-                    ],
-                  ),
-                ),
-              );
-            }),
-            if (done.isEmpty && toConduct.isNotEmpty)
-              const SizedBox.shrink()
-            else
-              ...done.map((TWorkout w) => Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                    decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
-                    child: Row(
-                      children: <Widget>[
-                        Icon(Icons.fitness_center, size: 18, color: c.inkMuted),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(w.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
-                              Text(
-                                <String>[
-                                  if (w.completedAt != null) _date(w.completedAt),
-                                  '${w.exerciseCount} упр.',
-                                  if (w.createdByClient) 'своя',
-                                ].join(' · '),
-                                style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  )),
           ],
         );
       },
