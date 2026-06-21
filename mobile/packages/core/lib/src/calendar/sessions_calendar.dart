@@ -60,8 +60,9 @@ class _SessionsCalendarState extends State<SessionsCalendar> {
       return '${calDayFull[calWeekdayMon(_anchor)]}, ${_anchor.day} ${calMonthGen[_anchor.month - 1]}';
     }
     if (_view == CalendarView.week) {
+      // Двухнедельный диапазон от верхней видимой недели (как в вебе): a … a+13.
       final DateTime a = calStartOfWeek(_visibleWeek ?? _anchor);
-      final DateTime b = calAddDays(a, 6);
+      final DateTime b = calAddDays(a, 13);
       return a.month == b.month
           ? '${a.day}–${b.day} ${calMonthGen[b.month - 1]}'
           : '${a.day} ${calMonthGen[a.month - 1]} – ${b.day} ${calMonthGen[b.month - 1]}';
@@ -357,65 +358,118 @@ class _WeekView extends StatefulWidget {
 }
 
 class _WeekViewState extends State<_WeekView> {
-  // Окно недель вокруг опорной: опорная — индекс _anchorIdx.
-  static const int _count = 51;
-  static const int _anchorIdx = 16;
-  final GlobalKey _listKey = GlobalKey();
-  late final List<GlobalKey> _weekKeys =
-      List<GlobalKey>.generate(_count, (_) => GlobalKey());
+  // Бесконечный двунаправленный скролл недель: CustomScrollView с center-ключом.
+  // «Опорная + будущее» — слайвер после центра (индекс i → +i недель); «прошлое» —
+  // слайвер до центра (индекс i → −(i+1) недель). Обе стороны безграничны (генерим
+  // налету), как в вебе — без фиксированного окна.
+  final ScrollController _ctrl = ScrollController();
+  final GlobalKey _centerKey = GlobalKey();
+  final GlobalKey _viewportKey = GlobalKey();
+  // Ключи только для смонтированных строк (по смещению недели от опорной) — для
+  // определения верхней видимой недели; в дереве живёт лишь несколько строк.
+  final Map<int, GlobalKey> _rowKeys = <int, GlobalKey>{};
   DateTime? _lastReported;
+  bool _snapping = false;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToAnchor());
-  }
+  GlobalKey _rowKey(int signed) => _rowKeys.putIfAbsent(signed, () => GlobalKey());
 
   @override
   void didUpdateWidget(_WeekView old) {
     super.didUpdateWidget(old);
     if (!calSameDay(calStartOfWeek(old.anchor), calStartOfWeek(widget.anchor))) {
+      // Сменилась опорная неделя (стрелки/«Сегодня») — карта смещений устарела,
+      // возвращаем центр (опорную неделю) к верхнему краю.
+      _rowKeys.clear();
       _lastReported = null;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToAnchor());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_ctrl.hasClients) _ctrl.jumpTo(0);
+      });
     }
   }
 
-  void _scrollToAnchor() {
-    final BuildContext? ctx = _weekKeys[_anchorIdx].currentContext;
-    if (ctx != null) {
-      Scrollable.ensureVisible(ctx, alignment: 0, duration: const Duration(milliseconds: 1));
-    }
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
   }
 
-  /// Определяет верхнюю видимую неделю по позициям смонтированных строк
-  /// (ListView.builder держит в дереве лишь видимые/кэш — перебор дёшев).
+  /// Верхняя видимая неделя — по позициям смонтированных строк (их немного).
   void _reportVisible() {
-    final RenderObject? listRo = _listKey.currentContext?.findRenderObject();
-    if (listRo is! RenderBox) return;
-    final double listTop = listRo.localToGlobal(Offset.zero).dy;
-    int? topIdx;
-    for (int i = 0; i < _count; i++) {
-      final RenderObject? ro = _weekKeys[i].currentContext?.findRenderObject();
+    final RenderObject? vpRo = _viewportKey.currentContext?.findRenderObject();
+    if (vpRo is! RenderBox) return;
+    final double listTop = vpRo.localToGlobal(Offset.zero).dy;
+    int? topSigned;
+    double bestTop = double.negativeInfinity;
+    for (final MapEntry<int, GlobalKey> e in _rowKeys.entries) {
+      final RenderObject? ro = e.value.currentContext?.findRenderObject();
       if (ro is! RenderBox) continue;
       final double top = ro.localToGlobal(Offset.zero).dy;
       final double bottom = top + ro.size.height;
-      if (bottom > listTop + 2) {
-        topIdx = i;
-        break;
+      // Строка, пересекающая верхний край: top ≤ listTop < bottom; берём с макс. top.
+      if (bottom > listTop + 2 && top <= listTop + 2 && top > bestTop) {
+        bestTop = top;
+        topSigned = e.key;
       }
     }
-    if (topIdx == null) return;
-    final DateTime ws = calAddDays(calStartOfWeek(widget.anchor), (topIdx - _anchorIdx) * 7);
+    if (topSigned == null) return;
+    final DateTime ws = calAddDays(calStartOfWeek(widget.anchor), topSigned * 7);
     if (_lastReported == null || !calSameDay(_lastReported!, ws)) {
       _lastReported = ws;
       widget.onVisibleWeekChange(ws);
     }
   }
 
+  /// Автодоводчик: после прокрутки выравнивает ближайшую границу недели к
+  /// верхнему краю (snap по 1 неделе), как scroll-snap в вебе.
+  void _snap() {
+    if (_snapping || !_ctrl.hasClients) return;
+    final RenderObject? vpRo = _viewportKey.currentContext?.findRenderObject();
+    if (vpRo is! RenderBox) return;
+    final double listTop = vpRo.localToGlobal(Offset.zero).dy;
+    double? cTop;
+    double? cBottom;
+    for (final MapEntry<int, GlobalKey> e in _rowKeys.entries) {
+      final RenderObject? ro = e.value.currentContext?.findRenderObject();
+      if (ro is! RenderBox) continue;
+      final double top = ro.localToGlobal(Offset.zero).dy;
+      final double bottom = top + ro.size.height;
+      if (bottom > listTop + 2 && top <= listTop + 2) {
+        cTop = top;
+        cBottom = bottom;
+        break;
+      }
+    }
+    if (cTop == null || cBottom == null) return;
+    final double up = listTop - cTop; // на сколько ушли ниже верха текущей недели (≥0)
+    final double down = cBottom - listTop; // до начала следующей недели (>0)
+    final double target = up <= down ? _ctrl.offset - up : _ctrl.offset + down;
+    if ((target - _ctrl.offset).abs() < 1) return;
+    _snapping = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_ctrl.hasClients) {
+        _snapping = false;
+        return;
+      }
+      _ctrl
+          .animateTo(target, duration: const Duration(milliseconds: 200), curve: Curves.easeOut)
+          .whenComplete(() {
+        _snapping = false;
+        _reportVisible();
+      });
+    });
+  }
+
+  Widget _row(int signed) => _WeekRow(
+        key: _rowKey(signed),
+        weekStart: calAddDays(calStartOfWeek(widget.anchor), signed * 7),
+        sessions: widget.sessions,
+        onPickDay: widget.onPickDay,
+        onTap: widget.onTap,
+      );
+
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
-    final DateTime anchorWeek = calStartOfWeek(widget.anchor);
 
     return Column(
       children: <Widget>[
@@ -440,25 +494,34 @@ class _WeekViewState extends State<_WeekView> {
         Expanded(
           child: NotificationListener<ScrollNotification>(
             onNotification: (ScrollNotification n) {
-              if (n is ScrollUpdateNotification || n is ScrollEndNotification) {
+              if (n is ScrollUpdateNotification) {
                 _reportVisible();
+              } else if (n is ScrollEndNotification) {
+                _reportVisible();
+                _snap(); // автодоводчик до границы недели
               }
               return false;
             },
-            child: ListView.builder(
-              key: _listKey,
-              padding: const EdgeInsets.only(bottom: 90),
-              itemCount: _count,
-              itemBuilder: (BuildContext ctx, int i) {
-                final DateTime ws = calAddDays(anchorWeek, (i - _anchorIdx) * 7);
-                return _WeekRow(
-                  key: _weekKeys[i],
-                  weekStart: ws,
-                  sessions: widget.sessions,
-                  onPickDay: widget.onPickDay,
-                  onTap: widget.onTap,
-                );
-              },
+            child: CustomScrollView(
+              key: _viewportKey,
+              controller: _ctrl,
+              center: _centerKey,
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: <Widget>[
+                // Прошлое (растёт вверх): индекс i → неделя −(i+1).
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (BuildContext ctx, int i) => _row(-(i + 1)),
+                  ),
+                ),
+                // Опорная неделя + будущее: индекс i → неделя +i. Центр — здесь.
+                SliverList(
+                  key: _centerKey,
+                  delegate: SliverChildBuilderDelegate(
+                    (BuildContext ctx, int i) => _row(i),
+                  ),
+                ),
+              ],
             ),
           ),
         ),

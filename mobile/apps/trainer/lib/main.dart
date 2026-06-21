@@ -7,15 +7,21 @@ import 'package:go_router/go_router.dart';
 import 'router.dart';
 
 void main() {
-  runApp(
-    ProviderScope(
-      overrides: <Override>[
-        baseUrlProvider.overrideWithValue('https://app.fitbond.ru'),
-        pushRegisterPathProvider.overrideWithValue('/api/push/device'),
-      ],
-      child: const TrainerApp(),
-    ),
-  );
+  // Полный перехват ошибок Dart → журнал (файл crash.log + logcat APPCRASH).
+  runGuarded(() async {
+    // Тему грузим ДО первого кадра — иначе перескок light→dark на старте.
+    final ThemeMode themeMode = await loadThemeMode();
+    runApp(
+      ProviderScope(
+        overrides: <Override>[
+          baseUrlProvider.overrideWithValue('https://app.fitbond.ru'),
+          pushRegisterPathProvider.overrideWithValue('/api/push/device'),
+          initialThemeModeProvider.overrideWithValue(themeMode),
+        ],
+        child: const TrainerApp(),
+      ),
+    );
+  });
 }
 
 /// Маппинг url из пуша в маршрут тренера. Бэк шлёт `/clients/<id>/chat` при

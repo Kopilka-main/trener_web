@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:video_player/video_player.dart';
 
+import '../theme/app_theme.dart';
+
 /// Собрать абсолютный URL медиа каталога из base (например https://app.fitbond.ru)
 /// и относительного пути (/api/catalog-media/...). Возвращает null, если пути нет.
 String? catalogMediaUrl(String base, String? raw) {
@@ -51,11 +53,26 @@ class CatalogThumb extends StatelessWidget {
 
 /// Демонстрация упражнения: зацикленное видео (из дискового кэша) или картинка.
 /// Видео скачивается один раз и далее доступно офлайн.
+///
+/// Два режима работы:
+/// - `showToggle = false` (по умолчанию): авто-воспроизведение видео, если оно
+///   есть; иначе картинка. Так ведут себя карточки активной тренировки.
+/// - `showToggle = true`: как в вебе (ExerciseDetails) — заголовок «Демонстрация»
+///   с переключателем 📷/🎥. По умолчанию показывается ФОТО; видео грузится и
+///   проигрывается только после переключения. Переключатель виден, лишь когда
+///   есть и фото, и видео.
 class CatalogMediaView extends StatefulWidget {
-  const CatalogMediaView({super.key, this.imageUrl, this.videoUrl, this.height = 200});
+  const CatalogMediaView({
+    super.key,
+    this.imageUrl,
+    this.videoUrl,
+    this.height = 200,
+    this.showToggle = false,
+  });
   final String? imageUrl;
   final String? videoUrl;
   final double height;
+  final bool showToggle;
 
   @override
   State<CatalogMediaView> createState() => _CatalogMediaViewState();
@@ -64,11 +81,23 @@ class CatalogMediaView extends StatefulWidget {
 class _CatalogMediaViewState extends State<CatalogMediaView> {
   VideoPlayerController? _controller;
   bool _ready = false;
+  // Текущий режим в showToggle: false = фото, true = видео.
+  bool _videoMode = false;
+
+  bool get _hasImage => widget.imageUrl != null && widget.imageUrl!.isNotEmpty;
+  bool get _hasVideo => widget.videoUrl != null && widget.videoUrl!.isNotEmpty;
 
   @override
   void initState() {
     super.initState();
-    if (widget.videoUrl != null && widget.videoUrl!.isNotEmpty) _initVideo(widget.videoUrl!);
+    if (widget.showToggle) {
+      // Дефолт = фото, если оно есть; иначе сразу видео (зеркало веба).
+      _videoMode = !_hasImage && _hasVideo;
+      if (_videoMode && _hasVideo) _initVideo(widget.videoUrl!);
+    } else if (_hasVideo) {
+      // Старое поведение: авто-видео при наличии.
+      _initVideo(widget.videoUrl!);
+    }
   }
 
   Future<void> _initVideo(String url) async {
@@ -93,6 +122,13 @@ class _CatalogMediaViewState extends State<CatalogMediaView> {
     }
   }
 
+  void _selectMode(bool video) {
+    if (_videoMode == video) return;
+    setState(() => _videoMode = video);
+    // Видео монтируется лениво — только при первом переключении на него.
+    if (video && _controller == null && _hasVideo) _initVideo(widget.videoUrl!);
+  }
+
   @override
   void dispose() {
     _controller?.dispose();
@@ -101,10 +137,43 @@ class _CatalogMediaViewState extends State<CatalogMediaView> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.showToggle) {
+      final AppColors c = context.colors;
+      final bool showSwitch = _hasImage && _hasVideo;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  'ДЕМОНСТРАЦИЯ',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                    color: c.inkMutedXl,
+                  ),
+                ),
+              ),
+              if (showSwitch) _MediaToggle(videoMode: _videoMode, onChange: _selectMode),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _frame(context, video: _videoMode),
+        ],
+      );
+    }
+    // Старое поведение (без переключателя): авто-видео или картинка.
+    return _frame(context, video: true);
+  }
+
+  /// Кадр демонстрации. [video] = true — показать видео (если готово), иначе фото.
+  Widget _frame(BuildContext context, {required bool video}) {
     final double h = widget.height;
     final Color bg = Theme.of(context).colorScheme.surfaceContainerHighest;
     Widget child;
-    if (_ready && _controller != null) {
+    if (video && _ready && _controller != null) {
       child = FittedBox(
         fit: BoxFit.cover,
         child: SizedBox(
@@ -113,7 +182,15 @@ class _CatalogMediaViewState extends State<CatalogMediaView> {
           child: VideoPlayer(_controller!),
         ),
       );
-    } else if (widget.imageUrl != null && widget.imageUrl!.isNotEmpty) {
+    } else if (!video && _hasImage) {
+      child = CachedNetworkImage(
+        imageUrl: widget.imageUrl!,
+        fit: BoxFit.cover,
+        placeholder: (_, _) => Container(color: bg),
+        errorWidget: (_, _, _) => Container(color: bg),
+      );
+    } else if (_hasImage) {
+      // video=true, но видео ещё не готово/недоступно — показываем фото.
       child = CachedNetworkImage(
         imageUrl: widget.imageUrl!,
         fit: BoxFit.cover,
@@ -130,6 +207,53 @@ class _CatalogMediaViewState extends State<CatalogMediaView> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),
       child: SizedBox(width: double.infinity, height: h, child: child),
+    );
+  }
+}
+
+/// Переключатель 📷 фото / 🎥 видео (зеркало веб MediaToggle), пилюля с двумя
+/// круглыми кнопками. Активная — на акцентном фоне.
+class _MediaToggle extends StatelessWidget {
+  const _MediaToggle({required this.videoMode, required this.onChange});
+  final bool videoMode;
+  final ValueChanged<bool> onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: c.chip,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          _btn(context, icon: Icons.photo_outlined, active: !videoMode, onTap: () => onChange(false), tooltip: 'Фото'),
+          _btn(context, icon: Icons.videocam_outlined, active: videoMode, onTap: () => onChange(true), tooltip: 'Видео'),
+        ],
+      ),
+    );
+  }
+
+  Widget _btn(BuildContext context, {required IconData icon, required bool active, required VoidCallback onTap, required String tooltip}) {
+    final AppColors c = context.colors;
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 30,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: active ? c.accent : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Icon(icon, size: 16, color: active ? c.accentOn : c.inkMuted),
+        ),
+      ),
     );
   }
 }

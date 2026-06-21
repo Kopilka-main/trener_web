@@ -2,33 +2,43 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// Выбор темы пользователем (по умолчанию светлая — как в вебе). Сохраняется
-/// между запусками. system — следовать системной теме устройства.
-class ThemeController extends StateNotifier<ThemeMode> {
-  ThemeController(this._storage) : super(ThemeMode.light) {
-    _load();
+const String _themeKey = 'theme_mode';
+
+ThemeMode _themeFromString(String? v) => switch (v) {
+      'dark' => ThemeMode.dark,
+      'system' => ThemeMode.system,
+      _ => ThemeMode.light,
+    };
+
+/// Читает сохранённую тему ДО первого кадра (вызывать в main() с await), чтобы
+/// приложение сразу рисовалось в нужной теме и не было перескока light→dark.
+Future<ThemeMode> loadThemeMode() async {
+  try {
+    final String? v = await const FlutterSecureStorage().read(key: _themeKey);
+    return _themeFromString(v);
+  } catch (_) {
+    return ThemeMode.light;
   }
+}
+
+/// Начальная тема для первого кадра. По умолчанию светлая; в main() переопределяется
+/// уже загруженным значением (см. [loadThemeMode]) — поэтому перескока темы нет.
+final Provider<ThemeMode> initialThemeModeProvider =
+    Provider<ThemeMode>((Ref ref) => ThemeMode.light);
+
+/// Выбор темы пользователем (по умолчанию светлая — как в вебе). Начальное
+/// значение берётся из [initialThemeModeProvider]. system — следовать системной.
+class ThemeController extends StateNotifier<ThemeMode> {
+  ThemeController(ThemeMode initial, {FlutterSecureStorage? storage})
+      : _storage = storage ?? const FlutterSecureStorage(),
+        super(initial);
 
   final FlutterSecureStorage _storage;
-  static const String _key = 'theme_mode';
-
-  Future<void> _load() async {
-    try {
-      final String? v = await _storage.read(key: _key);
-      state = switch (v) {
-        'dark' => ThemeMode.dark,
-        'system' => ThemeMode.system,
-        _ => ThemeMode.light,
-      };
-    } catch (_) {
-      // нет доступа к хранилищу — остаёмся на светлой
-    }
-  }
 
   Future<void> set(ThemeMode mode) async {
     state = mode;
     try {
-      await _storage.write(key: _key, value: mode.name);
+      await _storage.write(key: _themeKey, value: mode.name);
     } catch (_) {
       // best-effort
     }
@@ -37,5 +47,5 @@ class ThemeController extends StateNotifier<ThemeMode> {
 
 final StateNotifierProvider<ThemeController, ThemeMode> themeModeProvider =
     StateNotifierProvider<ThemeController, ThemeMode>(
-  (ref) => ThemeController(const FlutterSecureStorage()),
+  (Ref ref) => ThemeController(ref.read(initialThemeModeProvider)),
 );

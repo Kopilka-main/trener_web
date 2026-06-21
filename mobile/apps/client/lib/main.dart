@@ -6,15 +6,21 @@ import 'package:go_router/go_router.dart';
 import 'router.dart';
 
 void main() {
-  runApp(
-    ProviderScope(
-      overrides: <Override>[
-        baseUrlProvider.overrideWithValue('https://my.fitbond.ru'),
-        pushRegisterPathProvider.overrideWithValue('/api/client/push/device'),
-      ],
-      child: const ClientApp(),
-    ),
-  );
+  // Полный перехват ошибок Dart → журнал (файл crash.log + logcat APPCRASH).
+  runGuarded(() async {
+    // Тему грузим ДО первого кадра — иначе перескок light→dark на старте.
+    final ThemeMode themeMode = await loadThemeMode();
+    runApp(
+      ProviderScope(
+        overrides: <Override>[
+          baseUrlProvider.overrideWithValue('https://my.fitbond.ru'),
+          pushRegisterPathProvider.overrideWithValue('/api/client/push/device'),
+          initialThemeModeProvider.overrideWithValue(themeMode),
+        ],
+        child: const ClientApp(),
+      ),
+    );
+  });
 }
 
 /// Клиентское приложение Trener: фирменная тема, токен-сессия, роутер
