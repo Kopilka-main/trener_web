@@ -50,21 +50,27 @@ Future<bool> showSessionForm(
   WidgetRef ref, {
   Session? session,
   DateTime? defaultDate,
+  TimeOfDay? defaultTime,
 }) async {
   final bool? changed = await showModalBottomSheet<bool>(
     context: context,
     backgroundColor: context.colors.bg,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (_) => _SessionForm(session: session, defaultDate: defaultDate ?? DateTime.now()),
+    builder: (_) => _SessionForm(
+      session: session,
+      defaultDate: defaultDate ?? DateTime.now(),
+      defaultTime: defaultTime,
+    ),
   );
   return changed ?? false;
 }
 
 class _SessionForm extends ConsumerStatefulWidget {
-  const _SessionForm({required this.session, required this.defaultDate});
+  const _SessionForm({required this.session, required this.defaultDate, this.defaultTime});
   final Session? session;
   final DateTime defaultDate;
+  final TimeOfDay? defaultTime;
 
   @override
   ConsumerState<_SessionForm> createState() => _SessionFormState();
@@ -74,7 +80,9 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
   late String? _clientId = widget.session?.clientId;
   late DateTime _date =
       widget.session != null ? calParseIso(widget.session!.date) : widget.defaultDate;
-  late TimeOfDay _time = _parseTime(widget.session?.startTime ?? '12:00');
+  late TimeOfDay _time = widget.session != null
+      ? _parseTime(widget.session!.startTime)
+      : (widget.defaultTime ?? _parseTime('12:00'));
   late final TextEditingController _duration =
       TextEditingController(text: '${widget.session?.durationMin ?? 60}');
   late final TextEditingController _title =

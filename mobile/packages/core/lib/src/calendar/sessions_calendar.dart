@@ -17,11 +17,16 @@ class SessionsCalendar extends StatefulWidget {
     super.key,
     required this.sessions,
     required this.onSessionTap,
+    this.onEmptyTap,
     this.defaultView = CalendarView.week,
   });
 
   final List<CalSession> sessions;
   final void Function(CalSession session) onSessionTap;
+
+  /// Тап по пустому слоту в дневном виде — с датой/временем выбранного слота
+  /// (округлено до 30 минут). null — пустые слоты не реагируют.
+  final void Function(DateTime at)? onEmptyTap;
   final CalendarView defaultView;
 
   @override
@@ -102,6 +107,7 @@ class _SessionsCalendarState extends State<SessionsCalendar> {
                     date: _anchor,
                     sessions: widget.sessions,
                     onTap: widget.onSessionTap,
+                    onEmptyTap: widget.onEmptyTap,
                   ),
               },
             ),
@@ -676,10 +682,16 @@ class _WeekCard extends StatelessWidget {
 // ─────────────────────────── DAY ───────────────────────────
 
 class _DayView extends StatefulWidget {
-  const _DayView({required this.date, required this.sessions, required this.onTap});
+  const _DayView({
+    required this.date,
+    required this.sessions,
+    required this.onTap,
+    this.onEmptyTap,
+  });
   final DateTime date;
   final List<CalSession> sessions;
   final void Function(CalSession) onTap;
+  final void Function(DateTime at)? onEmptyTap;
 
   @override
   State<_DayView> createState() => _DayViewState();
@@ -759,6 +771,29 @@ class _DayViewState extends State<_DayView> {
                   final double areaW = cons.maxWidth;
                   return Stack(
                     children: <Widget>[
+                      // Фон: тап по пустому слоту → новое занятие на это время.
+                      // Лежит под блоками занятий, поэтому их тапы перехватываются ими.
+                      if (widget.onEmptyTap != null)
+                        Positioned.fill(
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTapUp: (TapUpDetails d) {
+                              final int raw = calStartHour * 60 +
+                                  (d.localPosition.dy / _dayHourH * 60).round();
+                              final int snapped = ((raw / 30).round() * 30).clamp(
+                                calStartHour * 60,
+                                (calStartHour + calHours) * 60 - 30,
+                              );
+                              widget.onEmptyTap!(DateTime(
+                                widget.date.year,
+                                widget.date.month,
+                                widget.date.day,
+                                snapped ~/ 60,
+                                snapped % 60,
+                              ));
+                            },
+                          ),
+                        ),
                       // Часовые линии.
                       ...List<Widget>.generate(calHours, (int i) {
                         return Positioned(

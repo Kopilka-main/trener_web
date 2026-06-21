@@ -44,6 +44,12 @@ class CalendarScreen extends ConsumerWidget {
                       final Session? s = byId[cs.id];
                       if (s != null) _showSheet(context, ref, s);
                     },
+                    onEmptyTap: (DateTime at) => showSessionForm(
+                      context,
+                      ref,
+                      defaultDate: at,
+                      defaultTime: TimeOfDay(hour: at.hour, minute: at.minute),
+                    ),
                   );
                 },
               ),
