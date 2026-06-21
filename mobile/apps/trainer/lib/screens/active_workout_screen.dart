@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
@@ -8,10 +8,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/trainer_assign.dart';
 import '../api/trainer_client_card.dart';
 import '../api/trainer_workouts.dart';
+import 'template_edit_screen.dart' show ExerciseSelect;
 
-// ─── Утилиты ───
+// в”Ђв”Ђв”Ђ РЈС‚РёР»РёС‚С‹ в”Ђв”Ђв”Ђ
 
-/// Метки упражнений: повторяющиеся имена нумеруются «Имя 1», «Имя 2»… (по position).
+/// РњРµС‚РєРё СѓРїСЂР°Р¶РЅРµРЅРёР№: РїРѕРІС‚РѕСЂСЏСЋС‰РёРµСЃСЏ РёРјРµРЅР° РЅСѓРјРµСЂСѓСЋС‚СЃСЏ В«РРјСЏ 1В», В«РРјСЏ 2В»вЂ¦ (РїРѕ position).
 Map<int, String> _exerciseLabels(List<WorkoutExercise> exs) {
   final Map<String, int> total = <String, int>{};
   for (final WorkoutExercise e in exs) {
@@ -34,19 +35,19 @@ Map<int, String> _exerciseLabels(List<WorkoutExercise> exs) {
 String _plannedText(WorkoutSet s) {
   final List<String> p = <String>[
     if (s.plannedReps != null) '${s.plannedReps}',
-    if (s.plannedWeightKg != null) '× ${s.plannedWeightKg} кг',
-    if (s.plannedTimeSec != null) '${s.plannedTimeSec} с',
+    if (s.plannedWeightKg != null) 'Г— ${s.plannedWeightKg} РєРі',
+    if (s.plannedTimeSec != null) '${s.plannedTimeSec} СЃ',
   ];
-  return p.isEmpty ? '—' : p.join(' ');
+  return p.isEmpty ? 'вЂ”' : p.join(' ');
 }
 
 String _actualText(WorkoutSet s) {
   final List<String> p = <String>[
     if (s.actualReps != null) '${s.actualReps}',
-    if (s.actualWeightKg != null) '× ${s.actualWeightKg} кг',
-    if (s.actualTimeSec != null) '${s.actualTimeSec} с',
+    if (s.actualWeightKg != null) 'Г— ${s.actualWeightKg} РєРі',
+    if (s.actualTimeSec != null) '${s.actualTimeSec} СЃ',
   ];
-  return p.isEmpty ? '—' : p.join(' ');
+  return p.isEmpty ? 'вЂ”' : p.join(' ');
 }
 
 String _formatDuration(int totalSec) {
@@ -58,9 +59,9 @@ String _formatDuration(int totalSec) {
   return h > 0 ? '$h:${two(mm)}:${two(sec)}' : '$m:${two(sec)}';
 }
 
-/// Экран проведения тренировки клиента тренером. Загружает полную тренировку,
-/// затем: черновик → план + «Начать»; активная → таймер, чек-лист, отдых,
-/// завершение. Зеркало веб ActiveWorkoutPage (тренерский scope).
+/// Р­РєСЂР°РЅ РїСЂРѕРІРµРґРµРЅРёСЏ С‚СЂРµРЅРёСЂРѕРІРєРё РєР»РёРµРЅС‚Р° С‚СЂРµРЅРµСЂРѕРј. Р—Р°РіСЂСѓР¶Р°РµС‚ РїРѕР»РЅСѓСЋ С‚СЂРµРЅРёСЂРѕРІРєСѓ,
+/// Р·Р°С‚РµРј: С‡РµСЂРЅРѕРІРёРє в†’ РїР»Р°РЅ + В«РќР°С‡Р°С‚СЊВ»; Р°РєС‚РёРІРЅР°СЏ в†’ С‚Р°Р№РјРµСЂ, С‡РµРє-Р»РёСЃС‚, РѕС‚РґС‹С…,
+/// Р·Р°РІРµСЂС€РµРЅРёРµ. Р—РµСЂРєР°Р»Рѕ РІРµР± ActiveWorkoutPage (С‚СЂРµРЅРµСЂСЃРєРёР№ scope).
 class ActiveWorkoutScreen extends ConsumerWidget {
   const ActiveWorkoutScreen({super.key, required this.clientId, required this.workoutId});
   final String clientId;
@@ -78,12 +79,12 @@ class ActiveWorkoutScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              const Text('Не удалось загрузить тренировку'),
+              const Text('РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ С‚СЂРµРЅРёСЂРѕРІРєСѓ'),
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: () => ref.invalidate(
                     trainerWorkoutProvider((clientId: clientId, wid: workoutId))),
-                child: const Text('Повторить'),
+                child: const Text('РџРѕРІС‚РѕСЂРёС‚СЊ'),
               ),
             ],
           ),
@@ -107,7 +108,7 @@ class _Conductor extends ConsumerStatefulWidget {
 class _ConductorState extends ConsumerState<_Conductor> {
   late Workout _w = widget.workout;
   bool _busy = false;
-  String? _editing; // ключ "pos-idx" редактируемого подхода
+  String? _editing; // РєР»СЋС‡ "pos-idx" СЂРµРґР°РєС‚РёСЂСѓРµРјРѕРіРѕ РїРѕРґС…РѕРґР°
   bool _doneExpanded = false;
   Timer? _ticker;
   ({String key, int left})? _rest;
@@ -152,7 +153,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _busy = false);
-      if (!silent) m.showSnackBar(const SnackBar(content: Text('Не удалось сохранить изменение')));
+      if (!silent) m.showSnackBar(const SnackBar(content: Text('РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ РёР·РјРµРЅРµРЅРёРµ')));
     }
   }
 
@@ -179,16 +180,24 @@ class _ConductorState extends ConsumerState<_Conductor> {
   }
 
   Future<void> _addExercise() async {
-    final TExercise? ex = await showModalBottomSheet<TExercise>(
-      context: context,
-      backgroundColor: context.colors.bg,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) =>
-          _ExercisePicker(selectedIds: _w.exercises.map((WorkoutExercise e) => e.exerciseId).toSet()),
-    );
-    if (ex == null) return;
-    await _run(() => _api.addExercise(_clientId, _w.id, ex));
+    // РўРѕС‚ Р¶Рµ Р±РѕРіР°С‚С‹Р№ РјСѓР»СЊС‚РёРІС‹Р±РѕСЂ В«Р’С‹Р±РѕСЂ СѓРїСЂР°Р¶РЅРµРЅРёР№В», С‡С‚Рѕ Рё РІ СЃР±РѕСЂРєРµ С‚СЂРµРЅРёСЂРѕРІРєРё:
+    // РіСЂСѓРїРїР°в†’РїРѕРґРіСЂСѓРїРїР°, РёРЅС„Рѕ-РєР°СЂС‚РѕС‡РєР°, СЃС‡С‘С‚С‡РёРєРё. РљР°Р¶РґРѕРµ РІС‹Р±СЂР°РЅРЅРѕРµ РґРѕР±Р°РІР»СЏРµРј N СЂР°Р·.
+    final NavigatorState nav = Navigator.of(context);
+    await nav.push<void>(MaterialPageRoute<void>(
+      builder: (BuildContext ctx) => ExerciseSelect(
+        initialCounts: const <String, int>{},
+        onCancel: () => Navigator.of(ctx).pop(),
+        onDone: (Map<String, int> counts, List<TExercise> catalog) async {
+          Navigator.of(ctx).pop();
+          for (final TExercise ex in catalog) {
+            final int n = counts[ex.id] ?? 0;
+            for (int i = 0; i < n; i++) {
+              await _run(() => _api.addExercise(_clientId, _w.id, ex));
+            }
+          }
+        },
+      ),
+    ));
   }
 
   Future<void> _toggleDone(WorkoutExercise ex, WorkoutSet s) async {
@@ -207,10 +216,10 @@ class _ConductorState extends ConsumerState<_Conductor> {
     final bool? ok = await showDialog<bool>(
       context: context,
       builder: (BuildContext ctx) => AlertDialog(
-        title: const Text('Завершить тренировку?'),
+        title: const Text('Р—Р°РІРµСЂС€РёС‚СЊ С‚СЂРµРЅРёСЂРѕРІРєСѓ?'),
         actions: <Widget>[
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Завершить')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('РћС‚РјРµРЅР°')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Р—Р°РІРµСЂС€РёС‚СЊ')),
         ],
       ),
     );
@@ -224,11 +233,11 @@ class _ConductorState extends ConsumerState<_Conductor> {
       ref.invalidate(clientWorkoutsCardProvider(_clientId));
       if (!mounted) return;
       nav.pop();
-      m.showSnackBar(const SnackBar(content: Text('Тренировка завершена')));
+      m.showSnackBar(const SnackBar(content: Text('РўСЂРµРЅРёСЂРѕРІРєР° Р·Р°РІРµСЂС€РµРЅР°')));
     } catch (_) {
       if (!mounted) return;
       setState(() => _busy = false);
-      m.showSnackBar(const SnackBar(content: Text('Не удалось завершить тренировку')));
+      m.showSnackBar(const SnackBar(content: Text('РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РІРµСЂС€РёС‚СЊ С‚СЂРµРЅРёСЂРѕРІРєСѓ')));
     }
   }
 
@@ -240,7 +249,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
     );
   }
 
-  // ─────────── Черновик ───────────
+  // в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ Р§РµСЂРЅРѕРІРёРє в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
   Widget _buildDraft(BuildContext context) {
     final AppColors c = context.colors;
     final Map<int, String> labels = _exerciseLabels(_w.exercises);
@@ -253,7 +262,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
             children: <Widget>[
-              Text('План тренировки. Нажмите «Начать», чтобы провести с клиентом.',
+              Text('РџР»Р°РЅ С‚СЂРµРЅРёСЂРѕРІРєРё. РќР°Р¶РјРёС‚Рµ В«РќР°С‡Р°С‚СЊВ», С‡С‚РѕР±С‹ РїСЂРѕРІРµСЃС‚Рё СЃ РєР»РёРµРЅС‚РѕРј.',
                   style: TextStyle(fontSize: 13, color: c.inkMuted)),
               const SizedBox(height: 12),
               ReorderableListView.builder(
@@ -304,14 +313,14 @@ class _ConductorState extends ConsumerState<_Conductor> {
             onPressed:
                 (_busy || exs.isEmpty) ? null : () => _run(() => _api.start(_clientId, _w.id)),
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
-            child: Text(exs.isEmpty ? 'Добавьте упражнение' : 'Начать тренировку'),
+            child: Text(exs.isEmpty ? 'Р”РѕР±Р°РІСЊС‚Рµ СѓРїСЂР°Р¶РЅРµРЅРёРµ' : 'РќР°С‡Р°С‚СЊ С‚СЂРµРЅРёСЂРѕРІРєСѓ'),
           ),
         ),
       ],
     );
   }
 
-  // ─────────── Активная ───────────
+  // в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ РђРєС‚РёРІРЅР°СЏ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
   Widget _buildActive(BuildContext context) {
     final AppColors c = context.colors;
     final Map<int, String> labels = _exerciseLabels(_w.exercises);
@@ -336,7 +345,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('ПРОШЛО',
+                  Text('РџР РћРЁР›Рћ',
                       style: AppFonts.mono(size: 10, color: c.accentOn.withValues(alpha: 0.7))),
                   Text(_formatDuration(_elapsed),
                       style: TextStyle(
@@ -354,7 +363,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
                     decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(20)),
-                    child: Text('Завершить',
+                    child: Text('Р—Р°РІРµСЂС€РёС‚СЊ',
                         style: TextStyle(
                             fontSize: 14, fontWeight: FontWeight.w600, color: c.accentOn)),
                   ),
@@ -370,13 +379,13 @@ class _ConductorState extends ConsumerState<_Conductor> {
             decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12)),
             child: Row(
               children: <Widget>[
-                Text('ЗАВЕРШЕНО · ${completed.length}',
+                Text('Р—РђР’Р•Р РЁР•РќРћ В· ${completed.length}',
                     style: AppFonts.mono(size: 13, color: c.inkMuted)),
                 const Spacer(),
                 Text('$doneCount / $totalCount',
                     style: AppFonts.mono(size: 13, color: c.ink)),
                 const SizedBox(width: 4),
-                Text('подходов',
+                Text('РїРѕРґС…РѕРґРѕРІ',
                     style: AppFonts.mono(size: 10, color: c.inkMutedXl, weight: FontWeight.w500)),
                 const SizedBox(width: 6),
                 Icon(_doneExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
@@ -406,7 +415,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
           FilledButton(
             onPressed: _busy ? null : _complete,
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
-            child: const Text('Завершить'),
+            child: const Text('Р—Р°РІРµСЂС€РёС‚СЊ'),
           ),
         ],
       ],
@@ -456,7 +465,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
   }
 }
 
-// ─── Карточка упражнения ───
+// в”Ђв”Ђв”Ђ РљР°СЂС‚РѕС‡РєР° СѓРїСЂР°Р¶РЅРµРЅРёСЏ в”Ђв”Ђв”Ђ
 class _ExerciseCard extends StatelessWidget {
   const _ExerciseCard({super.key, required this.title, required this.child, this.onRemove});
   final String title;
@@ -554,7 +563,7 @@ class _AddExerciseButton extends StatelessWidget {
           children: <Widget>[
             Icon(Icons.add, size: 16, color: c.inkMuted),
             const SizedBox(width: 6),
-            Text('Добавить упражнение',
+            Text('Р”РѕР±Р°РІРёС‚СЊ СѓРїСЂР°Р¶РЅРµРЅРёРµ',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.inkMuted)),
           ],
         ),
@@ -563,7 +572,7 @@ class _AddExerciseButton extends StatelessWidget {
   }
 }
 
-// ─── Таймер отдыха (пилюля) ───
+// в”Ђв”Ђв”Ђ РўР°Р№РјРµСЂ РѕС‚РґС‹С…Р° (РїРёР»СЋР»СЏ) в”Ђв”Ђв”Ђ
 class _RestPill extends StatelessWidget {
   const _RestPill({required this.left, required this.onSkip, required this.color});
   final int left;
@@ -580,7 +589,7 @@ class _RestPill extends StatelessWidget {
         children: <Widget>[
           Text('$left', style: AppFonts.mono(size: 14, color: color)),
           const SizedBox(width: 6),
-          Text('Отдых', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color)),
+          Text('РћС‚РґС‹С…', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color)),
           const SizedBox(width: 4),
           GestureDetector(
             onTap: onSkip,
@@ -592,7 +601,7 @@ class _RestPill extends StatelessWidget {
   }
 }
 
-// ─── Редактор подхода (план/факт) ───
+// в”Ђв”Ђв”Ђ Р РµРґР°РєС‚РѕСЂ РїРѕРґС…РѕРґР° (РїР»Р°РЅ/С„Р°РєС‚) в”Ђв”Ђв”Ђ
 class _SetEditor extends StatefulWidget {
   const _SetEditor({
     required this.planned,
@@ -601,7 +610,7 @@ class _SetEditor extends StatefulWidget {
     required this.onSave,
     this.onDelete,
   });
-  final bool planned; // true → редактор плана (с отдыхом); false → факт
+  final bool planned; // true в†’ СЂРµРґР°РєС‚РѕСЂ РїР»Р°РЅР° (СЃ РѕС‚РґС‹С…РѕРј); false в†’ С„Р°РєС‚
   final WorkoutSet set;
   final VoidCallback onCancel;
   final void Function(Map<String, dynamic>) onSave;
@@ -671,14 +680,14 @@ class _SetEditorState extends State<_SetEditor> {
         children: <Widget>[
           Row(
             children: <Widget>[
-              _NumField(label: 'Повторы', ctrl: _reps),
+              _NumField(label: 'РџРѕРІС‚РѕСЂС‹', ctrl: _reps),
               const SizedBox(width: 8),
-              _NumField(label: 'Вес, кг', ctrl: _weight),
+              _NumField(label: 'Р’РµСЃ, РєРі', ctrl: _weight),
               const SizedBox(width: 8),
-              _NumField(label: 'Время, с', ctrl: _time),
+              _NumField(label: 'Р’СЂРµРјСЏ, СЃ', ctrl: _time),
               if (widget.planned) ...<Widget>[
                 const SizedBox(width: 8),
-                _NumField(label: 'Отдых, с', ctrl: _rest),
+                _NumField(label: 'РћС‚РґС‹С…, СЃ', ctrl: _rest),
               ],
             ],
           ),
@@ -738,260 +747,6 @@ class _NumField extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ─── Пикер упражнения из полного каталога тренера ───
-class _ExercisePicker extends ConsumerStatefulWidget {
-  const _ExercisePicker({required this.selectedIds});
-  final Set<String> selectedIds;
-  @override
-  ConsumerState<_ExercisePicker> createState() => _ExercisePickerState();
-}
-
-class _ExercisePickerState extends ConsumerState<_ExercisePicker> {
-  String _query = '';
-  String _group = '';
-
-  @override
-  Widget build(BuildContext context) {
-    final AppColors c = context.colors;
-    final String base = ref.read(baseUrlProvider);
-    final AsyncValue<List<TExercise>> catalog = ref.watch(trainerCatalogProvider);
-    return SizedBox(
-      height: MediaQuery.of(context).size.height * 0.82,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-            child: Text('Добавить упражнение',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.ink)),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: TextField(
-              onChanged: (String v) => setState(() => _query = v.trim().toLowerCase()),
-              decoration: InputDecoration(
-                hintText: 'Поиск упражнения',
-                prefixIcon: const Icon(Icons.search, size: 20),
-                filled: true,
-                fillColor: c.card,
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-              ),
-            ),
-          ),
-          Expanded(
-            child: catalog.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (Object e, _) => Center(
-                  child: Text('Не удалось загрузить каталог', style: TextStyle(color: c.inkMuted))),
-              data: (List<TExercise> all) {
-                final List<String> groups = <String>{
-                  for (final TExercise e in all)
-                    if (e.category.isNotEmpty) e.category,
-                }.toList()
-                  ..sort();
-                final List<TExercise> list = all.where((TExercise e) {
-                  if (_group.isNotEmpty && e.category != _group) return false;
-                  if (_query.isNotEmpty && !e.name.toLowerCase().contains(_query)) return false;
-                  return true;
-                }).toList();
-                return Column(
-                  children: <Widget>[
-                    if (groups.isNotEmpty)
-                      SizedBox(
-                        height: 38,
-                        child: ListView(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          children: <Widget>[
-                            _Chip(label: 'Все', active: _group.isEmpty, onTap: () => setState(() => _group = '')),
-                            ...groups.map((String g) => _Chip(
-                                  label: g,
-                                  active: _group == g,
-                                  onTap: () => setState(() => _group = g),
-                                )),
-                          ],
-                        ),
-                      ),
-                    Expanded(
-                      child: list.isEmpty
-                          ? Center(child: Text('Ничего не найдено', style: TextStyle(color: c.inkMuted)))
-                          : ListView.builder(
-                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                              itemCount: list.length,
-                              itemBuilder: (BuildContext ctx, int i) {
-                                final TExercise ex = list[i];
-                                final bool picked = widget.selectedIds.contains(ex.id);
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 8),
-                                  decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
-                                  child: Row(
-                                    children: <Widget>[
-                                      Expanded(
-                                        child: GestureDetector(
-                                          onTap: () => Navigator.pop(context, ex),
-                                          behavior: HitTestBehavior.opaque,
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(10),
-                                            child: Row(
-                                              children: <Widget>[
-                                                CatalogThumb(
-                                                    url: catalogMediaUrl(base, ex.thumbUrl ?? ex.imageUrl),
-                                                    size: 44),
-                                                const SizedBox(width: 10),
-                                                Container(
-                                                  width: 24,
-                                                  height: 24,
-                                                  alignment: Alignment.center,
-                                                  decoration: BoxDecoration(
-                                                    color: picked ? c.accent : Colors.transparent,
-                                                    borderRadius: BorderRadius.circular(7),
-                                                    border: picked ? null : Border.all(color: c.line),
-                                                  ),
-                                                  child: picked
-                                                      ? Icon(Icons.check, size: 14, color: c.accentOn)
-                                                      : null,
-                                                ),
-                                                const SizedBox(width: 10),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: <Widget>[
-                                                      Text(ex.name,
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow.ellipsis,
-                                                          style: TextStyle(
-                                                              fontSize: 15,
-                                                              fontWeight: FontWeight.w600,
-                                                              color: c.ink)),
-                                                      if (ex.category.isNotEmpty || ex.subgroup != null)
-                                                        Text(
-                                                          <String>[
-                                                            if (ex.category.isNotEmpty) ex.category,
-                                                            if (ex.subgroup?.isNotEmpty == true) ex.subgroup!,
-                                                          ].join(' · '),
-                                                          style: AppFonts.mono(
-                                                              size: 12, color: c.inkMuted, weight: FontWeight.w500),
-                                                        ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      IconButton(
-                                        onPressed: () => _showInfo(context, ex, base),
-                                        icon: Icon(Icons.info_outline, size: 18, color: c.inkMuted),
-                                        tooltip: 'Об упражнении',
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-void _showInfo(BuildContext context, TExercise ex, String base) {
-  showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: context.colors.bg,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (BuildContext ctx) {
-      final AppColors c = ctx.colors;
-      final String muscles = <String>[
-        if (ex.category.isNotEmpty) ex.category,
-        if (ex.subgroup?.isNotEmpty == true) ex.subgroup!,
-      ].join(' · ');
-      final String? img = catalogMediaUrl(base, ex.imageUrl ?? ex.thumbUrl);
-      final String? video = catalogMediaUrl(base, ex.videoUrl);
-      return Padding(
-        padding: EdgeInsets.fromLTRB(20, 4, 20, 16 + MediaQuery.of(ctx).viewPadding.bottom),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            if (img != null || video != null) ...<Widget>[
-              CatalogMediaView(imageUrl: img, videoUrl: video, height: 200),
-              const SizedBox(height: 12),
-            ],
-            Text(ex.name, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
-            if (muscles.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 2),
-              Text(muscles, style: TextStyle(fontSize: 13, color: c.inkMuted)),
-            ],
-            const SizedBox(height: 12),
-            if (ex.equipment?.isNotEmpty == true) _InfoLine(label: 'Оборудование', value: ex.equipment!),
-            if (ex.primaryMuscles?.isNotEmpty == true) _InfoLine(label: 'Целевые', value: ex.primaryMuscles!),
-            if (ex.secondaryMuscles?.isNotEmpty == true) _InfoLine(label: 'Дополнительно', value: ex.secondaryMuscles!),
-            if (ex.description?.isNotEmpty == true) ...<Widget>[
-              const SizedBox(height: 8),
-              Text(ex.description!, style: TextStyle(fontSize: 14, height: 1.4, color: c.ink)),
-            ],
-          ],
-        ),
-      );
-    },
-  );
-}
-
-class _InfoLine extends StatelessWidget {
-  const _InfoLine({required this.label, required this.value});
-  final String label;
-  final String value;
-  @override
-  Widget build(BuildContext context) {
-    final AppColors c = context.colors;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          SizedBox(width: 110, child: Text(label, style: TextStyle(fontSize: 14, color: c.inkMuted))),
-          Expanded(child: Text(value, style: TextStyle(fontSize: 14, color: c.ink))),
-        ],
-      ),
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip({required this.label, required this.active, required this.onTap});
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) {
-    final AppColors c = context.colors;
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-              color: active ? c.accent : c.chip, borderRadius: BorderRadius.circular(20)),
-          child: Text(label,
-              style: AppFonts.mono(size: 12, color: active ? c.accentOn : c.inkMuted, weight: FontWeight.w500)),
-        ),
       ),
     );
   }

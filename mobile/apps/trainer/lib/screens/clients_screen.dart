@@ -12,6 +12,7 @@ import '../api/trainer_client_card.dart';
 import '../api/trainer_client_stats.dart';
 import '../api/trainer_clients.dart';
 import '../api/trainer_medical.dart';
+import '../api/trainer_workouts.dart';
 import 'active_workout_screen.dart';
 import 'client_edit_screen.dart';
 import 'client_medical_screen.dart';
@@ -841,6 +842,32 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
     }
   }
 
+  /// Отменить назначенную тренировку (черновик/активную) — удалить.
+  Future<void> _cancelWorkout(TWorkout w) async {
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: const Text('Отменить тренировку?'),
+        content: Text('«${w.name}» будет удалена у клиента.'),
+        actions: <Widget>[
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Нет')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: context.colors.danger),
+            child: const Text('Отменить'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref.read(trainerWorkoutsApiProvider).delete(_cid, w.id);
+      ref.invalidate(clientWorkoutsCardProvider(_cid));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Не удалось отменить')));
+    }
+  }
+
   Future<void> _pickTemplate() async {
     final WorkoutTemplate? t = await showModalBottomSheet<WorkoutTemplate>(
       context: context,
@@ -895,7 +922,11 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
               Text('БЛИЖАЙШАЯ ТРЕНИРОВКА', style: AppFonts.mono(size: 11, color: c.inkMutedXl, weight: FontWeight.w700)),
               const SizedBox(height: 8),
               if (current.isNotEmpty)
-                _CurrentWorkoutCard(w: current.first, onTap: () => _openConduct(current.first.id))
+                _CurrentWorkoutCard(
+                  w: current.first,
+                  onTap: () => _openConduct(current.first.id),
+                  onCancel: () => _cancelWorkout(current.first),
+                )
               else
                 _EmptyCurrent(
                   busy: _busy,
@@ -964,11 +995,12 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
   }
 }
 
-/// Карточка ближайшей (черновик/активная) тренировки + кнопка начать/продолжить.
+/// Карточка ближайшей (черновик/активная) тренировки + начать/продолжить + отмена.
 class _CurrentWorkoutCard extends StatelessWidget {
-  const _CurrentWorkoutCard({required this.w, required this.onTap});
+  const _CurrentWorkoutCard({required this.w, required this.onTap, required this.onCancel});
   final TWorkout w;
   final VoidCallback onTap;
+  final VoidCallback onCancel;
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
@@ -981,7 +1013,20 @@ class _CurrentWorkoutCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(w.name, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(w.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
+                ),
+                GestureDetector(
+                  onTap: onCancel,
+                  child: Icon(Icons.delete_outline, size: 20, color: c.inkMuted),
+                ),
+              ],
+            ),
             const SizedBox(height: 4),
             Text('${w.exerciseCount} упр.${active ? ' · идёт' : ''}',
                 style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),

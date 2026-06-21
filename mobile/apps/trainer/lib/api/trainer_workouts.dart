@@ -142,6 +142,11 @@ class TrainerWorkoutsApi {
     return _unwrap(r);
   }
 
+  /// Удалить тренировку (отменить назначенную/черновик).
+  Future<void> delete(String clientId, String wid) async {
+    await _api.deleteJson(_base(clientId, wid));
+  }
+
   Future<Workout> start(String clientId, String wid) async {
     final Map<String, dynamic> r = await _api.postJson('${_base(clientId, wid)}/start');
     return _unwrap(r);

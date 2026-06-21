@@ -175,7 +175,7 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
   @override
   Widget build(BuildContext context) {
     if (_step1) {
-      return _ExerciseSelect(
+      return ExerciseSelect(
         initialCounts: _countByExercise(),
         onCancel: () {
           if (_positions.isEmpty && !_isEdit) {
@@ -627,18 +627,20 @@ class _InfoLine extends StatelessWidget {
   }
 }
 
-/// Шаг 1: выбор упражнений со счётчиком подходов.
-class _ExerciseSelect extends ConsumerStatefulWidget {
-  const _ExerciseSelect({required this.initialCounts, required this.onCancel, required this.onDone});
+/// Экран выбора упражнений со счётчиком подходов (шаг 1 шаблона; переиспользуется
+/// при «Добавить упражнение» в проведении тренировки — public).
+class ExerciseSelect extends ConsumerStatefulWidget {
+  const ExerciseSelect(
+      {super.key, required this.initialCounts, required this.onCancel, required this.onDone});
   final Map<String, int> initialCounts;
   final VoidCallback onCancel;
   final void Function(Map<String, int> counts, List<TExercise> catalog) onDone;
 
   @override
-  ConsumerState<_ExerciseSelect> createState() => _ExerciseSelectState();
+  ConsumerState<ExerciseSelect> createState() => _ExerciseSelectState();
 }
 
-class _ExerciseSelectState extends ConsumerState<_ExerciseSelect> {
+class _ExerciseSelectState extends ConsumerState<ExerciseSelect> {
   late final Map<String, int> _counts = Map<String, int>.from(widget.initialCounts);
   String _query = '';
   String _group = '';
