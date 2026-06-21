@@ -1,7 +1,16 @@
 import 'package:core/core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Профиль клиентского аккаунта (срез). `id` — код подключения, который клиент
+/// Контакт клиента (тип + значение).
+class ClientContact {
+  ClientContact({required this.type, required this.value});
+  final String type;
+  final String value;
+  factory ClientContact.fromJson(Map<String, dynamic> j) =>
+      ClientContact(type: j['type'] as String? ?? '', value: j['value'] as String? ?? '');
+}
+
+/// Профиль клиентского аккаунта. `id` — код подключения, который клиент
 /// передаёт тренеру.
 class ClientAccount {
   ClientAccount({
@@ -9,6 +18,10 @@ class ClientAccount {
     required this.firstName,
     required this.lastName,
     required this.email,
+    required this.avatarFileId,
+    required this.birthDate,
+    required this.bio,
+    required this.contacts,
   });
 
   factory ClientAccount.fromJson(Map<String, dynamic> j) => ClientAccount(
@@ -16,14 +29,31 @@ class ClientAccount {
         firstName: (j['firstName'] as String?) ?? '',
         lastName: (j['lastName'] as String?) ?? '',
         email: (j['email'] as String?) ?? '',
+        avatarFileId: j['avatarFileId'] as String?,
+        birthDate: j['birthDate'] as String?,
+        bio: j['bio'] as String?,
+        contacts: ((j['contacts'] as List<dynamic>?) ?? <dynamic>[])
+            .cast<Map<String, dynamic>>()
+            .map(ClientContact.fromJson)
+            .toList(),
       );
 
   final String id;
   final String firstName;
   final String lastName;
   final String email;
+  final String? avatarFileId;
+  final String? birthDate;
+  final String? bio;
+  final List<ClientContact> contacts;
 
   String get fullName => '$firstName $lastName'.trim();
+  String get initials {
+    final List<String> parts = fullName.split(RegExp(r'\s+')).where((String s) => s.isNotEmpty).toList();
+    if (parts.isEmpty) return '';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first.substring(0, 1) + parts[1].substring(0, 1)).toUpperCase();
+  }
 }
 
 /// Авторизация клиента: логин/профиль/выход поверх общего ApiClient + сессии.
@@ -56,6 +86,35 @@ class ClientApi {
   Future<ClientAccount> me() async {
     final Map<String, dynamic> res = await _api.getJson('/api/client/auth/me');
     return ClientAccount.fromJson(res['account'] as Map<String, dynamic>);
+  }
+
+  /// Обновить профиль (PATCH /api/client/auth/me).
+  Future<ClientAccount> updateProfile(Map<String, dynamic> body) async {
+    final Map<String, dynamic> res = await _api.patchJson('/api/client/auth/me', body);
+    return ClientAccount.fromJson(res['account'] as Map<String, dynamic>);
+  }
+
+  /// Загрузить аватар (multipart, поле photo).
+  Future<ClientAccount> uploadAvatar(String filePath, String fileName) async {
+    final Map<String, dynamic> res = await _api.postForm(
+      '/api/client/auth/me/avatar',
+      <String, String>{},
+      fileField: 'photo',
+      filePath: filePath,
+      fileName: fileName,
+    );
+    return ClientAccount.fromJson(res['account'] as Map<String, dynamic>);
+  }
+
+  Future<void> removeAvatar() async {
+    await _api.deleteJson('/api/client/auth/me/avatar');
+  }
+
+  /// URL собственного аватара (свой защищённый роут). [version] — для сброса кэша.
+  String avatarUrl(String version) {
+    final String base = _ref.read(baseUrlProvider);
+    final String b = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+    return '$b/api/client/auth/me/avatar?v=$version';
   }
 
   Future<void> logout() async {

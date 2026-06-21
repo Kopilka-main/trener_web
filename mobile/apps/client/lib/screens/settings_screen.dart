@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/client_auth.dart';
+import 'profile_edit_screen.dart';
 
 /// Профиль и настройки клиента: данные аккаунта, код подключения, выход.
 class SettingsScreen extends ConsumerWidget {
@@ -14,6 +15,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<ClientAccount> me = ref.watch(clientMeProvider);
     final ColorScheme cs = Theme.of(context).colorScheme;
+    final AppColors c = context.colors;
     return Scaffold(
       appBar: AppBar(title: const Text('Профиль')),
       body: me.when(
@@ -29,10 +31,11 @@ class SettingsScreen extends ConsumerWidget {
           children: <Widget>[
             Row(
               children: <Widget>[
-                CircleAvatar(
+                AuthedAvatar(
+                  url: a.avatarFileId != null ? ref.read(clientApiProvider).avatarUrl(a.avatarFileId!) : null,
+                  token: ref.watch(sessionProvider).token,
+                  initials: a.initials,
                   radius: 28,
-                  backgroundColor: cs.primary.withValues(alpha: 0.18),
-                  child: Icon(Icons.person, color: cs.primary, size: 26),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -48,8 +51,34 @@ class SettingsScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).push<bool>(
+                    MaterialPageRoute<bool>(builder: (_) => ProfileEditScreen(account: a)),
+                  ),
+                  icon: Icon(Icons.edit_outlined, size: 22, color: c.inkMuted),
+                  tooltip: 'Редактировать',
+                ),
               ],
             ),
+            if (a.bio?.isNotEmpty == true) ...<Widget>[
+              const SizedBox(height: 14),
+              Text(a.bio!, style: TextStyle(fontSize: 14, height: 1.4, color: c.ink)),
+            ],
+            if (a.contacts.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 12),
+              ...a.contacts.map((ClientContact ct) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: <Widget>[
+                        SizedBox(
+                          width: 100,
+                          child: Text(ct.type, style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w600)),
+                        ),
+                        Expanded(child: Text(ct.value, style: TextStyle(fontSize: 14, color: c.ink))),
+                      ],
+                    ),
+                  )),
+            ],
             const SizedBox(height: 24),
             _CodeCard(code: a.id),
             const SizedBox(height: 12),
