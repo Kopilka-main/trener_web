@@ -85,6 +85,26 @@ class TrainerChatApi {
     }
   }
 
+  /// Закрепить конкретное сообщение (плашка «Закреплённое» сверху чата).
+  Future<bool> pin(String clientId, String messageId) async {
+    try {
+      await _api.postJson('/api/clients/$clientId/messages/$messageId/pin');
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Снять закреп с конкретного сообщения.
+  Future<bool> unpin(String clientId, String messageId) async {
+    try {
+      await _api.deleteJson('/api/clients/$clientId/messages/$messageId/pin');
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> markRead(String clientId) async {
     try {
       await _api.postJson('/api/clients/$clientId/messages/read');

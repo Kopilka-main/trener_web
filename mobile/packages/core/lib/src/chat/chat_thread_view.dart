@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
 import 'chat_message.dart';
@@ -7,7 +8,8 @@ import 'chat_message.dart';
 typedef SendMessage = Future<bool> Function(String body, String? replyToId);
 
 /// Переиспользуемая лента диалога (зеркало веб ChatPage): пузыри по ролям, статус
-/// прочтения (✓/✓✓), задачи с чекбоксом, ответы свайпом, закреплённые сообщения.
+/// прочтения (✓/✓✓), задачи с чекбоксом, закреплённые сообщения. Действия по
+/// сообщению — долгим нажатием (ответить/закрепить/задача).
 class ChatThreadView extends StatefulWidget {
   const ChatThreadView({
     super.key,
@@ -18,6 +20,9 @@ class ChatThreadView extends StatefulWidget {
     this.pinned = const <ChatMessage>[],
     this.onCompleteTask,
     this.onRefresh,
+    this.onPin,
+    this.onUnpin,
+    this.onTask,
   });
 
   final List<ChatMessage> messages;
@@ -34,6 +39,12 @@ class ChatThreadView extends StatefulWidget {
   final Future<void> Function(String id)? onCompleteTask;
 
   final Future<void> Function()? onRefresh;
+
+  /// Действия по долгому нажатию (только тренер). null → пункт меню скрыт.
+  /// Клиенту доступен только «Ответить».
+  final Future<void> Function(ChatMessage message)? onPin;
+  final Future<void> Function(ChatMessage message)? onUnpin;
+  final Future<void> Function(ChatMessage message)? onTask;
 
   @override
   State<ChatThreadView> createState() => _ChatThreadViewState();
@@ -67,9 +78,59 @@ class _ChatThreadViewState extends State<ChatThreadView> {
     });
   }
 
+  /// Меню действий по долгому нажатию на сообщение. Тренеру — закрепить/задача/
+  /// ответить; клиенту — только ответить.
+  void _showActions(ChatMessage m) {
+    final AppColors c = context.colors;
+    final bool isPinned = widget.pinned.any((ChatMessage p) => p.id == m.id);
+    final bool canPin = (widget.onPin != null || widget.onUnpin != null) && m.kind == MessageKind.text;
+    final bool canTask = widget.onTask != null && m.kind == MessageKind.text;
+    HapticFeedback.selectionClick();
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: c.bg,
+      builder: (BuildContext ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            _ActionTile(
+              icon: Icons.reply,
+              label: 'Ответить',
+              onTap: () {
+                Navigator.pop(ctx);
+                setState(() => _replyTo = m);
+              },
+            ),
+            if (canPin)
+              _ActionTile(
+                icon: isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                label: isPinned ? 'Открепить' : 'Закрепить',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  if (isPinned) {
+                    widget.onUnpin?.call(m);
+                  } else {
+                    widget.onPin?.call(m);
+                  }
+                },
+              ),
+            if (canTask)
+              _ActionTile(
+                icon: Icons.check_circle_outline,
+                label: 'Задача',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  widget.onTask?.call(m);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final AppColors c = context.colors;
     final List<ChatMessage> ordered = widget.messages.reversed.toList();
     final ChatMessage? pin =
         widget.pinned.isNotEmpty ? widget.pinned[_pinIdx % widget.pinned.length] : null;
@@ -105,23 +166,10 @@ class _ChatThreadViewState extends State<ChatThreadView> {
                         onCompleteTask: widget.onCompleteTask,
                       );
                       if (m.kind == MessageKind.system) return bubble;
-                      return Dismissible(
-                        key: ValueKey<String>('sw-${m.id}'),
-                        direction: DismissDirection.endToStart,
-                        dismissThresholds: const <DismissDirection, double>{
-                          DismissDirection.endToStart: 0.25
-                        },
-                        confirmDismiss: (_) async {
-                          setState(() => _replyTo = m);
-                          return false;
-                        },
-                        background: Align(
-                          alignment: Alignment.centerRight,
-                          child: Padding(
-                            padding: const EdgeInsets.only(right: 16),
-                            child: Icon(Icons.reply, size: 18, color: c.accent),
-                          ),
-                        ),
+                      // Долгое нажатие → меню действий (ответить/закрепить/задача).
+                      return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onLongPress: () => _showActions(m),
                         child: bubble,
                       );
                     },
@@ -141,6 +189,23 @@ class _ChatThreadViewState extends State<ChatThreadView> {
           divider: _replyTo == null,
         ),
       ],
+    );
+  }
+}
+
+/// Пункт меню действий (долгое нажатие на сообщение).
+class _ActionTile extends StatelessWidget {
+  const _ActionTile({required this.icon, required this.label, required this.onTap});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return ListTile(
+      leading: Icon(icon, size: 22, color: c.ink),
+      title: Text(label, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: c.ink)),
+      onTap: onTap,
     );
   }
 }

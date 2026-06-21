@@ -50,6 +50,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return ok;
   }
 
+  Future<void> _pin(ChatMessage m) async {
+    await ref.read(trainerChatApiProvider).pin(widget.clientId, m.id);
+    ref.invalidate(trainerChatMessagesProvider(widget.clientId));
+  }
+
+  Future<void> _unpin(ChatMessage m) async {
+    await ref.read(trainerChatApiProvider).unpin(widget.clientId, m.id);
+    ref.invalidate(trainerChatMessagesProvider(widget.clientId));
+  }
+
+  /// «Задача» из сообщения: создаём задачу с чекбоксом из текста сообщения.
+  Future<void> _task(ChatMessage m) async {
+    final bool ok = await ref.read(trainerChatApiProvider).send(widget.clientId, '/task ${m.body}', null);
+    if (ok) {
+      ref.invalidate(trainerChatMessagesProvider(widget.clientId));
+      ref.invalidate(trainerConversationsProvider);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final AsyncValue<TrainerChatThread> chat =
@@ -77,6 +96,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           otherReadAt: d.clientReadAt,
           pinned: d.pinned,
           onSend: _send,
+          onPin: _pin,
+          onUnpin: _unpin,
+          onTask: _task,
           onRefresh: () async => ref.invalidate(trainerChatMessagesProvider(widget.clientId)),
         ),
       ),
