@@ -681,7 +681,13 @@ class _ConductorState extends ConsumerState<_Conductor> {
         onSave: (Map<String, dynamic> body) async {
           body['done'] = true;
           await _run(() => _api.updateSet(_clientId, _w.id, ex.position, s.setIndex, body));
-          _startRest(ex, s);
+          // Отдых мог измениться в редакторе — берём свежий подход из обновлённой
+          // тренировки, чтобы таймер запустился с новым значением.
+          final WorkoutExercise? freshEx =
+              _w.exercises.where((WorkoutExercise e) => e.position == ex.position).firstOrNull;
+          final WorkoutSet? freshSet =
+              freshEx?.sets.where((WorkoutSet x) => x.setIndex == s.setIndex).firstOrNull;
+          if (freshEx != null && freshSet != null) _startRest(freshEx, freshSet);
         },
         onDelete: () => _run(() => _api.removeExercise(_clientId, _w.id, ex.position)),
       );
@@ -1072,6 +1078,7 @@ class _SetEditorState extends State<_SetEditor> {
   late final TextEditingController _reps;
   late final TextEditingController _weight;
   late final TextEditingController _time;
+  late final TextEditingController _rest;
 
   @override
   void initState() {
@@ -1080,6 +1087,7 @@ class _SetEditorState extends State<_SetEditor> {
     _reps = TextEditingController(text: (s.actualReps ?? s.plannedReps)?.toString() ?? '');
     _weight = TextEditingController(text: (s.actualWeightKg ?? s.plannedWeightKg)?.toString() ?? '');
     _time = TextEditingController(text: (s.actualTimeSec ?? s.plannedTimeSec)?.toString() ?? '');
+    _rest = TextEditingController(text: s.plannedRestSec?.toString() ?? '');
   }
 
   @override
@@ -1087,6 +1095,7 @@ class _SetEditorState extends State<_SetEditor> {
     _reps.dispose();
     _weight.dispose();
     _time.dispose();
+    _rest.dispose();
     super.dispose();
   }
 
@@ -1097,6 +1106,7 @@ class _SetEditorState extends State<_SetEditor> {
       'actualReps': _num(_reps.text),
       'actualWeightKg': _num(_weight.text),
       'actualTimeSec': _num(_time.text),
+      'plannedRestSec': _num(_rest.text),
     });
   }
 
@@ -1107,6 +1117,20 @@ class _SetEditorState extends State<_SetEditor> {
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Column(
         children: <Widget>[
+          // Маленькая корзина сверху — удалить упражнение.
+          if (widget.onDelete != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: GestureDetector(
+                onTap: () async {
+                  if (await confirmDelete(context, title: 'Удалить упражнение?')) widget.onDelete!();
+                },
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Icon(Icons.delete_outline, size: 18, color: c.danger),
+                ),
+              ),
+            ),
           Row(
             children: <Widget>[
               _NumField(label: 'Повторы', ctrl: _reps),
@@ -1114,6 +1138,8 @@ class _SetEditorState extends State<_SetEditor> {
               _NumField(label: 'Вес, кг', ctrl: _weight),
               const SizedBox(width: 8),
               _NumField(label: 'Время, с', ctrl: _time),
+              const SizedBox(width: 8),
+              _NumField(label: 'Отдых, с', ctrl: _rest),
             ],
           ),
           const SizedBox(height: 8),
@@ -1123,16 +1149,6 @@ class _SetEditorState extends State<_SetEditor> {
               _CircleBtn(icon: Icons.check, onTap: _save, bg: c.accent, fg: c.accentOn),
               const SizedBox(width: 8),
               _CircleBtn(icon: Icons.close, onTap: widget.onCancel, bg: c.cardElevated, fg: c.inkMuted),
-              if (widget.onDelete != null) ...<Widget>[
-                const SizedBox(width: 8),
-                _CircleBtn(
-                    icon: Icons.delete_outline,
-                    onTap: () async {
-                      if (await confirmDelete(context, title: 'Удалить подход?')) widget.onDelete!();
-                    },
-                    bg: c.cardElevated,
-                    fg: c.danger),
-              ],
             ],
           ),
         ],
