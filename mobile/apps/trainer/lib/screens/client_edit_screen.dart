@@ -1,3 +1,4 @@
+import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -45,9 +46,73 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
     super.dispose();
   }
 
+  String? _codeMsg; // результат проверки кода
+  bool _codeOk = false;
+  bool _checking = false;
+
+  /// Серверная проверка кода до сохранения: существует ли аккаунт и не занят ли.
+  Future<void> _checkCode() async {
+    final String code = _code.text.trim();
+    if (code.isEmpty || _checking) return;
+    setState(() {
+      _checking = true;
+      _codeMsg = null;
+      _codeOk = false;
+    });
+    try {
+      final ({bool exists, String? linkedClientName}) r = await ref
+          .read(trainerClientsApiProvider)
+          .checkConnectCode(code, excludeClientId: widget.client?.id);
+      if (!mounted) return;
+      setState(() {
+        _checking = false;
+        if (!r.exists) {
+          _codeMsg = 'Клиент с таким кодом не найден';
+          _codeOk = false;
+        } else if (r.linkedClientName != null && r.linkedClientName!.isNotEmpty) {
+          _codeMsg = 'Код уже привязан к клиенту: ${r.linkedClientName}';
+          _codeOk = false;
+        } else {
+          _codeMsg = 'Код найден — можно привязать';
+          _codeOk = true;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _checking = false;
+        _codeMsg = 'Не удалось проверить код';
+        _codeOk = false;
+      });
+    }
+  }
+
+  /// Дозаполнить имя/фамилию/ДР из профиля привязанного аккаунта.
+  Future<void> _fillFromAccount() async {
+    final String code = _code.text.trim();
+    if (code.isEmpty) return;
+    try {
+      final Map<String, dynamic> p = await ref.read(trainerClientsApiProvider).accountProfile(code);
+      if (!mounted) return;
+      setState(() {
+        if ((p['firstName'] as String?)?.isNotEmpty == true) _first.text = p['firstName'] as String;
+        if ((p['lastName'] as String?)?.isNotEmpty == true) _last.text = p['lastName'] as String;
+        final String? bd = p['birthDate'] as String?;
+        if (bd != null && bd.length >= 10) _birth = DateTime.tryParse(bd.substring(0, 10));
+      });
+    } catch (_) {}
+  }
+
   Future<void> _save() async {
     if (_first.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Укажите имя')));
+      return;
+    }
+    final String code = _code.text.trim();
+    // Если ввели код, но не проверили или он невалиден — не даём сохранить с битой привязкой.
+    if (code.isNotEmpty && !_codeOk) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Проверьте код подключения перед сохранением')));
       return;
     }
     setState(() => _busy = true);
@@ -66,6 +131,9 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
           notes: _notes.text,
           setBirthDate: true,
           birthDate: _birth != null ? _iso(_birth!) : null,
+          // Привязываем только если ввели проверенный код (иначе не трогаем связь).
+          setAccountId: code.isNotEmpty && _codeOk,
+          accountId: code,
         );
       } else {
         await api.create(
@@ -73,17 +141,21 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
           lastName: _last.text.trim(),
           phone: _phone.text,
           isOnline: _online,
-          accountId: _code.text,
+          accountId: code,
           birthDate: _birth != null ? _iso(_birth!) : null,
         );
       }
       ref.invalidate(trainerClientsProvider);
       if (!mounted) return;
       nav.pop(true);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
-      m.showSnackBar(const SnackBar(content: Text('Не удалось сохранить')));
+      final String? msg = apiErrorMessage(e);
+      m.showSnackBar(SnackBar(
+          content: Text(msg != null && msg.toLowerCase().contains('код')
+              ? 'Неверный код подключения'
+              : (msg ?? 'Не удалось сохранить'))));
     }
   }
 
@@ -153,23 +225,72 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
               selected: <ClientStatus>{_status},
               onSelectionChanged: (Set<ClientStatus> s) => setState(() => _status = s.first),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _notes,
-              maxLines: 4,
-              decoration: const InputDecoration(labelText: 'Заметки', border: OutlineInputBorder(), alignLabelWithHint: true),
+          ],
+          const SizedBox(height: 12),
+          TextField(
+            controller: _notes,
+            maxLines: 4,
+            decoration: const InputDecoration(labelText: 'Заметки', border: OutlineInputBorder(), alignLabelWithHint: true),
+          ),
+          const SizedBox(height: 16),
+          // ── Подключение аккаунта клиента (проверка кода до сохранения) ──
+          Text('ПОДКЛЮЧЕНИЕ', style: AppFonts.mono(size: 11, color: context.colors.inkMutedXl, weight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          if (_isEdit && widget.client!.hasAccount)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('Аккаунт уже привязан. Новый код заменит привязку.',
+                  style: TextStyle(fontSize: 12, color: context.colors.inkMuted)),
             ),
-          ] else ...<Widget>[
-            const SizedBox(height: 12),
-            TextField(
-              controller: _code,
-              decoration: const InputDecoration(
-                labelText: 'Код подключения (необязательно)',
-                helperText: 'Привязать аккаунт клиента по его коду',
-                border: OutlineInputBorder(),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: TextField(
+                  controller: _code,
+                  onChanged: (_) => setState(() { _codeMsg = null; _codeOk = false; }),
+                  decoration: const InputDecoration(
+                    labelText: 'Код из приложения клиента',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 56,
+                child: FilledButton.tonal(
+                  onPressed: _checking ? null : _checkCode,
+                  child: _checking
+                      ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Проверить'),
+                ),
+              ),
+            ],
+          ),
+          if (_codeMsg != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Row(
+                children: <Widget>[
+                  Icon(_codeOk ? Icons.check_circle_outline : Icons.error_outline,
+                      size: 16, color: _codeOk ? context.colors.accent : context.colors.danger),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(_codeMsg!,
+                        style: TextStyle(fontSize: 13, color: _codeOk ? context.colors.ink : context.colors.danger)),
+                  ),
+                ],
               ),
             ),
-          ],
+          if (_codeOk)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _fillFromAccount,
+                icon: const Icon(Icons.download, size: 16),
+                label: const Text('Получить данные из профиля'),
+              ),
+            ),
           const SizedBox(height: 24),
           FilledButton(
             onPressed: _busy ? null : _save,

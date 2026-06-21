@@ -31,8 +31,13 @@ class SessionsCalendar extends StatefulWidget {
 class _SessionsCalendarState extends State<SessionsCalendar> {
   late CalendarView _view = widget.defaultView;
   DateTime _anchor = DateTime.now();
+  // Верхняя видимая неделя в week-виде — для подписи периода при прокрутке списка.
+  DateTime? _visibleWeek;
 
-  void _setAnchor(DateTime d) => setState(() => _anchor = d);
+  void _setAnchor(DateTime d) => setState(() {
+        _anchor = d;
+        _visibleWeek = null;
+      });
 
   void _shift(int dir) {
     switch (_view) {
@@ -55,7 +60,7 @@ class _SessionsCalendarState extends State<SessionsCalendar> {
       return '${calDayFull[calWeekdayMon(_anchor)]}, ${_anchor.day} ${calMonthGen[_anchor.month - 1]}';
     }
     if (_view == CalendarView.week) {
-      final DateTime a = calStartOfWeek(_anchor);
+      final DateTime a = calStartOfWeek(_visibleWeek ?? _anchor);
       final DateTime b = calAddDays(a, 6);
       return a.month == b.month
           ? '${a.day}–${b.day} ${calMonthGen[b.month - 1]}'
@@ -86,6 +91,11 @@ class _SessionsCalendarState extends State<SessionsCalendar> {
                     sessions: widget.sessions,
                     onPickDay: _pickDay,
                     onTap: widget.onSessionTap,
+                    onVisibleWeekChange: (DateTime ws) {
+                      if (_visibleWeek == null || !calSameDay(_visibleWeek!, ws)) {
+                        setState(() => _visibleWeek = ws);
+                      }
+                    },
                   ),
                 CalendarView.day => _DayView(
                     date: _anchor,
@@ -333,18 +343,27 @@ class _WeekView extends StatefulWidget {
     required this.sessions,
     required this.onPickDay,
     required this.onTap,
+    required this.onVisibleWeekChange,
   });
   final DateTime anchor;
   final List<CalSession> sessions;
   final void Function(DateTime) onPickDay;
   final void Function(CalSession) onTap;
+  // Сообщает наверх, какая неделя сейчас у верхнего края при прокрутке.
+  final void Function(DateTime) onVisibleWeekChange;
 
   @override
   State<_WeekView> createState() => _WeekViewState();
 }
 
 class _WeekViewState extends State<_WeekView> {
-  final GlobalKey _anchorKey = GlobalKey();
+  // Окно недель вокруг опорной: опорная — индекс _anchorIdx.
+  static const int _count = 51;
+  static const int _anchorIdx = 16;
+  final GlobalKey _listKey = GlobalKey();
+  late final List<GlobalKey> _weekKeys =
+      List<GlobalKey>.generate(_count, (_) => GlobalKey());
+  DateTime? _lastReported;
 
   @override
   void initState() {
@@ -356,14 +375,40 @@ class _WeekViewState extends State<_WeekView> {
   void didUpdateWidget(_WeekView old) {
     super.didUpdateWidget(old);
     if (!calSameDay(calStartOfWeek(old.anchor), calStartOfWeek(widget.anchor))) {
+      _lastReported = null;
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToAnchor());
     }
   }
 
   void _scrollToAnchor() {
-    final BuildContext? ctx = _anchorKey.currentContext;
+    final BuildContext? ctx = _weekKeys[_anchorIdx].currentContext;
     if (ctx != null) {
       Scrollable.ensureVisible(ctx, alignment: 0, duration: const Duration(milliseconds: 1));
+    }
+  }
+
+  /// Определяет верхнюю видимую неделю по позициям смонтированных строк
+  /// (ListView.builder держит в дереве лишь видимые/кэш — перебор дёшев).
+  void _reportVisible() {
+    final RenderObject? listRo = _listKey.currentContext?.findRenderObject();
+    if (listRo is! RenderBox) return;
+    final double listTop = listRo.localToGlobal(Offset.zero).dy;
+    int? topIdx;
+    for (int i = 0; i < _count; i++) {
+      final RenderObject? ro = _weekKeys[i].currentContext?.findRenderObject();
+      if (ro is! RenderBox) continue;
+      final double top = ro.localToGlobal(Offset.zero).dy;
+      final double bottom = top + ro.size.height;
+      if (bottom > listTop + 2) {
+        topIdx = i;
+        break;
+      }
+    }
+    if (topIdx == null) return;
+    final DateTime ws = calAddDays(calStartOfWeek(widget.anchor), (topIdx - _anchorIdx) * 7);
+    if (_lastReported == null || !calSameDay(_lastReported!, ws)) {
+      _lastReported = ws;
+      widget.onVisibleWeekChange(ws);
     }
   }
 
@@ -371,9 +416,6 @@ class _WeekViewState extends State<_WeekView> {
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
     final DateTime anchorWeek = calStartOfWeek(widget.anchor);
-    // Окно недель вокруг опорной: −16 … +34 (≈ −112…+238 дней) под диапазон загрузки.
-    final List<DateTime> weeks =
-        List<DateTime>.generate(51, (int i) => calAddDays(anchorWeek, (i - 16) * 7));
 
     return Column(
       children: <Widget>[
@@ -396,20 +438,28 @@ class _WeekViewState extends State<_WeekView> {
           ),
         ),
         Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.only(bottom: 90),
-            itemCount: weeks.length,
-            itemBuilder: (BuildContext ctx, int i) {
-              final DateTime ws = weeks[i];
-              final bool isAnchor = calSameDay(ws, anchorWeek);
-              return _WeekRow(
-                key: isAnchor ? _anchorKey : null,
-                weekStart: ws,
-                sessions: widget.sessions,
-                onPickDay: widget.onPickDay,
-                onTap: widget.onTap,
-              );
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (ScrollNotification n) {
+              if (n is ScrollUpdateNotification || n is ScrollEndNotification) {
+                _reportVisible();
+              }
+              return false;
             },
+            child: ListView.builder(
+              key: _listKey,
+              padding: const EdgeInsets.only(bottom: 90),
+              itemCount: _count,
+              itemBuilder: (BuildContext ctx, int i) {
+                final DateTime ws = calAddDays(anchorWeek, (i - _anchorIdx) * 7);
+                return _WeekRow(
+                  key: _weekKeys[i],
+                  weekStart: ws,
+                  sessions: widget.sessions,
+                  onPickDay: widget.onPickDay,
+                  onTap: widget.onTap,
+                );
+              },
+            ),
           ),
         ),
       ],

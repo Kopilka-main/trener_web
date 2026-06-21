@@ -37,7 +37,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Future<bool> _send(String body, String? replyToId) async {
     final bool ok = await ref.read(trainerChatApiProvider).send(widget.clientId, body, replyToId);
-    if (ok) ref.invalidate(trainerChatMessagesProvider(widget.clientId));
+    if (ok) {
+      ref.invalidate(trainerChatMessagesProvider(widget.clientId));
+      // Диалог мог только что появиться — обновляем список «Сообщения».
+      ref.invalidate(trainerConversationsProvider);
+    }
     return ok;
   }
 

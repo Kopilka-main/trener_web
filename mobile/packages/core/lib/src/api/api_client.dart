@@ -1,5 +1,28 @@
 import 'package:dio/dio.dart';
 
+/// HTTP-статус из ошибки API (DioException) или null — чтобы вызывающий код не
+/// импортировал dio напрямую (различение 401/409 и т.п.).
+int? apiErrorStatus(Object error) =>
+    error is DioException ? error.response?.statusCode : null;
+
+/// Текст ошибки от сервера (тело `{ error: ... }`) или null.
+String? apiErrorMessage(Object error) {
+  if (error is DioException) {
+    final dynamic d = error.response?.data;
+    if (d is Map && d['error'] is String) return d['error'] as String;
+  }
+  return null;
+}
+
+/// Код ошибки от сервера (тело `{ code: ... }`, например `EMAIL_TAKEN`) или null.
+String? apiErrorCode(Object error) {
+  if (error is DioException) {
+    final dynamic d = error.response?.data;
+    if (d is Map && d['code'] is String) return d['code'] as String;
+  }
+  return null;
+}
+
 /// Возвращает текущий токен сессии (или null, если не авторизован).
 typedef TokenProvider = Future<String?> Function();
 
@@ -48,7 +71,9 @@ class ApiClient {
   }
 
   Future<Map<String, dynamic>> postJson(String path, [Object? body]) async {
-    final Response<dynamic> r = await _dio.post<dynamic>(path, data: body);
+    // Пустое тело при content-type application/json → Fastify 400
+    // (FST_ERR_CTP_EMPTY_JSON_BODY). Шлём {} вместо null.
+    final Response<dynamic> r = await _dio.post<dynamic>(path, data: body ?? const <String, dynamic>{});
     return _asMap(r.data);
   }
 
@@ -58,7 +83,7 @@ class ApiClient {
   }
 
   Future<Map<String, dynamic>> deleteJson(String path, [Object? body]) async {
-    final Response<dynamic> r = await _dio.delete<dynamic>(path, data: body);
+    final Response<dynamic> r = await _dio.delete<dynamic>(path, data: body ?? const <String, dynamic>{});
     return _asMap(r.data);
   }
 

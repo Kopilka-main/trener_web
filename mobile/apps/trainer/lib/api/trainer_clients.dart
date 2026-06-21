@@ -128,6 +128,8 @@ class TrainerClientsApi {
     String? notes,
     bool setBirthDate = false,
     String? birthDate,
+    bool setAccountId = false,
+    String? accountId,
   }) async {
     await _api.patchJson('/api/clients/$id', <String, dynamic>{
       'firstName': firstName,
@@ -137,7 +139,30 @@ class TrainerClientsApi {
       'status': status == ClientStatus.archived ? 'archived' : 'active',
       'notes': notes == null || notes.trim().isEmpty ? null : notes.trim(),
       if (setBirthDate) 'birthDate': birthDate,
+      if (setAccountId) 'accountId': (accountId == null || accountId.trim().isEmpty) ? null : accountId.trim(),
     });
+  }
+
+  /// Проверка кода подключения перед привязкой: существует ли аккаунт и не занят ли
+  /// он другим клиентом тренера. Возвращает (exists, linkedClientName).
+  Future<({bool exists, String? linkedClientName})> checkConnectCode(String code, {String? excludeClientId}) async {
+    final String q = excludeClientId != null && excludeClientId.isNotEmpty
+        ? '&excludeClientId=$excludeClientId'
+        : '';
+    final Map<String, dynamic> r =
+        await _api.getJson('/api/clients/connect-code/check?code=${Uri.encodeComponent(code)}$q');
+    final Map<String, dynamic>? lc = r['linkedClient'] as Map<String, dynamic>?;
+    final String? name = lc != null
+        ? '${lc['firstName'] ?? ''} ${lc['lastName'] ?? ''}'.trim()
+        : null;
+    return (exists: r['exists'] as bool? ?? false, linkedClientName: name);
+  }
+
+  /// Профиль аккаунта клиента по коду (для авто-заполнения формы).
+  Future<Map<String, dynamic>> accountProfile(String accountId) async {
+    final Map<String, dynamic> r =
+        await _api.getJson('/api/clients/account-profile?accountId=${Uri.encodeComponent(accountId)}');
+    return (r['profile'] as Map<String, dynamic>?) ?? <String, dynamic>{};
   }
 
   /// Балансы абонементов по клиентам: clientId → остаток занятий.
