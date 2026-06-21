@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/trainer_home.dart';
+import '../api/trainer_notifications.dart';
 
 String _pad2(int n) => n.toString().padLeft(2, '0');
 
@@ -45,6 +46,10 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<HomeData> home = ref.watch(trainerHomeProvider);
+    // Счётчик плитки «Уведомления» = алерты «требует действия» минус увиденные/скрытые
+    // (как в вебе: visibleAlerts.length после фильтра seen/dismissed). Реактивен:
+    // после захода на /notifications алерты помечаются seen → плитка гаснет.
+    final int tileAlerts = ref.watch(trainerTileAlertsCountProvider);
     final AppColors c = context.colors;
     return Scaffold(
       body: SafeArea(
@@ -66,7 +71,7 @@ class HomeScreen extends ConsumerWidget {
             // Один acid-fill: непрочитанные сообщения в приоритете (как в вебе),
             // иначе — уведомления. Плитка «Сообщения» акцентна при unread > 0.
             final bool msgPrimary = d.unread > 0;
-            final bool alertsPrimary = !msgPrimary && d.alerts > 0;
+            final bool alertsPrimary = !msgPrimary && tileAlerts > 0;
             return RefreshIndicator(
               onRefresh: () async => ref.invalidate(trainerHomeProvider),
               child: CustomScrollView(
@@ -205,7 +210,7 @@ class HomeScreen extends ConsumerWidget {
                       _Tile(
                         title: 'Уведомления',
                         sub: alertsPrimary ? 'требуют внимания' : 'нет открытых задач',
-                        value: _pad2(d.alerts),
+                        value: _pad2(tileAlerts),
                         metric: alertsPrimary ? 'новых' : 'всё тихо',
                         icon: Icons.notifications_none,
                         primary: alertsPrimary,

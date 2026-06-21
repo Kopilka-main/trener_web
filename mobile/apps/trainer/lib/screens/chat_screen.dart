@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/trainer_chat.dart';
-import '../api/trainer_home.dart';
 
 /// Тред переписки тренера с конкретным клиентом. Поллинг + отметка прочтения.
 class ChatScreen extends ConsumerStatefulWidget {
@@ -24,25 +23,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    _markReadAndRefresh();
+    // markRead сам инвалидирует список диалогов и плитку «Сообщения» после POST.
+    ref.read(trainerChatApiProvider).markRead(widget.clientId);
     _poll = Timer.periodic(const Duration(seconds: 5), (_) {
       ref.invalidate(trainerChatMessagesProvider(widget.clientId));
     });
   }
 
-  /// Отметить тред прочитанным и обновить счётчики (плитка «Сообщения» + список диалогов).
-  Future<void> _markReadAndRefresh() async {
-    try {
-      await ref.read(trainerChatApiProvider).markRead(widget.clientId);
-    } catch (_) {}
-    if (!mounted) return;
-    ref.invalidate(trainerHomeProvider);
-    ref.invalidate(trainerConversationsProvider);
-  }
-
   @override
   void dispose() {
     _poll?.cancel();
+    // Повторная отметка при выходе: сообщения, пришедшие пока чат был открыт,
+    // тоже считаются прочитанными — иначе бейдж в списке диалогов «оживёт».
+    // Используем контейнер напрямую (ref недоступен после super.dispose).
+    ref.read(trainerChatApiProvider).markRead(widget.clientId);
     super.dispose();
   }
 

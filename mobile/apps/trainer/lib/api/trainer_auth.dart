@@ -14,6 +14,7 @@ class TrainerContact {
 /// Профиль тренера.
 class TrainerProfile {
   TrainerProfile({
+    required this.id,
     required this.firstName,
     required this.lastName,
     required this.email,
@@ -25,6 +26,7 @@ class TrainerProfile {
   });
 
   factory TrainerProfile.fromJson(Map<String, dynamic> j) => TrainerProfile(
+        id: (j['id'] as String?) ?? '',
         firstName: (j['firstName'] as String?) ?? '',
         lastName: (j['lastName'] as String?) ?? '',
         email: (j['email'] as String?) ?? '',
@@ -38,6 +40,7 @@ class TrainerProfile {
         avatarFileId: j['avatarFileId'] as String?,
       );
 
+  final String id;
   final String firstName;
   final String lastName;
   final String email;

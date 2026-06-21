@@ -12,7 +12,6 @@ class HomeData {
     required this.unread,
     required this.monthlyProfit,
     required this.knowledgeCount,
-    required this.alerts,
     required this.nextAt,
     required this.nextTime,
     required this.nextName,
@@ -27,7 +26,6 @@ class HomeData {
   final int unread;
   final num monthlyProfit;
   final int knowledgeCount;
-  final int alerts; // событий, требующих внимания
   // Ближайшее офлайн-занятие (не-cancelled, время ≥ сейчас).
   final DateTime? nextAt;
   final String nextTime;
@@ -69,7 +67,6 @@ class TrainerHomeApi {
       _safe('/api/chat/unread'),
       _safe('/api/accounting/summary?from=$monthFrom&to=$monthTo'),
       _safe('/api/exercises'),
-      _safe('/api/packages/balances'),
     ]);
 
     final Map<String, dynamic> me = (r[0]['trainer'] as Map<String, dynamic>?) ?? <String, dynamic>{};
@@ -127,18 +124,8 @@ class TrainerHomeApi {
       }
     }
 
-    // Алерты: отклонённые будущие + активные клиенты с исчерпанным балансом.
-    final int declined = sessions
-        .where((Map<String, dynamic> s) =>
-            s['status'] == 'planned' && s['clientConfirmation'] == 'declined')
-        .length;
-    final Map<String, num> balances = <String, num>{
-      for (final dynamic b in (r[6]['balances'] as List<dynamic>?) ?? <dynamic>[])
-        ((b as Map<String, dynamic>)['clientId'] as String? ?? ''): (b['remaining'] as num?) ?? 0,
-    };
-    final int exhausted = clients
-        .where((Map<String, dynamic> c) => c['status'] == 'active' && (balances[c['id']] ?? 0) <= 0)
-        .length;
+    // Счётчик плитки «Уведомления» считается отдельно (trainer_notifications.dart),
+    // с учётом seen/dismissed и точных окон дат — как в вебе. Здесь не дублируем.
 
     return HomeData(
       name: name.isEmpty ? (me['email'] as String? ?? '') : name,
@@ -148,7 +135,6 @@ class TrainerHomeApi {
       unread: unread,
       monthlyProfit: profit,
       knowledgeCount: knowledge,
-      alerts: declined + exhausted,
       nextAt: nextAt,
       nextTime: next != null ? sTime(next) : '',
       nextName: next != null ? clientNames[next['clientId']] : null,

@@ -1,6 +1,8 @@
 import 'package:core/core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'trainer_home.dart';
+
 /// Диалог в списке у тренера: клиент + сводка непрочитанного.
 class Conversation {
   Conversation({
@@ -86,6 +88,12 @@ class TrainerChatApi {
   Future<void> markRead(String clientId) async {
     try {
       await _api.postJson('/api/clients/$clientId/messages/read');
+      // Прочтение меняет trainerLastReadAt на сервере → счётчики устаревают.
+      // Инвалидируем зависимые срезы ВНУТРИ метода, СТРОГО после успешного POST
+      // (как в клиентском приложении): иначе бейдж непрочитанных в списке диалогов
+      // и плитка «Сообщения» на главной залипают, пока экран не обновят вручную.
+      _ref.invalidate(trainerConversationsProvider);
+      _ref.invalidate(trainerHomeProvider);
     } catch (_) {
       // не критично
     }

@@ -1,10 +1,82 @@
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../api/trainer_auth.dart';
 import '../api/trainer_gyms.dart';
 import 'profile_edit_screen.dart';
+
+/// Заголовок секции (mono uppercase) — как в вебе.
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+  final String text;
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Text(text.toUpperCase(),
+            style: AppFonts.mono(size: 11, color: context.colors.inkMutedXl, weight: FontWeight.w700)),
+      );
+}
+
+/// Строка контакта: иконка + тип + значение.
+class _ContactRow extends StatelessWidget {
+  const _ContactRow({required this.icon, required this.type, required this.value});
+  final IconData icon;
+  final String type;
+  final String value;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    if (value.trim().isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        children: <Widget>[
+          Icon(icon, size: 18, color: c.inkMuted),
+          const SizedBox(width: 12),
+          Text(type, style: TextStyle(fontSize: 14, color: c.inkMuted)),
+          const Spacer(),
+          Flexible(
+            child: Text(value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Показать QR с ID пользователя.
+void _showQr(BuildContext context, String id) {
+  final AppColors c = context.colors;
+  showDialog<void>(
+    context: context,
+    builder: (BuildContext ctx) => Dialog(
+      backgroundColor: c.bg,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Container(
+              padding: const EdgeInsets.all(12),
+              color: Colors.white,
+              child: QrImageView(data: id, size: 220, backgroundColor: Colors.white),
+            ),
+            const SizedBox(height: 12),
+            Text(id, textAlign: TextAlign.center, style: AppFonts.mono(size: 12, color: c.inkMuted)),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
 /// Профиль и настройки тренера: данные аккаунта, редактирование, тема и выход.
 class SettingsScreen extends ConsumerWidget {
@@ -69,28 +141,55 @@ class SettingsScreen extends ConsumerWidget {
               const SizedBox(height: 14),
               Text(a.bio!, style: TextStyle(fontSize: 14, height: 1.4, color: c.ink)),
             ],
-            if (a.contacts.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 14),
-              ...a.contacts.map((TrainerContact ct) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: <Widget>[
-                        SizedBox(
-                          width: 100,
-                          child: Text(ct.type, style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w600)),
-                        ),
-                        Expanded(child: Text(ct.value, style: TextStyle(fontSize: 14, color: c.ink))),
-                      ],
-                    ),
-                  )),
-            ],
             const SizedBox(height: 16),
             const Divider(),
             const _GymsSection(),
             const Divider(),
+            // ── КОНТАКТЫ ──
+            _SectionLabel('Контакты'),
+            _ContactRow(icon: Icons.mail_outline, type: 'Email', value: a.email),
+            ...a.contacts.map((TrainerContact ct) => _ContactRow(icon: Icons.alternate_email, type: ct.type, value: ct.value)),
+            const SizedBox(height: 8),
+            const Divider(),
             const _PushToggle(),
             const Divider(),
             const _ThemeSwitch(),
+            const Divider(),
+            // ── ID ПОЛЬЗОВАТЕЛЯ ──
+            _SectionLabel('ID пользователя'),
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(a.id,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppFonts.mono(size: 13, color: c.ink, weight: FontWeight.w600)),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: a.id));
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скопировано')));
+                    },
+                    child: Icon(Icons.copy, size: 18, color: c.inkMuted),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: OutlinedButton.icon(
+                onPressed: () => _showQr(context, a.id),
+                icon: const Icon(Icons.qr_code_2, size: 18),
+                label: const Text('Показать QR'),
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+              ),
+            ),
+            const SizedBox(height: 8),
             const Divider(),
             ListTile(
               leading: Icon(Icons.logout, color: cs.error),
