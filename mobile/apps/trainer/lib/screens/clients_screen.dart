@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../api/trainer_client_card.dart';
 import '../api/trainer_clients.dart';
+import 'assign_workout_screen.dart';
 
 enum _Tab { active, archived }
 
@@ -196,7 +197,11 @@ class ClientDetailScreen extends ConsumerWidget {
             child: _MeasurementsBlock(clientId: client.id),
           ),
           const SizedBox(height: 16),
-          _Section(title: 'Тренировки', child: _WorkoutsBlock(clientId: client.id)),
+          _Section(
+            title: 'Тренировки',
+            action: _AssignButton(clientId: client.id, clientName: client.fullName),
+            child: _WorkoutsBlock(clientId: client.id),
+          ),
           const SizedBox(height: 24),
         ],
       ),
@@ -355,6 +360,27 @@ class _RequestMeasureButton extends ConsumerWidget {
       },
       icon: const Icon(Icons.straighten, size: 16),
       label: const Text('Запросить'),
+    );
+  }
+}
+
+class _AssignButton extends ConsumerWidget {
+  const _AssignButton({required this.clientId, required this.clientName});
+  final String clientId;
+  final String clientName;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return TextButton.icon(
+      onPressed: () async {
+        final bool? assigned = await Navigator.of(context).push<bool>(
+          MaterialPageRoute<bool>(
+            builder: (_) => AssignWorkoutScreen(clientId: clientId, clientName: clientName),
+          ),
+        );
+        if (assigned == true) ref.invalidate(clientWorkoutsCardProvider(clientId));
+      },
+      icon: const Icon(Icons.add, size: 16),
+      label: const Text('Назначить'),
     );
   }
 }

@@ -44,30 +44,30 @@
 
 ## Матрица покрытия — ТРЕНЕР (`apps/web` → `mobile/apps/trainer`)
 
-| Веб-страница       | Мобильный экран         | Статус | Заметки                                                |
-| ------------------ | ----------------------- | ------ | ------------------------------------------------------ |
-| LoginPage          | login_screen            | ✅     |                                                        |
-| RegisterPage       | register_screen         | ✅     |                                                        |
-| HomePage           | home_screen             | ⚠️     | сверить плитки/метрики                                 |
-| CalendarPage       | calendar_screen         | ⚠️     | create/edit есть; сверить prefs, planned-workout, виды |
-| ClientsPage        | clients_screen          | ⚠️     | поиск/фильтры/добавление клиента                       |
-| ClientCardPage     | clients_screen (Detail) | ⚠️     | баланс/замеры/история есть; нет вкладок                |
-| ClientEditPage     | —                       | ❌     | редактирование данных клиента                          |
-| ClientProfilePage  | —                       | ⚠️     | часть карточки                                         |
-| ClientWorkoutsPage | —                       | ❌     | назначение/управление тренировками клиента             |
-| ActiveWorkoutPage  | —                       | ❌     | проведение тренировки тренером                         |
-| ClientStatsPage    | —                       | ❌     | статистика клиента                                     |
-| ClientMedicalPage  | —                       | ❌     | мед.карта                                              |
-| ClientPaymentsPage | —                       | ❌     | платежи клиента                                        |
-| ClientCalendarPage | —                       | ⚠️     | календарь клиента (слит в общий)                       |
-| MessagesPage       | conversations_screen    | ✅     |                                                        |
-| ClientChatPage     | chat_screen             | ✅     |                                                        |
-| NotificationsPage  | —                       | ❌     | уведомления тренера                                    |
-| KnowledgeBasePage  | —                       | ❌     | каталог упражнений тренера                             |
-| ExerciseEditPage   | —                       | ❌     | создание/правка упражнения                             |
-| TemplateEditPage   | —                       | ❌     | шаблоны тренировок                                     |
-| AccountingPage     | —                       | ❌     | бухгалтерия/доходы                                     |
-| ProfilePage        | settings_screen         | ⚠️     | аватар, редактирование                                 |
+| Веб-страница       | Мобильный экран         | Статус | Заметки                                                              |
+| ------------------ | ----------------------- | ------ | -------------------------------------------------------------------- |
+| LoginPage          | login_screen            | ✅     |                                                                      |
+| RegisterPage       | register_screen         | ✅     |                                                                      |
+| HomePage           | home_screen             | ⚠️     | сверить плитки/метрики                                               |
+| CalendarPage       | calendar_screen         | ⚠️     | create/edit есть; сверить prefs, planned-workout, виды               |
+| ClientsPage        | clients_screen          | ⚠️     | поиск/фильтры/добавление клиента                                     |
+| ClientCardPage     | clients_screen (Detail) | ⚠️     | баланс/замеры/история есть; нет вкладок                              |
+| ClientEditPage     | —                       | ❌     | редактирование данных клиента                                        |
+| ClientProfilePage  | —                       | ⚠️     | часть карточки                                                       |
+| ClientWorkoutsPage | assign_workout_screen   | ⚠️     | назначение тренировки готово (план+пикер); управление/правка — позже |
+| ActiveWorkoutPage  | —                       | ❌     | проведение тренировки тренером                                       |
+| ClientStatsPage    | —                       | ❌     | статистика клиента                                                   |
+| ClientMedicalPage  | —                       | ❌     | мед.карта                                                            |
+| ClientPaymentsPage | —                       | ❌     | платежи клиента                                                      |
+| ClientCalendarPage | —                       | ⚠️     | календарь клиента (слит в общий)                                     |
+| MessagesPage       | conversations_screen    | ✅     |                                                                      |
+| ClientChatPage     | chat_screen             | ✅     |                                                                      |
+| NotificationsPage  | —                       | ❌     | уведомления тренера                                                  |
+| KnowledgeBasePage  | —                       | ❌     | каталог упражнений тренера                                           |
+| ExerciseEditPage   | —                       | ❌     | создание/правка упражнения                                           |
+| TemplateEditPage   | —                       | ❌     | шаблоны тренировок                                                   |
+| AccountingPage     | —                       | ❌     | бухгалтерия/доходы                                                   |
+| ProfilePage        | settings_screen         | ⚠️     | аватар, редактирование                                               |
 
 ## Шаблон по-экранного разбора
 
