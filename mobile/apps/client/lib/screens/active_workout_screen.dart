@@ -30,6 +30,15 @@ Map<int, String> _exerciseLabels(List<WorkoutExercise> exs) {
   return out;
 }
 
+String _plannedText(WorkoutSet s) {
+  final List<String> p = <String>[
+    if (s.plannedReps != null) '${s.plannedReps}',
+    if (s.plannedWeightKg != null) '× ${s.plannedWeightKg} кг',
+    if (s.plannedTimeSec != null) '${s.plannedTimeSec} с',
+  ];
+  return p.isEmpty ? '—' : p.join(' ');
+}
+
 String _formatDuration(int totalSec) {
   final int sec = totalSec % 60;
   final int m = totalSec ~/ 60;
@@ -56,6 +65,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
   bool _started = false; // нажали «Начать» — черновик не удаляем при уходе
   String? _editing; // ключ "pos-idx" редактируемого подхода
   bool _doneExpanded = false;
+  bool _demoExpanded = true; // демонстрация следующего упражнения (фото/видео)
   Timer? _ticker;
   ({String key, int left})? _rest;
   Timer? _restTimer;
@@ -297,10 +307,6 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
     final Map<String, CatalogExercise> byId = <String, CatalogExercise>{
       for (final CatalogExercise e in catalog) e.id: e,
     };
-    String? thumbFor(WorkoutExercise ex) {
-      final CatalogExercise? ce = byId[ex.exerciseId];
-      return ce == null ? null : catalogMediaUrl(base, ce.thumbUrl ?? ce.imageUrl);
-    }
     final List<WorkoutSet> allSets =
         _w.exercises.expand((WorkoutExercise e) => e.sets).toList();
     final int doneCount = allSets.where((WorkoutSet s) => s.done).length;
@@ -310,6 +316,16 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
       ..sort((a, b) => a.position - b.position);
     final List<WorkoutExercise> pending = (_w.exercises.where((WorkoutExercise e) => !isDoneEx(e)).toList())
       ..sort((a, b) => a.position - b.position);
+
+    // Демонстрация следующего упражнения: имя + план + фото/видео (как у тренера).
+    final WorkoutExercise? nextEx = pending.isEmpty ? null : pending.first;
+    final CatalogExercise? nextCe = nextEx == null ? null : byId[nextEx.exerciseId];
+    final String? nextImg = nextCe == null ? null : catalogMediaUrl(base, nextCe.imageUrl ?? nextCe.thumbUrl);
+    final String? nextVid = nextCe == null ? null : catalogMediaUrl(base, nextCe.videoUrl);
+    final bool nextHasMedia =
+        (nextImg != null && nextImg.isNotEmpty) || (nextVid != null && nextVid.isNotEmpty);
+    final WorkoutSet? nextSet = nextEx?.sets.where((WorkoutSet s) => !s.done).firstOrNull;
+    final String nextPlan = nextSet != null ? _plannedText(nextSet) : '';
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
@@ -350,6 +366,59 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           ),
         ),
         const SizedBox(height: 12),
+        // Демонстрация следующего упражнения (фото/видео).
+        if (nextEx != null && nextHasMedia) ...<Widget>[
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+                color: _rest == null ? c.accent : c.card, borderRadius: BorderRadius.circular(16)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => setState(() => _demoExpanded = !_demoExpanded),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text('СЛЕДУЮЩЕЕ УПРАЖНЕНИЕ',
+                                style: AppFonts.mono(
+                                    size: 10,
+                                    color: _rest == null ? c.accentOn.withValues(alpha: 0.7) : c.inkMutedXl,
+                                    weight: FontWeight.w700)),
+                            const SizedBox(height: 2),
+                            Text(
+                              <String>[
+                                labels[nextEx.position] ?? nextEx.name,
+                                if (nextPlan.isNotEmpty && nextPlan != '—') nextPlan,
+                              ].join(' · '),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: _rest == null ? c.accentOn : c.ink),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(_demoExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                          color: _rest == null ? c.accentOn : c.inkMuted),
+                    ],
+                  ),
+                ),
+                if (_demoExpanded) ...<Widget>[
+                  const SizedBox(height: 10),
+                  CatalogMediaView(imageUrl: nextImg, videoUrl: nextVid, height: 200, showToggle: true),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         // Коллектор завершённых.
         GestureDetector(
           onTap: () => setState(() => _doneExpanded = !_doneExpanded),
@@ -378,15 +447,15 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                 opacity: 0.8,
                 child: _ExerciseCard(
                   title: labels[ex.position] ?? ex.name,
-                  thumbUrl: thumbFor(ex),
                   child: Column(children: ex.sets.map((WorkoutSet s) => _activeSetRow(ex, s, labels)).toList()),
                 ),
               )),
         const SizedBox(height: 4),
-        // Невыполненные — с перестановкой перетаскиванием (как у тренера).
+        // Невыполненные — карточки с drag-handle (как у тренера).
         ReorderableListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
           itemCount: pending.length,
           onReorderItem: (int oldI, int newI) {
             final List<int> pend = pending.map((WorkoutExercise e) => e.position).toList();
@@ -400,10 +469,13 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           },
           itemBuilder: (BuildContext ctx, int i) {
             final WorkoutExercise ex = pending[i];
-            return _ExerciseCard(
+            final bool editingThis =
+                ex.sets.any((WorkoutSet s) => _editing == '${ex.position}-${s.setIndex}');
+            return _ActiveExerciseCard(
               key: ValueKey<int>(ex.position),
+              listIndex: i,
               title: labels[ex.position] ?? ex.name,
-              thumbUrl: thumbFor(ex),
+              onDelete: editingThis ? () => _run(() => _api.removeExercise(_w.id, ex.position)) : null,
               child: Column(children: ex.sets.map((WorkoutSet s) => _activeSetRow(ex, s, labels)).toList()),
             );
           },
@@ -435,14 +507,13 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           await _run(() => _api.updateSet(_w.id, ex.position, s.setIndex, body));
           _startRest(ex, s);
         },
-        onDelete: () => _run(() => _api.removeExercise(_w.id, ex.position)),
       );
     }
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: <Widget>[
-          Expanded(child: _SetParams(set: s)),
+          Expanded(child: _SetMetrics(set: s, showActual: s.hasFact || s.done)),
           _CircleBtn(
             icon: Icons.edit,
             onTap: () => setState(() => _editing = key),
@@ -462,50 +533,109 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
   }
 }
 
-/// Параметры подхода с иконками: повторы / вес / время (факт приоритетнее плана).
-class _SetParams extends StatelessWidget {
-  const _SetParams({required this.set});
+/// Метрики подхода иконками как в базе знаний: повторы/вес/время/отдых (как у тренера).
+class _SetMetrics extends StatelessWidget {
+  const _SetMetrics({required this.set, this.showActual = false});
   final WorkoutSet set;
-
-  static String _fmt(num n) => n == n.roundToDouble() ? n.toInt().toString() : n.toString();
+  final bool showActual;
 
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
-    final bool fact = set.hasFact;
-    final num? reps = fact ? set.actualReps : set.plannedReps;
-    final num? weight = fact ? set.actualWeightKg : set.plannedWeightKg;
-    final num? time = fact ? set.actualTimeSec : set.plannedTimeSec;
+    final num? reps = showActual ? (set.actualReps ?? set.plannedReps) : set.plannedReps;
+    final num? weight = showActual ? (set.actualWeightKg ?? set.plannedWeightKg) : set.plannedWeightKg;
+    final num? time = showActual ? (set.actualTimeSec ?? set.plannedTimeSec) : set.plannedTimeSec;
+    final num? rest = set.plannedRestSec;
 
-    final List<Widget> items = <Widget>[];
-    void add(IconData ic, String val) {
-      if (items.isNotEmpty) items.add(const SizedBox(width: 14));
-      items.add(Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(ic, size: 15, color: c.inkMutedXl),
-          const SizedBox(width: 4),
-          Text(val, style: AppFonts.mono(size: 17, color: c.inkMuted, weight: FontWeight.w600)),
-        ],
-      ));
-    }
+    Widget metric(IconData icon, num? v) => Padding(
+          padding: const EdgeInsets.only(right: 14),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(icon, size: 15, color: c.inkMutedXl),
+              const SizedBox(width: 4),
+              Text('${(v ?? 0).toInt()}',
+                  style: AppFonts.mono(size: 15, color: c.inkMuted, weight: FontWeight.w600)),
+            ],
+          ),
+        );
 
-    if (reps != null) add(Icons.repeat, _fmt(reps));
-    if (weight != null) add(Icons.fitness_center, '${_fmt(weight)} кг');
-    if (time != null) add(Icons.timer_outlined, '${_fmt(time)} с');
-    if (items.isEmpty) {
-      return Text('—', style: AppFonts.mono(size: 17, color: c.inkMuted));
-    }
-    return Row(children: items);
+    return Row(
+      children: <Widget>[
+        metric(Icons.repeat, reps),
+        metric(Icons.fitness_center, weight),
+        metric(Icons.timer_outlined, time),
+        metric(Icons.bedtime_outlined, rest),
+      ],
+    );
   }
 }
 
-// ─── Карточка упражнения (активная тренировка) ───
+/// Карточка упражнения активной тренировки (как у тренера): drag-handle →
+/// название → подходы. Корзина в шапке видна при редактировании упражнения.
+class _ActiveExerciseCard extends StatelessWidget {
+  const _ActiveExerciseCard({
+    super.key,
+    required this.title,
+    required this.listIndex,
+    required this.child,
+    this.onDelete,
+  });
+  final String title;
+  final int listIndex;
+  final Widget child;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(10, 10, 14, 10),
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              ReorderableDragStartListener(
+                index: listIndex,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Icon(Icons.drag_indicator, size: 20, color: c.inkMutedXl),
+                ),
+              ),
+              Expanded(
+                child: Text(title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
+              ),
+              if (onDelete != null)
+                GestureDetector(
+                  onTap: () async {
+                    if (await confirmDelete(context, title: 'Удалить упражнение?')) onDelete!();
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: Icon(Icons.delete_outline, size: 18, color: c.danger),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Padding(padding: const EdgeInsets.only(left: 26), child: child),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Карточка завершённого упражнения (активная тренировка) ───
 class _ExerciseCard extends StatelessWidget {
-  const _ExerciseCard({super.key, required this.title, required this.child, this.thumbUrl});
+  const _ExerciseCard({required this.title, required this.child});
   final String title;
   final Widget child;
-  final String? thumbUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -517,20 +647,10 @@ class _ExerciseCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              if (thumbUrl != null) ...<Widget>[
-                CatalogThumb(url: thumbUrl, size: 40),
-                const SizedBox(width: 10),
-              ],
-              Expanded(
-                child: Text(title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
-              ),
-            ],
-          ),
+          Text(title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
           const SizedBox(height: 6),
           child,
         ],
@@ -752,13 +872,11 @@ class _SetEditor extends StatefulWidget {
     required this.set,
     required this.onCancel,
     required this.onSave,
-    this.onDelete,
   });
   final bool planned; // true → редактор плана (с отдыхом); false → факт
   final WorkoutSet set;
   final VoidCallback onCancel;
   final void Function(Map<String, dynamic>) onSave;
-  final VoidCallback? onDelete;
 
   @override
   State<_SetEditor> createState() => _SetEditorState();
@@ -842,16 +960,6 @@ class _SetEditorState extends State<_SetEditor> {
               _CircleBtn(icon: Icons.check, onTap: _save, bg: c.accent, fg: c.accentOn),
               const SizedBox(width: 8),
               _CircleBtn(icon: Icons.close, onTap: widget.onCancel, bg: c.cardElevated, fg: c.inkMuted),
-              if (widget.onDelete != null) ...<Widget>[
-                const SizedBox(width: 8),
-                _CircleBtn(
-                    icon: Icons.delete_outline,
-                    onTap: () async {
-                      if (await confirmDelete(context, title: 'Удалить подход?')) widget.onDelete!();
-                    },
-                    bg: c.cardElevated,
-                    fg: c.danger),
-              ],
             ],
           ),
         ],
