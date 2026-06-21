@@ -57,7 +57,7 @@
 | ClientWorkoutsPage | assign_workout_screen   | ⚠️     | назначение тренировки готово (план+пикер); управление/правка — позже                                       |
 | ActiveWorkoutPage  | active_workout_screen   | ✅     | проведение: draft→старт→лог подходов→отдых→завершение; пикер из полного каталога, добавл/удал/перестановка |
 | ClientStatsPage    | clients_screen (Stats)  | ✅     | сводка + рекорды в карточке                                                                                |
-| ClientMedicalPage  | —                       | ❌     | мед.карта                                                                                                  |
+| ClientMedicalPage  | client_medical_screen   | ✅     | заметки (дата+текст) список/создание/удаление, индикатор файла; загрузка файла P2 (нужен нативный пикер)   |
 | ClientPaymentsPage | clients_screen (Баланс) | ⚠️     | пакеты + добавление; детальная история платежей P2                                                         |
 | ClientCalendarPage | —                       | ⚠️     | календарь клиента (слит в общий)                                                                           |
 | MessagesPage       | conversations_screen    | ✅     |                                                                                                            |

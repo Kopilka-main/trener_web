@@ -62,6 +62,24 @@ class ApiClient {
     return _asMap(r.data);
   }
 
+  /// POST multipart/form-data. [fields] — текстовые поля; [file] — опциональный
+  /// файл (поле, путь, имя). Нужен для роутов, читающих form-data (мед.карта, аватар).
+  Future<Map<String, dynamic>> postForm(
+    String path,
+    Map<String, String> fields, {
+    String? fileField,
+    String? filePath,
+    String? fileName,
+  }) async {
+    final Map<String, dynamic> map = <String, dynamic>{...fields};
+    if (fileField != null && filePath != null) {
+      map[fileField] = await MultipartFile.fromFile(filePath, filename: fileName);
+    }
+    final FormData form = FormData.fromMap(map);
+    final Response<dynamic> r = await _dio.post<dynamic>(path, data: form);
+    return _asMap(r.data);
+  }
+
   Map<String, dynamic> _asMap(dynamic data) {
     if (data is Map<String, dynamic>) return data;
     return <String, dynamic>{};

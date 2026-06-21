@@ -6,9 +6,11 @@ import 'package:go_router/go_router.dart';
 import '../api/trainer_client_card.dart';
 import '../api/trainer_client_stats.dart';
 import '../api/trainer_clients.dart';
+import '../api/trainer_medical.dart';
 import 'active_workout_screen.dart';
 import 'assign_workout_screen.dart';
 import 'client_edit_screen.dart';
+import 'client_medical_screen.dart';
 
 enum _Tab { active, archived }
 
@@ -225,6 +227,12 @@ class ClientDetailScreen extends ConsumerWidget {
             title: 'Замеры',
             action: _RequestMeasureButton(clientId: client.id),
             child: _MeasurementsBlock(clientId: client.id),
+          ),
+          const SizedBox(height: 16),
+          _Section(
+            title: 'Мед.карта',
+            action: _MedicalButton(clientId: client.id, clientName: client.fullName),
+            child: _MedicalBlock(clientId: client.id, clientName: client.fullName),
           ),
           const SizedBox(height: 16),
           _Section(title: 'Статистика', child: _StatsBlock(clientId: client.id)),
@@ -757,6 +765,79 @@ class _WorkoutsBlock extends ConsumerWidget {
                     ),
                   )),
           ],
+        );
+      },
+    );
+  }
+}
+
+class _MedicalButton extends ConsumerWidget {
+  const _MedicalButton({required this.clientId, required this.clientName});
+  final String clientId;
+  final String clientName;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return TextButton.icon(
+      onPressed: () async {
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(
+            builder: (_) => ClientMedicalScreen(clientId: clientId, clientName: clientName),
+          ),
+        );
+        ref.invalidate(clientMedicalProvider(clientId));
+      },
+      icon: const Icon(Icons.open_in_new, size: 16),
+      label: const Text('Открыть'),
+    );
+  }
+}
+
+class _MedicalBlock extends ConsumerWidget {
+  const _MedicalBlock({required this.clientId, required this.clientName});
+  final String clientId;
+  final String clientName;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppColors c = context.colors;
+    final AsyncValue<List<MedicalRecord>> recs = ref.watch(clientMedicalProvider(clientId));
+    return recs.when(
+      loading: () => const _Empty('Загрузка…'),
+      error: (Object e, _) => const _Empty('Не удалось загрузить'),
+      data: (List<MedicalRecord> list) {
+        if (list.isEmpty) return const _Empty('Записей нет');
+        final MedicalRecord latest = list.first;
+        return GestureDetector(
+          onTap: () async {
+            await Navigator.of(context).push<void>(
+              MaterialPageRoute<void>(
+                builder: (_) => ClientMedicalScreen(clientId: clientId, clientName: clientName),
+              ),
+            );
+            ref.invalidate(clientMedicalProvider(clientId));
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+            child: Row(
+              children: <Widget>[
+                Icon(Icons.medical_information_outlined, size: 18, color: c.inkMuted),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(latest.note,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.ink)),
+                      Text('${list.length} записей', style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, size: 18, color: c.inkMutedXl),
+              ],
+            ),
+          ),
         );
       },
     );
