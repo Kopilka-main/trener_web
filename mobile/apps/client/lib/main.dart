@@ -9,6 +9,7 @@ void main() {
   // Полный перехват ошибок Dart → журнал (файл crash.log + logcat APPCRASH).
   runGuarded(() async {
     // Тему грузим ДО первого кадра — иначе перескок light→dark на старте.
+    // (Шрифты забандлены в ассеты core → грузятся синхронно, прогрев не нужен.)
     final ThemeMode themeMode = await loadThemeMode();
     runApp(
       ProviderScope(
@@ -21,6 +22,19 @@ void main() {
       ),
     );
   });
+}
+
+/// Маппинг url из пуша в маршрут клиента. Бэк шлёт разные url под тип события:
+///   `/chat`          — новое сообщение тренера;
+///   `/workouts`      — тренер назначил тренировку;
+///   `/calendar`      — тренер создал занятие на согласование;
+///   `/notifications` — запрос замеров / задача.
+/// Url из пуша совпадает с путём роутера — ведём прямо туда, иначе в чат.
+void _openFromPush(GoRouter router, String? url) {
+  if (url == null || url.isEmpty) return;
+  const Set<String> known = <String>{'/chat', '/workouts', '/calendar', '/notifications'};
+  final String path = url.split('?').first;
+  router.go(known.contains(path) ? path : '/chat');
 }
 
 /// Клиентское приложение Trener: фирменная тема, токен-сессия, роутер
@@ -48,10 +62,7 @@ class _ClientAppState extends ConsumerState<ClientApp> {
     ref.listen<SessionState>(sessionProvider, (SessionState? prev, SessionState next) {
       if (next.status == AuthStatus.authenticated &&
           prev?.status != AuthStatus.authenticated) {
-        ref.read(pushServiceProvider).init(onTap: (String? url) {
-          // Все клиентские пуши ведут в чат с тренером.
-          if (url != null && url.isNotEmpty) router.go('/chat');
-        });
+        ref.read(pushServiceProvider).init(onTap: (String? url) => _openFromPush(router, url));
       }
     });
     return MaterialApp.router(

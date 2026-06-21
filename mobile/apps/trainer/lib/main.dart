@@ -25,17 +25,24 @@ void main() {
   });
 }
 
-/// Маппинг url из пуша в маршрут тренера. Бэк шлёт `/clients/<id>/chat` при
-/// новом сообщении от клиента — открываем соответствующий тред.
+/// Маппинг url из пуша в маршрут тренера. Бэк шлёт разные url под тип события:
+///   `/clients/<id>/chat`     — новое сообщение клиента → тред с клиентом;
+///   `/clients/<id>/calendar` — клиент подтвердил/отклонил занятие → календарь.
 void _openFromPush(GoRouter router, String? url) {
   if (url == null || url.isEmpty) return;
-  final RegExpMatch? m = RegExp(r'/clients/([^/]+)/chat').firstMatch(url);
-  if (m != null) {
+  final String path = url.split('?').first;
+  final RegExpMatch? chat = RegExp(r'/clients/([^/]+)/chat').firstMatch(path);
+  if (chat != null) {
     router.go('/chats');
-    router.push('/chat/${m.group(1)}');
-  } else {
-    router.go('/chats');
+    router.push('/chat/${chat.group(1)}');
+    return;
   }
+  if (RegExp(r'/clients/([^/]+)/calendar').hasMatch(path)) {
+    router.go('/calendar');
+    return;
+  }
+  // Неизвестный url — безопасный дефолт в список диалогов.
+  router.go('/chats');
 }
 
 /// Тренерское приложение Trener: фирменная тема, токен-сессия, роутер
