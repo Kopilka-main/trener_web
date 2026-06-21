@@ -1132,10 +1132,17 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
           final List<TWorkout> history = all.where((TWorkout w) => w.status == 'completed' || w.status == 'skipped').toList()
             ..sort((TWorkout a, TWorkout b) => (b.completedAt ?? DateTime(0)).compareTo(a.completedAt ?? DateTime(0)));
 
+          // Ближайшее запланированное занятие клиента (дата/время) — для подзаголовка.
+          final Session? nextSess =
+              _nextSessionByClient(ref.watch(trainerSessionsProvider).valueOrNull ?? <Session>[])[_cid];
+          final String header = nextSess != null
+              ? 'БЛИЖАЙШАЯ ТРЕНИРОВКА · ${_groupLabel(nextSess.date).toUpperCase()}, ${nextSess.startTime}'
+              : 'БЛИЖАЙШАЯ ТРЕНИРОВКА';
+
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             children: <Widget>[
-              Text('БЛИЖАЙШАЯ ТРЕНИРОВКА', style: AppFonts.mono(size: 11, color: c.inkMutedXl, weight: FontWeight.w700)),
+              Text(header, style: AppFonts.mono(size: 11, color: c.inkMutedXl, weight: FontWeight.w700)),
               const SizedBox(height: 8),
               if (current.isNotEmpty)
                 _CurrentWorkoutCard(

@@ -3,21 +3,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/trainer_calendar.dart';
+import '../api/trainer_workouts.dart';
+import 'active_workout_screen.dart';
 import 'session_form.dart';
 
 /// Календарь тренера: SessionsCalendar (День/Неделя/Месяц) с именами клиентов +
 /// шит занятия с подтверждением клиента и действиями «Провести»/«Отменить».
 class CalendarScreen extends ConsumerWidget {
-  const CalendarScreen({super.key});
+  const CalendarScreen({super.key, this.clientId, this.clientName});
+
+  /// Если задан — календарь показывает занятия только этого клиента, а форма
+  /// создания занятия по умолчанию выбирает его (как в вебе).
+  final String? clientId;
+  final String? clientName;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<List<Session>> sessions = ref.watch(trainerSessionsProvider);
     final AppColors c = context.colors;
+    final bool scoped = clientId != null;
 
     return Scaffold(
+      appBar: scoped ? AppBar(title: Text('Календарь · ${clientName ?? ''}')) : null,
       floatingActionButton: FloatingActionButton(
-        onPressed: () => showSessionForm(context, ref),
+        onPressed: () => showSessionForm(context, ref, defaultClientId: clientId),
         child: const Icon(Icons.add),
       ),
       body: SafeArea(
@@ -25,17 +34,20 @@ class CalendarScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-              child: Text('Календарь', style: AppFonts.display(size: 24, color: c.ink)),
-            ),
+            if (!scoped)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+                child: Text('Календарь', style: AppFonts.display(size: 24, color: c.ink)),
+              ),
             Expanded(
               child: sessions.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (Object e, _) => _Retry(onRetry: () => ref.invalidate(trainerSessionsProvider)),
                 data: (List<Session> raw) {
-                  // Онлайн-занятия не показываются в тренерском календаре (как в вебе).
-                  final List<Session> all = raw.where((Session s) => !s.isOnline).toList();
+                  // Онлайн-занятия скрыты (как в вебе); при scoped — фильтр по клиенту.
+                  final List<Session> all = raw
+                      .where((Session s) => !s.isOnline && (clientId == null || s.clientId == clientId))
+                      .toList();
                   final Map<String, Session> byId = <String, Session>{for (final Session s in all) s.id: s};
                   return SessionsCalendar(
                     sessions: all.map((Session s) => s.toCal()).toList(),
@@ -49,6 +61,7 @@ class CalendarScreen extends ConsumerWidget {
                       ref,
                       defaultDate: at,
                       defaultTime: TimeOfDay(hour: at.hour, minute: at.minute),
+                      defaultClientId: clientId,
                     ),
                   );
                 },
@@ -89,6 +102,55 @@ void _showSheet(BuildContext context, WidgetRef ref, Session s) {
   );
 }
 
+/// Метка привязанной к занятию тренировки (или «не запланирована»).
+class _PlannedWorkout extends ConsumerWidget {
+  const _PlannedWorkout({required this.session});
+  final Session session;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppColors c = context.colors;
+    final String? wid = session.workoutId;
+    final String label;
+    if (wid == null) {
+      label = 'Тренировка не запланирована';
+    } else {
+      final AsyncValue<Workout> w =
+          ref.watch(trainerWorkoutProvider((clientId: session.clientId, wid: wid)));
+      label = w.valueOrNull?.name ?? 'Тренировка';
+    }
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
+      child: Row(
+        children: <Widget>[
+          Icon(wid == null ? Icons.fitness_center_outlined : Icons.fitness_center,
+              size: 18, color: c.inkMuted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('ТРЕНИРОВКА',
+                    style: AppFonts.mono(size: 10, color: c.inkMutedXl, weight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: wid == null ? c.inkMuted : c.ink)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Шит занятия (тренер): клиент, дата/время, формат, заметка, статус подтверждения
 /// клиентом + действия «Провести»/«Отменить» для запланированного занятия.
 class _SessionSheet extends ConsumerStatefulWidget {
@@ -106,6 +168,24 @@ class _SessionSheetState extends ConsumerState<_SessionSheet> {
     final NavigatorState nav = Navigator.of(context);
     final bool changed = await showSessionForm(context, ref, session: widget.session);
     if (changed && mounted) nav.pop();
+  }
+
+  /// «Провести»: если к занятию привязана тренировка — открываем её проведение
+  /// (по завершении бэкенд сам отметит занятие). Если тренировки нет — просто
+  /// помечаем занятие проведённым.
+  Future<void> _conduct() async {
+    final String? wid = widget.session.workoutId;
+    if (wid == null) {
+      await _setStatus(SessionStatus.completed, 'Занятие проведено');
+      return;
+    }
+    final NavigatorState nav = Navigator.of(context);
+    await nav.push<void>(MaterialPageRoute<void>(
+      builder: (_) => ActiveWorkoutScreen(clientId: widget.session.clientId, workoutId: wid),
+    ));
+    if (!mounted) return;
+    ref.invalidate(trainerSessionsProvider);
+    nav.pop(); // закрыть шит занятия
   }
 
   Future<void> _setStatus(SessionStatus status, String done) async {
@@ -170,6 +250,9 @@ class _SessionSheetState extends ConsumerState<_SessionSheet> {
             Text(s.note!.trim(), style: TextStyle(fontSize: 14, color: c.inkMuted)),
           ],
           const SizedBox(height: 16),
+          // Какая тренировка запланирована к занятию (или «не запланирована»).
+          _PlannedWorkout(session: s),
+          const SizedBox(height: 12),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -190,7 +273,7 @@ class _SessionSheetState extends ConsumerState<_SessionSheet> {
               children: <Widget>[
                 Expanded(
                   child: FilledButton(
-                    onPressed: _busy ? null : () => _setStatus(SessionStatus.completed, 'Занятие проведено'),
+                    onPressed: _busy ? null : _conduct,
                     style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
                     child: _busy
                         ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
