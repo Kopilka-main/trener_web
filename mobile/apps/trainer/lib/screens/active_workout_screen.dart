@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
@@ -10,9 +10,9 @@ import '../api/trainer_client_card.dart';
 import '../api/trainer_workouts.dart';
 import 'template_edit_screen.dart' show ExerciseSelect;
 
-// в”Ђв”Ђв”Ђ РЈС‚РёР»РёС‚С‹ в”Ђв”Ђв”Ђ
+// ─── Утилиты ───
 
-/// РњРµС‚РєРё СѓРїСЂР°Р¶РЅРµРЅРёР№: РїРѕРІС‚РѕСЂСЏСЋС‰РёРµСЃСЏ РёРјРµРЅР° РЅСѓРјРµСЂСѓСЋС‚СЃСЏ В«РРјСЏ 1В», В«РРјСЏ 2В»вЂ¦ (РїРѕ position).
+/// Метки упражнений: повторяющиеся имена нумеруются «Имя 1», «Имя 2»… (по position).
 Map<int, String> _exerciseLabels(List<WorkoutExercise> exs) {
   final Map<String, int> total = <String, int>{};
   for (final WorkoutExercise e in exs) {
@@ -35,19 +35,19 @@ Map<int, String> _exerciseLabels(List<WorkoutExercise> exs) {
 String _plannedText(WorkoutSet s) {
   final List<String> p = <String>[
     if (s.plannedReps != null) '${s.plannedReps}',
-    if (s.plannedWeightKg != null) 'Г— ${s.plannedWeightKg} РєРі',
-    if (s.plannedTimeSec != null) '${s.plannedTimeSec} СЃ',
+    if (s.plannedWeightKg != null) '× ${s.plannedWeightKg} кг',
+    if (s.plannedTimeSec != null) '${s.plannedTimeSec} с',
   ];
-  return p.isEmpty ? 'вЂ”' : p.join(' ');
+  return p.isEmpty ? '—' : p.join(' ');
 }
 
 String _actualText(WorkoutSet s) {
   final List<String> p = <String>[
     if (s.actualReps != null) '${s.actualReps}',
-    if (s.actualWeightKg != null) 'Г— ${s.actualWeightKg} РєРі',
-    if (s.actualTimeSec != null) '${s.actualTimeSec} СЃ',
+    if (s.actualWeightKg != null) '× ${s.actualWeightKg} кг',
+    if (s.actualTimeSec != null) '${s.actualTimeSec} с',
   ];
-  return p.isEmpty ? 'вЂ”' : p.join(' ');
+  return p.isEmpty ? '—' : p.join(' ');
 }
 
 String _formatDuration(int totalSec) {
@@ -59,9 +59,9 @@ String _formatDuration(int totalSec) {
   return h > 0 ? '$h:${two(mm)}:${two(sec)}' : '$m:${two(sec)}';
 }
 
-/// Р­РєСЂР°РЅ РїСЂРѕРІРµРґРµРЅРёСЏ С‚СЂРµРЅРёСЂРѕРІРєРё РєР»РёРµРЅС‚Р° С‚СЂРµРЅРµСЂРѕРј. Р—Р°РіСЂСѓР¶Р°РµС‚ РїРѕР»РЅСѓСЋ С‚СЂРµРЅРёСЂРѕРІРєСѓ,
-/// Р·Р°С‚РµРј: С‡РµСЂРЅРѕРІРёРє в†’ РїР»Р°РЅ + В«РќР°С‡Р°С‚СЊВ»; Р°РєС‚РёРІРЅР°СЏ в†’ С‚Р°Р№РјРµСЂ, С‡РµРє-Р»РёСЃС‚, РѕС‚РґС‹С…,
-/// Р·Р°РІРµСЂС€РµРЅРёРµ. Р—РµСЂРєР°Р»Рѕ РІРµР± ActiveWorkoutPage (С‚СЂРµРЅРµСЂСЃРєРёР№ scope).
+/// Экран проведения тренировки клиента тренером. Загружает полную тренировку,
+/// затем: черновик → план + «Начать»; активная → таймер, чек-лист, отдых,
+/// завершение. Зеркало веб ActiveWorkoutPage (тренерский scope).
 class ActiveWorkoutScreen extends ConsumerWidget {
   const ActiveWorkoutScreen({super.key, required this.clientId, required this.workoutId});
   final String clientId;
@@ -79,12 +79,12 @@ class ActiveWorkoutScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              const Text('РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ С‚СЂРµРЅРёСЂРѕРІРєСѓ'),
+              const Text('Не удалось загрузить тренировку'),
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: () => ref.invalidate(
                     trainerWorkoutProvider((clientId: clientId, wid: workoutId))),
-                child: const Text('РџРѕРІС‚РѕСЂРёС‚СЊ'),
+                child: const Text('Повторить'),
               ),
             ],
           ),
@@ -108,11 +108,13 @@ class _Conductor extends ConsumerStatefulWidget {
 class _ConductorState extends ConsumerState<_Conductor> {
   late Workout _w = widget.workout;
   bool _busy = false;
-  String? _editing; // РєР»СЋС‡ "pos-idx" СЂРµРґР°РєС‚РёСЂСѓРµРјРѕРіРѕ РїРѕРґС…РѕРґР°
+  String? _editing; // ключ "pos-idx" редактируемого подхода
   bool _doneExpanded = false;
   Timer? _ticker;
   ({String key, int left})? _rest;
   Timer? _restTimer;
+  // Дата исторической записи (excludedFromBalance) — по умолчанию сегодня.
+  DateTime _historyDate = DateTime.now();
 
   String get _clientId => widget.clientId;
   TrainerWorkoutsApi get _api => ref.read(trainerWorkoutsApiProvider);
@@ -153,7 +155,21 @@ class _ConductorState extends ConsumerState<_Conductor> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _busy = false);
-      if (!silent) m.showSnackBar(const SnackBar(content: Text('РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ РёР·РјРµРЅРµРЅРёРµ')));
+      if (!silent) m.showSnackBar(const SnackBar(content: Text('Не удалось сохранить изменение')));
+    }
+  }
+
+  /// Сохранить плановый подход без busy-блокировки (правка полей в черновике),
+  /// чтобы не блокировать кнопку «Начать».
+  Future<void> _savePlanned(WorkoutExercise ex, WorkoutSet s, Map<String, dynamic> body) async {
+    try {
+      final Workout updated = await _api.updateSet(_clientId, _w.id, ex.position, s.setIndex, body);
+      if (mounted) setState(() => _w = updated);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Не удалось сохранить изменение')));
+      }
     }
   }
 
@@ -180,8 +196,8 @@ class _ConductorState extends ConsumerState<_Conductor> {
   }
 
   Future<void> _addExercise() async {
-    // РўРѕС‚ Р¶Рµ Р±РѕРіР°С‚С‹Р№ РјСѓР»СЊС‚РёРІС‹Р±РѕСЂ В«Р’С‹Р±РѕСЂ СѓРїСЂР°Р¶РЅРµРЅРёР№В», С‡С‚Рѕ Рё РІ СЃР±РѕСЂРєРµ С‚СЂРµРЅРёСЂРѕРІРєРё:
-    // РіСЂСѓРїРїР°в†’РїРѕРґРіСЂСѓРїРїР°, РёРЅС„Рѕ-РєР°СЂС‚РѕС‡РєР°, СЃС‡С‘С‚С‡РёРєРё. РљР°Р¶РґРѕРµ РІС‹Р±СЂР°РЅРЅРѕРµ РґРѕР±Р°РІР»СЏРµРј N СЂР°Р·.
+    // Тот же богатый мультивыбор «Выбор упражнений», что и в сборке тренировки:
+    // группа→подгруппа, инфо-карточка, счётчики. Каждое выбранное добавляем N раз.
     final NavigatorState nav = Navigator.of(context);
     await nav.push<void>(MaterialPageRoute<void>(
       builder: (BuildContext ctx) => ExerciseSelect(
@@ -200,6 +216,60 @@ class _ConductorState extends ConsumerState<_Conductor> {
     ));
   }
 
+  /// Краткая карточка упражнения из каталога (по тапу на «i»).
+  void _showExerciseInfo(String exerciseId) {
+    final List<TExercise> catalog = ref.read(trainerCatalogProvider).valueOrNull ?? <TExercise>[];
+    final TExercise? ex = catalog.where((TExercise e) => e.id == exerciseId).firstOrNull;
+    if (ex == null) return;
+    final String base = ref.read(baseUrlProvider);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: context.colors.bg,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (BuildContext ctx) {
+        final AppColors c = ctx.colors;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20, 0, 20, 16 + MediaQuery.of(ctx).viewPadding.bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(ex.name, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
+              const SizedBox(height: 2),
+              Text(
+                <String>[
+                  if (ex.category.isNotEmpty) ex.category,
+                  if (ex.subgroup?.isNotEmpty == true) ex.subgroup!,
+                ].join(' · '),
+                style: TextStyle(fontSize: 13, color: c.inkMuted),
+              ),
+              const SizedBox(height: 12),
+              CatalogMediaView(
+                imageUrl: catalogMediaUrl(base, ex.imageUrl ?? ex.thumbUrl),
+                videoUrl: catalogMediaUrl(base, ex.videoUrl),
+                height: 200,
+                showToggle: true,
+              ),
+              if (ex.equipment?.isNotEmpty == true) ...<Widget>[
+                const SizedBox(height: 12),
+                _InfoRow(label: 'Оборудование', value: ex.equipment!),
+              ],
+              if (ex.primaryMuscles?.isNotEmpty == true) ...<Widget>[
+                const SizedBox(height: 8),
+                _InfoRow(label: 'Мышцы', value: ex.primaryMuscles!),
+              ],
+              if (ex.description?.isNotEmpty == true) ...<Widget>[
+                const SizedBox(height: 8),
+                _InfoRow(label: 'Техника', value: ex.description!),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _toggleDone(WorkoutExercise ex, WorkoutSet s) async {
     final bool next = !s.done;
     final Map<String, dynamic> body = <String, dynamic>{'done': next};
@@ -216,10 +286,10 @@ class _ConductorState extends ConsumerState<_Conductor> {
     final bool? ok = await showDialog<bool>(
       context: context,
       builder: (BuildContext ctx) => AlertDialog(
-        title: const Text('Р—Р°РІРµСЂС€РёС‚СЊ С‚СЂРµРЅРёСЂРѕРІРєСѓ?'),
+        title: const Text('Завершить тренировку?'),
         actions: <Widget>[
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('РћС‚РјРµРЅР°')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Р—Р°РІРµСЂС€РёС‚СЊ')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Завершить')),
         ],
       ),
     );
@@ -233,11 +303,46 @@ class _ConductorState extends ConsumerState<_Conductor> {
       ref.invalidate(clientWorkoutsCardProvider(_clientId));
       if (!mounted) return;
       nav.pop();
-      m.showSnackBar(const SnackBar(content: Text('РўСЂРµРЅРёСЂРѕРІРєР° Р·Р°РІРµСЂС€РµРЅР°')));
+      m.showSnackBar(const SnackBar(content: Text('Тренировка завершена')));
     } catch (_) {
       if (!mounted) return;
       setState(() => _busy = false);
-      m.showSnackBar(const SnackBar(content: Text('РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РІРµСЂС€РёС‚СЊ С‚СЂРµРЅРёСЂРѕРІРєСѓ')));
+      m.showSnackBar(const SnackBar(content: Text('Не удалось завершить тренировку')));
+    }
+  }
+
+  /// YYYY-MM-DD для backend add-to-history.
+  String _isoDate(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// Выбрать дату исторической записи (по умолчанию сегодня; не позже сегодня).
+  Future<void> _pickHistoryDate() async {
+    final DateTime now = DateTime.now();
+    final DateTime? d = await showDatePicker(
+      context: context,
+      initialDate: _historyDate,
+      firstDate: DateTime(now.year - 5),
+      lastDate: now,
+    );
+    if (d != null) setState(() => _historyDate = d);
+  }
+
+  /// Зафиксировать историческую (excludedFromBalance) тренировку выбранной датой.
+  Future<void> _addToHistory() async {
+    if (_busy) return;
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    final NavigatorState nav = Navigator.of(context);
+    setState(() => _busy = true);
+    try {
+      await _api.addToHistory(_clientId, _w.id, _isoDate(_historyDate));
+      ref.invalidate(clientWorkoutsCardProvider(_clientId));
+      if (!mounted) return;
+      nav.pop();
+      m.showSnackBar(const SnackBar(content: Text('Добавлено в историю')));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      m.showSnackBar(const SnackBar(content: Text('Не удалось добавить в историю')));
     }
   }
 
@@ -249,7 +354,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
     );
   }
 
-  // в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ Р§РµСЂРЅРѕРІРёРє в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+  // ─────────── Черновик ───────────
   Widget _buildDraft(BuildContext context) {
     final AppColors c = context.colors;
     final Map<int, String> labels = _exerciseLabels(_w.exercises);
@@ -262,12 +367,13 @@ class _ConductorState extends ConsumerState<_Conductor> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
             children: <Widget>[
-              Text('РџР»Р°РЅ С‚СЂРµРЅРёСЂРѕРІРєРё. РќР°Р¶РјРёС‚Рµ В«РќР°С‡Р°С‚СЊВ», С‡С‚РѕР±С‹ РїСЂРѕРІРµСЃС‚Рё СЃ РєР»РёРµРЅС‚РѕРј.',
+              Text('План тренировки. Нажмите «Начать», чтобы провести с клиентом.',
                   style: TextStyle(fontSize: 13, color: c.inkMuted)),
               const SizedBox(height: 12),
               ReorderableListView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
+                buildDefaultDragHandles: false,
                 itemCount: exs.length,
                 onReorderItem: (int oldI, int newI) {
                   final List<int> order = exs.map((WorkoutExercise e) => e.position).toList();
@@ -277,27 +383,17 @@ class _ConductorState extends ConsumerState<_Conductor> {
                 },
                 itemBuilder: (BuildContext ctx, int i) {
                   final WorkoutExercise ex = exs[i];
-                  return _ExerciseCard(
+                  final WorkoutSet? first = ex.sets.isNotEmpty ? ex.sets.first : null;
+                  return _DraftPositionCard(
                     key: ValueKey<int>(ex.position),
+                    index: i + 1,
+                    listIndex: i,
                     title: labels[ex.position] ?? ex.name,
-                    child: Column(
-                      children: ex.sets.map((WorkoutSet s) {
-                        final String key = '${ex.position}-${s.setIndex}';
-                        if (_editing == key) {
-                          return _SetEditor(
-                            planned: true,
-                            set: s,
-                            onCancel: () => setState(() => _editing = null),
-                            onSave: (Map<String, dynamic> body) =>
-                                _run(() => _api.updateSet(_clientId, _w.id, ex.position, s.setIndex, body)),
-                          );
-                        }
-                        return _PlanRow(
-                          text: _plannedText(s),
-                          onEdit: () => setState(() => _editing = key),
-                        );
-                      }).toList(),
-                    ),
+                    set: first,
+                    onSave: first == null
+                        ? (_) {}
+                        : (Map<String, dynamic> body) => _savePlanned(ex, first, body),
+                    onInfo: () => _showExerciseInfo(ex.exerciseId),
                     onRemove: () => _run(() => _api.removeExercise(_clientId, _w.id, ex.position)),
                   );
                 },
@@ -313,14 +409,14 @@ class _ConductorState extends ConsumerState<_Conductor> {
             onPressed:
                 (_busy || exs.isEmpty) ? null : () => _run(() => _api.start(_clientId, _w.id)),
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
-            child: Text(exs.isEmpty ? 'Р”РѕР±Р°РІСЊС‚Рµ СѓРїСЂР°Р¶РЅРµРЅРёРµ' : 'РќР°С‡Р°С‚СЊ С‚СЂРµРЅРёСЂРѕРІРєСѓ'),
+            child: Text(exs.isEmpty ? 'Добавьте упражнение' : 'Начать тренировку'),
           ),
         ),
       ],
     );
   }
 
-  // в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ РђРєС‚РёРІРЅР°СЏ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+  // ─────────── Активная ───────────
   Widget _buildActive(BuildContext context) {
     final AppColors c = context.colors;
     final Map<int, String> labels = _exerciseLabels(_w.exercises);
@@ -345,7 +441,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('РџР РћРЁР›Рћ',
+                  Text('ПРОШЛО',
                       style: AppFonts.mono(size: 10, color: c.accentOn.withValues(alpha: 0.7))),
                   Text(_formatDuration(_elapsed),
                       style: TextStyle(
@@ -363,7 +459,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
                     decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(20)),
-                    child: Text('Р—Р°РІРµСЂС€РёС‚СЊ',
+                    child: Text('Завершить',
                         style: TextStyle(
                             fontSize: 14, fontWeight: FontWeight.w600, color: c.accentOn)),
                   ),
@@ -379,13 +475,13 @@ class _ConductorState extends ConsumerState<_Conductor> {
             decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12)),
             child: Row(
               children: <Widget>[
-                Text('Р—РђР’Р•Р РЁР•РќРћ В· ${completed.length}',
+                Text('ЗАВЕРШЕНО · ${completed.length}',
                     style: AppFonts.mono(size: 13, color: c.inkMuted)),
                 const Spacer(),
                 Text('$doneCount / $totalCount',
                     style: AppFonts.mono(size: 13, color: c.ink)),
                 const SizedBox(width: 4),
-                Text('РїРѕРґС…РѕРґРѕРІ',
+                Text('подходов',
                     style: AppFonts.mono(size: 10, color: c.inkMutedXl, weight: FontWeight.w500)),
                 const SizedBox(width: 6),
                 Icon(_doneExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
@@ -415,7 +511,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
           FilledButton(
             onPressed: _busy ? null : _complete,
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
-            child: const Text('Р—Р°РІРµСЂС€РёС‚СЊ'),
+            child: const Text('Завершить'),
           ),
         ],
       ],
@@ -427,7 +523,6 @@ class _ConductorState extends ConsumerState<_Conductor> {
     final String key = '${ex.position}-${s.setIndex}';
     if (_editing == key) {
       return _SetEditor(
-        planned: false,
         set: s,
         onCancel: () => setState(() => _editing = null),
         onSave: (Map<String, dynamic> body) async {
@@ -465,12 +560,161 @@ class _ConductorState extends ConsumerState<_Conductor> {
   }
 }
 
-// в”Ђв”Ђв”Ђ РљР°СЂС‚РѕС‡РєР° СѓРїСЂР°Р¶РЅРµРЅРёСЏ в”Ђв”Ђв”Ђ
+// ─── Карточка позиции черновика (как в редакторе шаблона) ───
+/// Все 4 поля плана (повторы/вес/время/отдых) + drag/info/удаление.
+/// Поля сохраняются при потере фокуса группы и по «готово» на клавиатуре.
+class _DraftPositionCard extends StatefulWidget {
+  const _DraftPositionCard({
+    super.key,
+    required this.index,
+    required this.listIndex,
+    required this.title,
+    required this.set,
+    required this.onSave,
+    required this.onInfo,
+    required this.onRemove,
+  });
+  final int index;
+  final int listIndex;
+  final String title;
+  final WorkoutSet? set;
+  final void Function(Map<String, dynamic> body) onSave;
+  final VoidCallback onInfo;
+  final VoidCallback onRemove;
+
+  @override
+  State<_DraftPositionCard> createState() => _DraftPositionCardState();
+}
+
+class _DraftPositionCardState extends State<_DraftPositionCard> {
+  late final TextEditingController _reps;
+  late final TextEditingController _weight;
+  late final TextEditingController _time;
+  late final TextEditingController _rest;
+
+  @override
+  void initState() {
+    super.initState();
+    final WorkoutSet? s = widget.set;
+    _reps = TextEditingController(text: s?.plannedReps?.toString() ?? '');
+    _weight = TextEditingController(text: s?.plannedWeightKg?.toString() ?? '');
+    _time = TextEditingController(text: s?.plannedTimeSec?.toString() ?? '');
+    _rest = TextEditingController(text: s?.plannedRestSec?.toString() ?? '');
+  }
+
+  @override
+  void dispose() {
+    _reps.dispose();
+    _weight.dispose();
+    _time.dispose();
+    _rest.dispose();
+    super.dispose();
+  }
+
+  num? _n(String s) => num.tryParse(s.trim().replaceAll(',', '.'));
+
+  void _persist() {
+    if (widget.set == null) return;
+    widget.onSave(<String, dynamic>{
+      'plannedReps': _n(_reps.text),
+      'plannedWeightKg': _n(_weight.text),
+      'plannedTimeSec': _n(_time.text),
+      'plannedRestSec': _n(_rest.text),
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              ReorderableDragStartListener(
+                index: widget.listIndex,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Icon(Icons.drag_indicator, size: 20, color: c.inkMutedXl),
+                ),
+              ),
+              Expanded(
+                child: Text('${widget.index}. ${widget.title}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
+              ),
+              GestureDetector(
+                onTap: widget.onInfo,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Icon(Icons.info_outline, size: 18, color: c.inkMuted),
+                ),
+              ),
+              GestureDetector(
+                onTap: () async {
+                  if (await confirmDelete(context, title: 'Удалить упражнение?')) widget.onRemove();
+                },
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 2),
+                  child: Icon(Icons.delete_outline, size: 18, color: c.inkMuted),
+                ),
+              ),
+            ],
+          ),
+          if (widget.set != null) ...<Widget>[
+            const SizedBox(height: 8),
+            Focus(
+              onFocusChange: (bool hasFocus) {
+                if (!hasFocus) _persist();
+              },
+              child: Row(
+                children: <Widget>[
+                  _NumField(label: 'Повторы', ctrl: _reps, onSubmitted: (_) => _persist()),
+                  const SizedBox(width: 8),
+                  _NumField(label: 'Вес, кг', ctrl: _weight, onSubmitted: (_) => _persist()),
+                  const SizedBox(width: 8),
+                  _NumField(label: 'Время, с', ctrl: _time, onSubmitted: (_) => _persist()),
+                  const SizedBox(width: 8),
+                  _NumField(label: 'Отдых, с', ctrl: _rest, onSubmitted: (_) => _persist()),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.label, required this.value});
+  final String label;
+  final String value;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(label.toUpperCase(),
+            style: AppFonts.mono(size: 10, color: c.inkMutedXl, weight: FontWeight.w600)),
+        const SizedBox(height: 2),
+        Text(value, style: TextStyle(fontSize: 14, color: c.ink, height: 1.35)),
+      ],
+    );
+  }
+}
+
+// ─── Карточка упражнения (активная тренировка) ───
 class _ExerciseCard extends StatelessWidget {
-  const _ExerciseCard({super.key, required this.title, required this.child, this.onRemove});
+  const _ExerciseCard({super.key, required this.title, required this.child});
   final String title;
   final Widget child;
-  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -482,44 +726,12 @@ class _ExerciseCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
-              ),
-              if (onRemove != null)
-                GestureDetector(
-                  onTap: onRemove,
-                  child: Icon(Icons.delete_outline, size: 18, color: c.inkMuted),
-                ),
-            ],
-          ),
+          Text(title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
           const SizedBox(height: 2),
           child,
-        ],
-      ),
-    );
-  }
-}
-
-class _PlanRow extends StatelessWidget {
-  const _PlanRow({required this.text, required this.onEdit});
-  final String text;
-  final VoidCallback onEdit;
-  @override
-  Widget build(BuildContext context) {
-    final AppColors c = context.colors;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(text, style: AppFonts.mono(size: 19, color: c.inkMuted, weight: FontWeight.w500)),
-          ),
-          _CircleBtn(icon: Icons.edit, onTap: onEdit, bg: c.cardElevated, fg: c.inkMuted),
         ],
       ),
     );
@@ -563,7 +775,7 @@ class _AddExerciseButton extends StatelessWidget {
           children: <Widget>[
             Icon(Icons.add, size: 16, color: c.inkMuted),
             const SizedBox(width: 6),
-            Text('Р”РѕР±Р°РІРёС‚СЊ СѓРїСЂР°Р¶РЅРµРЅРёРµ',
+            Text('Добавить упражнение',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.inkMuted)),
           ],
         ),
@@ -572,7 +784,7 @@ class _AddExerciseButton extends StatelessWidget {
   }
 }
 
-// в”Ђв”Ђв”Ђ РўР°Р№РјРµСЂ РѕС‚РґС‹С…Р° (РїРёР»СЋР»СЏ) в”Ђв”Ђв”Ђ
+// ─── Таймер отдыха (пилюля) ───
 class _RestPill extends StatelessWidget {
   const _RestPill({required this.left, required this.onSkip, required this.color});
   final int left;
@@ -589,7 +801,7 @@ class _RestPill extends StatelessWidget {
         children: <Widget>[
           Text('$left', style: AppFonts.mono(size: 14, color: color)),
           const SizedBox(width: 6),
-          Text('РћС‚РґС‹С…', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color)),
+          Text('Отдых', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color)),
           const SizedBox(width: 4),
           GestureDetector(
             onTap: onSkip,
@@ -601,16 +813,14 @@ class _RestPill extends StatelessWidget {
   }
 }
 
-// в”Ђв”Ђв”Ђ Р РµРґР°РєС‚РѕСЂ РїРѕРґС…РѕРґР° (РїР»Р°РЅ/С„Р°РєС‚) в”Ђв”Ђв”Ђ
+// ─── Редактор подхода-факта (активная тренировка) ───
 class _SetEditor extends StatefulWidget {
   const _SetEditor({
-    required this.planned,
     required this.set,
     required this.onCancel,
     required this.onSave,
     this.onDelete,
   });
-  final bool planned; // true в†’ СЂРµРґР°РєС‚РѕСЂ РїР»Р°РЅР° (СЃ РѕС‚РґС‹С…РѕРј); false в†’ С„Р°РєС‚
   final WorkoutSet set;
   final VoidCallback onCancel;
   final void Function(Map<String, dynamic>) onSave;
@@ -624,23 +834,14 @@ class _SetEditorState extends State<_SetEditor> {
   late final TextEditingController _reps;
   late final TextEditingController _weight;
   late final TextEditingController _time;
-  late final TextEditingController _rest;
 
   @override
   void initState() {
     super.initState();
     final WorkoutSet s = widget.set;
-    if (widget.planned) {
-      _reps = TextEditingController(text: s.plannedReps?.toString() ?? '');
-      _weight = TextEditingController(text: s.plannedWeightKg?.toString() ?? '');
-      _time = TextEditingController(text: s.plannedTimeSec?.toString() ?? '');
-      _rest = TextEditingController(text: s.plannedRestSec?.toString() ?? '');
-    } else {
-      _reps = TextEditingController(text: (s.actualReps ?? s.plannedReps)?.toString() ?? '');
-      _weight = TextEditingController(text: (s.actualWeightKg ?? s.plannedWeightKg)?.toString() ?? '');
-      _time = TextEditingController(text: (s.actualTimeSec ?? s.plannedTimeSec)?.toString() ?? '');
-      _rest = TextEditingController();
-    }
+    _reps = TextEditingController(text: (s.actualReps ?? s.plannedReps)?.toString() ?? '');
+    _weight = TextEditingController(text: (s.actualWeightKg ?? s.plannedWeightKg)?.toString() ?? '');
+    _time = TextEditingController(text: (s.actualTimeSec ?? s.plannedTimeSec)?.toString() ?? '');
   }
 
   @override
@@ -648,27 +849,17 @@ class _SetEditorState extends State<_SetEditor> {
     _reps.dispose();
     _weight.dispose();
     _time.dispose();
-    _rest.dispose();
     super.dispose();
   }
 
   num? _num(String s) => num.tryParse(s.trim().replaceAll(',', '.'));
 
   void _save() {
-    if (widget.planned) {
-      widget.onSave(<String, dynamic>{
-        'plannedReps': _num(_reps.text),
-        'plannedWeightKg': _num(_weight.text),
-        'plannedTimeSec': _num(_time.text),
-        'plannedRestSec': _num(_rest.text),
-      });
-    } else {
-      widget.onSave(<String, dynamic>{
-        'actualReps': _num(_reps.text),
-        'actualWeightKg': _num(_weight.text),
-        'actualTimeSec': _num(_time.text),
-      });
-    }
+    widget.onSave(<String, dynamic>{
+      'actualReps': _num(_reps.text),
+      'actualWeightKg': _num(_weight.text),
+      'actualTimeSec': _num(_time.text),
+    });
   }
 
   @override
@@ -680,15 +871,11 @@ class _SetEditorState extends State<_SetEditor> {
         children: <Widget>[
           Row(
             children: <Widget>[
-              _NumField(label: 'РџРѕРІС‚РѕСЂС‹', ctrl: _reps),
+              _NumField(label: 'Повторы', ctrl: _reps),
               const SizedBox(width: 8),
-              _NumField(label: 'Р’РµСЃ, РєРі', ctrl: _weight),
+              _NumField(label: 'Вес, кг', ctrl: _weight),
               const SizedBox(width: 8),
-              _NumField(label: 'Р’СЂРµРјСЏ, СЃ', ctrl: _time),
-              if (widget.planned) ...<Widget>[
-                const SizedBox(width: 8),
-                _NumField(label: 'РћС‚РґС‹С…, СЃ', ctrl: _rest),
-              ],
+              _NumField(label: 'Время, с', ctrl: _time),
             ],
           ),
           const SizedBox(height: 8),
@@ -701,7 +888,12 @@ class _SetEditorState extends State<_SetEditor> {
               if (widget.onDelete != null) ...<Widget>[
                 const SizedBox(width: 8),
                 _CircleBtn(
-                    icon: Icons.delete_outline, onTap: widget.onDelete!, bg: c.cardElevated, fg: c.danger),
+                    icon: Icons.delete_outline,
+                    onTap: () async {
+                      if (await confirmDelete(context, title: 'Удалить подход?')) widget.onDelete!();
+                    },
+                    bg: c.cardElevated,
+                    fg: c.danger),
               ],
             ],
           ),
@@ -712,9 +904,10 @@ class _SetEditorState extends State<_SetEditor> {
 }
 
 class _NumField extends StatelessWidget {
-  const _NumField({required this.label, required this.ctrl});
+  const _NumField({required this.label, required this.ctrl, this.onSubmitted});
   final String label;
   final TextEditingController ctrl;
+  final ValueChanged<String>? onSubmitted;
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
@@ -731,6 +924,8 @@ class _NumField extends StatelessWidget {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
               textAlign: TextAlign.center,
+              textInputAction: TextInputAction.done,
+              onSubmitted: onSubmitted,
               style: AppFonts.mono(size: 15, color: c.ink, weight: FontWeight.w500),
               decoration: InputDecoration(
                 isDense: true,
