@@ -9,6 +9,8 @@ export 'src/calendar/cal_session.dart';
 export 'src/calendar/sessions_calendar.dart';
 export 'src/chat/chat_message.dart';
 export 'src/chat/chat_thread_view.dart';
+export 'src/media/catalog_media.dart';
+export 'src/storage/local_json_store.dart';
 export 'src/auth/token_store.dart';
 export 'src/push/push_service.dart';
 export 'src/theme/app_theme.dart';

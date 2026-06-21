@@ -80,6 +80,7 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
   }
 
   Widget _buildExercises(AppColors c) {
+    final String base = ref.read(baseUrlProvider);
     final AsyncValue<List<TExercise>> catalog = ref.watch(trainerCatalogProvider);
     return catalog.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -120,6 +121,8 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
                             decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
                             child: Row(
                               children: <Widget>[
+                                CatalogThumb(url: catalogMediaUrl(base, ex.thumbUrl ?? ex.imageUrl), size: 46),
+                                const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,

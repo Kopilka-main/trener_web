@@ -758,6 +758,7 @@ class _ExercisePickerState extends ConsumerState<_ExercisePicker> {
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
+    final String base = ref.read(baseUrlProvider);
     final AsyncValue<List<TExercise>> catalog = ref.watch(trainerCatalogProvider);
     return SizedBox(
       height: MediaQuery.of(context).size.height * 0.82,
@@ -836,23 +837,27 @@ class _ExercisePickerState extends ConsumerState<_ExercisePicker> {
                                           onTap: () => Navigator.pop(context, ex),
                                           behavior: HitTestBehavior.opaque,
                                           child: Padding(
-                                            padding: const EdgeInsets.all(12),
+                                            padding: const EdgeInsets.all(10),
                                             child: Row(
                                               children: <Widget>[
+                                                CatalogThumb(
+                                                    url: catalogMediaUrl(base, ex.thumbUrl ?? ex.imageUrl),
+                                                    size: 44),
+                                                const SizedBox(width: 10),
                                                 Container(
-                                                  width: 28,
-                                                  height: 28,
+                                                  width: 24,
+                                                  height: 24,
                                                   alignment: Alignment.center,
                                                   decoration: BoxDecoration(
                                                     color: picked ? c.accent : Colors.transparent,
-                                                    borderRadius: BorderRadius.circular(8),
+                                                    borderRadius: BorderRadius.circular(7),
                                                     border: picked ? null : Border.all(color: c.line),
                                                   ),
                                                   child: picked
-                                                      ? Icon(Icons.check, size: 16, color: c.accentOn)
+                                                      ? Icon(Icons.check, size: 14, color: c.accentOn)
                                                       : null,
                                                 ),
-                                                const SizedBox(width: 12),
+                                                const SizedBox(width: 10),
                                                 Expanded(
                                                   child: Column(
                                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -882,7 +887,7 @@ class _ExercisePickerState extends ConsumerState<_ExercisePicker> {
                                         ),
                                       ),
                                       IconButton(
-                                        onPressed: () => _showInfo(context, ex),
+                                        onPressed: () => _showInfo(context, ex, base),
                                         icon: Icon(Icons.info_outline, size: 18, color: c.inkMuted),
                                         tooltip: 'Об упражнении',
                                       ),
@@ -903,7 +908,7 @@ class _ExercisePickerState extends ConsumerState<_ExercisePicker> {
   }
 }
 
-void _showInfo(BuildContext context, TExercise ex) {
+void _showInfo(BuildContext context, TExercise ex, String base) {
   showModalBottomSheet<void>(
     context: context,
     backgroundColor: context.colors.bg,
@@ -915,12 +920,18 @@ void _showInfo(BuildContext context, TExercise ex) {
         if (ex.category.isNotEmpty) ex.category,
         if (ex.subgroup?.isNotEmpty == true) ex.subgroup!,
       ].join(' · ');
+      final String? img = catalogMediaUrl(base, ex.imageUrl ?? ex.thumbUrl);
+      final String? video = catalogMediaUrl(base, ex.videoUrl);
       return Padding(
         padding: EdgeInsets.fromLTRB(20, 4, 20, 16 + MediaQuery.of(ctx).viewPadding.bottom),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
+            if (img != null || video != null) ...<Widget>[
+              CatalogMediaView(imageUrl: img, videoUrl: video, height: 200),
+              const SizedBox(height: 12),
+            ],
             Text(ex.name, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
             if (muscles.isNotEmpty) ...<Widget>[
               const SizedBox(height: 2),

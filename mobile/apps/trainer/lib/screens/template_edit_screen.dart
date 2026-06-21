@@ -389,6 +389,7 @@ class _ExerciseSelectState extends ConsumerState<_ExerciseSelect> {
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
+    final String base = ref.read(baseUrlProvider);
     final AsyncValue<List<TExercise>> catalog = ref.watch(trainerCatalogProvider);
     final int total = _counts.values.fold<int>(0, (int a, int b) => a + b);
 
@@ -469,6 +470,8 @@ class _ExerciseSelectState extends ConsumerState<_ExerciseSelect> {
                       ),
                       child: Row(
                         children: <Widget>[
+                          CatalogThumb(url: catalogMediaUrl(base, ex.thumbUrl ?? ex.imageUrl), size: 42),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,

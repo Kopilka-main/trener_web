@@ -138,6 +138,9 @@ class _ExerciseEditScreenState extends ConsumerState<ExerciseEditScreen> {
     final AppColors c = context.colors;
     final bool locked = _isGlobal; // системное: имя/группа/описание заблокированы
     final List<String> subs = subgroupsFor(_category);
+    final String base = ref.read(baseUrlProvider);
+    final String? img = catalogMediaUrl(base, _src?.imageUrl ?? _src?.thumbUrl);
+    final String? video = catalogMediaUrl(base, _src?.videoUrl);
 
     return Scaffold(
       appBar: AppBar(
@@ -152,6 +155,10 @@ class _ExerciseEditScreenState extends ConsumerState<ExerciseEditScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: <Widget>[
+          if (img != null || video != null) ...<Widget>[
+            CatalogMediaView(imageUrl: img, videoUrl: video, height: 190),
+            const SizedBox(height: 14),
+          ],
           if (locked)
             Container(
               margin: const EdgeInsets.only(bottom: 12),

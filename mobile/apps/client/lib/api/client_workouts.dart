@@ -139,6 +139,9 @@ class CatalogExercise {
     required this.equipment,
     required this.primaryMuscles,
     required this.secondaryMuscles,
+    this.imageUrl,
+    this.thumbUrl,
+    this.videoUrl,
   });
 
   final String id;
@@ -153,6 +156,9 @@ class CatalogExercise {
   final String? equipment;
   final String? primaryMuscles;
   final String? secondaryMuscles;
+  final String? imageUrl;
+  final String? thumbUrl;
+  final String? videoUrl;
 
   factory CatalogExercise.fromJson(Map<String, dynamic> j) => CatalogExercise(
         id: j['id'] as String? ?? '',
@@ -167,6 +173,9 @@ class CatalogExercise {
         equipment: j['equipment'] as String?,
         primaryMuscles: j['primaryMuscles'] as String?,
         secondaryMuscles: j['secondaryMuscles'] as String?,
+        imageUrl: j['imageUrl'] as String?,
+        thumbUrl: j['thumbUrl'] as String?,
+        videoUrl: j['videoUrl'] as String?,
       );
 }
 
@@ -193,12 +202,16 @@ class ClientWorkoutsApi {
   Future<Workout> _unwrap(Map<String, dynamic> r) =>
       Future<Workout>.value(Workout.fromJson((r['workout'] as Map<String, dynamic>?) ?? <String, dynamic>{}));
 
-  Future<List<CatalogExercise>> catalog() async {
+  /// Сырые JSON-объекты каталога (для офлайн-кэша).
+  Future<List<Map<String, dynamic>>> catalogRaw() async {
     final Map<String, dynamic> r = await _api.getJson('/api/client/exercises');
-    final List<CatalogExercise> list = ((r['exercises'] as List<dynamic>?) ?? <dynamic>[])
-        .cast<Map<String, dynamic>>()
-        .map(CatalogExercise.fromJson)
-        .toList();
+    return ((r['exercises'] as List<dynamic>?) ?? <dynamic>[]).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<CatalogExercise>> catalog() async => sortedCatalog(await catalogRaw());
+
+  static List<CatalogExercise> sortedCatalog(List<Map<String, dynamic>> raw) {
+    final List<CatalogExercise> list = raw.map(CatalogExercise.fromJson).toList();
     list.sort((CatalogExercise a, CatalogExercise b) =>
         a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return list;
@@ -288,5 +301,46 @@ final Provider<ClientWorkoutsApi> clientWorkoutsApiProvider =
 final FutureProvider<List<Workout>> clientWorkoutsProvider =
     FutureProvider<List<Workout>>((ref) => ref.read(clientWorkoutsApiProvider).load());
 
-final FutureProvider<List<CatalogExercise>> clientCatalogProvider =
-    FutureProvider<List<CatalogExercise>>((ref) => ref.read(clientWorkoutsApiProvider).catalog());
+/// Каталог упражнений клиента с офлайн-кэшем: мгновенно отдаёт сохранённую
+/// копию, в фоне обновляет с сервера и прогревает превью.
+class ClientCatalogNotifier extends AsyncNotifier<List<CatalogExercise>> {
+  static const String _key = 'client_exercises';
+
+  @override
+  Future<List<CatalogExercise>> build() async {
+    final List<Map<String, dynamic>>? cached = await LocalJsonStore.instance.readList(_key);
+    if (cached != null && cached.isNotEmpty) {
+      Future<void>(() => _refresh());
+      return ClientWorkoutsApi.sortedCatalog(cached);
+    }
+    return _fetch();
+  }
+
+  Future<List<CatalogExercise>> _fetch() async {
+    final List<Map<String, dynamic>> raw = await ref.read(clientWorkoutsApiProvider).catalogRaw();
+    await LocalJsonStore.instance.writeList(_key, raw);
+    final List<CatalogExercise> list = ClientWorkoutsApi.sortedCatalog(raw);
+    _warm(list);
+    return list;
+  }
+
+  Future<void> _refresh() async {
+    try {
+      state = AsyncData<List<CatalogExercise>>(await _fetch());
+    } catch (_) {
+      // офлайн — остаёмся на кэше
+    }
+  }
+
+  void _warm(List<CatalogExercise> list) {
+    final String base = ref.read(baseUrlProvider);
+    final List<String> thumbs = <String>[
+      for (final CatalogExercise e in list)
+        if (catalogMediaUrl(base, e.thumbUrl ?? e.imageUrl) case final String u) u,
+    ];
+    Future<void>(() => prefetchThumbs(thumbs));
+  }
+}
+
+final AsyncNotifierProvider<ClientCatalogNotifier, List<CatalogExercise>> clientCatalogProvider =
+    AsyncNotifierProvider<ClientCatalogNotifier, List<CatalogExercise>>(ClientCatalogNotifier.new);
