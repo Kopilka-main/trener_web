@@ -42,6 +42,8 @@ dependencies:
   go_router: ^14.6.2
   # Выбор фото для аватара и вложений
   image_picker: ^1.1.2
+  # Графики прогресса (замеры, тоннаж)
+  fl_chart: ^0.69.2
 
 dev_dependencies:
   flutter_test:
