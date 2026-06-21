@@ -29,10 +29,11 @@ class SettingsScreen extends ConsumerWidget {
           children: <Widget>[
             Row(
               children: <Widget>[
-                CircleAvatar(
+                AuthedAvatar(
+                  url: a.avatarFileId != null ? ref.read(trainerApiProvider).fileUrl(a.avatarFileId!) : null,
+                  token: ref.watch(sessionProvider).token,
+                  initials: a.initials,
                   radius: 28,
-                  backgroundColor: cs.primary.withValues(alpha: 0.18),
-                  child: Icon(Icons.person, color: cs.primary, size: 26),
                 ),
                 const SizedBox(width: 14),
                 Expanded(

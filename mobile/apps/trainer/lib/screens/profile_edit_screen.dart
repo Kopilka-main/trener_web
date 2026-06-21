@@ -1,6 +1,7 @@
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../api/trainer_auth.dart';
 
@@ -32,7 +33,9 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
   late final TextEditingController _bio;
   DateTime? _birth;
   late final List<_EditContact> _contacts;
+  late String? _avatarFileId = widget.profile.avatarFileId;
   bool _busy = false;
+  bool _avatarBusy = false;
   String? _error;
 
   @override
@@ -99,9 +102,50 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     }
   }
 
+  Future<void> _pickAvatar() async {
+    if (_avatarBusy) return;
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    final XFile? picked = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1024, imageQuality: 85);
+    if (picked == null) return;
+    setState(() => _avatarBusy = true);
+    try {
+      final TrainerProfile p = await ref.read(trainerApiProvider).uploadAvatar(picked.path, picked.name);
+      ref.invalidate(trainerMeProvider);
+      if (!mounted) return;
+      setState(() {
+        _avatarFileId = p.avatarFileId;
+        _avatarBusy = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _avatarBusy = false);
+      m.showSnackBar(const SnackBar(content: Text('Не удалось загрузить фото')));
+    }
+  }
+
+  Future<void> _removeAvatar() async {
+    if (_avatarBusy) return;
+    setState(() => _avatarBusy = true);
+    try {
+      await ref.read(trainerApiProvider).removeAvatar();
+      ref.invalidate(trainerMeProvider);
+      if (!mounted) return;
+      setState(() {
+        _avatarFileId = null;
+        _avatarBusy = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _avatarBusy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
+    final String? token = ref.watch(sessionProvider).token;
+    final TrainerApi api = ref.read(trainerApiProvider);
+    final String name = '${_first.text} ${_last.text}'.trim();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Редактировать профиль'),
@@ -112,6 +156,43 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: <Widget>[
+          Center(
+            child: Column(
+              children: <Widget>[
+                Stack(
+                  alignment: Alignment.bottomRight,
+                  children: <Widget>[
+                    AuthedAvatar(
+                      url: _avatarFileId != null ? api.fileUrl(_avatarFileId!) : null,
+                      token: token,
+                      initials: name.isEmpty ? '' : name.substring(0, 1).toUpperCase(),
+                      radius: 44,
+                    ),
+                    Positioned(
+                      right: -2,
+                      bottom: -2,
+                      child: GestureDetector(
+                        onTap: _avatarBusy ? null : _pickAvatar,
+                        child: Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(color: c.accent, shape: BoxShape.circle, border: Border.all(color: c.bg, width: 2)),
+                          child: _avatarBusy
+                              ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: c.accentOn))
+                              : Icon(Icons.photo_camera, size: 16, color: c.accentOn),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_avatarFileId != null)
+                  TextButton(
+                    onPressed: _avatarBusy ? null : _removeAvatar,
+                    child: Text('Удалить фото', style: TextStyle(color: c.inkMuted, fontSize: 13)),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
           if (_error != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),

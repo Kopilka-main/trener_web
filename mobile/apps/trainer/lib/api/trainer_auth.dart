@@ -21,6 +21,7 @@ class TrainerProfile {
     required this.bio,
     required this.birthDate,
     required this.contacts,
+    required this.avatarFileId,
   });
 
   factory TrainerProfile.fromJson(Map<String, dynamic> j) => TrainerProfile(
@@ -34,6 +35,7 @@ class TrainerProfile {
             .cast<Map<String, dynamic>>()
             .map(TrainerContact.fromJson)
             .toList(),
+        avatarFileId: j['avatarFileId'] as String?,
       );
 
   final String firstName;
@@ -43,8 +45,15 @@ class TrainerProfile {
   final String? bio;
   final String? birthDate;
   final List<TrainerContact> contacts;
+  final String? avatarFileId;
 
   String get fullName => '$firstName $lastName'.trim();
+  String get initials {
+    final List<String> parts = fullName.split(RegExp(r'\s+')).where((String s) => s.isNotEmpty).toList();
+    if (parts.isEmpty) return '';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first.substring(0, 1) + parts[1].substring(0, 1)).toUpperCase();
+  }
 }
 
 /// Авторизация тренера: логин/профиль/выход поверх общего ApiClient + сессии.
@@ -83,6 +92,30 @@ class TrainerApi {
   Future<TrainerProfile> updateProfile(Map<String, dynamic> body) async {
     final Map<String, dynamic> res = await _api.patchJson('/api/auth/me', body);
     return TrainerProfile.fromJson(res['trainer'] as Map<String, dynamic>);
+  }
+
+  /// Загрузить аватар (multipart, поле photo).
+  Future<TrainerProfile> uploadAvatar(String filePath, String fileName) async {
+    final Map<String, dynamic> res = await _api.postForm(
+      '/api/auth/me/avatar',
+      <String, String>{},
+      fileField: 'photo',
+      filePath: filePath,
+      fileName: fileName,
+    );
+    return TrainerProfile.fromJson(res['trainer'] as Map<String, dynamic>);
+  }
+
+  /// Удалить аватар.
+  Future<void> removeAvatar() async {
+    await _api.deleteJson('/api/auth/me/avatar');
+  }
+
+  /// Абсолютный URL приватного файла (аватар) для authed-показа.
+  String fileUrl(String fileId) {
+    final String base = _ref.read(baseUrlProvider);
+    final String b = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+    return '$b/api/files/$fileId';
   }
 
   Future<void> logout() async {

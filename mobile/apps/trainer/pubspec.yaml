@@ -40,6 +40,8 @@ dependencies:
     path: ../../packages/core
   flutter_riverpod: ^2.6.1
   go_router: ^14.6.2
+  # Выбор фото для аватара и вложений
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:

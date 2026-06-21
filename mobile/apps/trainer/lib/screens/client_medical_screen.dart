@@ -1,6 +1,7 @@
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../api/trainer_medical.dart';
 
@@ -29,6 +30,7 @@ class ClientMedicalScreen extends ConsumerStatefulWidget {
 class _ClientMedicalScreenState extends ConsumerState<ClientMedicalScreen> {
   final TextEditingController _note = TextEditingController();
   DateTime _date = DateTime.now();
+  XFile? _file;
   bool _busy = false;
 
   @override
@@ -37,18 +39,25 @@ class _ClientMedicalScreenState extends ConsumerState<ClientMedicalScreen> {
     super.dispose();
   }
 
+  Future<void> _pickFile() async {
+    final XFile? picked = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 85);
+    if (picked != null) setState(() => _file = picked);
+  }
+
   Future<void> _add() async {
     final String note = _note.text.trim();
     if (note.isEmpty || _busy) return;
     setState(() => _busy = true);
     final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
     try {
-      await ref.read(trainerMedicalApiProvider).create(widget.clientId, date: _iso(_date), note: note);
+      await ref.read(trainerMedicalApiProvider).create(widget.clientId,
+          date: _iso(_date), note: note, filePath: _file?.path, fileName: _file?.name);
       ref.invalidate(clientMedicalProvider(widget.clientId));
       if (!mounted) return;
       setState(() {
         _note.clear();
         _date = DateTime.now();
+        _file = null;
         _busy = false;
       });
       FocusScope.of(context).unfocus();
@@ -209,6 +218,19 @@ class _ClientMedicalScreenState extends ConsumerState<ClientMedicalScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: _pickFile,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: _file != null ? c.accent.withValues(alpha: 0.15) : c.card,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(_file != null ? Icons.check_circle : Icons.attach_file,
+                              size: 18, color: _file != null ? c.accent : c.inkMuted),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: FilledButton(
                           onPressed: _busy ? null : _add,
@@ -218,6 +240,26 @@ class _ClientMedicalScreenState extends ConsumerState<ClientMedicalScreen> {
                       ),
                     ],
                   ),
+                  if (_file != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Row(
+                        children: <Widget>[
+                          Icon(Icons.image_outlined, size: 14, color: c.inkMuted),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(_file!.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+                          ),
+                          GestureDetector(
+                            onTap: () => setState(() => _file = null),
+                            child: Icon(Icons.close, size: 16, color: c.inkMuted),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),
