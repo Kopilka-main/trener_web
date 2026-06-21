@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/trainer_client_card.dart';
+import '../api/trainer_client_stats.dart';
 import '../api/trainer_clients.dart';
 import 'assign_workout_screen.dart';
 import 'client_edit_screen.dart';
@@ -213,13 +214,19 @@ class ClientDetailScreen extends ConsumerWidget {
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
           ),
           const SizedBox(height: 20),
-          _Section(title: 'Баланс', child: _PackagesBlock(clientId: client.id)),
+          _Section(
+            title: 'Баланс',
+            action: _AddPackageButton(clientId: client.id),
+            child: _PackagesBlock(clientId: client.id),
+          ),
           const SizedBox(height: 16),
           _Section(
             title: 'Замеры',
             action: _RequestMeasureButton(clientId: client.id),
             child: _MeasurementsBlock(clientId: client.id),
           ),
+          const SizedBox(height: 16),
+          _Section(title: 'Статистика', child: _StatsBlock(clientId: client.id)),
           const SizedBox(height: 16),
           _Section(
             title: 'Тренировки',
@@ -266,6 +273,158 @@ class _Empty extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       Text(text, style: TextStyle(fontSize: 13, color: context.colors.inkMuted));
+}
+
+class _AddPackageButton extends ConsumerWidget {
+  const _AddPackageButton({required this.clientId});
+  final String clientId;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return TextButton.icon(
+      onPressed: () => showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: context.colors.bg,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (_) => _AddPackageForm(clientId: clientId),
+      ),
+      icon: const Icon(Icons.add, size: 16),
+      label: const Text('Добавить'),
+    );
+  }
+}
+
+class _AddPackageForm extends ConsumerStatefulWidget {
+  const _AddPackageForm({required this.clientId});
+  final String clientId;
+  @override
+  ConsumerState<_AddPackageForm> createState() => _AddPackageFormState();
+}
+
+class _AddPackageFormState extends ConsumerState<_AddPackageForm> {
+  final TextEditingController _lessons = TextEditingController(text: '8');
+  final TextEditingController _total = TextEditingController();
+  final TextEditingController _type = TextEditingController();
+  DateTime _starts = DateTime.now();
+  DateTime? _ends;
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _lessons.dispose();
+    _total.dispose();
+    _type.dispose();
+    super.dispose();
+  }
+
+  String _iso(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> _save() async {
+    final int lessons = int.tryParse(_lessons.text.trim()) ?? 0;
+    final num total = num.tryParse(_total.text.trim().replaceAll(',', '.')) ?? 0;
+    if (total <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Укажите сумму')));
+      return;
+    }
+    setState(() => _busy = true);
+    final NavigatorState nav = Navigator.of(context);
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(trainerClientCardApiProvider).createPackage(
+            widget.clientId,
+            lessonsPaid: lessons,
+            totalPaid: total,
+            workoutType: _type.text,
+            startsAt: _iso(_starts),
+            endsAt: _ends != null ? _iso(_ends!) : null,
+          );
+      ref.invalidate(clientPackagesProvider(widget.clientId));
+      if (!mounted) return;
+      nav.pop();
+      m.showSnackBar(const SnackBar(content: Text('Пакет добавлен')));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      m.showSnackBar(const SnackBar(content: Text('Не удалось добавить пакет')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 4, 20, 16 + MediaQuery.of(context).viewInsets.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text('Новый пакет', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
+          const SizedBox(height: 16),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: TextField(
+                  controller: _lessons,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Тренировок', border: OutlineInputBorder()),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _total,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Сумма, ₽', border: OutlineInputBorder()),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _type,
+            decoration: const InputDecoration(labelText: 'Тип (необязательно)', border: OutlineInputBorder()),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () async {
+                    final DateTime? d = await showDatePicker(
+                      context: context, initialDate: _starts,
+                      firstDate: DateTime(_starts.year - 1), lastDate: DateTime(_starts.year + 2));
+                    if (d != null) setState(() => _starts = d);
+                  },
+                  child: Text('С ${_iso(_starts)}'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () async {
+                    final DateTime? d = await showDatePicker(
+                      context: context, initialDate: _ends ?? _starts,
+                      firstDate: _starts, lastDate: DateTime(_starts.year + 2));
+                    if (d != null) setState(() => _ends = d);
+                  },
+                  child: Text(_ends != null ? 'До ${_iso(_ends!)}' : 'До (необяз.)'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: _busy ? null : _save,
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+            child: _busy
+                ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Добавить пакет'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _PackagesBlock extends ConsumerWidget {
@@ -384,6 +543,94 @@ class _RequestMeasureButton extends ConsumerWidget {
       },
       icon: const Icon(Icons.straighten, size: 16),
       label: const Text('Запросить'),
+    );
+  }
+}
+
+String _dur(int sec) {
+  if (sec <= 0) return '0';
+  final int h = sec ~/ 3600;
+  final int m = (sec % 3600) ~/ 60;
+  return h > 0 ? '$h ч ${m > 0 ? '$m м' : ''}'.trim() : '$m м';
+}
+
+class _StatsBlock extends ConsumerWidget {
+  const _StatsBlock({required this.clientId});
+  final String clientId;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppColors c = context.colors;
+    final AsyncValue<ClientStatsData> stats = ref.watch(clientStatsProvider(clientId));
+    return stats.when(
+      loading: () => const _Empty('Загрузка…'),
+      error: (Object e, _) => const _Empty('Не удалось загрузить'),
+      data: (ClientStatsData s) {
+        if (s.completedWorkouts == 0) return const _Empty('Нет проведённых тренировок');
+        final List<(String, String)> cells = <(String, String)>[
+          ('${s.completedWorkouts}', 'тренировок'),
+          ('${s.tonnageKg}', 'кг тоннаж'),
+          ('${s.doneSets}', 'подходов'),
+          ('${s.totalReps}', 'повторов'),
+          (s.avgRpe != null ? '${s.avgRpe}' : '—', 'средний RPE'),
+          (_dur(s.totalDurationSec), 'в зале'),
+        ];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              childAspectRatio: 1.7,
+              children: cells
+                  .map(((String, String) cell) => Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: c.card,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: c.line),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(cell.$1, style: AppFonts.display(size: 26, color: c.accent, letterSpacing: -1)),
+                            ),
+                            Text(cell.$2.toUpperCase(),
+                                style: AppFonts.mono(size: 9, color: c.inkMuted, weight: FontWeight.w700)),
+                          ],
+                        ),
+                      ))
+                  .toList(),
+            ),
+            if (s.records.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 8),
+              ...s.records.take(8).map((StatRecord r) => Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Row(
+                      children: <Widget>[
+                        Icon(Icons.emoji_events, size: 16, color: c.accent),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(r.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 14, color: c.ink)),
+                        ),
+                        Text(r.isTimeBased ? '${r.value} с' : '${r.value} кг',
+                            style: AppFonts.mono(size: 13, color: c.ink)),
+                      ],
+                    ),
+                  )),
+            ],
+          ],
+        );
+      },
     );
   }
 }

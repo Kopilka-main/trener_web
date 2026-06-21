@@ -111,6 +111,26 @@ class TrainerClientCardApi {
   Future<void> requestMeasurements(String clientId, String? note) async {
     await _api.postJson('/api/clients/$clientId/measurement-tasks', <String, dynamic>{'note': ?note});
   }
+
+  /// Добавить пакет/абонемент клиенту.
+  Future<void> createPackage(
+    String clientId, {
+    required int lessonsPaid,
+    required num totalPaid,
+    String? workoutType,
+    required String startsAt,
+    String? endsAt,
+  }) async {
+    await _api.postJson('/api/clients/$clientId/packages', <String, dynamic>{
+      'kind': 'package',
+      'lessonsPaid': lessonsPaid,
+      'pricePerLesson': lessonsPaid > 0 ? (totalPaid / lessonsPaid) : 0,
+      'totalPaid': totalPaid,
+      'workoutType': (workoutType == null || workoutType.trim().isEmpty) ? null : workoutType.trim(),
+      'startsAt': startsAt,
+      'endsAt': (endsAt == null || endsAt.isEmpty) ? null : endsAt,
+    });
+  }
 }
 
 final Provider<TrainerClientCardApi> trainerClientCardApiProvider =
