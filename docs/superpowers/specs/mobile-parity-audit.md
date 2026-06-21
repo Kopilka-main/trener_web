@@ -56,13 +56,13 @@
 | ClientProfilePage  | —                       | ⚠️     | часть карточки                                                       |
 | ClientWorkoutsPage | assign_workout_screen   | ⚠️     | назначение тренировки готово (план+пикер); управление/правка — позже |
 | ActiveWorkoutPage  | —                       | ❌     | проведение тренировки тренером                                       |
-| ClientStatsPage    | —                       | ❌     | статистика клиента                                                   |
+| ClientStatsPage    | clients_screen (Stats)  | ✅     | сводка + рекорды в карточке                                          |
 | ClientMedicalPage  | —                       | ❌     | мед.карта                                                            |
-| ClientPaymentsPage | —                       | ❌     | платежи клиента                                                      |
+| ClientPaymentsPage | clients_screen (Баланс) | ⚠️     | пакеты + добавление; детальная история платежей P2                   |
 | ClientCalendarPage | —                       | ⚠️     | календарь клиента (слит в общий)                                     |
 | MessagesPage       | conversations_screen    | ✅     |                                                                      |
 | ClientChatPage     | chat_screen             | ✅     |                                                                      |
-| NotificationsPage  | —                       | ❌     | уведомления тренера                                                  |
+| NotificationsPage  | notifications_screen    | ⚠️     | actionable по занятиям (отклонён/сегодня/ждёт/подтв.); ДР/балансы P2 |
 | KnowledgeBasePage  | —                       | ❌     | каталог упражнений тренера                                           |
 | ExerciseEditPage   | —                       | ❌     | создание/правка упражнения                                           |
 | TemplateEditPage   | —                       | ❌     | шаблоны тренировок                                                   |
