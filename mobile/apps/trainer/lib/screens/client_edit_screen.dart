@@ -1,11 +1,40 @@
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../api/trainer_clients.dart';
 
-/// Создание (client == null) или редактирование клиента: имя, телефон, формат,
-/// статус (при правке), заметки; код подключения (при создании).
+/// Типы контактов и их оформление (зеркало веб CONTACT_ADD).
+class _ContactType {
+  const _ContactType(this.label, this.icon, this.keyboard);
+  final String label;
+  final IconData icon;
+  final TextInputType keyboard;
+}
+
+const List<_ContactType> _contactTypes = <_ContactType>[
+  _ContactType('Телефон', Icons.phone_outlined, TextInputType.phone),
+  _ContactType('Email', Icons.mail_outline, TextInputType.emailAddress),
+  _ContactType('Telegram', Icons.send_outlined, TextInputType.text),
+  _ContactType('WhatsApp', Icons.chat_outlined, TextInputType.phone),
+  _ContactType('MAX', Icons.chat_bubble_outline, TextInputType.text),
+  _ContactType('Instagram', Icons.camera_alt_outlined, TextInputType.text),
+  _ContactType('ВКонтакте', Icons.groups_outlined, TextInputType.text),
+];
+
+IconData _iconForType(String type) =>
+    _contactTypes.firstWhere((_ContactType t) => t.label == type, orElse: () => _contactTypes.first).icon;
+
+class _EditContact {
+  _EditContact({required this.type, required this.value});
+  final String type;
+  final TextEditingController value;
+}
+
+/// Создание/правка клиента тренером. Зеркало веб ClientEditPage: X/✓-шапка,
+/// аватар, подключение по коду, формат, типизированные контакты, ДР, заметки,
+/// теги, удаление.
 class ClientEditScreen extends ConsumerStatefulWidget {
   const ClientEditScreen({super.key, this.client});
   final Client? client;
@@ -15,109 +44,67 @@ class ClientEditScreen extends ConsumerStatefulWidget {
 }
 
 class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
-  late final TextEditingController _first =
-      TextEditingController(text: widget.client?.firstName ?? '');
-  late final TextEditingController _last =
-      TextEditingController(text: widget.client?.lastName ?? '');
-  late final TextEditingController _phone =
-      TextEditingController(text: widget.client?.phone ?? '');
-  late final TextEditingController _notes =
-      TextEditingController(text: widget.client?.notes ?? '');
-  final TextEditingController _code = TextEditingController();
+  late final TextEditingController _first = TextEditingController(text: widget.client?.firstName ?? '');
+  late final TextEditingController _last = TextEditingController(text: widget.client?.lastName ?? '');
+  late final TextEditingController _notes = TextEditingController(text: widget.client?.notes ?? '');
   late bool _online = widget.client?.isOnline ?? false;
   late ClientStatus _status = widget.client?.status ?? ClientStatus.active;
   late DateTime? _birth = (widget.client?.birthDate != null && widget.client!.birthDate!.length >= 10)
       ? DateTime.tryParse(widget.client!.birthDate!.substring(0, 10))
       : null;
+  late String? _accountId = widget.client?.accountId;
+  late String? _avatarFileId = widget.client?.avatarFileId;
+  late final List<_EditContact> _contacts = _initContacts();
+  late final List<String> _tags = <String>[...?widget.client?.tags];
+  final TextEditingController _tagInput = TextEditingController();
   bool _busy = false;
+  bool _avatarBusy = false;
 
   bool get _isEdit => widget.client != null;
 
-  String _iso(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  List<_EditContact> _initContacts() {
+    final List<ClientContact> src = widget.client?.contacts ?? <ClientContact>[];
+    final List<_EditContact> list = src
+        .map((ClientContact c) => _EditContact(type: c.type, value: TextEditingController(text: c.value)))
+        .toList();
+    // Если контактов нет, но есть телефон — подставляем как контакт «Телефон».
+    if (list.isEmpty && widget.client?.phone?.trim().isNotEmpty == true) {
+      list.add(_EditContact(type: 'Телефон', value: TextEditingController(text: widget.client!.phone!.trim())));
+    }
+    return list;
+  }
 
   @override
   void dispose() {
     _first.dispose();
     _last.dispose();
-    _phone.dispose();
     _notes.dispose();
-    _code.dispose();
+    _tagInput.dispose();
+    for (final _EditContact c in _contacts) {
+      c.value.dispose();
+    }
     super.dispose();
   }
 
-  String? _codeMsg; // результат проверки кода
-  bool _codeOk = false;
-  bool _checking = false;
-
-  /// Серверная проверка кода до сохранения: существует ли аккаунт и не занят ли.
-  Future<void> _checkCode() async {
-    final String code = _code.text.trim();
-    if (code.isEmpty || _checking) return;
-    setState(() {
-      _checking = true;
-      _codeMsg = null;
-      _codeOk = false;
-    });
-    try {
-      final ({bool exists, String? linkedClientName}) r = await ref
-          .read(trainerClientsApiProvider)
-          .checkConnectCode(code, excludeClientId: widget.client?.id);
-      if (!mounted) return;
-      setState(() {
-        _checking = false;
-        if (!r.exists) {
-          _codeMsg = 'Клиент с таким кодом не найден';
-          _codeOk = false;
-        } else if (r.linkedClientName != null && r.linkedClientName!.isNotEmpty) {
-          _codeMsg = 'Код уже привязан к клиенту: ${r.linkedClientName}';
-          _codeOk = false;
-        } else {
-          _codeMsg = 'Код найден — можно привязать';
-          _codeOk = true;
-        }
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _checking = false;
-        _codeMsg = 'Не удалось проверить код';
-        _codeOk = false;
-      });
-    }
-  }
-
-  /// Дозаполнить имя/фамилию/ДР из профиля привязанного аккаунта.
-  Future<void> _fillFromAccount() async {
-    final String code = _code.text.trim();
-    if (code.isEmpty) return;
-    try {
-      final Map<String, dynamic> p = await ref.read(trainerClientsApiProvider).accountProfile(code);
-      if (!mounted) return;
-      setState(() {
-        if ((p['firstName'] as String?)?.isNotEmpty == true) _first.text = p['firstName'] as String;
-        if ((p['lastName'] as String?)?.isNotEmpty == true) _last.text = p['lastName'] as String;
-        final String? bd = p['birthDate'] as String?;
-        if (bd != null && bd.length >= 10) _birth = DateTime.tryParse(bd.substring(0, 10));
-      });
-    } catch (_) {}
-  }
+  String _iso(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   Future<void> _save() async {
     if (_first.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Укажите имя')));
       return;
     }
-    final String code = _code.text.trim();
-    // Если ввели код, но не проверили или он невалиден — не даём сохранить с битой привязкой.
-    if (code.isNotEmpty && !_codeOk) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Проверьте код подключения перед сохранением')));
-      return;
-    }
     setState(() => _busy = true);
     final NavigatorState nav = Navigator.of(context);
     final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    final List<Map<String, String>> contacts = _contacts
+        .where((_EditContact c) => c.value.text.trim().isNotEmpty)
+        .map((_EditContact c) => <String, String>{'type': c.type, 'value': c.value.text.trim()})
+        .toList();
+    final String? phone = contacts.cast<Map<String, String>?>().firstWhere(
+          (Map<String, String>? c) => c?['type'] == 'Телефон',
+          orElse: () => null,
+        )?['value'];
     try {
       final TrainerClientsApi api = ref.read(trainerClientsApiProvider);
       if (_isEdit) {
@@ -125,182 +112,572 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
           widget.client!.id,
           firstName: _first.text.trim(),
           lastName: _last.text.trim(),
-          phone: _phone.text,
+          phone: phone,
           isOnline: _online,
           status: _status,
           notes: _notes.text,
           setBirthDate: true,
           birthDate: _birth != null ? _iso(_birth!) : null,
-          // Привязываем только если ввели проверенный код (иначе не трогаем связь).
-          setAccountId: code.isNotEmpty && _codeOk,
-          accountId: code,
+          setAccountId: true,
+          accountId: _accountId,
+          contacts: contacts,
+          tags: _tags,
         );
       } else {
         await api.create(
           firstName: _first.text.trim(),
           lastName: _last.text.trim(),
-          phone: _phone.text,
+          phone: phone,
           isOnline: _online,
-          accountId: code,
+          accountId: _accountId,
           birthDate: _birth != null ? _iso(_birth!) : null,
+          contacts: contacts,
+          tags: _tags,
         );
       }
       ref.invalidate(trainerClientsProvider);
+      if (_isEdit) ref.invalidate(trainerClientProvider(widget.client!.id));
       if (!mounted) return;
       nav.pop(true);
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() => _busy = false);
-      final String? msg = apiErrorMessage(e);
-      m.showSnackBar(SnackBar(
-          content: Text(msg != null && msg.toLowerCase().contains('код')
-              ? 'Неверный код подключения'
-              : (msg ?? 'Не удалось сохранить'))));
+      m.showSnackBar(const SnackBar(content: Text('Не удалось сохранить')));
     }
+  }
+
+  Future<void> _pickAvatar() async {
+    if (!_isEdit || _avatarBusy) return;
+    final XFile? picked = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1024, imageQuality: 85);
+    if (picked == null) return;
+    setState(() => _avatarBusy = true);
+    try {
+      await ref.read(trainerClientsApiProvider).uploadAvatar(widget.client!.id, picked.path, picked.name);
+      ref.invalidate(trainerClientProvider(widget.client!.id));
+      final Client fresh = await ref.read(trainerClientsApiProvider).byId(widget.client!.id);
+      if (!mounted) return;
+      setState(() {
+        _avatarFileId = fresh.avatarFileId;
+        _avatarBusy = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _avatarBusy = false);
+    }
+  }
+
+  Future<void> _removeAvatar() async {
+    if (!_isEdit || _avatarBusy) return;
+    setState(() => _avatarBusy = true);
+    try {
+      await ref.read(trainerClientsApiProvider).removeAvatar(widget.client!.id);
+      ref.invalidate(trainerClientProvider(widget.client!.id));
+      if (!mounted) return;
+      setState(() {
+        _avatarFileId = null;
+        _avatarBusy = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _avatarBusy = false);
+    }
+  }
+
+  Future<void> _openConnect() async {
+    final String? code = await _showConnectDialog(context, excludeClientId: widget.client?.id);
+    if (code == null || code.trim().isEmpty) return;
+    setState(() => _accountId = code.trim());
+  }
+
+  Future<void> _fillFromAccount() async {
+    if (_accountId == null) return;
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    try {
+      final Map<String, dynamic> p = await ref.read(trainerClientsApiProvider).accountProfile(_accountId!);
+      if (!mounted) return;
+      setState(() {
+        if ((p['firstName'] as String?)?.isNotEmpty == true && _first.text.trim().isEmpty) _first.text = p['firstName'] as String;
+        if ((p['lastName'] as String?)?.isNotEmpty == true && _last.text.trim().isEmpty) _last.text = p['lastName'] as String;
+        final String? bd = p['birthDate'] as String?;
+        if (bd != null && _birth == null) _birth = DateTime.tryParse(bd.substring(0, 10));
+      });
+    } catch (_) {
+      m.showSnackBar(const SnackBar(content: Text('Не удалось получить данные')));
+    }
+  }
+
+  Future<void> _delete() async {
+    final NavigatorState nav = Navigator.of(context);
+    final bool ok = await _showDeleteDialog(context, widget.client!.fullName);
+    if (!ok) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(trainerClientsApiProvider).delete(widget.client!.id);
+      ref.invalidate(trainerClientsProvider);
+      if (!mounted) return;
+      nav.pop(true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+    }
+  }
+
+  void _addTag() {
+    final String t = _tagInput.text.trim();
+    if (t.isEmpty || _tags.contains(t)) {
+      _tagInput.clear();
+      return;
+    }
+    setState(() {
+      _tags.add(t);
+      _tagInput.clear();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final AppColors c = context.colors;
     return Scaffold(
-      appBar: AppBar(title: Text(_isEdit ? 'Редактировать клиента' : 'Новый клиент')),
+      backgroundColor: c.bg,
+      appBar: AppBar(
+        leading: IconButton(
+          icon: CircleAvatar(backgroundColor: c.card, child: Icon(Icons.close, size: 20, color: c.ink)),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(_isEdit ? 'Клиент' : 'Новый клиент'),
+        actions: <Widget>[
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: GestureDetector(
+              onTap: _busy ? null : _save,
+              child: CircleAvatar(
+                backgroundColor: c.accent,
+                child: _busy
+                    ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: c.accentOn))
+                    : Icon(Icons.check, color: c.accentOn),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: <Widget>[
-          TextField(
-            controller: _first,
-            decoration: const InputDecoration(labelText: 'Имя', border: OutlineInputBorder()),
+          // Аватар.
+          Center(
+            child: Column(
+              children: <Widget>[
+                Stack(
+                  alignment: Alignment.bottomRight,
+                  children: <Widget>[
+                    AuthedAvatar(
+                      url: (_isEdit && _avatarFileId != null)
+                          ? '${ref.read(baseUrlProvider).replaceAll(RegExp(r'/$'), '')}/api/files/$_avatarFileId'
+                          : null,
+                      token: ref.watch(sessionProvider).token,
+                      initials: '${_first.text.isNotEmpty ? _first.text[0] : ''}${_last.text.isNotEmpty ? _last.text[0] : ''}'.toUpperCase(),
+                      radius: 44,
+                    ),
+                    if (_isEdit)
+                      GestureDetector(
+                        onTap: _avatarBusy ? null : _pickAvatar,
+                        child: Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(color: c.accent, shape: BoxShape.circle, border: Border.all(color: c.bg, width: 2)),
+                          child: _avatarBusy
+                              ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: c.accentOn))
+                              : Icon(Icons.photo_camera, size: 14, color: c.accentOn),
+                        ),
+                      ),
+                  ],
+                ),
+                if (_isEdit) ...<Widget>[
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      TextButton(onPressed: _avatarBusy ? null : _pickAvatar, child: const Text('Изменить фото')),
+                      if (_avatarFileId != null)
+                        TextButton(
+                            onPressed: _avatarBusy ? null : _removeAvatar,
+                            child: Text('Удалить', style: TextStyle(color: c.inkMuted))),
+                    ],
+                  ),
+                ],
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _last,
-            decoration: const InputDecoration(labelText: 'Фамилия', border: OutlineInputBorder()),
+          const SizedBox(height: 8),
+          // ── Подключение ──
+          _Label('Подключение'),
+          GestureDetector(
+            onTap: _openConnect,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+              child: Row(
+                children: <Widget>[
+                  Icon(_accountId != null ? Icons.link : Icons.add_link, size: 22, color: c.inkMuted),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(_accountId != null ? 'Код привязки указан' : 'Подключить клиента',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                        Text(_accountId != null ? 'ID: $_accountId' : 'Привязать по коду из приложения клиента',
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12, color: c.inkMuted)),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, size: 18, color: c.inkMutedXl),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _phone,
-            keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(labelText: 'Телефон', border: OutlineInputBorder()),
+          if (_accountId != null) ...<Widget>[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _fillFromAccount,
+              icon: const Icon(Icons.download_outlined, size: 18),
+              label: const Text('Получить данные из профиля клиента'),
+            ),
+          ],
+          const SizedBox(height: 16),
+          // ── Имя/Фамилия ──
+          _field(c, 'Имя', _first, onChanged: (_) => setState(() {})),
+          const SizedBox(height: 10),
+          _field(c, 'Фамилия', _last, onChanged: (_) => setState(() {})),
+          const SizedBox(height: 16),
+          // ── Формат ──
+          _Label('Формат'),
+          Row(
+            children: <Widget>[
+              _SegBtn(label: 'Спортзал', active: !_online, onTap: () => setState(() => _online = false)),
+              const SizedBox(width: 8),
+              _SegBtn(label: 'Онлайн', active: _online, onTap: () => setState(() => _online = true)),
+            ],
           ),
-          const SizedBox(height: 12),
+          if (_isEdit) ...<Widget>[
+            const SizedBox(height: 16),
+            _Label('Статус'),
+            Row(
+              children: <Widget>[
+                _SegBtn(label: 'Активный', active: _status == ClientStatus.active, onTap: () => setState(() => _status = ClientStatus.active)),
+                const SizedBox(width: 8),
+                _SegBtn(label: 'В архиве', active: _status == ClientStatus.archived, onTap: () => setState(() => _status = ClientStatus.archived)),
+              ],
+            ),
+          ],
+          const SizedBox(height: 16),
+          // ── Связь ──
+          _Label('Связь'),
+          ..._contacts.asMap().entries.map((MapEntry<int, _EditContact> e) => _contactRow(c, e.key, e.value)),
+          ..._contactTypes.map((_ContactType t) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: GestureDetector(
+                  onTap: () => setState(() => _contacts.add(_EditContact(type: t.label, value: TextEditingController()))),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+                    child: Row(
+                      children: <Widget>[
+                        CircleAvatar(radius: 16, backgroundColor: c.accent, child: Icon(Icons.add, size: 18, color: c.accentOn)),
+                        const SizedBox(width: 12),
+                        Text('добавить ${t.label}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                      ],
+                    ),
+                  ),
+                ),
+              )),
+          const SizedBox(height: 8),
+          // ── Личное ──
+          _Label('Личное'),
           InkWell(
             onTap: () async {
               final DateTime now = DateTime.now();
               final DateTime? d = await showDatePicker(
-                context: context,
-                initialDate: _birth ?? DateTime(now.year - 25),
-                firstDate: DateTime(1900),
-                lastDate: now,
-              );
+                context: context, initialDate: _birth ?? DateTime(now.year - 25), firstDate: DateTime(1900), lastDate: now);
               if (d != null) setState(() => _birth = d);
             },
-            child: InputDecorator(
-              decoration: InputDecoration(
-                labelText: 'Дата рождения (необязательно)',
-                border: const OutlineInputBorder(),
-                suffixIcon: _birth != null
-                    ? IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => setState(() => _birth = null))
-                    : const Icon(Icons.event),
-              ),
-              child: Text(_birth != null
-                  ? '${_birth!.day.toString().padLeft(2, '0')}.${_birth!.month.toString().padLeft(2, '0')}.${_birth!.year}'
-                  : 'Не указана'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Онлайн-формат'),
-            value: _online,
-            onChanged: (bool v) => setState(() => _online = v),
-          ),
-          if (_isEdit) ...<Widget>[
-            const SizedBox(height: 4),
-            const Text('Статус'),
-            const SizedBox(height: 6),
-            SegmentedButton<ClientStatus>(
-              segments: const <ButtonSegment<ClientStatus>>[
-                ButtonSegment<ClientStatus>(value: ClientStatus.active, label: Text('Активный')),
-                ButtonSegment<ClientStatus>(value: ClientStatus.archived, label: Text('В архиве')),
-              ],
-              selected: <ClientStatus>{_status},
-              onSelectionChanged: (Set<ClientStatus> s) => setState(() => _status = s.first),
-            ),
-          ],
-          const SizedBox(height: 12),
-          TextField(
-            controller: _notes,
-            maxLines: 4,
-            decoration: const InputDecoration(labelText: 'Заметки', border: OutlineInputBorder(), alignLabelWithHint: true),
-          ),
-          const SizedBox(height: 16),
-          // ── Подключение аккаунта клиента (проверка кода до сохранения) ──
-          Text('ПОДКЛЮЧЕНИЕ', style: AppFonts.mono(size: 11, color: context.colors.inkMutedXl, weight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          if (_isEdit && widget.client!.hasAccount)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text('Аккаунт уже привязан. Новый код заменит привязку.',
-                  style: TextStyle(fontSize: 12, color: context.colors.inkMuted)),
-            ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Expanded(
-                child: TextField(
-                  controller: _code,
-                  onChanged: (_) => setState(() { _codeMsg = null; _codeOk = false; }),
-                  decoration: const InputDecoration(
-                    labelText: 'Код из приложения клиента',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                height: 56,
-                child: FilledButton.tonal(
-                  onPressed: _checking ? null : _checkCode,
-                  child: _checking
-                      ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Проверить'),
-                ),
-              ),
-            ],
-          ),
-          if (_codeMsg != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
               child: Row(
                 children: <Widget>[
-                  Icon(_codeOk ? Icons.check_circle_outline : Icons.error_outline,
-                      size: 16, color: _codeOk ? context.colors.accent : context.colors.danger),
-                  const SizedBox(width: 6),
+                  Icon(Icons.cake_outlined, size: 18, color: c.inkMuted),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: Text(_codeMsg!,
-                        style: TextStyle(fontSize: 13, color: _codeOk ? context.colors.ink : context.colors.danger)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text('Дата рождения', style: TextStyle(fontSize: 12, color: c.inkMuted)),
+                        Text(
+                            _birth != null
+                                ? '${_birth!.day.toString().padLeft(2, '0')}.${_birth!.month.toString().padLeft(2, '0')}.${_birth!.year}'
+                                : 'Не указана',
+                            style: TextStyle(fontSize: 15, color: _birth != null ? c.ink : c.inkMuted)),
+                      ],
+                    ),
                   ),
+                  if (_birth != null)
+                    GestureDetector(onTap: () => setState(() => _birth = null), child: Icon(Icons.close, size: 18, color: c.inkMuted)),
                 ],
               ),
             ),
-          if (_codeOk)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: _fillFromAccount,
-                icon: const Icon(Icons.download, size: 16),
-                label: const Text('Получить данные из профиля'),
+          ),
+          const SizedBox(height: 16),
+          // ── Заметки ──
+          _Label('Заметки'),
+          TextField(
+            controller: _notes,
+            maxLines: 4,
+            decoration: InputDecoration(
+              hintText: 'Заметка о клиенте…',
+              filled: true,
+              fillColor: c.card,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // ── Теги ──
+          _Label('Теги'),
+          if (_tags.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _tags
+                    .map((String t) => Chip(
+                          label: Text('#$t'),
+                          onDeleted: () => setState(() => _tags.remove(t)),
+                          visualDensity: VisualDensity.compact,
+                        ))
+                    .toList(),
               ),
             ),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: _busy ? null : _save,
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
-            child: _busy
-                ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : Text(_isEdit ? 'Сохранить' : 'Создать'),
+          TextField(
+            controller: _tagInput,
+            onSubmitted: (_) => _addTag(),
+            decoration: InputDecoration(
+              hintText: '+ добавить',
+              filled: true,
+              fillColor: c.card,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('Введите тег и нажмите ввод. Теги помогают быстро группировать клиентов.',
+                style: TextStyle(fontSize: 12, color: c.inkMuted)),
+          ),
+          if (_isEdit) ...<Widget>[
+            const SizedBox(height: 20),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _delete,
+              icon: Icon(Icons.delete_outline, size: 18, color: c.danger),
+              label: Text('Удалить клиента', style: TextStyle(color: c.danger)),
+              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48), side: BorderSide(color: c.line)),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _contactRow(AppColors c, int i, _EditContact ct) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(14, 6, 8, 6),
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+      child: Row(
+        children: <Widget>[
+          Icon(_iconForType(ct.type), size: 18, color: c.inkMuted),
+          const SizedBox(width: 10),
+          SizedBox(width: 76, child: Text(ct.type, style: TextStyle(fontSize: 13, color: c.inkMuted))),
+          Expanded(
+            child: TextField(
+              controller: ct.value,
+              keyboardType: _contactTypes
+                  .firstWhere((_ContactType t) => t.label == ct.type, orElse: () => _contactTypes.first)
+                  .keyboard,
+              decoration: const InputDecoration(isDense: true, border: InputBorder.none, hintText: 'значение'),
+            ),
+          ),
+          GestureDetector(
+            onTap: () => setState(() {
+              _contacts.removeAt(i).value.dispose();
+            }),
+            child: Padding(padding: const EdgeInsets.all(6), child: Icon(Icons.close, size: 18, color: c.inkMuted)),
           ),
         ],
       ),
     );
   }
+
+  Widget _field(AppColors c, String label, TextEditingController ctrl, {ValueChanged<String>? onChanged}) {
+    return TextField(
+      controller: ctrl,
+      onChanged: onChanged,
+      decoration: InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: c.card,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+      ),
+    );
+  }
+}
+
+class _Label extends StatelessWidget {
+  const _Label(this.text);
+  final String text;
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(text.toUpperCase(),
+            style: AppFonts.mono(size: 11, color: context.colors.inkMutedXl, weight: FontWeight.w700)),
+      );
+}
+
+class _SegBtn extends StatelessWidget {
+  const _SegBtn({required this.label, required this.active, required this.onTap});
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: active ? c.accent : c.card,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Text(label,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: active ? c.accentOn : c.inkMuted)),
+        ),
+      ),
+    );
+  }
+}
+
+/// Диалог подключения: ввод кода + проверка перед применением.
+Future<String?> _showConnectDialog(BuildContext context, {String? excludeClientId}) {
+  final TextEditingController code = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (BuildContext ctx) {
+      String? error;
+      bool checking = false;
+      return StatefulBuilder(
+        builder: (BuildContext ctx, void Function(void Function()) setLocal) => AlertDialog(
+          title: const Text('Подключить клиента'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              TextField(
+                controller: code,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Код из приложения клиента', border: OutlineInputBorder()),
+              ),
+              if (error != null) ...<Widget>[
+                const SizedBox(height: 8),
+                Text(error!, style: TextStyle(color: ctx.colors.danger, fontSize: 13)),
+              ],
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+            Consumer(
+              builder: (BuildContext ctx, WidgetRef ref, _) => FilledButton(
+                onPressed: checking
+                    ? null
+                    : () async {
+                        final String v = code.text.trim();
+                        if (v.isEmpty) return;
+                        setLocal(() {
+                          checking = true;
+                          error = null;
+                        });
+                        try {
+                          final ({bool exists, String? linkedClientName}) res =
+                              await ref.read(trainerClientsApiProvider).checkConnectCode(v, excludeClientId: excludeClientId);
+                          if (!res.exists) {
+                            setLocal(() {
+                              error = 'Клиент с таким кодом не найден';
+                              checking = false;
+                            });
+                            return;
+                          }
+                          if (res.linkedClientName != null) {
+                            setLocal(() {
+                              error = 'Код уже привязан: ${res.linkedClientName}';
+                              checking = false;
+                            });
+                            return;
+                          }
+                          if (ctx.mounted) Navigator.pop(ctx, v);
+                        } catch (_) {
+                          setLocal(() {
+                            error = 'Не удалось проверить код';
+                            checking = false;
+                          });
+                        }
+                      },
+                child: checking
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Проверить'),
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+/// Диалог удаления: требует ввести имя клиента точно.
+Future<bool> _showDeleteDialog(BuildContext context, String name) async {
+  final TextEditingController input = TextEditingController();
+  final bool? ok = await showDialog<bool>(
+    context: context,
+    builder: (BuildContext ctx) {
+      bool match = false;
+      return StatefulBuilder(
+        builder: (BuildContext ctx, void Function(void Function()) setLocal) => AlertDialog(
+          title: const Text('Удалить клиента?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text('Действие необратимо. Введите «$name» для подтверждения.', style: const TextStyle(fontSize: 14)),
+              const SizedBox(height: 12),
+              TextField(
+                controller: input,
+                autofocus: true,
+                onChanged: (String v) => setLocal(() => match = v.trim() == name.trim()),
+                decoration: const InputDecoration(border: OutlineInputBorder()),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+            FilledButton(
+              onPressed: match ? () => Navigator.pop(ctx, true) : null,
+              style: FilledButton.styleFrom(backgroundColor: ctx.colors.danger),
+              child: const Text('Удалить'),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+  return ok ?? false;
 }

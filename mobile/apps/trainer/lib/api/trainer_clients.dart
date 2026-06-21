@@ -114,24 +114,29 @@ class TrainerClientsApi {
   }
 
   /// Создать клиента (необязательно с привязкой к аккаунту по коду).
-  Future<void> create({
+  Future<String> create({
     required String firstName,
     required String lastName,
     String? phone,
     required bool isOnline,
     String? accountId,
     String? birthDate,
+    List<Map<String, String>>? contacts,
+    List<String>? tags,
   }) async {
     final String? ph = (phone == null || phone.trim().isEmpty) ? null : phone.trim();
     final String? acc = (accountId == null || accountId.trim().isEmpty) ? null : accountId.trim();
-    await _api.postJson('/api/clients', <String, dynamic>{
+    final Map<String, dynamic> r = await _api.postJson('/api/clients', <String, dynamic>{
       'firstName': firstName,
       'lastName': lastName,
       'phone': ph,
       'isOnline': isOnline,
       'accountId': acc,
       'birthDate': ?birthDate,
+      'contacts': contacts ?? <Map<String, String>>[],
+      'tags': tags ?? <String>[],
     });
+    return (r['client'] as Map<String, dynamic>?)?['id'] as String? ?? '';
   }
 
   /// Обновить данные клиента (частично).
@@ -147,6 +152,8 @@ class TrainerClientsApi {
     String? birthDate,
     bool setAccountId = false,
     String? accountId,
+    List<Map<String, String>>? contacts,
+    List<String>? tags,
   }) async {
     await _api.patchJson('/api/clients/$id', <String, dynamic>{
       'firstName': firstName,
@@ -157,7 +164,24 @@ class TrainerClientsApi {
       'notes': notes == null || notes.trim().isEmpty ? null : notes.trim(),
       if (setBirthDate) 'birthDate': birthDate,
       if (setAccountId) 'accountId': (accountId == null || accountId.trim().isEmpty) ? null : accountId.trim(),
+      'contacts': ?contacts,
+      'tags': ?tags,
     });
+  }
+
+  /// Удалить клиента.
+  Future<void> delete(String id) async {
+    await _api.deleteJson('/api/clients/$id');
+  }
+
+  /// Загрузить аватар клиента (multipart, поле photo).
+  Future<void> uploadAvatar(String id, String filePath, String fileName) async {
+    await _api.postForm('/api/clients/$id/avatar', <String, String>{},
+        fileField: 'photo', filePath: filePath, fileName: fileName);
+  }
+
+  Future<void> removeAvatar(String id) async {
+    await _api.deleteJson('/api/clients/$id/avatar');
   }
 
   /// Проверка кода подключения перед привязкой: существует ли аккаунт и не занят ли
