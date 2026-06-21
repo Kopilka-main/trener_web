@@ -196,6 +196,59 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
     return m;
   }
 
+  /// Краткая карточка упражнения из каталога (по тапу на «i»).
+  void _showExerciseInfo(String exerciseId) {
+    final List<TExercise> catalog = ref.read(trainerCatalogProvider).valueOrNull ?? <TExercise>[];
+    final TExercise? ex = catalog.where((TExercise e) => e.id == exerciseId).firstOrNull;
+    if (ex == null) return;
+    final String base = ref.read(baseUrlProvider);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: context.colors.bg,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (BuildContext ctx) {
+        final AppColors c = ctx.colors;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20, 0, 20, 16 + MediaQuery.of(ctx).viewPadding.bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(ex.name, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
+              const SizedBox(height: 2),
+              Text(
+                <String>[
+                  if (ex.category.isNotEmpty) ex.category,
+                  if (ex.subgroup?.isNotEmpty == true) ex.subgroup!,
+                ].join(' · '),
+                style: TextStyle(fontSize: 13, color: c.inkMuted),
+              ),
+              const SizedBox(height: 12),
+              CatalogMediaView(
+                imageUrl: catalogMediaUrl(base, ex.imageUrl ?? ex.thumbUrl),
+                videoUrl: catalogMediaUrl(base, ex.videoUrl),
+                height: 200,
+                showToggle: true,
+              ),
+              if (ex.equipment?.isNotEmpty == true || ex.primaryMuscles?.isNotEmpty == true ||
+                  ex.description?.isNotEmpty == true) ...<Widget>[
+                const SizedBox(height: 12),
+                if (ex.equipment?.isNotEmpty == true) _InfoLine(label: 'Оборудование', value: ex.equipment!),
+                if (ex.primaryMuscles?.isNotEmpty == true) _InfoLine(label: 'Целевые', value: ex.primaryMuscles!),
+                if (ex.secondaryMuscles?.isNotEmpty == true) _InfoLine(label: 'Дополнительно', value: ex.secondaryMuscles!),
+                if (ex.description?.isNotEmpty == true) ...<Widget>[
+                  const SizedBox(height: 8),
+                  Text(ex.description!, style: TextStyle(fontSize: 14, height: 1.4, color: c.ink)),
+                ],
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildDetails(BuildContext context) {
     final AppColors c = context.colors;
     return Scaffold(
@@ -239,20 +292,11 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
             ],
           ),
           const SizedBox(height: 20),
-          Row(
-            children: <Widget>[
-              _Label('Упражнения · ${_positions.length}'),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: () => setState(() => _step1 = true),
-                icon: const Icon(Icons.edit, size: 16),
-                label: const Text('Изменить состав'),
-              ),
-            ],
-          ),
+          _Label('Упражнения · ${_positions.length}'),
           ReorderableListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
             itemCount: _positions.length,
             onReorderItem: (int oldI, int newI) {
               setState(() {
@@ -266,8 +310,10 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
                 key: ValueKey<int>(i),
                 pos: p,
                 index: i + 1,
+                listIndex: i,
                 onChanged: () => setState(() {}),
                 onRemove: () => setState(() => _positions.removeAt(i)),
+                onInfo: () => _showExerciseInfo(p.exerciseId),
               );
             },
           ),
@@ -286,13 +332,23 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
   }
 }
 
-/// Карточка позиции: поля плана (повторы/вес или время + отдых).
+/// Карточка позиции: все 4 поля плана (повторы/вес/время/отдых) + drag/info/удаление.
 class _PositionCard extends StatefulWidget {
-  const _PositionCard({super.key, required this.pos, required this.index, required this.onChanged, required this.onRemove});
+  const _PositionCard({
+    super.key,
+    required this.pos,
+    required this.index,
+    required this.listIndex,
+    required this.onChanged,
+    required this.onRemove,
+    required this.onInfo,
+  });
   final _Pos pos;
   final int index;
+  final int listIndex;
   final VoidCallback onChanged;
   final VoidCallback onRemove;
+  final VoidCallback onInfo;
 
   @override
   State<_PositionCard> createState() => _PositionCardState();
@@ -338,6 +394,14 @@ class _PositionCardState extends State<_PositionCard> {
         children: <Widget>[
           Row(
             children: <Widget>[
+              // Drag-handle для перестановки.
+              ReorderableDragStartListener(
+                index: widget.listIndex,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Icon(Icons.drag_indicator, size: 20, color: c.inkMutedXl),
+                ),
+              ),
               Expanded(
                 child: Text('${widget.index}. ${p.exerciseName}',
                     maxLines: 1,
@@ -345,25 +409,55 @@ class _PositionCardState extends State<_PositionCard> {
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
               ),
               GestureDetector(
+                onTap: widget.onInfo,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Icon(Icons.info_outline, size: 18, color: c.inkMuted),
+                ),
+              ),
+              GestureDetector(
                 onTap: widget.onRemove,
-                child: Icon(Icons.delete_outline, size: 18, color: c.inkMuted),
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 2),
+                  child: Icon(Icons.delete_outline, size: 18, color: c.inkMuted),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 8),
+          // Все 4 поля плана.
           Row(
             children: <Widget>[
-              if (p.timeBased)
-                _Num(label: 'Время, с', ctrl: _time, onChanged: (String v) { p.timeSec = _n(v); widget.onChanged(); })
-              else ...<Widget>[
-                _Num(label: 'Повторы', ctrl: _reps, onChanged: (String v) { p.reps = _n(v); widget.onChanged(); }),
-                const SizedBox(width: 8),
-                _Num(label: 'Вес, кг', ctrl: _weight, onChanged: (String v) { p.weightKg = _n(v); widget.onChanged(); }),
-              ],
+              _Num(label: 'Повторы', ctrl: _reps, onChanged: (String v) { p.reps = _n(v); widget.onChanged(); }),
+              const SizedBox(width: 8),
+              _Num(label: 'Вес, кг', ctrl: _weight, onChanged: (String v) { p.weightKg = _n(v); widget.onChanged(); }),
+              const SizedBox(width: 8),
+              _Num(label: 'Время, с', ctrl: _time, onChanged: (String v) { p.timeSec = _n(v); widget.onChanged(); }),
               const SizedBox(width: 8),
               _Num(label: 'Отдых, с', ctrl: _rest, onChanged: (String v) { p.restSec = _n(v); widget.onChanged(); }),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Строка «label: value» для карточки упражнения.
+class _InfoLine extends StatelessWidget {
+  const _InfoLine({required this.label, required this.value});
+  final String label;
+  final String value;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SizedBox(width: 110, child: Text(label, style: TextStyle(fontSize: 14, color: c.inkMuted))),
+          Expanded(child: Text(value, style: TextStyle(fontSize: 14, color: c.ink))),
         ],
       ),
     );
@@ -728,7 +822,6 @@ class _Chip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(color: active ? c.accent : c.chip, borderRadius: BorderRadius.circular(20)),
         child: Text(label,
