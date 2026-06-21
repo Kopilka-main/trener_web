@@ -478,7 +478,11 @@ class ClientDetailScreen extends ConsumerWidget {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: Text(name)),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+      ),
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(trainerClientProvider(c.id));
