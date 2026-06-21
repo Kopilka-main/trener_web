@@ -166,6 +166,11 @@ export function makeChatService(repo: ChatRepo, deps: ChatDeps) {
       return rows.map(toMessageResponse);
     },
 
+    // Закрепить конкретное сообщение (тренер).
+    async pin(trainerId: string, clientId: string, messageId: string): Promise<void> {
+      await repo.pinMessage(trainerId, clientId, messageId, deps.now());
+    },
+
     // Снять закреп с конкретного сообщения (тренер).
     async unpin(trainerId: string, clientId: string, messageId: string): Promise<void> {
       await repo.unpinMessage(trainerId, clientId, messageId);

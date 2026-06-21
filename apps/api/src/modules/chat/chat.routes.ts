@@ -95,6 +95,22 @@ export function chatRoutes(
     },
   );
 
+  // Закрепить конкретное сообщение (тренер).
+  typed.post(
+    '/api/clients/:id/messages/:messageId/pin',
+    {
+      preHandler: clientPreHandler,
+      schema: {
+        params: z.object({ id: z.string(), messageId: z.string() }),
+        response: { 200: z.object({ ok: z.literal(true) }) },
+      },
+    },
+    async (req) => {
+      await svc.pin(trainerId(req), req.params.id, req.params.messageId);
+      return { ok: true as const };
+    },
+  );
+
   // Снять закреп с конкретного сообщения (тренер).
   typed.delete(
     '/api/clients/:id/messages/:messageId/pin',
