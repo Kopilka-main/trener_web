@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/trainer_calendar.dart';
+import '../api/trainer_clients.dart';
 import '../api/trainer_workouts.dart';
 import 'active_workout_screen.dart';
+import 'clients_screen.dart' show ClientDetailScreen;
 import 'session_form.dart';
 
 /// Календарь тренера: SessionsCalendar (День/Неделя/Месяц) с именами клиентов +
@@ -225,12 +227,58 @@ class _SessionSheetState extends ConsumerState<_SessionSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(s.clientName.isNotEmpty ? s.clientName : 'Без клиента',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
-          if (s.title?.trim().isNotEmpty == true) ...<Widget>[
-            const SizedBox(height: 2),
-            Text(s.title!.trim(), style: TextStyle(fontSize: 14, color: c.inkMuted)),
-          ],
+          // Шапка: аватар + имя клиента (тап → карточка клиента).
+          Builder(builder: (BuildContext _) {
+            final Client? cl =
+                s.clientId.isNotEmpty ? ref.watch(trainerClientProvider(s.clientId)).valueOrNull : null;
+            final String name = (cl?.fullName.trim().isNotEmpty == true)
+                ? cl!.fullName
+                : (s.clientName.isNotEmpty ? s.clientName : 'Без клиента');
+            final String base = ref.read(baseUrlProvider).replaceAll(RegExp(r'/$'), '');
+            final String? avatarUrl =
+                cl?.avatarFileId != null ? '$base/api/files/${cl!.avatarFileId}' : null;
+            final bool canOpen = cl != null;
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: canOpen
+                  ? () {
+                      final NavigatorState nav = Navigator.of(context);
+                      nav.pop();
+                      nav.push<void>(MaterialPageRoute<void>(
+                          builder: (_) => ClientDetailScreen(client: cl)));
+                    }
+                  : null,
+              child: Row(
+                children: <Widget>[
+                  AuthedAvatar(
+                    url: avatarUrl,
+                    token: ref.watch(sessionProvider).token,
+                    initials: cl?.initials ?? '',
+                    radius: 22,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
+                        if (s.title?.trim().isNotEmpty == true)
+                          Text(s.title!.trim(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 14, color: c.inkMuted)),
+                      ],
+                    ),
+                  ),
+                  if (canOpen) Icon(Icons.chevron_right, size: 22, color: c.inkMutedXl),
+                ],
+              ),
+            );
+          }),
           const SizedBox(height: 12),
           Text('$dateLabel, $timeLabel',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
