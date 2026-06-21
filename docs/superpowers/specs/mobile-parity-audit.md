@@ -50,9 +50,9 @@
 | RegisterPage       | register_screen         | ✅     |                                                                      |
 | HomePage           | home_screen             | ⚠️     | сверить плитки/метрики                                               |
 | CalendarPage       | calendar_screen         | ⚠️     | create/edit есть; сверить prefs, planned-workout, виды               |
-| ClientsPage        | clients_screen          | ⚠️     | поиск/фильтры/добавление клиента                                     |
-| ClientCardPage     | clients_screen (Detail) | ⚠️     | баланс/замеры/история есть; нет вкладок                              |
-| ClientEditPage     | —                       | ❌     | редактирование данных клиента                                        |
+| ClientsPage        | clients_screen          | ✅     | + создание клиента (FAB); фильтры активные/архив                     |
+| ClientCardPage     | clients_screen (Detail) | ✅     | баланс/замеры/история/назначение/правка; вкладки P2                  |
+| ClientEditPage     | client_edit_screen      | ✅     | имя/телефон/формат/статус/заметки + код подключения                  |
 | ClientProfilePage  | —                       | ⚠️     | часть карточки                                                       |
 | ClientWorkoutsPage | assign_workout_screen   | ⚠️     | назначение тренировки готово (план+пикер); управление/правка — позже |
 | ActiveWorkoutPage  | —                       | ❌     | проведение тренировки тренером                                       |

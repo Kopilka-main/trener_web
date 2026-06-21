@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../api/trainer_client_card.dart';
 import '../api/trainer_clients.dart';
 import 'assign_workout_screen.dart';
+import 'client_edit_screen.dart';
 
 enum _Tab { active, archived }
 
@@ -21,6 +22,12 @@ class ClientsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Клиенты')),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => Navigator.of(context).push<bool>(
+          MaterialPageRoute<bool>(builder: (_) => const ClientEditScreen()),
+        ),
+        child: const Icon(Icons.person_add_alt),
+      ),
       body: clients.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object e, _) => Center(
@@ -123,7 +130,24 @@ class ClientDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ColorScheme cs = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: Text(client.fullName.isNotEmpty ? client.fullName : 'Клиент')),
+      appBar: AppBar(
+        title: Text(client.fullName.isNotEmpty ? client.fullName : 'Клиент'),
+        actions: <Widget>[
+          IconButton(
+            tooltip: 'Редактировать',
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: () async {
+              final bool? changed = await Navigator.of(context).push<bool>(
+                MaterialPageRoute<bool>(builder: (_) => ClientEditScreen(client: client)),
+              );
+              if (changed == true && context.mounted) {
+                ref.invalidate(trainerClientsProvider);
+                Navigator.of(context).pop();
+              }
+            },
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: <Widget>[

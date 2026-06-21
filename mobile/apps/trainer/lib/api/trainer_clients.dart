@@ -89,6 +89,45 @@ class TrainerClientsApi {
         a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
     return list;
   }
+
+  /// Создать клиента (необязательно с привязкой к аккаунту по коду).
+  Future<void> create({
+    required String firstName,
+    required String lastName,
+    String? phone,
+    required bool isOnline,
+    String? accountId,
+  }) async {
+    final String? ph = (phone == null || phone.trim().isEmpty) ? null : phone.trim();
+    final String? acc = (accountId == null || accountId.trim().isEmpty) ? null : accountId.trim();
+    await _api.postJson('/api/clients', <String, dynamic>{
+      'firstName': firstName,
+      'lastName': lastName,
+      'phone': ph,
+      'isOnline': isOnline,
+      'accountId': acc,
+    });
+  }
+
+  /// Обновить данные клиента (частично).
+  Future<void> update(
+    String id, {
+    required String firstName,
+    required String lastName,
+    String? phone,
+    required bool isOnline,
+    required ClientStatus status,
+    String? notes,
+  }) async {
+    await _api.patchJson('/api/clients/$id', <String, dynamic>{
+      'firstName': firstName,
+      'lastName': lastName,
+      'phone': phone == null || phone.trim().isEmpty ? null : phone.trim(),
+      'isOnline': isOnline,
+      'status': status == ClientStatus.archived ? 'archived' : 'active',
+      'notes': notes == null || notes.trim().isEmpty ? null : notes.trim(),
+    });
+  }
 }
 
 final Provider<TrainerClientsApi> trainerClientsApiProvider =
