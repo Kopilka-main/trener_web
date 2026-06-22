@@ -42,6 +42,7 @@ class PushService {
         badge: true,
         sound: true,
       );
+      await _waitForApns(messaging);
       final String? token = await messaging.getToken();
       if (token != null) await _register(token);
       messaging.onTokenRefresh.listen(_register);
@@ -64,6 +65,18 @@ class PushService {
       }
     } catch (_) {
       // Нет конфигурации/разрешения/сети — тихо пропускаем.
+    }
+  }
+
+  /// iOS: FCM `getToken()` бросает `apns-token-not-set-yet`, пока система не
+  /// зарегистрирует APNs-токен. Ждём его до ~5 секунд, иначе токен не уедет на
+  /// сервер и пуши на iPhone не приходят. На Android это no-op (APNs нет).
+  Future<void> _waitForApns(FirebaseMessaging messaging) async {
+    if (!Platform.isIOS) return;
+    String? apns = await messaging.getAPNSToken();
+    for (int i = 0; i < 10 && apns == null; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      apns = await messaging.getAPNSToken();
     }
   }
 
@@ -97,6 +110,7 @@ class PushService {
       final bool ok = s.authorizationStatus == AuthorizationStatus.authorized ||
           s.authorizationStatus == AuthorizationStatus.provisional;
       if (ok) {
+        await _waitForApns(m);
         final String? token = await m.getToken();
         if (token != null) await _register(token);
       }
