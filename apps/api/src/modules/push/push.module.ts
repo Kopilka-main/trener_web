@@ -32,6 +32,13 @@ function makeFcmSender(
         tokens,
         notification: { title: payload.title, body: payload.body },
         data: payload.url ? { url: payload.url } : {},
+        // Высокий приоритет: будит Android из Doze (иначе пуши придерживаются до
+        // пробуждения телефона) и просит APNs доставить iOS немедленно со звуком.
+        android: { priority: 'high' },
+        apns: {
+          headers: { 'apns-priority': '10' },
+          payload: { aps: { sound: 'default' } },
+        },
       });
       res.responses.forEach((r, i) => {
         if (r.success) return;
