@@ -66,6 +66,10 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Доступ к фотографиям нужен, чтобы выбрать фото профиля клиента и снимки прогресса.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Доступ к камере нужен, чтобы сделать фото профиля и снимки прогресса.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
