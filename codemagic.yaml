@@ -31,11 +31,9 @@ workflows:
     scripts:
       - name: Flutter packages
         script: flutter pub get
-      - name: Pod install
-        script: cd ios && pod install
       - name: Подпись (применить профили от Codemagic)
         script: xcode-project use-profiles
-      - name: Сборка IPA
+      - name: Сборка IPA (поды flutter поставит сам, Podfile сгенерится)
         script: flutter build ipa --release --export-options-plist=$HOME/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
@@ -62,11 +60,9 @@ workflows:
     scripts:
       - name: Flutter packages
         script: flutter pub get
-      - name: Pod install
-        script: cd ios && pod install
       - name: Подпись (применить профили от Codemagic)
         script: xcode-project use-profiles
-      - name: Сборка IPA
+      - name: Сборка IPA (поды flutter поставит сам, Podfile сгенерится)
         script: flutter build ipa --release --export-options-plist=$HOME/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
