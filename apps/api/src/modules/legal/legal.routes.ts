@@ -98,8 +98,74 @@ const PRIVACY_HTML = `<!doctype html>
 </body>
 </html>`;
 
+const DELETION_HTML = `<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="index,follow" />
+<title>Удаление аккаунта — FitBond</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { max-width: 760px; margin: 0 auto; padding: 24px 18px 64px;
+    font: 16px/1.6 -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #1a1a1a; background: #fff; }
+  @media (prefers-color-scheme: dark) { body { color: #e8e8e8; background: #141414; } a { color: #8ab4f8; } }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font-size: 19px; margin: 28px 0 8px; }
+  .muted { color: #777; font-size: 14px; margin-bottom: 24px; }
+  ol, ul { padding-left: 22px; } li { margin: 6px 0; }
+  code { background: rgba(127,127,127,.18); padding: 1px 5px; border-radius: 5px; }
+</style>
+</head>
+<body>
+  <h1>Удаление аккаунта</h1>
+  <p class="muted">Приложения «FitBond» (для тренера и для клиента). Обновлено: ${UPDATED}.</p>
+
+  <p>На этой странице описано, как пользователь приложения «FitBond» может запросить удаление
+  своего аккаунта и связанных с ним данных.</p>
+
+  <h2>Как удалить аккаунт в приложении</h2>
+  <ol>
+    <li>Откройте приложение «FitBond» и войдите в свой аккаунт.</li>
+    <li>Перейдите в раздел <b>«Профиль»</b> (нижняя навигация).</li>
+    <li>Прокрутите вниз и нажмите <b>«Удалить аккаунт»</b>.</li>
+    <li>Подтвердите удаление.</li>
+  </ol>
+  <p>После подтверждения аккаунт помечается на удаление. В течение <b>3 дней</b> удаление можно
+  отменить кнопкой <b>«Отменить удаление»</b> в том же разделе «Профиль». По истечении 3 дней
+  аккаунт и связанные с ним данные <b>удаляются безвозвратно</b>.</p>
+
+  <h2>Удаление по запросу (если нет доступа к приложению)</h2>
+  <p>Если вы не можете войти в приложение, отправьте запрос на удаление с темой «Удаление аккаунта»
+  и адресом эл. почты вашего аккаунта на
+  <a href="mailto:${CONTACT_EMAIL}?subject=Удаление%20аккаунта%20FitBond">${CONTACT_EMAIL}</a>.
+  Мы обработаем запрос и удалим аккаунт в течение 30 дней.</p>
+
+  <h2>Какие данные удаляются</h2>
+  <ul>
+    <li>данные аккаунта: адрес эл. почты, имя, телефон и другие контакты, дата рождения, фотография профиля;</li>
+    <li>фитнес-данные: тренировки, упражнения, подходы, замеры тела, история и статистика;</li>
+    <li>фотографии прогресса;</li>
+    <li>сообщения чата;</li>
+    <li>токен push-уведомлений и связанные технические данные.</li>
+  </ul>
+
+  <h2>Какие данные могут сохраняться</h2>
+  <p>После удаления данные не сохраняются для использования в приложении. Ограниченный набор записей
+  (например, журналы операций) может временно храниться, если это требуется по закону или для
+  предотвращения злоупотреблений, и удаляется по истечении необходимого срока (как правило, не более 90 дней).</p>
+
+  <h2>Контакты</h2>
+  <p>Вопросы по удалению данных: <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.
+  См. также <a href="/privacy">Политику конфиденциальности</a>.</p>
+</body>
+</html>`;
+
 export function legalRoutes(app: FastifyInstance): void {
   for (const path of ['/privacy', '/privacy.html']) {
     app.get(path, (_req, reply) => reply.type('text/html; charset=utf-8').send(PRIVACY_HTML));
+  }
+  for (const path of ['/account-deletion', '/delete-account']) {
+    app.get(path, (_req, reply) => reply.type('text/html; charset=utf-8').send(DELETION_HTML));
   }
 }
