@@ -1532,25 +1532,29 @@ class _TemplatePickerSheet extends ConsumerWidget {
             child: Text('Выбрать из базы', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.ink)),
           ),
           if (templates.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Text('Шаблонов нет. Создайте их в базе знаний.', style: TextStyle(color: c.inkMuted)),
-                  const SizedBox(height: 16),
-                  // Шаблонов нет — предлагаем создать новую тренировку с нуля (как «+»).
-                  FilledButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      onCreateNew?.call();
-                    },
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Создать новую тренировку'),
-                    style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text('Шаблонов нет. Создайте их в базе знаний.',
+                          textAlign: TextAlign.center, style: TextStyle(color: c.inkMuted)),
+                      const SizedBox(height: 20),
+                      // Шаблонов нет — предлагаем создать новую тренировку с нуля (как «+»).
+                      FilledButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          onCreateNew?.call();
+                        },
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Создать новую тренировку'),
+                        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             )
           else
