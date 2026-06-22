@@ -12,6 +12,7 @@ import { realClock } from './core/app-deps.js';
 import { makeErrorHandler } from './plugins/error-handler.js';
 import { tenantContext } from './plugins/tenant-context.js';
 import { healthRoutes } from './modules/health/health.routes.js';
+import { legalRoutes } from './modules/legal/legal.routes.js';
 import { makeAuthRepo } from './modules/auth/auth.repo.js';
 import { makeFilesRepo } from './modules/files/files.repo.js';
 import { makeAuthService } from './modules/auth/auth.service.js';
@@ -217,5 +218,6 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerMedicalModule(app, { db: deps.db, storage, clock });
 
   healthRoutes(app);
+  legalRoutes(app);
   return app;
 }
