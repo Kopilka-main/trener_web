@@ -7,11 +7,13 @@
 #      (или поменяй имя в строках `app_store_connect:` ниже на своё).
 #   3. Запустить нужный workflow (trainer-ios / client-ios).
 #
-# Версия берётся из pubspec.yaml (version: 1.0.3+4). Перед каждой новой загрузкой
-# поднимай build-number в pubspec (как для Android), иначе App Store отклонит.
+# Подпись: первая сборка САМА создаёт distribution-сертификат и provisioning
+# profile через App Store Connect API (app-store-connect fetch-signing-files
+# --create), поэтому заранее в Apple ничего создавать не нужно — только App ID
+# с включённым Push (уже сделано).
 #
-# Push-уведомления: App ID с Push capability + APNs-ключ в Firebase +
-# GoogleService-Info.plist и entitlements (уже в проекте).
+# Версия берётся из pubspec.yaml. Перед каждой новой загрузкой поднимай
+# build-number в pubspec (как для Android), иначе App Store отклонит.
 
 workflows:
   trainer-ios:
@@ -25,15 +27,23 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: ru.fitbond.trenerTrainer
+      vars:
+        BUNDLE_ID: 'ru.fitbond.trenerTrainer'
     scripts:
       - name: Flutter packages
         script: flutter pub get
-      - name: Подпись (применить профили от Codemagic)
+      - name: Инициализировать keychain
+        script: keychain initialize
+      - name: Создать/получить сертификат и профиль
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+      - name: Добавить сертификаты в keychain
+        script: keychain add-certificates
+      - name: Применить профили к проекту
         script: xcode-project use-profiles
-      - name: Сборка IPA (поды flutter поставит сам, Podfile сгенерится)
+      - name: Сборка IPA
         script: flutter build ipa --release --export-options-plist=$HOME/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
@@ -54,15 +64,23 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: ru.fitbond.trenerClient
+      vars:
+        BUNDLE_ID: 'ru.fitbond.trenerClient'
     scripts:
       - name: Flutter packages
         script: flutter pub get
-      - name: Подпись (применить профили от Codemagic)
+      - name: Инициализировать keychain
+        script: keychain initialize
+      - name: Создать/получить сертификат и профиль
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+      - name: Добавить сертификаты в keychain
+        script: keychain add-certificates
+      - name: Применить профили к проекту
         script: xcode-project use-profiles
-      - name: Сборка IPA (поды flutter поставит сам, Podfile сгенерится)
+      - name: Сборка IPA
         script: flutter build ipa --release --export-options-plist=$HOME/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
