@@ -80,6 +80,55 @@ class PushService {
     }
   }
 
+  /// Диагностика доставки пушей — показывает, на каком шаге рвётся цепочка
+  /// (Firebase init → разрешение → APNs-токен → FCM-токен → регистрация на
+  /// сервере). Возвращает читаемый многострочный отчёт.
+  Future<String> diagnose() async {
+    final StringBuffer b = StringBuffer();
+    b.writeln('platform: ${Platform.isIOS ? 'ios' : 'android'}');
+    b.writeln('register path: $_registerPath');
+    try {
+      await Firebase.initializeApp();
+      b.writeln('firebase init: OK');
+    } catch (e) {
+      b.writeln('firebase init: FAIL — $e');
+      return b.toString();
+    }
+    final FirebaseMessaging m = FirebaseMessaging.instance;
+    try {
+      final NotificationSettings s = await m.getNotificationSettings();
+      b.writeln('permission: ${s.authorizationStatus.name}');
+    } catch (e) {
+      b.writeln('permission: err — $e');
+    }
+    if (Platform.isIOS) {
+      try {
+        await _waitForApns(m);
+        final String? apns = await m.getAPNSToken();
+        b.writeln('APNs token: ${apns == null ? 'NULL (НЕТ!)' : 'OK (${apns.length} симв.)'}');
+      } catch (e) {
+        b.writeln('APNs token: err — $e');
+      }
+    }
+    String? fcm;
+    try {
+      fcm = await m.getToken();
+      b.writeln('FCM token: ${fcm == null ? 'NULL (НЕТ!)' : 'OK ${fcm.substring(0, 16)}…'}');
+    } catch (e) {
+      b.writeln('FCM token: FAIL — $e');
+    }
+    if (fcm != null) {
+      try {
+        final String platform = Platform.isIOS ? 'ios' : 'android';
+        await _api.postJson(_registerPath, <String, String>{'token': fcm, 'platform': platform});
+        b.writeln('server register: OK');
+      } catch (e) {
+        b.writeln('server register: FAIL — $e');
+      }
+    }
+    return b.toString();
+  }
+
   Future<void> _register(String token) async {
     try {
       final String platform = Platform.isIOS ? 'ios' : 'android';

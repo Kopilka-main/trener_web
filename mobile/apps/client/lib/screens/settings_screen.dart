@@ -534,22 +534,56 @@ class _PushToggleState extends ConsumerState<_PushToggle> {
     }
   }
 
+  // Долгое нажатие по строке — диагностика доставки пушей (видно, где обрыв).
+  Future<void> _showDiagnostics() async {
+    final NavigatorState nav = Navigator.of(context);
+    showDialog<void>(
+      context: context,
+      builder: (_) => const AlertDialog(
+        content: SizedBox(height: 48, child: Center(child: CircularProgressIndicator())),
+      ),
+    );
+    final String report = await ref.read(pushServiceProvider).diagnose();
+    nav.pop();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Диагностика пушей'),
+        content: SelectableText(report, style: const TextStyle(fontSize: 13, height: 1.5)),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: report));
+              Navigator.of(context).pop();
+            },
+            child: const Text('Копировать'),
+          ),
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Закрыть')),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
-      child: Row(
-        children: <Widget>[
-          Icon(Icons.notifications_outlined, size: 22, color: c.ink),
-          const SizedBox(width: 12),
-          Expanded(child: Text('Push-уведомления', style: TextStyle(fontSize: 15, color: c.ink))),
-          if (_busy)
-            const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-          else
-            Switch(value: _enabled, onChanged: _onChanged),
-        ],
+    return GestureDetector(
+      onLongPress: _showDiagnostics,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
+        child: Row(
+          children: <Widget>[
+            Icon(Icons.notifications_outlined, size: 22, color: c.ink),
+            const SizedBox(width: 12),
+            Expanded(child: Text('Push-уведомления', style: TextStyle(fontSize: 15, color: c.ink))),
+            if (_busy)
+              const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+            else
+              Switch(value: _enabled, onChanged: _onChanged),
+          ],
+        ),
       ),
     );
   }
