@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/trainer_assign.dart';
+import '../api/trainer_calendar.dart';
 import '../api/trainer_client_card.dart';
 import '../api/trainer_client_stats.dart';
 import '../api/trainer_workouts.dart';
@@ -319,6 +320,11 @@ class _ConductorState extends ConsumerState<_Conductor> {
     try {
       await _api.complete(_clientId, _w.id, durationSec: el > 0 ? el : null);
       ref.invalidate(clientWorkoutsCardProvider(_clientId));
+      // Бэкенд при завершении отметил занятие проведённым (reconcileFromWorkout) →
+      // обновляем тренерский календарь, иначе он остаётся на старом статусе.
+      ref.invalidate(trainerSessionsProvider);
+      // Прогресс/обзор по упражнениям учитывают завершённую тренировку.
+      ref.invalidate(clientWorkoutsRawProvider(_clientId));
       if (!mounted) return;
       nav.pop();
       m.showSnackBar(const SnackBar(content: Text('Тренировка завершена')));
@@ -354,7 +360,8 @@ class _ConductorState extends ConsumerState<_Conductor> {
     try {
       await _api.addToHistory(_clientId, _w.id, _isoDate(_historyDate));
       ref.invalidate(clientWorkoutsCardProvider(_clientId));
-      ref.invalidate(clientStatsProvider(_clientId)); // запись сразу учтётся в прогрессе
+      // raw каскадно обновит и сводку, и обзор по упражнениям в «Прогрессе».
+      ref.invalidate(clientWorkoutsRawProvider(_clientId));
       if (!mounted) return;
       nav.pop();
       m.showSnackBar(const SnackBar(content: Text('Добавлено в историю')));

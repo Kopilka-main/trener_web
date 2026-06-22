@@ -167,4 +167,15 @@ export function clientsRoutes(
       return { ok: true as const };
     },
   );
+
+  // Подтянуть аватар подключённого аккаунта в карточку клиента (копия файла).
+  // Нет аккаунта/аватара → карточка возвращается без изменений.
+  typed.post(
+    '/api/clients/:id/avatar-from-account',
+    {
+      preHandler: [requireAuth, requireClientAccess],
+      schema: { params: idParams, response: { 200: clientWrap } },
+    },
+    async (req) => ({ client: await svc.avatarFromAccount(trainerId(req), req.params.id) }),
+  );
 }

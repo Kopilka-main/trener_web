@@ -1,6 +1,9 @@
 import 'package:core/core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'client_home.dart';
+import 'client_packages.dart';
+
 /// Снимок диалога клиента: сообщения, момент прочтения ТРЕНЕРОМ (для ✓✓),
 /// закреплённые сообщения.
 class ClientChatData {
@@ -38,17 +41,25 @@ class ClientChatApi {
     }
   }
 
-  Future<void> completeTask(String id) async {
+  /// Закрыть задачу (однократно). Возвращает true при успехе; 404 «уже закрыта»
+  /// или иная ошибка → false (лента всё равно перечитается поллингом).
+  Future<bool> completeTask(String id) async {
     try {
       await _api.postJson('/api/client/chat/tasks/$id/complete');
+      return true;
     } catch (_) {
-      // best-effort
+      return false;
     }
   }
 
   Future<void> markRead() async {
     try {
       await _api.postJson('/api/client/chat/read');
+      // Прочтение меняет счётчик непрочитанных на сервере — освежаем зависимые
+      // срезы, иначе плитка «Чат» на главной и пункт «новые сообщения» в
+      // уведомлениях залипают акцентом, пока экран не обновят вручную.
+      _ref.invalidate(clientUnreadProvider);
+      _ref.invalidate(clientHomeProvider);
     } catch (_) {
       // не критично
     }
@@ -60,15 +71,3 @@ final Provider<ClientChatApi> clientChatApiProvider =
 
 final FutureProvider<ClientChatData> clientChatProvider =
     FutureProvider<ClientChatData>((ref) => ref.read(clientChatApiProvider).load());
-
-/// Имя тренера для шапки чата (или null, если не подключён/ошибка).
-final FutureProvider<String?> clientTrainerNameProvider = FutureProvider<String?>((ref) async {
-  try {
-    final Map<String, dynamic> r = await ref.read(apiClientProvider).getJson('/api/client/trainer');
-    final Map<String, dynamic> t = (r['trainer'] as Map<String, dynamic>?) ?? <String, dynamic>{};
-    final String name = '${t['firstName'] ?? ''} ${t['lastName'] ?? ''}'.trim();
-    return name.isEmpty ? null : name;
-  } catch (_) {
-    return null;
-  }
-});

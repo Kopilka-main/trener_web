@@ -127,7 +127,11 @@ class _AssignWorkoutScreenState extends ConsumerState<AssignWorkoutScreen> {
                           icon: const Icon(Icons.add_circle_outline, size: 20),
                         ),
                         IconButton(
-                          onPressed: () => setState(() => _items.removeAt(e.key)),
+                          onPressed: () async {
+                            if (await confirmDelete(context, title: 'Удалить упражнение?') && mounted) {
+                              setState(() => _items.removeAt(e.key));
+                            }
+                          },
                           icon: Icon(Icons.delete_outline, size: 20, color: c.inkMuted),
                         ),
                       ],

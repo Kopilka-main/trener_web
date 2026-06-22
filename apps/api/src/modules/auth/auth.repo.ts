@@ -1,6 +1,6 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNotNull, lte } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
-import { trainers, sessionsAuth } from '../../db/schema.js';
+import { trainers, sessionsAuth, files } from '../../db/schema.js';
 
 export type NewTrainer = {
   id: string;
@@ -64,6 +64,36 @@ export function makeAuthRepo(db: Db) {
         .from(trainers)
         .where(eq(trainers.id, trainerId));
       return row?.avatarFileId ?? null;
+    },
+
+    // ─── Удаление аккаунта с окном отмены ───
+
+    // Запланировать/отменить удаление: at=Date — удалить в этот момент; null — отмена.
+    async setPendingDeletion(id: string, at: Date | null): Promise<void> {
+      await db.update(trainers).set({ pendingDeletionAt: at }).where(eq(trainers.id, id));
+    },
+
+    // Тренеры, у которых окно отмены истекло (pending_deletion_at ≤ now) — на снос.
+    async findExpiredDeletions(now: Date): Promise<{ id: string }[]> {
+      return db
+        .select({ id: trainers.id })
+        .from(trainers)
+        .where(and(isNotNull(trainers.pendingDeletionAt), lte(trainers.pendingDeletionAt, now)));
+    },
+
+    // Пути файлов тренера на диске — читаем ДО удаления (строки files уйдут каскадом).
+    async findTrainerFileStoragePaths(trainerId: string): Promise<string[]> {
+      const rows = await db
+        .select({ storagePath: files.storagePath })
+        .from(files)
+        .where(eq(files.trainerId, trainerId));
+      return rows.map((r) => r.storagePath);
+    },
+
+    // Жёсткое удаление тренера: каскадом сносит весь воркспейс (упражнения, шаблоны,
+    // тренировки, занятия, чат, залы, замеры, фото, файлы, push, сессии).
+    async deleteTrainer(id: string): Promise<void> {
+      await db.delete(trainers).where(eq(trainers.id, id));
     },
 
     async createSession(s: { id: string; trainerId: string; expiresAt: Date }) {

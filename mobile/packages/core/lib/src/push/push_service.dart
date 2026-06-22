@@ -22,7 +22,13 @@ class PushService {
   /// [onTap] вызывается при открытии приложения по тапу на пуш — с `url` из
   /// data-полей сообщения (например '/chat' или '/clients/<id>/chat'). Приложение
   /// само маппит url в свой маршрут.
-  Future<void> init({void Function(String? url)? onTap}) async {
+  ///
+  /// [onForeground] вызывается при приходе пуша, когда приложение активно — чтобы
+  /// обновить данные на экране сразу (иначе видимая карточка отстаёт от пуша).
+  Future<void> init({
+    void Function(String? url)? onTap,
+    void Function(String? url)? onForeground,
+  }) async {
     try {
       await Firebase.initializeApp();
       final FirebaseMessaging messaging = FirebaseMessaging.instance;
@@ -30,6 +36,13 @@ class PushService {
       final String? token = await messaging.getToken();
       if (token != null) await _register(token);
       messaging.onTokenRefresh.listen(_register);
+
+      // Пуш пришёл при активном приложении — даём приложению обновить данные.
+      if (onForeground != null) {
+        FirebaseMessaging.onMessage.listen((RemoteMessage m) {
+          onForeground(m.data['url'] as String?);
+        });
+      }
 
       if (onTap != null) {
         // Холодный старт по тапу на пуш (приложение было закрыто).

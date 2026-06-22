@@ -1,5 +1,5 @@
 import { createReadStream, type ReadStream } from 'node:fs';
-import { mkdir, writeFile, unlink } from 'node:fs/promises';
+import { mkdir, writeFile, unlink, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 // Слой файлового хранилища (чистый fs, без БД). Файлы лежат в
@@ -16,6 +16,8 @@ export type Storage = {
     data: Buffer,
   ): Promise<SaveResult>;
   openRead(storagePath: string): ReadStream;
+  /** Прочитать файл целиком в буфер (для копирования между скоупами). */
+  read(storagePath: string): Promise<Buffer>;
   remove(storagePath: string): Promise<void>;
 };
 
@@ -43,6 +45,10 @@ export function makeStorage(uploadsDir: string): Storage {
 
     openRead(storagePath) {
       return createReadStream(resolve(storagePath));
+    },
+
+    async read(storagePath) {
+      return readFile(resolve(storagePath));
     },
 
     async remove(storagePath) {

@@ -211,7 +211,15 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
           if (!exists) _contacts.add(_EditContact(type: type, value: TextEditingController(text: value)));
         }
       });
-      m.showSnackBar(const SnackBar(content: Text('Данные подставлены')));
+      // Аватар тянем только при редактировании (нужен clientId; копия делается на
+      // сервере). Приоритет клиентского: если у аккаунта есть фото — заменяем.
+      if (_isEdit) {
+        final Client fresh =
+            await ref.read(trainerClientsApiProvider).avatarFromAccount(widget.client!.id);
+        ref.invalidate(trainerClientProvider(widget.client!.id));
+        if (mounted) setState(() => _avatarFileId = fresh.avatarFileId);
+      }
+      if (mounted) m.showSnackBar(const SnackBar(content: Text('Данные подставлены')));
     } catch (_) {
       m.showSnackBar(const SnackBar(content: Text('Не удалось получить данные')));
     }
@@ -310,7 +318,11 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
                       TextButton(onPressed: _avatarBusy ? null : _pickAvatar, child: const Text('Изменить фото')),
                       if (_avatarFileId != null)
                         TextButton(
-                            onPressed: _avatarBusy ? null : _removeAvatar,
+                            onPressed: _avatarBusy
+                                ? null
+                                : () async {
+                                    if (await confirmDelete(context, title: 'Удалить фото?')) _removeAvatar();
+                                  },
                             child: Text('Удалить', style: TextStyle(color: c.inkMuted))),
                     ],
                   ),

@@ -351,6 +351,13 @@
       "when": 1781970108862,
       "tag": "0049_massive_madame_hydra",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1782099924226,
+      "tag": "0050_fuzzy_titania",
+      "breakpoints": true
     }
   ]
 }

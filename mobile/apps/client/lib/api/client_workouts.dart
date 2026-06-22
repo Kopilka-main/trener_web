@@ -88,6 +88,7 @@ class Workout {
     required this.trainerNote,
     required this.createdByClient,
     required this.exercises,
+    this.excludedFromBalance = false,
   });
 
   final String id;
@@ -99,6 +100,8 @@ class Workout {
   final num? rpe;
   final String? trainerNote;
   final bool createdByClient;
+  // Тренировка исключена из остатка баланса (не вычитается из оплаченных).
+  final bool excludedFromBalance;
   final List<WorkoutExercise> exercises;
 
   factory Workout.fromJson(Map<String, dynamic> j) {
@@ -114,6 +117,7 @@ class Workout {
       rpe: j['rpe'] as num?,
       trainerNote: j['trainerNote'] as String?,
       createdByClient: j['createdByClient'] as bool? ?? false,
+      excludedFromBalance: j['excludedFromBalance'] as bool? ?? false,
       exercises: ((j['exercises'] as List<dynamic>?) ?? <dynamic>[])
           .cast<Map<String, dynamic>>()
           .map(WorkoutExercise.fromJson)

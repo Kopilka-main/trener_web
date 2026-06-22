@@ -2,6 +2,7 @@ import { buildApp } from './app.js';
 import { parseEnv } from './env.js';
 import { createDb } from './db/client.js';
 import { realClock } from './core/app-deps.js';
+import { makeStorage } from './files/storage.js';
 import { startRemindersScheduler } from './modules/reminders/reminders.scheduler.js';
 
 const env = parseEnv(process.env);
@@ -26,6 +27,8 @@ buildApp({
       startRemindersScheduler({
         db,
         push: app.pushService,
+        storage: makeStorage(env.UPLOADS_DIR),
+        newId: realClock.newId,
         now: realClock.now,
         log: (msg, err) => {
           app.log.error({ err }, msg);

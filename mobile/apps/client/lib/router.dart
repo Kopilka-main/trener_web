@@ -58,7 +58,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/connect', builder: (_, _) => const ConnectScreen()),
       GoRoute(path: '/trainer', builder: (_, _) => const TrainerScreen()),
       GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
-      GoRoute(path: '/progress', builder: (_, _) => const ProgressScreen()),
+      GoRoute(
+        path: '/progress',
+        builder: (BuildContext context, GoRouterState state) =>
+            ProgressScreen(initialTab: state.uri.queryParameters['tab']),
+      ),
       GoRoute(path: '/knowledge', builder: (_, _) => const KnowledgeScreen()),
       GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),
     ],

@@ -54,5 +54,7 @@ export type ClientLink = z.infer<typeof clientLinkSchema>;
 export const clientMeResponseSchema = z.object({
   account: clientAccountResponseSchema,
   link: clientLinkSchema,
+  // ISO-момент окончательного удаления аккаунта (окно отмены), либо null.
+  pendingDeletionAt: z.string().nullable(),
 });
 export type ClientMeResponse = z.infer<typeof clientMeResponseSchema>;

@@ -16,11 +16,14 @@ const List<String> _ruMonths = <String>[
 enum _Kind { confirm, soon, chat, package, workout, measure }
 
 class _Notif {
-  _Notif({required this.id, required this.kind, required this.text, required this.to});
+  _Notif({required this.id, required this.kind, required this.text, required this.to, this.sessionId});
   final String id;
   final _Kind kind;
   final String text;
   final String to;
+
+  /// Для confirm-уведомлений — id занятия, чтобы открыть шторку подтверждения напрямую.
+  final String? sessionId;
 }
 
 IconData _icon(_Kind k) => switch (k) {
@@ -66,7 +69,7 @@ List<_Notif> _build({
       text: t.note?.trim().isNotEmpty == true
           ? 'Тренер просит сделать замеры: ${t.note!.trim()}'
           : 'Тренер просит сделать замеры',
-      to: '/progress',
+      to: '/progress?tab=measurements',
     ));
   }
 
@@ -77,7 +80,7 @@ List<_Notif> _build({
 
   for (final Session s in future) {
     if (s.confirmation == ClientConfirmation.pending) {
-      out.add(_Notif(id: 'confirm:${s.id}', kind: _Kind.confirm, text: 'Подтвердите занятие ${_whenLabel(s)}', to: '/calendar'));
+      out.add(_Notif(id: 'confirm:${s.id}', kind: _Kind.confirm, text: 'Подтвердите занятие ${_whenLabel(s)}', to: '/calendar', sessionId: s.id));
     }
   }
 
@@ -86,7 +89,7 @@ List<_Notif> _build({
   for (final Session s in sessions) {
     if (s.status != SessionStatus.completed || s.confirmation != ClientConfirmation.pending) continue;
     if (!s.start.isBefore(now) || s.start.isBefore(ago30)) continue;
-    out.add(_Notif(id: 'confirm:${s.id}', kind: _Kind.confirm, text: 'Подтвердите проведённую тренировку ${_whenLabel(s)}', to: '/calendar'));
+    out.add(_Notif(id: 'confirm:${s.id}', kind: _Kind.confirm, text: 'Подтвердите проведённую тренировку ${_whenLabel(s)}', to: '/calendar', sessionId: s.id));
   }
 
   // Скоро занятие — ближайшее не-pending в пределах 24ч.
@@ -132,6 +135,21 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     // Уход со страницы = «увидел новые сообщения» → отмечаем чат прочитанным.
     if (_hadUnread) ref.read(clientChatApiProvider).markRead();
     super.dispose();
+  }
+
+  /// Согласование занятия открывает шторку подтверждения прямо здесь (как в
+  /// календаре), а не перебрасывает на страницу календаря. Если сессия не нашлась —
+  /// падаем на обычную навигацию по `n.to`.
+  void _openNotif(_Notif n, List<Session> sessions) {
+    if (n.kind == _Kind.confirm && n.sessionId != null) {
+      for (final Session s in sessions) {
+        if (s.id == n.sessionId) {
+          _showConfirmSheet(context, ref, s);
+          return;
+        }
+      }
+    }
+    context.push(n.to);
   }
 
   @override
@@ -193,7 +211,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                                   )),
                               ...items.map((_Notif n) => _NotifCard(
                                     notif: n,
-                                    onTap: () => context.push(n.to),
+                                    onTap: () => _openNotif(n, sessions.valueOrNull ?? <Session>[]),
                                     onDismiss: () => ref.read(_dismissedProvider.notifier).state =
                                         <String>{...dismissed, n.id},
                                   )),
@@ -246,6 +264,134 @@ class _TaskCard extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+void _showConfirmSheet(BuildContext context, WidgetRef ref, Session s) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: context.colors.bg,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (_) => _SessionSheet(session: s),
+  );
+}
+
+/// Шторка занятия: дата/время/длительность, формат, заметка, статус и кнопки
+/// «Подтвердить»/«Отклонить» (пока ждёт ответа и не отменено). Зеркало шторки из
+/// календаря — клиент согласовывает занятие прямо из ленты уведомлений.
+class _SessionSheet extends ConsumerStatefulWidget {
+  const _SessionSheet({required this.session});
+  final Session session;
+
+  @override
+  ConsumerState<_SessionSheet> createState() => _SessionSheetState();
+}
+
+class _SessionSheetState extends ConsumerState<_SessionSheet> {
+  bool _busy = false;
+
+  Future<void> _respond(bool accept) async {
+    setState(() => _busy = true);
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final NavigatorState nav = Navigator.of(context);
+    try {
+      await ref.read(clientCalendarApiProvider).confirm(widget.session.id, accept: accept);
+      ref.invalidate(clientSessionsProvider);
+      if (!mounted) return;
+      nav.pop();
+      messenger.showSnackBar(
+        SnackBar(content: Text(accept ? 'Участие подтверждено' : 'Занятие отклонено')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      messenger.showSnackBar(const SnackBar(content: Text('Не удалось сохранить. Попробуйте снова')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    final Session s = widget.session;
+    final bool cancelled = s.status == SessionStatus.cancelled;
+    final bool canRespond = !cancelled && s.confirmation == ClientConfirmation.pending;
+    final String statusLabel = cancelled
+        ? 'Отменено тренером'
+        : switch (s.confirmation) {
+            ClientConfirmation.confirmed => 'Вы подтвердили',
+            ClientConfirmation.declined => 'Вы отклонили',
+            _ => 'Ожидает ответа',
+          };
+    final DateTime d = calParseIso(s.date);
+    final String dateLabel = '${d.day} ${calMonthGen[d.month - 1]}';
+    final String timeLabel = '${s.startTime}–${calEndTime(s.startTime, s.durationMin)}';
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 4, 20, 16 + MediaQuery.of(context).viewPadding.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(s.title?.trim().isNotEmpty == true ? s.title! : 'Занятие',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
+          const SizedBox(height: 12),
+          Text('$dateLabel, $timeLabel',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
+          const SizedBox(height: 4),
+          Text(calHumanDuration(s.durationMin), style: TextStyle(fontSize: 14, color: c.inkMuted)),
+          const SizedBox(height: 4),
+          if (s.isOnline)
+            Row(children: <Widget>[
+              Icon(Icons.wifi, size: 14, color: c.inkMuted),
+              const SizedBox(width: 6),
+              Text('Онлайн-занятие', style: TextStyle(fontSize: 14, color: c.inkMuted)),
+            ])
+          else if (s.location?.trim().isNotEmpty == true)
+            Text(s.location!.trim(), style: TextStyle(fontSize: 14, color: c.inkMuted)),
+          if (s.note?.trim().isNotEmpty == true) ...<Widget>[
+            const SizedBox(height: 4),
+            Text(s.note!.trim(), style: TextStyle(fontSize: 14, color: c.inkMuted)),
+          ],
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
+            child: Text(statusLabel,
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.inkMuted)),
+          ),
+          if (canRespond) ...<Widget>[
+            const SizedBox(height: 16),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _busy ? null : () => _respond(true),
+                    style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+                    child: _busy
+                        ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Text('Подтвердить'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _busy ? null : () => _respond(false),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: c.card,
+                      foregroundColor: c.ink,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text('Отклонить'),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

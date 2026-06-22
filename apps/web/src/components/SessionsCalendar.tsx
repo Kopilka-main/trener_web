@@ -220,8 +220,9 @@ function ViewSwitcher({
 // отказ клиента — красный; ждёт ответа — оранжевый.
 function tileClasses(s: SessionResponse): string {
   if (s.status === 'cancelled') return 'bg-card-elevated text-ink-muted line-through opacity-50';
-  if (s.clientConfirmation === 'confirmed') return 'bg-[#caff3a] text-[#0b0c10]';
+  // Проведённое — терминальное состояние, перебивает подтверждение клиента.
   if (s.status === 'completed') return 'bg-[#46d4f0] text-[#06222b]';
+  if (s.clientConfirmation === 'confirmed') return 'bg-[#caff3a] text-[#0b0c10]';
   if (s.clientConfirmation === 'declined') return 'bg-[#ff5a5a] text-[#1a0606]';
   return 'bg-[#ffab2e] text-[#1a1200]';
 }
@@ -283,8 +284,8 @@ function layoutColumns(items: SessionResponse[]): Map<string, { col: number; col
 type StatusBucket = 'planned' | 'confirmed' | 'completed' | 'declined' | 'cancelled';
 function bucketOf(s: SessionResponse): StatusBucket {
   if (s.status === 'cancelled') return 'cancelled';
-  if (s.clientConfirmation === 'confirmed') return 'confirmed';
   if (s.status === 'completed') return 'completed';
+  if (s.clientConfirmation === 'confirmed') return 'confirmed';
   if (s.clientConfirmation === 'declined') return 'declined';
   return 'planned';
 }

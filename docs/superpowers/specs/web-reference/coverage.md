@@ -11,17 +11,17 @@
 | client/register        | register_screen        | 🟡      | ДС-форма, валидация (имя/фамилия/email/пароль≥8), EMAIL_TAKEN под полем, ссылка; analyze ✓                                                             |
 | client/connect         | connect_screen         | 🟡      | ДС-вёрстка: заголовок display, описание, QR (qr_flutter) на ink-подложке, кнопка-код Copy/Check + «Скопировано», «Продолжить»→/home; analyze ✓         |
 | client/home            | home_screen            | 🟡      | код приведён к эталону (analyze ✓): attention/«ВСЁ ТИХО», primary-fallback, hero→профиль, аватар тренера, excludedFromBalance; проверить на устройстве |
-| client/calendar        | calendar_screen        | ❓      | подтверждение pending даже после старта                                                                                                                |
-| client/workouts-list   | workouts_screen        | ❓      |                                                                                                                                                        |
-| client/run-workout     | active_workout_screen  | ❓      |                                                                                                                                                        |
-| client/workout-detail  | workouts_screen Detail | ❓      |                                                                                                                                                        |
-| client/chat            | chat_screen            | ❓      |                                                                                                                                                        |
-| client/notifications   | notifications_screen   | ❓      |                                                                                                                                                        |
-| client/knowledge       | knowledge_screen       | ❓      | двухуровневые чипы группа→подгруппа                                                                                                                    |
-| client/exercise-detail | knowledge Detail       | ❓      | в вебе НЕТ графика и медиа                                                                                                                             |
-| client/stats           | progress_screen        | ❓      |                                                                                                                                                        |
-| client/profile         | settings+profile_edit  | ❓      | маска ДР, кроп аватара                                                                                                                                 |
-| client/trainer         | trainer_screen         | 🟡      | отключение — вводом ИМЕНИ тренера (есть простой confirm)                                                                                               |
+| client/calendar        | calendar_screen        | 🟡      | pending-ответ доступен после старта, цвета блоков по статусу, шторка занятия; analyze ✓ (проверить на устройстве)                                      |
+| client/workouts-list   | workouts_screen        | 🟡      | приоритет !linked→подсказка, ContinueCard/New, назначенные, история по датам, пикеры шаблон/история; analyze ✓                                         |
+| client/run-workout     | active_workout_screen  | 🟡      | старт→лог подходов→таймер отдыха→завершение (4-поля план / 3-поля факт, RestPill); паритет, правок не требовалось                                      |
+| client/workout-detail  | workouts_screen Detail | 🟡      | итоги переписаны: факт + бейдж «рекорд» (computeRecordKeys) + план; заголовок/мета/trainerNote; analyze ✓                                              |
+| client/chat            | chat_screen            | 🟡      | шапка тренера (аватар+title), pinned/reply-swipe/tasks/read-receipts в core ChatThreadView; completeTask→bool; analyze ✓                               |
+| client/notifications   | notifications_screen   | 🟡      | построитель/dismissed/markRead — паритет; confirm открывает SessionSheet в ленте; measure→/progress?tab=measurements (deep-link на вкладку); analyze ✓ |
+| client/knowledge       | knowledge_screen       | 🟡      | двухуровневые чипы группа→подгруппа (обе вкладки), linked-aware пустые состояния, очистка поиска; analyze ✓                                            |
+| client/exercise-detail | knowledge Detail       | 🟡      | перестроено под эталон: описание + параметры каталога + PR/дата; убраны график истории и медиа; analyze ✓                                              |
+| client/stats           | progress_screen        | 🟡      | 3 вкладки: упражнения (детализация+интерактивные графики+история), замеры (аналитика+тоннаж+форма PATCH), фото (силуэт-гид+группировка); analyze ✓     |
+| client/profile         | settings+profile_edit  | 🟡      | карточка клиента/тренера/контакты/тема/выход; маска ДР, квадратный кроп аватара (pan/zoom); ОГРАНИЧ.: аватар PNG (dart:ui), Email без mailto           |
+| client/trainer         | trainer_screen         | 🟡      | отключение вводом ТОЧНОГО имени тренера (case-insensitive), кнопка-danger только при совпадении, состояния pending/error; analyze ✓                    |
 
 ## Тренер (`apps/web` → `mobile/apps/trainer`)
 

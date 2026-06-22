@@ -1,3 +1,4 @@
+import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -28,20 +29,35 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     super.dispose();
   }
 
+  /// Клиентская проверка полей — мгновенная и конкретная (сервер на валидацию
+  /// отдаёт общее «Ошибка валидации»).
+  String? _validate(String first, String last, String email, String password) {
+    if (first.isEmpty) return 'Укажите имя.';
+    if (last.isEmpty) return 'Укажите фамилию.';
+    if (!email.contains('@') || !email.contains('.')) return 'Введите корректный email.';
+    if (password.length < 8) return 'Пароль должен быть не короче 8 символов.';
+    return null;
+  }
+
   Future<void> _submit() async {
+    final String email = _email.text.trim();
+    final String password = _password.text;
+    final String first = _first.text.trim();
+    final String last = _last.text.trim();
+    final String? invalid = _validate(first, last, email, password);
+    if (invalid != null) {
+      setState(() => _error = invalid);
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      await ref.read(trainerApiProvider).register(
-            _email.text.trim(),
-            _password.text,
-            _first.text.trim(),
-            _last.text.trim(),
-          );
-    } catch (_) {
-      setState(() => _error = 'Не удалось зарегистрироваться. Проверьте данные.');
+      await ref.read(trainerApiProvider).register(email, password, first, last);
+    } catch (e) {
+      setState(() =>
+          _error = describeApiError(e, fallback: 'Не удалось зарегистрироваться. Попробуйте снова.'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

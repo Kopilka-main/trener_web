@@ -67,6 +67,12 @@ class ClientMeasurementsApi {
     await _api.postJson('/api/client/measurements', body);
   }
 
+  /// Частичное обновление замера. Поля передаём явно (включая null,
+  /// чтобы очистить значение на сервере) — см. UpdateMeasurementRequest.
+  Future<void> update(String id, Map<String, dynamic> body) async {
+    await _api.patchJson('/api/client/measurements/$id', body);
+  }
+
   Future<void> delete(String id) async {
     await _api.deleteJson('/api/client/measurements/$id');
   }

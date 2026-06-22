@@ -1,6 +1,12 @@
 import type { Db } from '../../db/client.js';
+import type { Storage } from '../../files/storage.js';
 import type { PushService } from '../push/push.service.js';
 import { makeRemindersRepo, type RemindersRepo } from './reminders.repo.js';
+import { makeFilesRepo } from '../files/files.repo.js';
+import { makeAuthRepo } from '../auth/auth.repo.js';
+import { makeAuthService } from '../auth/auth.service.js';
+import { makeClientAuthRepo } from '../client-auth/client-auth.repo.js';
+import { makeClientAuthService } from '../client-auth/client-auth.service.js';
 
 const PACKAGE_LOW_THRESHOLD = 2;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -106,6 +112,8 @@ async function tick(repo: RemindersRepo, push: PushService, now: Date): Promise<
 export type SchedulerDeps = {
   db: Db;
   push: PushService;
+  storage: Storage;
+  newId: () => string;
   now: () => Date;
   log: Logger;
   intervalMs?: number;
@@ -115,10 +123,32 @@ export type SchedulerDeps = {
 // Дедуп в БД → безопасно при рестартах/нескольких инстансах.
 export function startRemindersScheduler(deps: SchedulerDeps): () => void {
   const repo = makeRemindersRepo(deps.db);
+  // Сервисы авторизации — для досноса аккаунтов с истёкшим окном отмены удаления.
+  const filesRepo = makeFilesRepo(deps.db);
+  const authSvc = makeAuthService(makeAuthRepo(deps.db), filesRepo, deps.storage, {
+    newId: deps.newId,
+    now: deps.now,
+  });
+  const clientAuthSvc = makeClientAuthService(
+    makeClientAuthRepo(deps.db),
+    filesRepo,
+    deps.storage,
+    {
+      newId: deps.newId,
+      now: deps.now,
+    },
+  );
   const interval = deps.intervalMs ?? 30 * 60 * 1000; // каждые 30 минут
   const run = () => {
     void tick(repo, deps.push, deps.now()).catch((err: unknown) => {
       deps.log('[reminders] tick failed', err);
+    });
+    // Снос аккаунтов, у которых истекло окно отмены удаления.
+    void authSvc.purgeExpiredDeletions().catch((err: unknown) => {
+      deps.log('[deletion] trainer purge failed', err);
+    });
+    void clientAuthSvc.purgeExpiredDeletions().catch((err: unknown) => {
+      deps.log('[deletion] client purge failed', err);
     });
   };
   // Первый прогон через 30с (дать сервису прогрузиться), затем по интервалу.

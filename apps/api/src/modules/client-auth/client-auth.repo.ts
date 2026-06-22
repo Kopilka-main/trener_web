@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, lte } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { clientAccounts, clientSessionsAuth, clients, trainerClients } from '../../db/schema.js';
 
@@ -113,6 +113,40 @@ export function makeClientAuthRepo(db: Db) {
         .from(clientAccounts)
         .where(eq(clientAccounts.id, id));
       return !!row;
+    },
+
+    // ─── Удаление аккаунта с окном отмены ───
+
+    // Запланировать/отменить удаление: at=Date — удалить в этот момент; null — отмена.
+    async setPendingDeletion(id: string, at: Date | null): Promise<void> {
+      await db
+        .update(clientAccounts)
+        .set({ pendingDeletionAt: at })
+        .where(eq(clientAccounts.id, id));
+    },
+
+    // Аккаунты, у которых окно отмены истекло (pending_deletion_at ≤ now) — на снос.
+    async findExpiredDeletions(now: Date): Promise<{ id: string; avatarFileId: string | null }[]> {
+      return db
+        .select({ id: clientAccounts.id, avatarFileId: clientAccounts.avatarFileId })
+        .from(clientAccounts)
+        .where(
+          and(
+            isNotNull(clientAccounts.pendingDeletionAt),
+            lte(clientAccounts.pendingDeletionAt, now),
+          ),
+        );
+    },
+
+    // Отвязать аккаунт от ВСЕХ карточек клиентов (clients.account_id = null). Данные
+    // тренеров не трогаем — только обнуляем ссылку на удаляемый аккаунт.
+    async unlinkAccountFromClients(accountId: string): Promise<void> {
+      await db.update(clients).set({ accountId: null }).where(eq(clients.accountId, accountId));
+    },
+
+    // Жёсткое удаление строки аккаунта (каскад: сессии, push-токены, web-push).
+    async deleteAccount(id: string): Promise<void> {
+      await db.delete(clientAccounts).where(eq(clientAccounts.id, id));
     },
   };
 }

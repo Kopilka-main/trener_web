@@ -68,11 +68,14 @@ class CatalogMediaView extends StatefulWidget {
     this.videoUrl,
     this.height = 200,
     this.showToggle = false,
+    this.title = 'ДЕМОНСТРАЦИЯ',
   });
   final String? imageUrl;
   final String? videoUrl;
   final double height;
   final bool showToggle;
+  // Подпись над медиа в режиме showToggle. Пусто → подписи нет (только переключатель).
+  final String title;
 
   @override
   State<CatalogMediaView> createState() => _CatalogMediaViewState();
@@ -140,26 +143,31 @@ class _CatalogMediaViewState extends State<CatalogMediaView> {
     if (widget.showToggle) {
       final AppColors c = context.colors;
       final bool showSwitch = _hasImage && _hasVideo;
+      final bool showHeader = widget.title.isNotEmpty || showSwitch;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  'ДЕМОНСТРАЦИЯ',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
-                    color: c.inkMutedXl,
-                  ),
+          if (showHeader) ...<Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: widget.title.isEmpty
+                      ? const SizedBox.shrink()
+                      : Text(
+                          widget.title,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                            color: c.inkMutedXl,
+                          ),
+                        ),
                 ),
-              ),
-              if (showSwitch) _MediaToggle(videoMode: _videoMode, onChange: _selectMode),
-            ],
-          ),
-          const SizedBox(height: 8),
+                if (showSwitch) _MediaToggle(videoMode: _videoMode, onChange: _selectMode),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
           _frame(context, video: _videoMode),
         ],
       );
@@ -174,8 +182,9 @@ class _CatalogMediaViewState extends State<CatalogMediaView> {
     final Color bg = Theme.of(context).colorScheme.surfaceContainerHighest;
     Widget child;
     if (video && _ready && _controller != null) {
+      // contain — показываем медиа целиком (без авто-увеличения по ширине/обрезки).
       child = FittedBox(
-        fit: BoxFit.cover,
+        fit: BoxFit.contain,
         child: SizedBox(
           width: _controller!.value.size.width,
           height: _controller!.value.size.height,
@@ -185,7 +194,7 @@ class _CatalogMediaViewState extends State<CatalogMediaView> {
     } else if (!video && _hasImage) {
       child = CachedNetworkImage(
         imageUrl: widget.imageUrl!,
-        fit: BoxFit.cover,
+        fit: BoxFit.contain,
         placeholder: (_, _) => Container(color: bg),
         errorWidget: (_, _, _) => Container(color: bg),
       );
@@ -193,7 +202,7 @@ class _CatalogMediaViewState extends State<CatalogMediaView> {
       // video=true, но видео ещё не готово/недоступно — показываем фото.
       child = CachedNetworkImage(
         imageUrl: widget.imageUrl!,
-        fit: BoxFit.cover,
+        fit: BoxFit.contain,
         placeholder: (_, _) => Container(color: bg),
         errorWidget: (_, _, _) => Container(color: bg),
       );

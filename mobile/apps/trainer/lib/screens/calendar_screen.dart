@@ -11,7 +11,7 @@ import 'session_form.dart';
 
 /// Календарь тренера: SessionsCalendar (День/Неделя/Месяц) с именами клиентов +
 /// шит занятия с подтверждением клиента и действиями «Провести»/«Отменить».
-class CalendarScreen extends ConsumerWidget {
+class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({super.key, this.clientId, this.clientName});
 
   /// Если задан — календарь показывает занятия только этого клиента, а форма
@@ -20,7 +20,24 @@ class CalendarScreen extends ConsumerWidget {
   final String? clientName;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CalendarScreen> createState() => _CalendarScreenState();
+}
+
+class _CalendarScreenState extends ConsumerState<CalendarScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // При открытии тянем свежие занятия — чтобы статус подтверждения клиента был
+    // актуальным, даже если пуш не обновил кэш.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.invalidate(trainerSessionsProvider);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String? clientId = widget.clientId;
+    final String? clientName = widget.clientName;
     final AsyncValue<List<Session>> sessions = ref.watch(trainerSessionsProvider);
     final AppColors c = context.colors;
     final bool scoped = clientId != null;
@@ -172,15 +189,12 @@ class _SessionSheetState extends ConsumerState<_SessionSheet> {
     if (changed && mounted) nav.pop();
   }
 
-  /// «Провести»: если к занятию привязана тренировка — открываем её проведение
-  /// (по завершении бэкенд сам отметит занятие). Если тренировки нет — просто
-  /// помечаем занятие проведённым.
+  /// «Провести»: открываем проведение привязанной тренировки (по завершении бэкенд
+  /// сам отметит занятие). Кнопка показывается только если тренировка привязана —
+  /// «голой» смены статуса без проведения нет.
   Future<void> _conduct() async {
     final String? wid = widget.session.workoutId;
-    if (wid == null) {
-      await _setStatus(SessionStatus.completed, 'Занятие проведено');
-      return;
-    }
+    if (wid == null) return;
     final NavigatorState nav = Navigator.of(context);
     await nav.push<void>(MaterialPageRoute<void>(
       builder: (_) => ActiveWorkoutScreen(clientId: widget.session.clientId, workoutId: wid),
@@ -319,16 +333,20 @@ class _SessionSheetState extends ConsumerState<_SessionSheet> {
             const SizedBox(height: 16),
             Row(
               children: <Widget>[
-                Expanded(
-                  child: FilledButton(
-                    onPressed: _busy ? null : _conduct,
-                    style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
-                    child: _busy
-                        ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('Провести'),
+                // «Провести» — только если есть привязанная тренировка (открывает её
+                // проведение). Без тренировки кнопки-статуса нет — остаётся «Отменить».
+                if (s.workoutId != null) ...<Widget>[
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _busy ? null : _conduct,
+                      style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+                      child: _busy
+                          ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('Провести'),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
+                  const SizedBox(width: 8),
+                ],
                 Expanded(
                   child: FilledButton(
                     onPressed: _busy ? null : () => _setStatus(SessionStatus.cancelled, 'Занятие отменено'),

@@ -456,7 +456,9 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
           Text('$sign${_money(amount)}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: color)),
           if (onDelete != null)
             GestureDetector(
-              onTap: onDelete,
+              onTap: () async {
+                if (await confirmDelete(context, title: 'Удалить операцию?')) onDelete();
+              },
               child: Padding(
                 padding: const EdgeInsets.only(left: 4),
                 child: Icon(Icons.delete_outline, size: 18, color: c.inkMutedXl),

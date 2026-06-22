@@ -48,6 +48,13 @@ class SettingsScreen extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 20),
+              if (a.pendingDeletionAt != null) ...<Widget>[
+                _DeletionBanner(
+                  when: a.pendingDeletionAt!,
+                  onCancel: () => _cancelAccountDeletion(context, ref),
+                ),
+                const SizedBox(height: 20),
+              ],
               _ClientCard(account: a),
               const SizedBox(height: 20),
               _TrainerCard(linked: linked.valueOrNull ?? false),
@@ -79,6 +86,10 @@ class SettingsScreen extends ConsumerWidget {
               _IdCard(id: a.id),
               const SizedBox(height: 24),
               _LogoutButton(onLogout: () => _confirmLogout(context, ref)),
+              if (a.pendingDeletionAt == null) ...<Widget>[
+                const SizedBox(height: 10),
+                _DeleteAccountButton(onTap: () => _confirmDeleteAccount(context, ref)),
+              ],
             ],
           ),
         ),
@@ -371,6 +382,106 @@ class _LogoutButton extends StatelessWidget {
         child: Text('Выйти', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
       ),
     );
+  }
+}
+
+/// Кнопка «Удалить аккаунт» — реальное необратимое действие (допустим красный).
+class _DeleteAccountButton extends StatelessWidget {
+  const _DeleteAccountButton({required this.onTap});
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(Icons.delete_forever_outlined, size: 18, color: c.danger),
+            const SizedBox(width: 8),
+            Text('Удалить аккаунт',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.danger)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Баннер «аккаунт запланирован к удалению» с кнопкой отмены (в течение окна).
+class _DeletionBanner extends StatelessWidget {
+  const _DeletionBanner({required this.when, required this.onCancel});
+  final String when; // ISO-момент сноса
+  final VoidCallback onCancel;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    final DateTime? d = DateTime.tryParse(when)?.toLocal();
+    final String date = d == null
+        ? ''
+        : '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+      decoration: BoxDecoration(
+        color: c.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.danger),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.warning_amber_rounded, color: c.danger, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('Аккаунт будет удалён',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.ink)),
+                Text('$date · можно отменить', style: AppFonts.mono(size: 12, color: c.inkMuted)),
+              ],
+            ),
+          ),
+          TextButton(onPressed: onCancel, child: const Text('Отменить')),
+        ],
+      ),
+    );
+  }
+}
+
+/// Запросить удаление аккаунта (окно отмены 3 дня) — подтверждение + планирование.
+Future<void> _confirmDeleteAccount(BuildContext context, WidgetRef ref) async {
+  final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+  final bool ok = await confirmDelete(
+    context,
+    title: 'Удалить аккаунт?',
+    message:
+        'Аккаунт и все ваши данные будут удалены через 3 дня. В течение этого срока удаление можно отменить.',
+  );
+  if (!ok) return;
+  try {
+    await ref.read(clientApiProvider).deleteAccount();
+    ref.invalidate(clientMeProvider);
+    m.showSnackBar(
+        const SnackBar(content: Text('Удаление запланировано. Можно отменить в течение 3 дней.')));
+  } catch (_) {
+    m.showSnackBar(const SnackBar(content: Text('Не удалось запланировать удаление')));
+  }
+}
+
+/// Отменить запланированное удаление аккаунта.
+Future<void> _cancelAccountDeletion(BuildContext context, WidgetRef ref) async {
+  final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+  try {
+    await ref.read(clientApiProvider).cancelDeletion();
+    ref.invalidate(clientMeProvider);
+    m.showSnackBar(const SnackBar(content: Text('Удаление отменено')));
+  } catch (_) {
+    m.showSnackBar(const SnackBar(content: Text('Не удалось отменить')));
   }
 }
 

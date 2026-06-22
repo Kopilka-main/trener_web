@@ -18,6 +18,7 @@ class HomeData {
     required this.knowledgeCount,
     required this.nextSessionAt,
     required this.nextSessionLabel,
+    required this.attention,
   });
 
   final String name;
@@ -31,6 +32,9 @@ class HomeData {
   final int knowledgeCount;
   final DateTime? nextSessionAt;
   final String? nextSessionLabel;
+  // Кол-во уведомлений «требуют внимания» = прочие уведомления + открытые задачи
+  // (зеркало HomePage.tsx: notifications.length + openTasks, без задач на замеры).
+  final int attention;
 }
 
 String _isoDate(DateTime d) =>
@@ -75,6 +79,7 @@ class ClientHomeApi {
       _safe('/api/client/workouts'),
       _safe('/api/client/sessions?from=$from&to=$to'),
       _safe('/api/client/chat/unread'),
+      _safe('/api/client/chat/messages'),
     ]);
 
     final Map<String, dynamic> me = (r[0]['account'] as Map<String, dynamic>?) ?? <String, dynamic>{};
@@ -83,6 +88,7 @@ class ClientHomeApi {
     final List<dynamic> workoutsRaw = (r[2]['workouts'] as List<dynamic>?) ?? <dynamic>[];
     final List<dynamic> sessions = (r[3]['sessions'] as List<dynamic>?) ?? <dynamic>[];
     final int unread = (r[4]['count'] as num?)?.toInt() ?? 0;
+    final List<dynamic> messages = (r[5]['messages'] as List<dynamic>?) ?? <dynamic>[];
 
     final Iterable<Map<String, dynamic>> active =
         packages.cast<Map<String, dynamic>>().where((p) => p['status'] == 'active');
@@ -93,7 +99,7 @@ class ClientHomeApi {
         workoutsRaw.cast<Map<String, dynamic>>().map(Workout.fromJson).toList();
     final int completedTrainer = workouts
         .where((Workout w) =>
-            w.status == WorkoutStatus.completed && !w.createdByClient)
+            w.status == WorkoutStatus.completed && !w.createdByClient && !w.excludedFromBalance)
         .length;
     final int completedAll =
         workouts.where((Workout w) => w.status == WorkoutStatus.completed).length;
@@ -129,6 +135,46 @@ class ClientHomeApi {
           ].join(' · ')
         : null;
 
+    // attention = кол-во уведомлений (зеркало buildClientNotifications без задач
+    // на замеры и без dismissed) + открытые задачи из чата. Используется для
+    // плитки «Уведомления» и правила «один acid-fill».
+    int notif = 0;
+    // 0) Назначенные тренером тренировки (черновики, не свои).
+    notif += workouts.where((Workout w) => !w.createdByClient && w.status == WorkoutStatus.draft).length;
+    // 1) Подтверждения будущих pending-занятий.
+    notif += future.where((Map<String, dynamic> s) => s['clientConfirmation'] == 'pending').length;
+    // 1b) Проведённые, но не согласованные занятия за последние 30 дней.
+    final DateTime ago30 = now.subtract(const Duration(days: 30));
+    for (final Map<String, dynamic> s in sessions.cast<Map<String, dynamic>>()) {
+      if (s['status'] != 'completed' || s['clientConfirmation'] != 'pending') continue;
+      final DateTime st = _localStart(s['date'] as String? ?? '', s['startTime'] as String? ?? '');
+      if (!st.isBefore(now) || st.isBefore(ago30)) continue;
+      notif++;
+    }
+    // 2) Скоро занятие — первое будущее не-pending в пределах 24ч.
+    for (final Map<String, dynamic> s in future) {
+      if (s['clientConfirmation'] == 'pending') continue;
+      final DateTime st = _localStart(s['date'] as String? ?? '', s['startTime'] as String? ?? '');
+      if (st.difference(now) <= const Duration(hours: 24)) {
+        notif++;
+        break;
+      }
+    }
+    // 3) Заканчивающийся пакет (остаток ≤ 2) среди активных.
+    for (final Map<String, dynamic> p in active) {
+      final int remaining =
+          ((p['lessonsPaid'] as num?)?.toInt() ?? 0) - ((p['lessonsUsed'] as num?)?.toInt() ?? 0);
+      if (remaining <= 2) notif++;
+    }
+    // 4) Непрочитанные сообщения.
+    if (unread > 0) notif++;
+
+    final int openTasks = messages
+        .cast<Map<String, dynamic>>()
+        .where((Map<String, dynamic> m) => m['kind'] == 'task' && m['taskDone'] != true)
+        .length;
+    final int attention = notif + openTasks;
+
     return HomeData(
       name: name.isEmpty ? (me['email'] as String? ?? '') : name,
       linked: linked,
@@ -142,6 +188,7 @@ class ClientHomeApi {
       knowledgeCount: overview.length,
       nextSessionAt: nextAt,
       nextSessionLabel: nextLabel,
+      attention: attention,
     );
   }
 }

@@ -32,6 +32,8 @@ export const trainerResponseSchema = z.object({
   birthDate: z.string().nullable(),
   contacts: z.array(contactSchema),
   avatarFileId: z.string().nullable(),
+  // ISO-момент окончательного удаления аккаунта (окно отмены), либо null.
+  pendingDeletionAt: z.string().nullable(),
 });
 export type TrainerResponse = z.infer<typeof trainerResponseSchema>;
 

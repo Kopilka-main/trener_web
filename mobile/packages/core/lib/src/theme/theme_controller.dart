@@ -29,9 +29,8 @@ final Provider<ThemeMode> initialThemeModeProvider =
 /// Выбор темы пользователем (по умолчанию светлая — как в вебе). Начальное
 /// значение берётся из [initialThemeModeProvider]. system — следовать системной.
 class ThemeController extends StateNotifier<ThemeMode> {
-  ThemeController(ThemeMode initial, {FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage(),
-        super(initial);
+  ThemeController(super.initial, {FlutterSecureStorage? storage})
+      : _storage = storage ?? const FlutterSecureStorage();
 
   final FlutterSecureStorage _storage;
 

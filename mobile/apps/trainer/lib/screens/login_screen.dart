@@ -1,3 +1,4 @@
+import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -32,8 +33,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       await ref.read(trainerApiProvider).login(_email.text.trim(), _password.text);
       // Дальше редирект на главную сделает роутер (по смене сессии).
-    } catch (_) {
-      setState(() => _error = 'Не удалось войти. Проверьте почту и пароль.');
+    } catch (e) {
+      setState(() => _error = describeApiError(e, fallback: 'Не удалось войти. Проверьте почту и пароль.'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

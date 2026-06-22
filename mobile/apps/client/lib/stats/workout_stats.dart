@@ -140,6 +140,48 @@ List<ExerciseOverview> aggregateExerciseOverview(List<Workout> workouts) {
   return out;
 }
 
+/// Стабильный ключ подхода для пометки рекордов `workoutId:position:setIndex`.
+String setKey(String workoutId, int position, int setIndex) =>
+    '$workoutId:$position:$setIndex';
+
+class _Best {
+  _Best(this.key, this.weight, this.reps, this.time);
+  final String key;
+  final num weight;
+  final num reps;
+  final num time;
+}
+
+/// По всем тренировкам находит «рекордный» подход каждого упражнения: максимум
+/// по весу, при равенстве — по повторам, затем по времени. Подходы без фактических
+/// значений игнорируются. Возвращает множество ключей-рекордов (зеркало computeRecordKeys).
+Set<String> computeRecordKeys(List<Workout> workouts) {
+  final Map<String, _Best> bestByExercise = <String, _Best>{};
+  for (final Workout w in workouts) {
+    for (final WorkoutExercise ex in w.exercises) {
+      for (final WorkoutSet s in ex.sets) {
+        if (s.actualWeightKg == null && s.actualReps == null && s.actualTimeSec == null) {
+          continue;
+        }
+        final _Best cand = _Best(
+          setKey(w.id, ex.position, s.setIndex),
+          s.actualWeightKg ?? 0,
+          s.actualReps ?? 0,
+          s.actualTimeSec ?? 0,
+        );
+        final _Best? cur = bestByExercise[ex.exerciseId];
+        if (cur == null ||
+            cand.weight > cur.weight ||
+            (cand.weight == cur.weight && cand.reps > cur.reps) ||
+            (cand.weight == cur.weight && cand.reps == cur.reps && cand.time > cur.time)) {
+          bestByExercise[ex.exerciseId] = cand;
+        }
+      }
+    }
+  }
+  return bestByExercise.values.map((_Best b) => b.key).toSet();
+}
+
 class _Acc {
   _Acc(this.exerciseId, this.name);
   final String exerciseId;
@@ -163,6 +205,7 @@ class ExerciseHistoryPoint {
     required this.topReps,
     required this.tonnage,
     required this.maxTimeSec,
+    required this.totalTimeSec,
   });
   final DateTime? date;
   final int totalSets;
@@ -170,6 +213,8 @@ class ExerciseHistoryPoint {
   final num? topReps;
   final int tonnage;
   final num? maxTimeSec;
+  /// Суммарное время в сессии, сек (Σ actualTimeSec по done-подходам).
+  final int totalTimeSec;
 }
 
 class ExerciseHistory {
@@ -195,6 +240,7 @@ ExerciseHistory? aggregateExerciseHistory(List<Workout> workouts, String exercis
     num? topReps;
     double tonnage = 0;
     num? maxT;
+    double totalT = 0;
     for (final WorkoutExercise ex in w.exercises) {
       if (ex.exerciseId != exerciseId) continue;
       name = ex.name;
@@ -214,6 +260,7 @@ ExerciseHistory? aggregateExerciseHistory(List<Workout> workouts, String exercis
         if (s.actualTimeSec != null) {
           timeCount += 1;
           maxT = (maxT == null || s.actualTimeSec! > maxT) ? s.actualTimeSec : maxT;
+          totalT += s.actualTimeSec!;
         }
       }
     }
@@ -225,6 +272,7 @@ ExerciseHistory? aggregateExerciseHistory(List<Workout> workouts, String exercis
         topReps: topReps,
         tonnage: tonnage.round(),
         maxTimeSec: maxT,
+        totalTimeSec: totalT.round(),
       ));
     }
   }

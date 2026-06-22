@@ -105,10 +105,20 @@ class TrainerAssignApi {
   }
 
   /// То же, но возвращает id созданного черновика (для привязки к занятию).
-  Future<String> assignReturningId(String clientId, String name, List<Map<String, dynamic>> exercises) async {
+  /// [excludedFromBalance] — историческая запись (не влияет на баланс/календарь).
+  Future<String> assignReturningId(
+    String clientId,
+    String name,
+    List<Map<String, dynamic>> exercises, {
+    bool excludedFromBalance = false,
+  }) async {
     final Map<String, dynamic> r = await _api.postJson(
       '/api/clients/$clientId/workouts',
-      <String, dynamic>{'name': name, 'exercises': exercises},
+      <String, dynamic>{
+        'name': name,
+        'exercises': exercises,
+        if (excludedFromBalance) 'excludedFromBalance': true,
+      },
     );
     return (r['workout'] as Map<String, dynamic>?)?['id'] as String? ?? '';
   }

@@ -20,38 +20,6 @@ class _SectionLabel extends StatelessWidget {
       );
 }
 
-/// Строка контакта: иконка + тип + значение.
-class _ContactRow extends StatelessWidget {
-  const _ContactRow({required this.icon, required this.type, required this.value});
-  final IconData icon;
-  final String type;
-  final String value;
-  @override
-  Widget build(BuildContext context) {
-    final AppColors c = context.colors;
-    if (value.trim().isEmpty) return const SizedBox.shrink();
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12)),
-      child: Row(
-        children: <Widget>[
-          Icon(icon, size: 18, color: c.inkMuted),
-          const SizedBox(width: 12),
-          Text(type, style: TextStyle(fontSize: 14, color: c.inkMuted)),
-          const Spacer(),
-          Flexible(
-            child: Text(value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// Показать QR с ID пользователя.
 void _showQr(BuildContext context, String id) {
   final AppColors c = context.colors;
@@ -100,6 +68,13 @@ class SettingsScreen extends ConsumerWidget {
         data: (TrainerProfile a) => ListView(
           padding: const EdgeInsets.all(16),
           children: <Widget>[
+            if (a.pendingDeletionAt != null) ...<Widget>[
+              _DeletionBanner(
+                when: a.pendingDeletionAt!,
+                onCancel: () => _cancelAccountDeletion(context, ref),
+              ),
+              const SizedBox(height: 16),
+            ],
             Row(
               children: <Widget>[
                 AuthedAvatar(
@@ -143,15 +118,8 @@ class SettingsScreen extends ConsumerWidget {
             ],
             const SizedBox(height: 16),
             const Divider(),
-            const _GymsSection(),
-            const Divider(),
-            // ── КОНТАКТЫ ──
-            _SectionLabel('Контакты'),
-            _ContactRow(icon: Icons.mail_outline, type: 'Email', value: a.email),
-            ...a.contacts.map((TrainerContact ct) => _ContactRow(icon: Icons.alternate_email, type: ct.type, value: ct.value)),
-            const SizedBox(height: 8),
-            const Divider(),
             const _PushToggle(),
+            const _SoundToggle(),
             const Divider(),
             const _ThemeSwitch(),
             const Divider(),
@@ -196,10 +164,90 @@ class SettingsScreen extends ConsumerWidget {
               title: Text('Выйти', style: TextStyle(color: cs.error)),
               onTap: () => _confirmLogout(context, ref),
             ),
+            if (a.pendingDeletionAt == null)
+              ListTile(
+                leading: Icon(Icons.delete_forever_outlined, color: cs.error),
+                title: Text('Удалить аккаунт', style: TextStyle(color: cs.error)),
+                onTap: () => _confirmDeleteAccount(context, ref),
+              ),
           ],
         ),
       ),
     );
+  }
+}
+
+/// Баннер «аккаунт запланирован к удалению» с кнопкой отмены (в течение окна).
+class _DeletionBanner extends StatelessWidget {
+  const _DeletionBanner({required this.when, required this.onCancel});
+  final String when; // ISO-момент сноса
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    final DateTime? d = DateTime.tryParse(when)?.toLocal();
+    final String date = d == null
+        ? ''
+        : '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+      decoration: BoxDecoration(
+        color: c.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: c.danger),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.warning_amber_rounded, color: c.danger, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('Аккаунт будет удалён',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.ink)),
+                Text('$date · можно отменить',
+                    style: AppFonts.mono(size: 12, color: c.inkMuted)),
+              ],
+            ),
+          ),
+          TextButton(onPressed: onCancel, child: const Text('Отменить')),
+        ],
+      ),
+    );
+  }
+}
+
+/// Запросить удаление аккаунта (окно отмены 3 дня) — подтверждение + планирование.
+Future<void> _confirmDeleteAccount(BuildContext context, WidgetRef ref) async {
+  final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+  final bool ok = await confirmDelete(
+    context,
+    title: 'Удалить аккаунт?',
+    message:
+        'Аккаунт и все ваши данные будут удалены через 3 дня. В течение этого срока удаление можно отменить.',
+  );
+  if (!ok) return;
+  try {
+    await ref.read(trainerApiProvider).deleteAccount();
+    ref.invalidate(trainerMeProvider);
+    m.showSnackBar(
+        const SnackBar(content: Text('Удаление запланировано. Можно отменить в течение 3 дней.')));
+  } catch (_) {
+    m.showSnackBar(const SnackBar(content: Text('Не удалось запланировать удаление')));
+  }
+}
+
+/// Отменить запланированное удаление аккаунта.
+Future<void> _cancelAccountDeletion(BuildContext context, WidgetRef ref) async {
+  final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+  try {
+    await ref.read(trainerApiProvider).cancelDeletion();
+    ref.invalidate(trainerMeProvider);
+    m.showSnackBar(const SnackBar(content: Text('Удаление отменено')));
+  } catch (_) {
+    m.showSnackBar(const SnackBar(content: Text('Не удалось отменить')));
   }
 }
 
@@ -265,6 +313,30 @@ class _PushToggleState extends ConsumerState<_PushToggle> {
               else
                 Switch(value: _enabled, onChanged: _onChanged),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Тумблер звука при проведении тренировки (бип таймера отдыха: за 10 с и
+/// двойной по завершении). Хранится локально через [workoutSoundEnabledProvider].
+class _SoundToggle extends ConsumerWidget {
+  const _SoundToggle();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bool on = ref.watch(workoutSoundEnabledProvider);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Row(
+        children: <Widget>[
+          const Icon(Icons.volume_up_outlined, size: 22),
+          const SizedBox(width: 12),
+          const Expanded(child: Text('Звук при тренировке', style: TextStyle(fontSize: 16))),
+          Switch(
+            value: on,
+            onChanged: (bool v) => ref.read(workoutSoundEnabledProvider.notifier).setEnabled(v),
           ),
         ],
       ),
@@ -373,7 +445,9 @@ class _GymsSectionState extends ConsumerState<_GymsSection> {
                     children: <Widget>[
                       Expanded(child: Text(g.name, style: TextStyle(fontSize: 14, color: c.ink))),
                       GestureDetector(
-                        onTap: () => _delete(g.id),
+                        onTap: () async {
+                          if (await confirmDelete(context, title: 'Удалить зал?')) _delete(g.id);
+                        },
                         child: Icon(Icons.delete_outline, size: 18, color: c.inkMuted),
                       ),
                     ],
@@ -405,15 +479,19 @@ class _ThemeSwitch extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 10),
-          SegmentedButton<ThemeMode>(
-            segments: const <ButtonSegment<ThemeMode>>[
-              ButtonSegment<ThemeMode>(value: ThemeMode.system, label: Text('Система')),
-              ButtonSegment<ThemeMode>(value: ThemeMode.light, label: Text('Светлая')),
-              ButtonSegment<ThemeMode>(value: ThemeMode.dark, label: Text('Тёмная')),
-            ],
-            selected: <ThemeMode>{mode},
-            onSelectionChanged: (Set<ThemeMode> s) =>
-                ref.read(themeModeProvider.notifier).set(s.first),
+          // Полная ширина: сегменты делят строку поровну, без пустоты справа.
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<ThemeMode>(
+              segments: const <ButtonSegment<ThemeMode>>[
+                ButtonSegment<ThemeMode>(value: ThemeMode.system, label: Text('Система')),
+                ButtonSegment<ThemeMode>(value: ThemeMode.light, label: Text('Светлая')),
+                ButtonSegment<ThemeMode>(value: ThemeMode.dark, label: Text('Тёмная')),
+              ],
+              selected: <ThemeMode>{mode},
+              onSelectionChanged: (Set<ThemeMode> s) =>
+                  ref.read(themeModeProvider.notifier).set(s.first),
+            ),
           ),
         ],
       ),

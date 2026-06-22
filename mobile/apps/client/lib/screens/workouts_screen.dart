@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../api/client_auth.dart';
 import '../api/client_templates.dart';
 import '../api/client_workouts.dart';
+import '../stats/workout_stats.dart';
 import 'active_workout_screen.dart';
 
 const List<String> _ruMonths = <String>[
@@ -51,6 +53,8 @@ class WorkoutsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AppColors c = context.colors;
     final AsyncValue<List<Workout>> workouts = ref.watch(clientWorkoutsProvider);
+    // Подключён ли клиент к тренеру — приоритет №1 верхнего блока (см. spec).
+    final bool linked = ref.watch(clientLinkedProvider).valueOrNull ?? true;
 
     return Scaffold(
       body: SafeArea(
@@ -74,7 +78,13 @@ class WorkoutsScreen extends ConsumerWidget {
                 children: <Widget>[
                   Text('Тренировки', style: AppFonts.display(size: 28, color: c.ink)),
                   const SizedBox(height: 16),
-                  if (current != null)
+                  if (!linked)
+                    Text(
+                      'Вы пока не подключены к тренеру. Подключите его, чтобы здесь появились '
+                      'назначенные тренировки.',
+                      style: TextStyle(fontSize: 14, color: c.inkMuted),
+                    )
+                  else if (current != null)
                     _ContinueCard(workout: current, onOpen: () => _openRun(context, ref, current))
                   else
                     _NewWorkoutCard(
@@ -467,7 +477,12 @@ class _HistoryRowState extends ConsumerState<_HistoryRow> {
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
                             color: c.cardElevated, borderRadius: BorderRadius.circular(12)),
-                        child: Text(_saved ? 'В шаблонах ✓' : 'Сохранить как шаблон',
+                        child: Text(
+                            _saved
+                                ? 'В шаблонах ✓'
+                                : _busy
+                                    ? 'Сохраняем…'
+                                    : 'Сохранить как шаблон',
                             style: TextStyle(
                                 fontSize: 12, fontWeight: FontWeight.w600, color: c.ink)),
                       ),
@@ -696,7 +711,9 @@ class _PickRow extends StatelessWidget {
           ),
           if (onDelete != null)
             IconButton(
-              onPressed: onDelete,
+              onPressed: () async {
+                if (await confirmDelete(context, title: 'Удалить шаблон?')) onDelete!();
+              },
               icon: Icon(Icons.delete_outline, size: 20, color: c.inkMuted),
               tooltip: 'Удалить шаблон',
             ),
@@ -790,62 +807,100 @@ class _HistoryPickerSheet extends ConsumerWidget {
   }
 }
 
-/// Деталь назначенной/завершённой тренировки (только просмотр): упражнения и подходы.
-class WorkoutDetailScreen extends StatelessWidget {
+/// Факт подхода: время приоритетнее; иначе «повторы × вес кг»; иначе «—».
+String _factText(WorkoutSet s) {
+  if (s.actualTimeSec != null) return '${s.actualTimeSec} сек';
+  if (s.actualReps != null || s.actualWeightKg != null) {
+    final String reps = s.actualReps?.toString() ?? '—';
+    final String kg = s.actualWeightKg != null ? ' × ${s.actualWeightKg} кг' : '';
+    return '$reps$kg';
+  }
+  return '—';
+}
+
+/// План подхода с префиксом «план »: время приоритетнее; иначе «повторы × вес кг».
+String _planText(WorkoutSet s) {
+  if (s.plannedTimeSec != null) return 'план ${s.plannedTimeSec} сек';
+  final String reps = s.plannedReps?.toString() ?? '—';
+  final String kg = s.plannedWeightKg != null ? ' × ${s.plannedWeightKg} кг' : '';
+  return 'план $reps$kg';
+}
+
+/// Итоги тренировки (только просмотр): мета, заметка тренера, упражнения с
+/// фактом/планом по подходам и глобальной пометкой рекордов. Зеркало WorkoutDetailPage.
+class WorkoutDetailScreen extends ConsumerWidget {
   const WorkoutDetailScreen({super.key, required this.workout});
   final Workout workout;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final AppColors c = context.colors;
-    final List<Widget> children = <Widget>[];
+    // Рекорды — глобальная пометка по всей истории, а не в рамках этой тренировки.
+    final List<Workout> all = ref.watch(clientWorkoutsProvider).valueOrNull ?? <Workout>[];
+    final Set<String> recordKeys = computeRecordKeys(all);
+
     final List<String> meta = <String>[
       if (workout.completedAt != null) _dateGroup(workout.completedAt!),
       if (workout.durationSec != null && workout.durationSec! > 0) '${(workout.durationSec! / 60).round()} мин',
       if (workout.rpe != null) 'RPE ${workout.rpe}',
     ];
-    if (meta.isNotEmpty) {
-      children.add(Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-        child: Text(meta.join(' · '), style: TextStyle(color: c.inkMuted)),
-      ));
-    }
-    if (workout.trainerNote?.trim().isNotEmpty == true) {
-      children.add(Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-        child: Container(
-          padding: const EdgeInsets.all(12),
+
+    final List<Widget> children = <Widget>[
+      Text(workout.name, style: AppFonts.display(size: 24, color: c.ink)),
+      if (meta.isNotEmpty) ...<Widget>[
+        const SizedBox(height: 4),
+        Text(meta.join(' · '), style: TextStyle(fontSize: 12, color: c.inkMuted)),
+      ],
+      if (workout.trainerNote?.trim().isNotEmpty == true) ...<Widget>[
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12)),
-          child: Text('«${workout.trainerNote!.trim()}»',
-              style: TextStyle(fontSize: 14, fontStyle: FontStyle.italic, color: c.inkMuted)),
+          child: Text(workout.trainerNote!.trim(),
+              style: TextStyle(fontSize: 13, color: c.inkMuted)),
         ),
-      ));
-    }
+      ],
+      const SizedBox(height: 12),
+    ];
+
     for (final WorkoutExercise e in workout.exercises) {
-      children.add(Padding(
-        padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+      children.add(Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(e.name, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c.ink)),
-            const SizedBox(height: 6),
+            Text(e.name, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+            const SizedBox(height: 8),
             ...e.sets.map((WorkoutSet s) {
-              final num? reps = s.actualReps ?? s.plannedReps;
-              final num? weight = s.actualWeightKg ?? s.plannedWeightKg;
-              final num? time = s.actualTimeSec ?? s.plannedTimeSec;
-              final String desc = <String>[
-                if (reps != null) '$reps повт.',
-                if (weight != null && weight > 0) '$weight кг',
-                if (time != null && time > 0) '$time сек',
-              ].join(' × ');
+              final bool isRecord = recordKeys.contains(setKey(workout.id, e.position, s.setIndex));
               return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
+                padding: const EdgeInsets.symmetric(vertical: 3),
                 child: Row(
                   children: <Widget>[
-                    SizedBox(width: 26, child: Text('${s.setIndex + 1}', style: AppFonts.mono(size: 13, color: c.inkMuted))),
-                    Expanded(child: Text(desc.isEmpty ? '—' : desc, style: TextStyle(fontSize: 15, color: c.ink))),
-                    Icon(s.done ? Icons.check_circle : Icons.radio_button_unchecked,
-                        size: 18, color: s.done ? c.accent : c.inkMuted),
+                    Flexible(
+                      child: Text(_factText(s),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 14, color: c.ink)),
+                    ),
+                    if (isRecord) ...<Widget>[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                            color: c.accent, borderRadius: BorderRadius.circular(6)),
+                        child: Text('рекорд',
+                            style: TextStyle(
+                                fontSize: 10, fontWeight: FontWeight.w700, color: c.accentOn)),
+                      ),
+                    ],
+                    const Spacer(),
+                    Text(_planText(s),
+                        style: TextStyle(fontSize: 12, color: c.inkMutedXl)),
                   ],
                 ),
               );
@@ -860,11 +915,13 @@ class WorkoutDetailScreen extends StatelessWidget {
         child: Center(child: Text('Упражнения не добавлены', style: TextStyle(color: c.inkMuted))),
       ));
     }
-    children.add(const SizedBox(height: 24));
 
     return Scaffold(
       appBar: AppBar(title: Text(workout.name)),
-      body: ListView(children: children),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        children: children,
+      ),
     );
   }
 }

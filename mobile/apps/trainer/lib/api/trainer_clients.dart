@@ -184,6 +184,13 @@ class TrainerClientsApi {
     await _api.deleteJson('/api/clients/$id/avatar');
   }
 
+  /// Подтянуть аватар подключённого аккаунта в карточку клиента (копия на сервере).
+  /// Если у аккаунта аватара нет — бэкенд вернёт карточку без изменений.
+  Future<Client> avatarFromAccount(String id) async {
+    final Map<String, dynamic> r = await _api.postJson('/api/clients/$id/avatar-from-account');
+    return Client.fromJson((r['client'] as Map<String, dynamic>?) ?? <String, dynamic>{});
+  }
+
   /// Проверка кода подключения перед привязкой: существует ли аккаунт и не занят ли
   /// он другим клиентом тренера. Возвращает (exists, linkedClientName).
   Future<({bool exists, String? linkedClientName})> checkConnectCode(String code, {String? excludeClientId}) async {

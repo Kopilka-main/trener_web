@@ -31,6 +31,7 @@ export function registerClientsModule(
         contacts: a.contacts,
       };
     },
+    accountAvatarFileId: (id) => clientAuthRepo.findAvatarFileId(id),
   });
   const requireClientAccess = makeRequireClientAccess(repo);
   clientsRoutes(app, svc, requireClientAccess);

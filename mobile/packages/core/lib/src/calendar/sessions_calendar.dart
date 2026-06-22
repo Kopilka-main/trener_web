@@ -38,10 +38,14 @@ class _SessionsCalendarState extends State<SessionsCalendar> {
   DateTime _anchor = DateTime.now();
   // Верхняя видимая неделя в week-виде — для подписи периода при прокрутке списка.
   DateTime? _visibleWeek;
+  // Растёт при каждом _setAnchor (стрелки/«Сегодня») — сигнал week-виду вернуться
+  // к опорной неделе, даже если сама неделя не изменилась (прокрутка её не меняет).
+  int _weekResetSignal = 0;
 
   void _setAnchor(DateTime d) => setState(() {
         _anchor = d;
         _visibleWeek = null;
+        _weekResetSignal++;
       });
 
   void _shift(int dir) {
@@ -94,6 +98,7 @@ class _SessionsCalendarState extends State<SessionsCalendar> {
                   _MonthView(anchor: _anchor, sessions: widget.sessions, onPickDay: _pickDay),
                 CalendarView.week => _WeekView(
                     anchor: _anchor,
+                    resetSignal: _weekResetSignal,
                     sessions: widget.sessions,
                     onPickDay: _pickDay,
                     onTap: widget.onSessionTap,
@@ -336,10 +341,67 @@ class _MonthView extends StatelessWidget {
               }).toList(),
             ),
           ),
+          _MonthLegend(sessions: sessions, anchor: anchor),
         ],
       ),
     );
   }
+}
+
+/// Легенда-сводка за видимый месяц: цвет + количество по статусам (бакеты как у
+/// плиток — completed перебивает confirmed). Показываем только ненулевые.
+class _MonthLegend extends StatelessWidget {
+  const _MonthLegend({required this.sessions, required this.anchor});
+  final List<CalSession> sessions;
+  final DateTime anchor;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    int confirmed = 0, completed = 0, cancelled = 0, declined = 0, pending = 0;
+    for (final CalSession s in sessions) {
+      final DateTime d = calParseIso(s.date);
+      if (d.month != anchor.month || d.year != anchor.year) continue;
+      if (s.status == CalStatus.cancelled) {
+        cancelled++;
+      } else if (s.status == CalStatus.completed) {
+        completed++;
+      } else if (s.confirmation == CalConfirmation.confirmed) {
+        confirmed++;
+      } else if (s.confirmation == CalConfirmation.declined) {
+        declined++;
+      } else {
+        pending++;
+      }
+    }
+    final List<Widget> items = <Widget>[
+      if (confirmed > 0) _item(c, const Color(0xFFCAFF3A), 'согласовано', confirmed),
+      if (completed > 0) _item(c, const Color(0xFF46D4F0), 'проведено', completed),
+      if (pending > 0) _item(c, const Color(0xFFFFAB2E), 'ожидает', pending),
+      if (declined > 0) _item(c, const Color(0xFFFF5A5A), 'отклонено', declined),
+      if (cancelled > 0) _item(c, c.cardElevated, 'отменено', cancelled),
+    ];
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Wrap(spacing: 14, runSpacing: 6, alignment: WrapAlignment.center, children: items),
+    );
+  }
+
+  Widget _item(AppColors c, Color dot, String label, int n) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: dot, borderRadius: BorderRadius.circular(3)),
+          ),
+          const SizedBox(width: 5),
+          Text('$n', style: AppFonts.mono(size: 11, color: c.ink, weight: FontWeight.w700)),
+          const SizedBox(width: 3),
+          Text(label, style: AppFonts.mono(size: 11, color: c.inkMuted)),
+        ],
+      );
 }
 
 // ─────────────────────────── WEEK ───────────────────────────
@@ -347,12 +409,15 @@ class _MonthView extends StatelessWidget {
 class _WeekView extends StatefulWidget {
   const _WeekView({
     required this.anchor,
+    required this.resetSignal,
     required this.sessions,
     required this.onPickDay,
     required this.onTap,
     required this.onVisibleWeekChange,
   });
   final DateTime anchor;
+  // Меняется при «Сегодня»/стрелках → принудительный возврат к опорной неделе.
+  final int resetSignal;
   final List<CalSession> sessions;
   final void Function(DateTime) onPickDay;
   final void Function(CalSession) onTap;
@@ -382,9 +447,10 @@ class _WeekViewState extends State<_WeekView> {
   @override
   void didUpdateWidget(_WeekView old) {
     super.didUpdateWidget(old);
-    if (!calSameDay(calStartOfWeek(old.anchor), calStartOfWeek(widget.anchor))) {
-      // Сменилась опорная неделя (стрелки/«Сегодня») — карта смещений устарела,
-      // возвращаем центр (опорную неделю) к верхнему краю.
+    if (!calSameDay(calStartOfWeek(old.anchor), calStartOfWeek(widget.anchor)) ||
+        widget.resetSignal != old.resetSignal) {
+      // Сменилась опорная неделя ИЛИ нажали «Сегодня» при уже текущей неделе —
+      // карта смещений устарела, возвращаем центр (опорную неделю) к верхнему краю.
       _rowKeys.clear();
       _lastReported = null;
       WidgetsBinding.instance.addPostFrameCallback((_) {

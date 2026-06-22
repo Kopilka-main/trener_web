@@ -22,6 +22,7 @@ class ClientAccount {
     required this.birthDate,
     required this.bio,
     required this.contacts,
+    required this.pendingDeletionAt,
   });
 
   factory ClientAccount.fromJson(Map<String, dynamic> j) => ClientAccount(
@@ -36,6 +37,7 @@ class ClientAccount {
             .cast<Map<String, dynamic>>()
             .map(ClientContact.fromJson)
             .toList(),
+        pendingDeletionAt: j['pendingDeletionAt'] as String?,
       );
 
   final String id;
@@ -46,6 +48,8 @@ class ClientAccount {
   final String? birthDate;
   final String? bio;
   final List<ClientContact> contacts;
+  // ISO-момент окончательного удаления аккаунта (окно отмены), либо null.
+  final String? pendingDeletionAt;
 
   String get fullName => '$firstName $lastName'.trim();
   String get initials {
@@ -85,7 +89,12 @@ class ClientApi {
 
   Future<ClientAccount> me() async {
     final Map<String, dynamic> res = await _api.getJson('/api/client/auth/me');
-    return ClientAccount.fromJson(res['account'] as Map<String, dynamic>);
+    // pendingDeletionAt лежит на верхнем уровне ответа — вмешиваем в account.
+    final Map<String, dynamic> account = <String, dynamic>{
+      ...res['account'] as Map<String, dynamic>,
+      'pendingDeletionAt': res['pendingDeletionAt'],
+    };
+    return ClientAccount.fromJson(account);
   }
 
   /// Обновить профиль (PATCH /api/client/auth/me).
@@ -124,6 +133,17 @@ class ClientApi {
       // выход локально всё равно выполняем
     }
     await _ref.read(sessionProvider.notifier).clear();
+  }
+
+  /// Запросить удаление аккаунта (окно отмены 3 дня). Возвращает ISO-дату сноса.
+  Future<String> deleteAccount() async {
+    final Map<String, dynamic> res = await _api.deleteJson('/api/client/auth/me');
+    return res['pendingDeletionAt'] as String? ?? '';
+  }
+
+  /// Отменить запланированное удаление аккаунта.
+  Future<void> cancelDeletion() async {
+    await _api.postJson('/api/client/auth/me/cancel-deletion');
   }
 }
 

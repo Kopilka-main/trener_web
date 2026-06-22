@@ -40,6 +40,9 @@ export const trainers = pgTable(
     avatarFileId: text('avatar_file_id').references((): AnyPgColumn => files.id, {
       onDelete: 'set null',
     }),
+    // Запрошено удаление аккаунта: момент окончательного удаления (окно отмены).
+    // NULL = удаление не запланировано. Планировщик сносит аккаунт по достижении.
+    pendingDeletionAt: timestamp('pending_deletion_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   // ИНВАРИАНТ: email хранится уже нормализованным (lowercase+trim) — это гарантирует
@@ -101,6 +104,9 @@ export const clientAccounts = pgTable(
     avatarFileId: text('avatar_file_id').references((): AnyPgColumn => files.id, {
       onDelete: 'set null',
     }),
+    // Запрошено удаление аккаунта: момент окончательного удаления (окно отмены).
+    // NULL = удаление не запланировано. Планировщик сносит аккаунт по достижении.
+    pendingDeletionAt: timestamp('pending_deletion_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   // email нормализован контрактом clientRegisterRequestSchema (lowercase+trim).

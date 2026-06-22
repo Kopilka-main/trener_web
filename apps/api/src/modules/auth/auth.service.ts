@@ -11,6 +11,7 @@ import { hashPassword, verifyPassword } from '../../auth/password.js';
 import { AppError, unauthorized } from '../../errors.js';
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 дней
+const DELETION_GRACE_MS = 3 * 24 * 60 * 60 * 1000; // окно отмены удаления — 3 дня
 
 // Расширение файла выводим ИЗ MIME по whitelist (НЕ из имени файла клиента).
 const MIME_EXT: Record<string, string> = {
@@ -39,6 +40,7 @@ function toTrainerResponse(t: {
   birthDate?: string | null;
   contacts: { type: string; value: string }[];
   avatarFileId?: string | null;
+  pendingDeletionAt?: Date | null;
 }): TrainerResponse {
   return {
     id: t.id,
@@ -50,6 +52,7 @@ function toTrainerResponse(t: {
     birthDate: t.birthDate ?? null,
     contacts: t.contacts,
     avatarFileId: t.avatarFileId ?? null,
+    pendingDeletionAt: t.pendingDeletionAt ? t.pendingDeletionAt.toISOString() : null,
   };
 }
 
@@ -102,6 +105,34 @@ export function makeAuthService(
       const trainer = await repo.findTrainerById(trainerId);
       if (!trainer) throw unauthorized('Сессия недействительна');
       return toTrainerResponse(trainer);
+    },
+
+    // Запросить удаление аккаунта тренера: момент сноса = now + окно отмены (3 дня).
+    async requestDeletion(trainerId: string): Promise<{ pendingDeletionAt: string }> {
+      const trainer = await repo.findTrainerById(trainerId);
+      if (!trainer) throw unauthorized('Сессия недействительна');
+      const at = new Date(deps.now().getTime() + DELETION_GRACE_MS);
+      await repo.setPendingDeletion(trainerId, at);
+      return { pendingDeletionAt: at.toISOString() };
+    },
+
+    // Отменить запланированное удаление (в течение окна).
+    async cancelDeletion(trainerId: string): Promise<void> {
+      const trainer = await repo.findTrainerById(trainerId);
+      if (!trainer) throw unauthorized('Сессия недействительна');
+      await repo.setPendingDeletion(trainerId, null);
+    },
+
+    // Снести тренеров с истёкшим окном (вызывает планировщик): для каждого читаем пути
+    // файлов, удаляем строку (каскад всего воркспейса), затем чистим файлы с диска.
+    async purgeExpiredDeletions(): Promise<number> {
+      const expired = await repo.findExpiredDeletions(deps.now());
+      for (const t of expired) {
+        const paths = await repo.findTrainerFileStoragePaths(t.id);
+        await repo.deleteTrainer(t.id);
+        for (const p of paths) await storage.remove(p).catch(() => undefined);
+      }
+      return expired.length;
     },
 
     async updateMe(trainerId: string, input: UpdateTrainerRequest): Promise<TrainerResponse> {

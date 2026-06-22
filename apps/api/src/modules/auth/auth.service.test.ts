@@ -50,6 +50,7 @@ function fakeStorage(over: Partial<Storage> = {}): Storage {
   return {
     save: vi.fn(() => Promise.resolve({ storagePath: 'A/_/f1.jpg', sizeBytes: 10 })),
     openRead: vi.fn(),
+    read: vi.fn(() => Promise.resolve(Buffer.from([]))),
     remove: vi.fn(() => Promise.resolve()),
     ...over,
   };

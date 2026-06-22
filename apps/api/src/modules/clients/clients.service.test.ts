@@ -67,6 +67,7 @@ function fakeStorage(over: Partial<Storage> = {}): Storage {
   return {
     save: vi.fn(() => Promise.resolve({ storagePath: 'A/c1/f1.jpg', sizeBytes: 10 })),
     openRead: vi.fn(),
+    read: vi.fn(() => Promise.resolve(Buffer.from([]))),
     remove: vi.fn(() => Promise.resolve()),
     ...over,
   };
@@ -84,8 +85,9 @@ const defaultAccountProfile: AccountProfileFn = () => Promise.resolve(null);
 function makeDeps(
   accountExists: (id: string) => Promise<boolean> = vi.fn(() => Promise.resolve(true)),
   accountProfile: AccountProfileFn = defaultAccountProfile,
+  accountAvatarFileId: (id: string) => Promise<string | null> = () => Promise.resolve(null),
 ) {
-  return { newId: () => 'newid', accountExists, accountProfile };
+  return { newId: () => 'newid', accountExists, accountProfile, accountAvatarFileId };
 }
 const deps = makeDeps();
 

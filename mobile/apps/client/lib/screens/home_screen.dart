@@ -3,9 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../api/client_auth.dart';
-import '../api/client_chat.dart';
 import '../api/client_home.dart';
+import '../api/client_trainer.dart';
 
 const List<String> _ruMonths = <String>[
   'янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
@@ -61,55 +60,63 @@ class HomeScreen extends ConsumerWidget {
             ),
           ),
           data: (HomeData d) {
-            final String? trainerName = ref.watch(clientTrainerNameProvider).valueOrNull;
+            final TrainerPublic? trainer = ref.watch(clientTrainerProvider).valueOrNull;
+            final bool showTrainer = d.linked && trainer != null;
             return RefreshIndicator(
             onRefresh: () async => ref.invalidate(clientHomeProvider),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-              children: <Widget>[
-                // Шапка: тренер (если подключён) / имя + шестерёнка.
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: <Widget>[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                // Шапка: слева тренер (аватар+имя → /trainer, только если подключён),
+                // справа всегда шестерёнка → профиль.
                 Row(
                   children: <Widget>[
                     Expanded(
-                      child: GestureDetector(
-                        onTap: d.linked && trainerName != null ? () => context.push('/trainer') : null,
-                        behavior: HitTestBehavior.opaque,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(d.linked && trainerName != null ? trainerName : d.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
-                            if (d.linked && trainerName != null)
-                              Text('тренер · профиль', style: TextStyle(fontSize: 11, color: c.inkMuted)),
-                          ],
-                        ),
-                      ),
+                      child: showTrainer
+                          ? GestureDetector(
+                              onTap: () => context.push('/trainer'),
+                              behavior: HitTestBehavior.opaque,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  AuthedAvatar(
+                                    url: trainer.avatarFileId != null
+                                        ? ref.read(clientTrainerApiProvider).avatarUrl(trainer.avatarFileId!)
+                                        : null,
+                                    token: ref.watch(sessionProvider).token,
+                                    initials: trainer.initials,
+                                    radius: 18,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Flexible(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Text(trainer.fullName,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                                fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
+                                        Text('тренер', style: TextStyle(fontSize: 11, color: c.inkMuted)),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : const SizedBox.shrink(),
                     ),
-                    Builder(builder: (BuildContext context) {
-                      final ClientAccount? acc = ref.watch(clientMeProvider).valueOrNull;
-                      final String? fileId = acc?.avatarFileId;
-                      if (fileId == null) {
-                        return IconButton(
-                          onPressed: () => context.push('/settings'),
-                          icon: Icon(Icons.settings_outlined, size: 28, color: c.inkMuted),
-                          tooltip: 'Профиль',
-                        );
-                      }
-                      return GestureDetector(
-                        onTap: () => context.push('/settings'),
-                        child: Padding(
-                          padding: const EdgeInsets.all(6),
-                          child: AuthedAvatar(
-                            url: ref.read(clientApiProvider).avatarUrl(fileId),
-                            token: ref.watch(sessionProvider).token,
-                            initials: acc?.initials ?? '',
-                            radius: 18,
-                          ),
-                        ),
-                      );
-                    }),
+                    IconButton(
+                      onPressed: () => context.push('/settings'),
+                      icon: Icon(Icons.settings_outlined, size: 30, color: c.inkMuted),
+                      tooltip: 'Профиль',
+                    ),
                   ],
                 ),
                 // Hero: счётчик / CTA подключения.
@@ -139,26 +146,30 @@ class HomeScreen extends ConsumerWidget {
                       : Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: <Widget>[
-                                Text(
-                                  d.paidBalance < 0 ? '${d.paidBalance}' : _pad2(d.paidBalance),
-                                  style: AppFonts.display(
-                                      size: 64,
-                                      color: d.paidBalance < 0 ? c.danger : c.accent,
-                                      letterSpacing: -2),
-                                ),
-                                const SizedBox(width: 12),
-                                Flexible(
-                                  child: Text('количество\nтренировок',
-                                      style: TextStyle(
-                                          fontSize: 22,
-                                          height: 1.1,
-                                          fontWeight: FontWeight.bold,
-                                          color: c.ink)),
-                                ),
-                              ],
+                            GestureDetector(
+                              onTap: () => context.push('/settings'),
+                              behavior: HitTestBehavior.opaque,
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: <Widget>[
+                                  Text(
+                                    d.paidBalance < 0 ? '${d.paidBalance}' : _pad2(d.paidBalance),
+                                    style: AppFonts.display(
+                                        size: 64,
+                                        color: d.paidBalance < 0 ? c.danger : c.accent,
+                                        letterSpacing: -2),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Flexible(
+                                    child: Text('количество\nтренировок',
+                                        style: TextStyle(
+                                            fontSize: 22,
+                                            height: 1.1,
+                                            fontWeight: FontWeight.bold,
+                                            color: c.ink)),
+                                  ),
+                                ],
+                              ),
                             ),
                             if (d.packageEndsAt != null) ...<Widget>[
                               const SizedBox(height: 6),
@@ -180,7 +191,7 @@ class HomeScreen extends ConsumerWidget {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: <Widget>[
-                                    Text('СЛЕД · ${d.nextSessionLabel!.toUpperCase()}',
+                                    Text('СЛЕД. · ${d.nextSessionLabel!.toUpperCase()}',
                                         style: AppFonts.mono(size: 11, color: c.inkMuted)),
                                     const SizedBox(width: 8),
                                     Container(
@@ -199,16 +210,18 @@ class HomeScreen extends ConsumerWidget {
                           ],
                         ),
                 ),
-                const SizedBox(height: 12),
-                // Сетка плиток 2×3.
-                GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 8,
-                  crossAxisSpacing: 8,
-                  childAspectRatio: 1.15,
-                  children: <Widget>[
+                      ],
+                    ),
+                  ),
+                ),
+                // Сетка плиток 2×3 — тянется на всю оставшуюся высоту (как flex-1
+                // grid-rows-3 в вебе): три равных ряда, плитки заполняют экран.
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                    child: _TileGrid(
+                      tiles: <Widget>[
                     _Tile(
                       title: 'Тренировки',
                       sub: 'журнал занятий',
@@ -236,7 +249,7 @@ class HomeScreen extends ConsumerWidget {
                     ),
                     _Tile(
                       title: 'Прогресс',
-                      sub: 'рекорды и цифры',
+                      sub: 'рекорды и графики',
                       value: _pad2(d.recordsCount),
                       metric: 'рекордов',
                       icon: Icons.trending_up,
@@ -244,7 +257,7 @@ class HomeScreen extends ConsumerWidget {
                     ),
                     _Tile(
                       title: 'База знаний',
-                      sub: 'упражнения',
+                      sub: 'упражнения с тренировок',
                       value: _pad2(d.knowledgeCount),
                       metric: 'упражнений',
                       icon: Icons.menu_book_outlined,
@@ -252,13 +265,18 @@ class HomeScreen extends ConsumerWidget {
                     ),
                     _Tile(
                       title: 'Уведомления',
-                      sub: 'что нового',
-                      value: '↗',
-                      metric: 'открыть',
+                      sub: d.attention > 0 ? 'требуют внимания' : 'нет открытых задач',
+                      value: d.attention > 0 ? _pad2(d.attention) : null,
+                      metric: 'новых',
+                      kicker: d.attention > 0 ? 'НОВЫЕ' : 'ВСЁ ТИХО',
                       icon: Icons.notifications_none,
+                      // Один acid-fill: чат при непрочитанных, иначе уведомления.
+                      primary: d.unread == 0 && d.attention > 0,
                       onTap: () => context.push('/notifications'),
                     ),
-                  ],
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -266,6 +284,33 @@ class HomeScreen extends ConsumerWidget {
           },
         ),
       ),
+    );
+  }
+}
+
+/// Сетка 2×3 из ровно 6 плиток, тянущаяся на всю высоту: три равных ряда
+/// (каждый — Expanded), по две равные плитки в ряду. Зеркало web `grid-rows-3 flex-1`.
+class _TileGrid extends StatelessWidget {
+  const _TileGrid({required this.tiles});
+  final List<Widget> tiles;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: <Widget>[
+        for (int r = 0; r < 3; r++) ...<Widget>[
+          if (r > 0) const SizedBox(height: 8),
+          Expanded(
+            child: Row(
+              children: <Widget>[
+                Expanded(child: tiles[r * 2]),
+                const SizedBox(width: 8),
+                Expanded(child: tiles[r * 2 + 1]),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -280,14 +325,18 @@ class _Tile extends StatelessWidget {
     required this.metric,
     required this.icon,
     required this.onTap,
+    this.kicker,
     this.primary = false,
   });
   final String title;
   final String sub;
-  final String value;
+  // null → число не показываем (например, «ВСЁ ТИХО» на плитке уведомлений).
+  final String? value;
   final String metric;
   final IconData icon;
   final VoidCallback onTap;
+  // Mono-кикер над числом (например, «НОВЫЕ» / «ВСЁ ТИХО»).
+  final String? kicker;
   final bool primary;
 
   @override
@@ -318,20 +367,31 @@ class _Tile extends StatelessWidget {
               ],
             ),
             const Spacer(),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: <Widget>[
-                Text(value, style: AppFonts.display(size: 34, color: fg, letterSpacing: -1)),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(metric.toUpperCase(),
-                      maxLines: 2,
-                      style: AppFonts.mono(size: 10, color: metricColor, weight: FontWeight.w700)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
+            if (kicker != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(kicker!,
+                    style: AppFonts.mono(
+                        size: 10,
+                        color: primary ? c.accentOn.withValues(alpha: 0.55) : c.inkMutedXl,
+                        weight: FontWeight.w700)),
+              ),
+            if (value != null) ...<Widget>[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: <Widget>[
+                  Text(value!, style: AppFonts.display(size: 34, color: fg, letterSpacing: -1)),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(metric.toUpperCase(),
+                        maxLines: 2,
+                        style: AppFonts.mono(size: 10, color: metricColor, weight: FontWeight.w700)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+            ],
             Text(title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

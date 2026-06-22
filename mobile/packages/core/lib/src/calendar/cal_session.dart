@@ -45,17 +45,17 @@ class CalTileColors {
 }
 
 /// Цвет блока по статусу (зеркало tileClasses):
-/// confirmed→лайм, completed→голубой, declined→красный, pending→оранжевый,
-/// cancelled→серый перечёркнутый.
+/// cancelled→серый перечёркнутый, completed→голубой (проведённое — терминальное,
+/// перебивает подтверждение), confirmed→лайм, declined→красный, pending→оранжевый.
 CalTileColors calTileColors(CalSession s, Color cancelledBg, Color cancelledFg) {
   if (s.status == CalStatus.cancelled) {
     return CalTileColors(cancelledBg, cancelledFg, strike: true, faded: true);
   }
-  if (s.confirmation == CalConfirmation.confirmed) {
-    return const CalTileColors(Color(0xFFCAFF3A), Color(0xFF0B0C10));
-  }
   if (s.status == CalStatus.completed) {
     return const CalTileColors(Color(0xFF46D4F0), Color(0xFF06222B));
+  }
+  if (s.confirmation == CalConfirmation.confirmed) {
+    return const CalTileColors(Color(0xFFCAFF3A), Color(0xFF0B0C10));
   }
   if (s.confirmation == CalConfirmation.declined) {
     return const CalTileColors(Color(0xFFFF5A5A), Color(0xFF1A0606));

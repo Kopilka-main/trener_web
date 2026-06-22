@@ -23,6 +23,7 @@ class TrainerProfile {
     required this.birthDate,
     required this.contacts,
     required this.avatarFileId,
+    required this.pendingDeletionAt,
   });
 
   factory TrainerProfile.fromJson(Map<String, dynamic> j) => TrainerProfile(
@@ -38,6 +39,7 @@ class TrainerProfile {
             .map(TrainerContact.fromJson)
             .toList(),
         avatarFileId: j['avatarFileId'] as String?,
+        pendingDeletionAt: j['pendingDeletionAt'] as String?,
       );
 
   final String id;
@@ -49,6 +51,8 @@ class TrainerProfile {
   final String? birthDate;
   final List<TrainerContact> contacts;
   final String? avatarFileId;
+  // ISO-момент окончательного удаления аккаунта (окно отмены), либо null.
+  final String? pendingDeletionAt;
 
   String get fullName => '$firstName $lastName'.trim();
   String get initials {
@@ -128,6 +132,17 @@ class TrainerApi {
       // выход локально всё равно выполняем
     }
     await _ref.read(sessionProvider.notifier).clear();
+  }
+
+  /// Запросить удаление аккаунта (окно отмены 3 дня). Возвращает ISO-дату сноса.
+  Future<String> deleteAccount() async {
+    final Map<String, dynamic> res = await _api.deleteJson('/api/auth/me');
+    return res['pendingDeletionAt'] as String? ?? '';
+  }
+
+  /// Отменить запланированное удаление аккаунта.
+  Future<void> cancelDeletion() async {
+    await _api.postJson('/api/auth/me/cancel-deletion');
   }
 }
 

@@ -1,19 +1,41 @@
+import 'dart:async';
+
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:go_router/go_router.dart';
 
 import '../api/client_auth.dart';
 import '../api/client_calendar.dart';
 
 /// Календарь клиента: переиспользуемый SessionsCalendar (День/Неделя/Месяц) +
 /// шит занятия с подтверждением/отклонением участия. Вид и поведение — как в вебе.
-class CalendarScreen extends ConsumerWidget {
+class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CalendarScreen> createState() => _CalendarScreenState();
+}
+
+class _CalendarScreenState extends ConsumerState<CalendarScreen> {
+  Timer? _poll;
+
+  @override
+  void initState() {
+    super.initState();
+    // Поллинг занятий и подтверждений — как в вебе (8с, вебсокетов нет).
+    _poll = Timer.periodic(const Duration(seconds: 8), (_) {
+      ref.invalidate(clientSessionsProvider);
+    });
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final AsyncValue<List<Session>> sessions = ref.watch(clientSessionsProvider);
     final bool linked = ref.watch(clientLinkedProvider).valueOrNull ?? true;
     final AppColors c = context.colors;
@@ -32,69 +54,58 @@ class CalendarScreen extends ConsumerWidget {
               child: !linked
                   ? _NotLinked()
                   : sessions.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (Object e, _) => _Retry(onRetry: () => ref.invalidate(clientSessionsProvider)),
-                data: (List<Session> all) {
-                  final Map<String, Session> byId = <String, Session>{for (final Session s in all) s.id: s};
-                  return SessionsCalendar(
-                    sessions: all.map((Session s) => s.toCal()).toList(),
-                    defaultView: CalendarView.week,
-                    onSessionTap: (CalSession cs) {
-                      final Session? s = byId[cs.id];
-                      if (s != null) _showSheet(context, ref, s);
-                    },
-                  );
-                },
-              ),
+                      // Загрузка — пустой календарь без спиннера (как в вебе).
+                      loading: () => _calendar(context, const <Session>[]),
+                      error: (Object e, _) => const _LoadError(),
+                      data: (List<Session> all) => _calendar(context, all),
+                    ),
             ),
           ],
         ),
       ),
     );
   }
+
+  Widget _calendar(BuildContext context, List<Session> all) {
+    final Map<String, Session> byId = <String, Session>{for (final Session s in all) s.id: s};
+    return SessionsCalendar(
+      sessions: all.map((Session s) => s.toCal()).toList(),
+      defaultView: CalendarView.week,
+      onSessionTap: (CalSession cs) {
+        final Session? s = byId[cs.id];
+        if (s != null) _showSheet(context, ref, s);
+      },
+    );
+  }
 }
 
-class _Retry extends StatelessWidget {
-  const _Retry({required this.onRetry});
-  final VoidCallback onRetry;
+/// Ошибка загрузки списка занятий — нейтральный текст-алерт (без красного, как в вебе).
+class _LoadError extends StatelessWidget {
+  const _LoadError();
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          const Text('Не удалось загрузить занятия'),
-          const SizedBox(height: 12),
-          FilledButton(onPressed: onRetry, child: const Text('Повторить')),
-        ],
+    final AppColors c = context.colors;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Text(
+        'Не удалось загрузить занятия. Попробуйте обновить страницу.',
+        style: TextStyle(fontSize: 14, color: c.inkMuted),
       ),
     );
   }
 }
 
-/// Клиент не подключён к тренеру — как в вебе: пояснение + переход к подключению.
+/// Клиент не подключён к тренеру — как в вебе: нейтральный пояснительный текст.
 class _NotLinked extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(
-              'Вы пока не подключены к тренеру. Подключите его, чтобы здесь появились занятия.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: c.inkMuted),
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: () => context.push('/connect'),
-              child: const Text('Подключить тренера'),
-            ),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+      child: Text(
+        'Вы пока не подключены к тренеру. Подключите его, чтобы здесь появились '
+        'назначенные занятия.',
+        style: TextStyle(fontSize: 14, color: c.inkMuted),
       ),
     );
   }
@@ -104,7 +115,6 @@ void _showSheet(BuildContext context, WidgetRef ref, Session s) {
   showModalBottomSheet<void>(
     context: context,
     backgroundColor: context.colors.bg,
-    showDragHandle: true,
     isScrollControlled: true,
     builder: (_) => _SessionSheet(session: s),
   );

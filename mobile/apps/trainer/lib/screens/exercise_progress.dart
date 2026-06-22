@@ -187,7 +187,8 @@ class _ExerciseDetailScreenState extends ConsumerState<ExerciseDetailScreen> {
     final AsyncValue<List<Map<String, dynamic>>> raw =
         ref.watch(clientWorkoutsRawProvider(widget.clientId));
     return Scaffold(
-      appBar: AppBar(title: Text(widget.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
+      // Заголовок раздела — «Прогресс»; само упражнение показано карточкой ниже.
+      appBar: AppBar(title: const Text('Прогресс')),
       body: raw.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object e, _) =>

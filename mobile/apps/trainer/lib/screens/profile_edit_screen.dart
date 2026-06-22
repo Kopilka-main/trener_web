@@ -204,7 +204,11 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
                 ),
                 if (_avatarFileId != null)
                   TextButton(
-                    onPressed: _avatarBusy ? null : _removeAvatar,
+                    onPressed: _avatarBusy
+                        ? null
+                        : () async {
+                            if (await confirmDelete(context, title: 'Удалить фото?')) _removeAvatar();
+                          },
                     child: Text('Удалить фото', style: TextStyle(color: c.inkMuted, fontSize: 13)),
                   ),
               ],
@@ -422,7 +426,9 @@ class _GymsEditSectionState extends ConsumerState<_GymsEditSection> {
                   const SizedBox(width: 12),
                   Expanded(child: Text(g.name, style: TextStyle(fontSize: 15, color: c.ink))),
                   GestureDetector(
-                    onTap: () => _delete(g.id),
+                    onTap: () async {
+                      if (await confirmDelete(context, title: 'Удалить зал?')) _delete(g.id);
+                    },
                     child: Icon(Icons.delete_outline, size: 18, color: c.inkMuted),
                   ),
                 ],

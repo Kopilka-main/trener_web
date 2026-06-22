@@ -300,7 +300,14 @@ class _ClientRow extends ConsumerWidget {
     return Opacity(
       opacity: client.status == ClientStatus.archived ? 0.6 : 1,
       child: GestureDetector(
-        onTap: () => context.push('/client/${client.id}', extra: client),
+        onTap: () {
+          // Прогреваем данные карточки заранее (бейджи: оплата/календарь/рекорды),
+          // чтобы они были готовы к моменту отрисовки хаба, а не подгружались после.
+          ref.read(clientPackagesProvider(client.id).future).ignore();
+          ref.read(clientWorkoutsCardProvider(client.id).future).ignore();
+          ref.read(clientStatsProvider(client.id).future).ignore();
+          context.push('/client/${client.id}', extra: client);
+        },
         child: Container(
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -702,7 +709,7 @@ class _WorkoutsCta extends StatefulWidget {
 
 class _WorkoutsCtaState extends State<_WorkoutsCta> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat();
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 2200))..repeat();
 
   @override
   void dispose() {
@@ -710,10 +717,29 @@ class _WorkoutsCtaState extends State<_WorkoutsCta> with SingleTickerProviderSta
     super.dispose();
   }
 
-  /// Треугольная волна 0→1→0 от нормализованной фазы.
-  double _wave(double t) {
+  /// Импульс появления шеврона (зеркало web cta-chevron-cycle): в первой четверти
+  /// фазы яркнет (0→1), во второй гаснет (1→0), остаток — покой. Со сдвигом по i
+  /// шевроны «бегут» слева направо медленным каскадом.
+  double _pulse(double t) {
     final double x = ((t % 1.0) + 1.0) % 1.0;
-    return x < 0.5 ? x * 2 : (1 - x) * 2;
+    if (x < 0.25) return x / 0.25;
+    if (x < 0.5) return (0.5 - x) / 0.25;
+    return 0;
+  }
+
+  /// Один шеврон каскада: сдвиг (наезд слева) + масштаб-«пульс» + прозрачность.
+  Widget _chevron(int i, AppColors c) {
+    final double p = _pulse(_ctrl.value - i * 0.14);
+    return Transform.translate(
+      offset: Offset(-7.0 * i + 5 * (1 - p), 0),
+      child: Transform.scale(
+        scale: 0.95 + 0.3 * p,
+        child: Opacity(
+          opacity: 0.25 + 0.75 * p,
+          child: Icon(Icons.chevron_right, size: 30, color: c.accentOn),
+        ),
+      ),
+    );
   }
 
   @override
@@ -744,21 +770,12 @@ class _WorkoutsCtaState extends State<_WorkoutsCta> with SingleTickerProviderSta
                 ],
               ),
             ),
-            // «Бегущие» шевроны: волна прозрачности слева→направо + лёгкий сдвиг.
+            // Массивный медленный каскад шевронов (зеркало web cta-chevron).
             AnimatedBuilder(
               animation: _ctrl,
               builder: (BuildContext context, _) => Row(
                 mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  for (int i = 0; i < 3; i++)
-                    Transform.translate(
-                      offset: Offset(-8.0 * i + 3 * _wave(_ctrl.value - i * 0.18), 0),
-                      child: Opacity(
-                        opacity: 0.3 + 0.7 * _wave(_ctrl.value - i * 0.18),
-                        child: Icon(Icons.chevron_right, size: 22, color: c.accentOn),
-                      ),
-                    ),
-                ],
+                children: <Widget>[for (int i = 0; i < 3; i++) _chevron(i, c)],
               ),
             ),
           ],
@@ -2286,33 +2303,47 @@ class _PackagesBlock extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            ...active.map((TPackage p) => Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
-                  child: Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+            ...active.map((TPackage p) => GestureDetector(
+                  onTap: () => _showPackageSheet(context, p),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(p.workoutType?.isNotEmpty == true ? p.workoutType! : 'Пакет',
+                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                              if (p.endsAt != null) ...<Widget>[
+                                const SizedBox(height: 3),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: <Widget>[
+                                    Icon(Icons.local_fire_department, size: 14, color: c.coral),
+                                    const SizedBox(width: 3),
+                                    Text('сгорает ${_date(DateTime.tryParse(p.endsAt!)?.toLocal())}',
+                                        style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+                                  ],
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
                           children: <Widget>[
-                            Text(p.workoutType?.isNotEmpty == true ? p.workoutType! : 'Пакет',
-                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
-                            if (p.endsAt != null)
-                              Text('до ${_date(DateTime.tryParse(p.endsAt!)?.toLocal())}',
-                                  style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+                            Text('${p.remaining}',
+                                style: AppFonts.display(size: 22, color: p.remaining > 0 ? c.accent : c.danger)),
+                            Text('осталось', style: AppFonts.mono(size: 9, color: c.inkMutedXl, weight: FontWeight.w700)),
                           ],
                         ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: <Widget>[
-                          Text('${p.remaining}',
-                              style: AppFonts.display(size: 22, color: p.remaining > 0 ? c.accent : c.danger)),
-                          Text('осталось', style: AppFonts.mono(size: 9, color: c.inkMutedXl, weight: FontWeight.w700)),
-                        ],
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        Icon(Icons.chevron_right, size: 18, color: c.inkMutedXl),
+                      ],
+                    ),
                   ),
                 )),
             if (payments.isNotEmpty) ...<Widget>[
@@ -2343,6 +2374,54 @@ class _PackagesBlock extends ConsumerWidget {
     );
   }
 }
+
+/// Шит «содержимое пакета»: оплачено / проведено / остаток / срок сгорания / статус.
+void _showPackageSheet(BuildContext context, TPackage p) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: context.colors.bg,
+    showDragHandle: true,
+    builder: (BuildContext ctx) {
+      final AppColors c = ctx.colors;
+      return Padding(
+        padding: EdgeInsets.fromLTRB(20, 0, 20, 16 + MediaQuery.of(ctx).viewPadding.bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(p.workoutType?.isNotEmpty == true ? p.workoutType! : 'Пакет тренировок',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
+            const SizedBox(height: 14),
+            _pkgRow(c, 'Оплачено занятий', '${p.lessonsPaid}'),
+            _pkgRow(c, 'Проведено', '${p.lessonsUsed}'),
+            _pkgRow(c, 'Осталось', '${p.remaining}',
+                valueColor: p.remaining > 0 ? c.accent : c.danger),
+            if (p.endsAt != null)
+              _pkgRow(c, 'Сгорает', _date(DateTime.tryParse(p.endsAt!)?.toLocal()),
+                  icon: Icons.local_fire_department, iconColor: c.coral),
+            _pkgRow(c, 'Статус', p.isActive ? 'Активен' : 'Завершён'),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+Widget _pkgRow(AppColors c, String label, String value,
+        {Color? valueColor, IconData? icon, Color? iconColor}) =>
+    Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        children: <Widget>[
+          if (icon != null) ...<Widget>[
+            Icon(icon, size: 16, color: iconColor ?? c.inkMuted),
+            const SizedBox(width: 8),
+          ],
+          Expanded(child: Text(label, style: TextStyle(fontSize: 14, color: c.inkMuted))),
+          Text(value, style: AppFonts.mono(size: 14, color: valueColor ?? c.ink, weight: FontWeight.w700)),
+        ],
+      ),
+    );
 
 class _MeasurementsBlock extends ConsumerWidget {
   const _MeasurementsBlock({required this.clientId});

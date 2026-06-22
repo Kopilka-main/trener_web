@@ -135,6 +135,29 @@ export function clientAuthRoutes(
     },
   );
 
+  // Запросить удаление аккаунта: ставит окно отмены (3 дня), потом снос планировщиком.
+  typed.delete(
+    '/api/client/auth/me',
+    {
+      preHandler: requireClient,
+      schema: { response: { 200: z.object({ pendingDeletionAt: z.string() }) } },
+    },
+    async (req) => svc.requestDeletion(accountId(req)),
+  );
+
+  // Отменить запланированное удаление (в течение окна).
+  typed.post(
+    '/api/client/auth/me/cancel-deletion',
+    {
+      preHandler: requireClient,
+      schema: { response: { 200: z.object({ ok: z.literal(true) }) } },
+    },
+    async (req) => {
+      await svc.cancelDeletion(accountId(req));
+      return { ok: true as const };
+    },
+  );
+
   // Аватар клиент-аккаунта: multipart (поле `photo`, image/*). Логика — в service.
   typed.post(
     '/api/client/auth/me/avatar',

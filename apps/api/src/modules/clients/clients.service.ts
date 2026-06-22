@@ -21,6 +21,8 @@ export type ClientsDeps = {
   accountExists: (id: string) => Promise<boolean>;
   /** Профиль клиентского аккаунта по id (для авто-заполнения карточки). */
   accountProfile: (id: string) => Promise<AccountProfile | null>;
+  /** avatarFileId подключённого аккаунта (для «подтянуть аватар»), либо null. */
+  accountAvatarFileId: (id: string) => Promise<string | null>;
 };
 
 // Расширение файла выводим ИЗ MIME по whitelist (НЕ из имени файла клиента).
@@ -60,6 +62,54 @@ export function makeClientsService(
   storage: Storage,
   deps: ClientsDeps,
 ) {
+  // Сохранить буфер аватара в скоупе (тренер, клиент): записать файл, создать
+  // запись files, проставить avatarFileId, подчистить прежний аватар. Общий код
+  // для загрузки (setAvatar) и копии из аккаунта (avatarFromAccount).
+  async function applyAvatar(
+    trainerId: string,
+    clientId: string,
+    fileBuffer: Buffer,
+    mime: string,
+    ext: string,
+    originalName: string | null,
+  ): Promise<ClientResponse> {
+    const fileId = deps.newId();
+    const saved = await storage.save(trainerId, clientId, fileId, ext, fileBuffer);
+
+    let result: { previousFileId: string | null } | undefined;
+    try {
+      await filesRepo.create({
+        id: fileId,
+        trainerId,
+        clientId,
+        accountId: null,
+        mime,
+        sizeBytes: saved.sizeBytes,
+        storagePath: saved.storagePath,
+        originalName,
+      });
+      result = await repo.setAvatar(trainerId, clientId, fileId);
+    } catch (err) {
+      await storage.remove(saved.storagePath).catch(() => undefined);
+      throw err;
+    }
+
+    if (!result) {
+      await filesRepo.delete(trainerId, fileId).catch(() => undefined);
+      await storage.remove(saved.storagePath).catch(() => undefined);
+      throw notFound('Клиент не найден');
+    }
+
+    if (result.previousFileId && result.previousFileId !== fileId) {
+      const old = await filesRepo.delete(trainerId, result.previousFileId).catch(() => null);
+      if (old) await storage.remove(old.storagePath).catch(() => undefined);
+    }
+
+    const row = await repo.getForTrainer(trainerId, clientId);
+    if (!row) throw notFound('Клиент не найден');
+    return toResponse(row);
+  }
+
   return {
     async create(trainerId: string, input: CreateClientRequest): Promise<ClientResponse> {
       // Привязка при создании: непустой accountId должен существовать (как в update)
@@ -197,44 +247,32 @@ export function makeClientsService(
       if (!ext) {
         throw new AppError(400, 'UNSUPPORTED_MEDIA_TYPE', 'Неподдерживаемый тип файла');
       }
+      return applyAvatar(
+        trainerId,
+        clientId,
+        input.fileBuffer,
+        input.mime,
+        ext,
+        input.originalName,
+      );
+    },
 
-      const fileId = deps.newId();
-      const saved = await storage.save(trainerId, clientId, fileId, ext, input.fileBuffer);
-
-      let result: { previousFileId: string | null } | undefined;
-      try {
-        await filesRepo.create({
-          id: fileId,
-          trainerId,
-          clientId,
-          accountId: null,
-          mime: input.mime,
-          sizeBytes: saved.sizeBytes,
-          storagePath: saved.storagePath,
-          originalName: input.originalName,
-        });
-        result = await repo.setAvatar(trainerId, clientId, fileId);
-      } catch (err) {
-        await storage.remove(saved.storagePath).catch(() => undefined);
-        throw err;
-      }
-
-      // Нет связи тренер↔клиент: откатываем созданный файл, 404.
-      if (!result) {
-        await filesRepo.delete(trainerId, fileId).catch(() => undefined);
-        await storage.remove(saved.storagePath).catch(() => undefined);
-        throw notFound('Клиент не найден');
-      }
-
-      // Старый аватар: удаляем строку files (каскадом обнулит ссылку) + файл с диска.
-      if (result.previousFileId && result.previousFileId !== fileId) {
-        const old = await filesRepo.delete(trainerId, result.previousFileId).catch(() => null);
-        if (old) await storage.remove(old.storagePath).catch(() => undefined);
-      }
-
+    // Подтянуть аватар подключённого аккаунта в карточку клиента (копия файла).
+    // Нет аккаунта / у аккаунта нет аватара / неподдерживаемый тип → no-op:
+    // возвращаем карточку как есть (приоритет «есть — тянем, нет — не трогаем»).
+    async avatarFromAccount(trainerId: string, clientId: string): Promise<ClientResponse> {
       const row = await repo.getForTrainer(trainerId, clientId);
       if (!row) throw notFound('Клиент не найден');
-      return toResponse(row);
+      const accountId = row.accountId;
+      if (!accountId) return toResponse(row);
+      const fileId = await deps.accountAvatarFileId(accountId);
+      if (!fileId) return toResponse(row);
+      const file = await filesRepo.getById(fileId);
+      if (!file) return toResponse(row);
+      const ext = MIME_EXT[file.mime];
+      if (!ext) return toResponse(row);
+      const buffer = await storage.read(file.storagePath);
+      return applyAvatar(trainerId, clientId, buffer, file.mime, ext, file.originalName);
     },
 
     // Снять аватар: avatarFileId = null, старый файл удалить best-effort.

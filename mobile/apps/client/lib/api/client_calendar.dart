@@ -119,16 +119,22 @@ class ClientCalendarApi {
   ApiClient get _api => _ref.read(apiClientProvider);
 
   /// Занятия за широкий диапазон (−60…+90 дней), фильтрация на клиенте.
+  /// 409 (непривязанный клиент) трактуем как пустой список — не ошибка (как в вебе).
   Future<List<Session>> load() async {
     final DateTime now = DateTime.now();
     final String from = _isoDate(now.subtract(const Duration(days: 120)));
     final String to = _isoDate(now.add(const Duration(days: 240)));
-    final Map<String, dynamic> r = await _api.getJson('/api/client/sessions?from=$from&to=$to');
-    final List<dynamic> raw = (r['sessions'] as List<dynamic>?) ?? <dynamic>[];
-    final List<Session> list =
-        raw.cast<Map<String, dynamic>>().map(Session.fromJson).toList();
-    list.sort((Session a, Session b) => a.start.compareTo(b.start));
-    return list;
+    try {
+      final Map<String, dynamic> r = await _api.getJson('/api/client/sessions?from=$from&to=$to');
+      final List<dynamic> raw = (r['sessions'] as List<dynamic>?) ?? <dynamic>[];
+      final List<Session> list =
+          raw.cast<Map<String, dynamic>>().map(Session.fromJson).toList();
+      list.sort((Session a, Session b) => a.start.compareTo(b.start));
+      return list;
+    } catch (e) {
+      if (apiErrorStatus(e) == 409) return <Session>[];
+      rethrow;
+    }
   }
 
   /// Подтвердить или отклонить занятие.

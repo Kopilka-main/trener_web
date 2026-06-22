@@ -23,6 +23,30 @@ String? apiErrorCode(Object error) {
   return null;
 }
 
+/// Человекочитаемое сообщение об ошибке для UI: сперва сообщение сервера
+/// (`{ error: ... }`), затем понятный текст для сетевых сбоев, иначе [fallback].
+/// Сообщения валидации (общее «Ошибка валидации») заменяем на [fallback] —
+/// конкретику по полям лучше проверять на клиенте до запроса.
+String describeApiError(Object error, {String fallback = 'Что-то пошло не так. Попробуйте ещё раз.'}) {
+  if (error is DioException) {
+    switch (error.type) {
+      case DioExceptionType.connectionError:
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+        return 'Нет связи с сервером. Проверьте интернет и попробуйте снова.';
+      case DioExceptionType.badCertificate:
+        return 'Не удалось установить защищённое соединение.';
+      default:
+        break;
+    }
+  }
+  if (apiErrorCode(error) == 'VALIDATION_ERROR') return fallback;
+  final String? msg = apiErrorMessage(error);
+  if (msg != null && msg.trim().isNotEmpty) return msg;
+  return fallback;
+}
+
 /// Возвращает текущий токен сессии (или null, если не авторизован).
 typedef TokenProvider = Future<String?> Function();
 

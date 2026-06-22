@@ -113,6 +113,23 @@ export function authRoutes(app: FastifyInstance, svc: AuthService, isProd: boole
     },
   );
 
+  // Запросить удаление аккаунта: окно отмены (3 дня), затем снос планировщиком.
+  typed.delete(
+    '/api/auth/me',
+    { schema: { response: { 200: z.object({ pendingDeletionAt: z.string() }) } } },
+    async (req) => svc.requestDeletion(trainerId(req)),
+  );
+
+  // Отменить запланированное удаление (в течение окна).
+  typed.post(
+    '/api/auth/me/cancel-deletion',
+    { schema: { response: { 200: z.object({ ok: z.literal(true) }) } } },
+    async (req) => {
+      await svc.cancelDeletion(trainerId(req));
+      return { ok: true as const };
+    },
+  );
+
   // Аватар тренера: multipart (поле `photo`, image/*). Бизнес-логика — в service.
   typed.post('/api/auth/me/avatar', { schema: { response: { 200: meResponse } } }, async (req) => {
     const input = await readAvatar(req);

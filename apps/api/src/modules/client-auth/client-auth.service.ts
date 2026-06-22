@@ -13,6 +13,7 @@ import { hashPassword, verifyPassword } from '../../auth/password.js';
 import { AppError, unauthorized } from '../../errors.js';
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 дней
+const DELETION_GRACE_MS = 3 * 24 * 60 * 60 * 1000; // окно отмены удаления — 3 дня
 
 // Расширение файла выводим ИЗ MIME по whitelist (НЕ из имени файла клиента).
 const MIME_EXT: Record<string, string> = {
@@ -108,7 +109,49 @@ export function makeClientAuthService(
       const account = await repo.findAccountById(clientAccountId);
       if (!account) throw unauthorized('Сессия недействительна');
       const link = await repo.findScopeByAccountId(clientAccountId);
-      return { account: toAccountResponse(account), link };
+      return {
+        account: toAccountResponse(account),
+        link,
+        pendingDeletionAt: account.pendingDeletionAt
+          ? account.pendingDeletionAt.toISOString()
+          : null,
+      };
+    },
+
+    // Запросить удаление аккаунта: ставим момент сноса = now + окно отмены (3 дня).
+    // Возвращаем ISO-дату, чтобы показать её в приложении.
+    async requestDeletion(clientAccountId: string): Promise<{ pendingDeletionAt: string }> {
+      const account = await repo.findAccountById(clientAccountId);
+      if (!account) throw unauthorized('Сессия недействительна');
+      const at = new Date(deps.now().getTime() + DELETION_GRACE_MS);
+      await repo.setPendingDeletion(clientAccountId, at);
+      return { pendingDeletionAt: at.toISOString() };
+    },
+
+    // Отменить запланированное удаление (в течение окна).
+    async cancelDeletion(clientAccountId: string): Promise<void> {
+      const account = await repo.findAccountById(clientAccountId);
+      if (!account) throw unauthorized('Сессия недействительна');
+      await repo.setPendingDeletion(clientAccountId, null);
+    },
+
+    // Снести аккаунты, у которых окно отмены истекло (вызывает планировщик).
+    // Для каждого: отвязка от карточек клиентов + удаление строки (каскад сессий/
+    // push/файлов) + чистка файла аватара с диска. Возвращает число удалённых.
+    async purgeExpiredDeletions(): Promise<number> {
+      const expired = await repo.findExpiredDeletions(deps.now());
+      for (const acc of expired) {
+        await repo.unlinkAccountFromClients(acc.id);
+        // storagePath читаем ДО удаления — строка files уйдёт каскадом.
+        let storagePath: string | null = null;
+        if (acc.avatarFileId) {
+          const f = await filesRepo.getById(acc.avatarFileId).catch(() => null);
+          storagePath = f?.storagePath ?? null;
+        }
+        await repo.deleteAccount(acc.id);
+        if (storagePath) await storage.remove(storagePath).catch(() => undefined);
+      }
+      return expired.length;
     },
 
     async updateMe(
