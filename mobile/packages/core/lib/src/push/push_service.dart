@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -60,7 +62,8 @@ class PushService {
 
   Future<void> _register(String token) async {
     try {
-      await _api.postJson(_registerPath, <String, String>{'token': token, 'platform': 'android'});
+      final String platform = Platform.isIOS ? 'ios' : 'android';
+      await _api.postJson(_registerPath, <String, String>{'token': token, 'platform': platform});
     } catch (_) {
       // регистрация токена — best-effort
     }
