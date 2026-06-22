@@ -35,6 +35,13 @@ class PushService {
       await Firebase.initializeApp();
       final FirebaseMessaging messaging = FirebaseMessaging.instance;
       await messaging.requestPermission();
+      // iOS: по умолчанию пуш в активном приложении не показывает баннер —
+      // включаем alert/badge/sound, чтобы вёл себя как на Android.
+      await messaging.setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
       final String? token = await messaging.getToken();
       if (token != null) await _register(token);
       messaging.onTokenRefresh.listen(_register);
