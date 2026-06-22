@@ -624,10 +624,23 @@ class _TemplatePickerSheet extends ConsumerWidget {
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
-                      child: Text(
-                        'Шаблонов пока нет. Они появятся из проведённых тренером тренировок или когда вы сохраните тренировку как шаблон.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: c.inkMuted),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Text(
+                            'Шаблонов пока нет. Они появятся из проведённых тренером тренировок или когда вы сохраните тренировку как шаблон.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: c.inkMuted),
+                          ),
+                          const SizedBox(height: 20),
+                          // Шаблонов нет — предлагаем создать новую тренировку с нуля.
+                          FilledButton.icon(
+                            onPressed: () => pick('Новая тренировка', <Map<String, dynamic>>[]),
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text('Создать новую тренировку'),
+                            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                          ),
+                        ],
                       ),
                     ),
                   );

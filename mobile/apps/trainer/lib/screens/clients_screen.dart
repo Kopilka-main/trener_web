@@ -916,7 +916,10 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
       backgroundColor: context.colors.bg,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => const _TemplatePickerSheet(),
+      builder: (_) => _TemplatePickerSheet(
+        onCreateNew: () =>
+            _createAndOpen('Новая тренировка', <Map<String, dynamic>>[], excluded: excluded),
+      ),
     );
     if (t == null) return;
     // sets=N в шаблоне → N отдельных подходов (как в вебе), иначе тоннаж занижен.
@@ -1512,7 +1515,9 @@ class _EmptyCurrent extends StatelessWidget {
 
 /// Шит выбора шаблона тренировки.
 class _TemplatePickerSheet extends ConsumerWidget {
-  const _TemplatePickerSheet();
+  const _TemplatePickerSheet({this.onCreateNew});
+  // Вызывается из пустого состояния (шаблонов нет) — создать тренировку с нуля.
+  final VoidCallback? onCreateNew;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AppColors c = context.colors;
@@ -1529,7 +1534,24 @@ class _TemplatePickerSheet extends ConsumerWidget {
           if (templates.isEmpty)
             Padding(
               padding: const EdgeInsets.all(20),
-              child: Text('Шаблонов нет. Создайте их в базе знаний.', style: TextStyle(color: c.inkMuted)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text('Шаблонов нет. Создайте их в базе знаний.', style: TextStyle(color: c.inkMuted)),
+                  const SizedBox(height: 16),
+                  // Шаблонов нет — предлагаем создать новую тренировку с нуля (как «+»).
+                  FilledButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      onCreateNew?.call();
+                    },
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Создать новую тренировку'),
+                    style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                  ),
+                ],
+              ),
             )
           else
             Expanded(

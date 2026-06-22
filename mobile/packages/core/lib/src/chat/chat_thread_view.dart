@@ -100,64 +100,99 @@ class _ChatThreadViewState extends State<ChatThreadView> {
   }
 
   /// Меню действий по долгому нажатию на сообщение. Тренеру — закрепить/задача/
-  /// ответить; клиенту — только ответить.
+  /// ответить/удалить; клиенту — только ответить.
+  ///
+  /// Показываем через Overlay (а не showModalBottomSheet), чтобы НЕ перехватывать
+  /// фокус у поля ввода: клавиатура остаётся как была (открыта — открыта, нет —
+  /// нет). Меню поднимается над клавиатурой на её высоту (viewInsets.bottom).
   void _showActions(ChatMessage m) {
-    final AppColors c = context.colors;
     final bool isPinned = widget.pinned.any((ChatMessage p) => p.id == m.id);
     final bool canPin = (widget.onPin != null || widget.onUnpin != null) && m.kind == MessageKind.text;
     final bool canTask = widget.onTask != null && m.kind == MessageKind.text;
     HapticFeedback.selectionClick();
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: c.bg,
-      builder: (BuildContext ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
+
+    final OverlayState overlay = Overlay.of(context);
+    late OverlayEntry entry;
+    void close() {
+      if (entry.mounted) entry.remove();
+    }
+
+    entry = OverlayEntry(
+      builder: (BuildContext ctx) {
+        final AppColors c = ctx.colors;
+        final List<Widget> tiles = <Widget>[
+          _ActionTile(
+            icon: Icons.reply,
+            label: 'Ответить',
+            onTap: () {
+              close();
+              setState(() => _replyTo = m);
+            },
+          ),
+          if (canPin)
             _ActionTile(
-              icon: Icons.reply,
-              label: 'Ответить',
+              icon: isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+              label: isPinned ? 'Открепить' : 'Закрепить',
               onTap: () {
-                Navigator.pop(ctx);
-                setState(() => _replyTo = m);
+                close();
+                if (isPinned) {
+                  widget.onUnpin?.call(m);
+                } else {
+                  widget.onPin?.call(m);
+                }
               },
             ),
-            if (canPin)
-              _ActionTile(
-                icon: isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                label: isPinned ? 'Открепить' : 'Закрепить',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  if (isPinned) {
-                    widget.onUnpin?.call(m);
-                  } else {
-                    widget.onPin?.call(m);
-                  }
-                },
+          if (canTask)
+            _ActionTile(
+              icon: Icons.check_circle_outline,
+              label: 'Задача',
+              onTap: () {
+                close();
+                widget.onTask?.call(m);
+              },
+            ),
+          if (widget.onDelete != null)
+            _ActionTile(
+              icon: Icons.delete_outline,
+              label: 'Удалить',
+              danger: true,
+              onTap: () {
+                close();
+                widget.onDelete?.call(m);
+              },
+            ),
+        ];
+        return Stack(
+          children: <Widget>[
+            // Барьер: тап мимо меню закрывает (фокус поля при этом не трогаем).
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: close,
+                child: const ColoredBox(color: Color(0x66000000)),
               ),
-            if (canTask)
-              _ActionTile(
-                icon: Icons.check_circle_outline,
-                label: 'Задача',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  widget.onTask?.call(m);
-                },
+            ),
+            // Меню снизу — над клавиатурой (если она открыта).
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              child: Material(
+                color: c.bg,
+                shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+                clipBehavior: Clip.antiAlias,
+                child: SafeArea(
+                  top: false,
+                  child: Column(mainAxisSize: MainAxisSize.min, children: tiles),
+                ),
               ),
-            if (widget.onDelete != null)
-              _ActionTile(
-                icon: Icons.delete_outline,
-                label: 'Удалить',
-                danger: true,
-                onTap: () {
-                  Navigator.pop(ctx);
-                  widget.onDelete?.call(m);
-                },
-              ),
+            ),
           ],
-        ),
-      ),
+        );
+      },
     );
+    overlay.insert(entry);
   }
 
   @override

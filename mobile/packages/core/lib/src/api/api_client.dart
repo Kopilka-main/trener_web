@@ -89,25 +89,43 @@ class ApiClient {
 
   final Dio _dio;
 
+  // Жёсткий дедлайн запроса: гарантия, что UI не зависнет в спиннере, даже если
+  // внутренние таймауты Dio не сработали (сервер «молча» умер посреди запроса —
+  // соединение есть, ответа/RST нет). Future.timeout — гарантия Dart, не Dio.
+  static const Duration _deadline = Duration(seconds: 20);
+
+  Future<Response<dynamic>> _guard(Future<Response<dynamic>> req, String path) {
+    return req.timeout(
+      _deadline,
+      onTimeout: () => throw DioException(
+        requestOptions: RequestOptions(path: path),
+        type: DioExceptionType.receiveTimeout,
+        error: 'Превышено время ожидания ответа',
+      ),
+    );
+  }
+
   Future<Map<String, dynamic>> getJson(String path) async {
-    final Response<dynamic> r = await _dio.get<dynamic>(path);
+    final Response<dynamic> r = await _guard(_dio.get<dynamic>(path), path);
     return _asMap(r.data);
   }
 
   Future<Map<String, dynamic>> postJson(String path, [Object? body]) async {
     // Пустое тело при content-type application/json → Fastify 400
     // (FST_ERR_CTP_EMPTY_JSON_BODY). Шлём {} вместо null.
-    final Response<dynamic> r = await _dio.post<dynamic>(path, data: body ?? const <String, dynamic>{});
+    final Response<dynamic> r =
+        await _guard(_dio.post<dynamic>(path, data: body ?? const <String, dynamic>{}), path);
     return _asMap(r.data);
   }
 
   Future<Map<String, dynamic>> patchJson(String path, [Object? body]) async {
-    final Response<dynamic> r = await _dio.patch<dynamic>(path, data: body);
+    final Response<dynamic> r = await _guard(_dio.patch<dynamic>(path, data: body), path);
     return _asMap(r.data);
   }
 
   Future<Map<String, dynamic>> deleteJson(String path, [Object? body]) async {
-    final Response<dynamic> r = await _dio.delete<dynamic>(path, data: body ?? const <String, dynamic>{});
+    final Response<dynamic> r =
+        await _guard(_dio.delete<dynamic>(path, data: body ?? const <String, dynamic>{}), path);
     return _asMap(r.data);
   }
 
