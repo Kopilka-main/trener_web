@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/api_client.dart';
@@ -102,6 +103,13 @@ class PushService {
       b.writeln('permission: err — $e');
     }
     if (Platform.isIOS) {
+      try {
+        const MethodChannel ch = MethodChannel('push_native');
+        final String? native = await ch.invokeMethod<String>('apnsStatus');
+        b.writeln('native register: ${native ?? 'нет ответа'}');
+      } catch (e) {
+        b.writeln('native register: канал недоступен — $e');
+      }
       try {
         await _waitForApns(m);
         final String? apns = await m.getAPNSToken();
