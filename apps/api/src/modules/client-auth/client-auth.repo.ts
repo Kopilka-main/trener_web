@@ -24,6 +24,10 @@ export function makeClientAuthRepo(db: Db) {
       const [row] = await db.select().from(clientAccounts).where(eq(clientAccounts.id, id));
       return row ?? null;
     },
+    // Обновить хэш пароля (сброс пароля по email-коду).
+    async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
+      await db.update(clientAccounts).set({ passwordHash }).where(eq(clientAccounts.id, id));
+    },
     // Проставляет/снимает аватар аккаунта, возвращает прежний avatarFileId (для чистки).
     // null fileId — снять аватар. null-результат — аккаунт не найден.
     async setAvatar(

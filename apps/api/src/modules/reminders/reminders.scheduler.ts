@@ -7,6 +7,7 @@ import { makeAuthRepo } from '../auth/auth.repo.js';
 import { makeAuthService } from '../auth/auth.service.js';
 import { makeClientAuthRepo } from '../client-auth/client-auth.repo.js';
 import { makeClientAuthService } from '../client-auth/client-auth.service.js';
+import { makeMailer } from '../../auth/mailer.js';
 
 const PACKAGE_LOW_THRESHOLD = 2;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -125,18 +126,24 @@ export function startRemindersScheduler(deps: SchedulerDeps): () => void {
   const repo = makeRemindersRepo(deps.db);
   // Сервисы авторизации — для досноса аккаунтов с истёкшим окном отмены удаления.
   const filesRepo = makeFilesRepo(deps.db);
-  const authSvc = makeAuthService(makeAuthRepo(deps.db), filesRepo, deps.storage, {
-    newId: deps.newId,
-    now: deps.now,
-  });
+  // Планировщик использует auth-сервисы только для доснова аккаунтов (не для писем),
+  // поэтому mailer здесь — с no-op логгером (реально не отправляет ничего).
+  const mailer = makeMailer({ info: () => undefined });
+  const authSvc = makeAuthService(
+    makeAuthRepo(deps.db),
+    filesRepo,
+    deps.storage,
+    { newId: deps.newId, now: deps.now },
+    deps.db,
+    mailer,
+  );
   const clientAuthSvc = makeClientAuthService(
     makeClientAuthRepo(deps.db),
     filesRepo,
     deps.storage,
-    {
-      newId: deps.newId,
-      now: deps.now,
-    },
+    { newId: deps.newId, now: deps.now },
+    deps.db,
+    mailer,
   );
   const interval = deps.intervalMs ?? 30 * 60 * 1000; // каждые 30 минут
   const run = () => {

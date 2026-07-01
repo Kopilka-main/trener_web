@@ -20,6 +20,12 @@ const envSchema = z.object({
   YANDEX_CLIENT_ID: z.string().default(''),
   YANDEX_CLIENT_SECRET: z.string().default(''),
   OAUTH_REDIRECT_BASE: z.string().default('https://app.fitbond.ru'),
+  // SMTP для писем (коды сброса пароля). Без SMTP_HOST письма уходят в лог-заглушку.
+  SMTP_HOST: z.string().default(''),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_USER: z.string().default(''),
+  SMTP_PASS: z.string().default(''),
+  SMTP_FROM: z.string().default('FitBond <no-reply@fitbond.ru>'),
 });
 
 export type Env = z.infer<typeof envSchema>;

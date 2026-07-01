@@ -24,6 +24,10 @@ export function makeAuthRepo(db: Db) {
       const [row] = await db.select().from(trainers).where(eq(trainers.id, id));
       return row ?? null;
     },
+    // Обновить хэш пароля (сброс пароля по email-коду).
+    async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
+      await db.update(trainers).set({ passwordHash }).where(eq(trainers.id, id));
+    },
     async updateTrainer(
       id: string,
       patch: {
