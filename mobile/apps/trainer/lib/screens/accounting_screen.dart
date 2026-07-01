@@ -714,7 +714,7 @@ class _Pill extends StatelessWidget {
 
 /// Категории источников. «Фарма» убрана из доходов.
 const List<String> _kIncomeCats = <String>['Тренировка', 'Консультация', 'Прочее'];
-const List<String> _kExpenseCats = <String>['Аренда', 'Инвентарь', 'Обучение', 'Фарма', 'Прочее'];
+const List<String> _kExpenseCats = <String>['Аренда', 'Инвентарь', 'Обучение', 'Прочее'];
 
 /// Данные редактируемой записи для префилла формы.
 class _EntryEdit {
