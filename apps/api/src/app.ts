@@ -32,6 +32,7 @@ import { registerExercisesModule } from './modules/exercises/exercises.module.js
 import { registerTemplatesModule } from './modules/workout-templates/templates.module.js';
 import { registerClientWorkoutsModule } from './modules/client-workouts/client-workouts.module.js';
 import { registerSessionsModule } from './modules/sessions/sessions.module.js';
+import { registerCalendarModule } from './modules/calendar/calendar.module.js';
 import { registerPackagesModule } from './modules/packages/packages.module.js';
 import { registerAccountingModule } from './modules/accounting/accounting.module.js';
 import { registerMeasurementsModule } from './modules/measurements/measurements.module.js';
@@ -216,6 +217,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   catalogMediaRoutes(app, deps.catalogMediaDir ?? path.resolve(process.cwd(), 'media/catalog'));
   registerProgressPhotosModule(app, { db: deps.db, storage, clock });
   registerMedicalModule(app, { db: deps.db, storage, clock });
+
+  registerCalendarModule(app, { db: deps.db, clock });
 
   healthRoutes(app);
   legalRoutes(app);

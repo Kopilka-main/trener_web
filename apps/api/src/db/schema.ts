@@ -43,6 +43,9 @@ export const trainers = pgTable(
     // Запрошено удаление аккаунта: момент окончательного удаления (окно отмены).
     // NULL = удаление не запланировано. Планировщик сносит аккаунт по достижении.
     pendingDeletionAt: timestamp('pending_deletion_at', { withTimezone: true }),
+    // Секретный токен iCal-фида расписания (односторонний экспорт занятий).
+    // NULL = фид ещё не запрашивался; генерируется лениво при первом запросе.
+    calendarToken: text('calendar_token').unique(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   // ИНВАРИАНТ: email хранится уже нормализованным (lowercase+trim) — это гарантирует
