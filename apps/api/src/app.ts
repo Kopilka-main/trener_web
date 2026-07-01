@@ -43,8 +43,10 @@ import { registerProgressPhotosModule } from './modules/progress-photos/progress
 import { registerMedicalModule } from './modules/medical-records/medical.module.js';
 import { makeTelemetry, registerTelemetryRoutes } from './modules/telemetry/telemetry.module.js';
 import { registerPushModule, type VapidConfig } from './modules/push/push.module.js';
+import { registerOAuthModule } from './modules/oauth/oauth.module.js';
 import type { PushService } from './modules/push/push.service.js';
 import { makeStorage } from './files/storage.js';
+import { makeMailer } from './auth/mailer.js';
 
 // Доступ к push-сервису из server.ts (для планировщика напоминаний).
 declare module 'fastify' {
@@ -66,6 +68,13 @@ export type AppDeps = {
   // Каталог с глобальным медиа упражнений (картинки/видео). По умолчанию
   // <cwd>/media/catalog. Раздаётся публично через /api/catalog-media/:file.
   catalogMediaDir?: string;
+  // OAuth-конфиг (VK ID / Яндекс). Опционален: без него провайдеры мягко недоступны
+  // (getAuthUrl вернёт 503). redirectBase по умолчанию https://app.fitbond.ru.
+  oauth?: {
+    redirectBase: string;
+    vk: { clientId: string; clientSecret: string };
+    yandex: { clientId: string; clientSecret: string };
+  };
 };
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
@@ -95,8 +104,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // (раздача + чистка прежних файлов), а также модулем files.
   const filesRepo = makeFilesRepo(deps.db);
 
+  // Единый мейлер на оба auth-модуля: SMTP при заданном SMTP_HOST, иначе dev-заглушка.
+  const mailer = makeMailer(app.log);
+
   const repo = makeAuthRepo(deps.db);
-  const svc = makeAuthService(repo, filesRepo, storage, clock);
+  const svc = makeAuthService(repo, filesRepo, storage, clock, deps.db, mailer);
 
   await app.register(tenantContext, { findSession: (id) => repo.findSession(id) });
 
@@ -112,6 +124,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     isProd: deps.isProd,
     filesRepo,
     storage,
+    mailer,
   });
   registerClientAppWorkoutsModule(app, {
     db: deps.db,
@@ -219,6 +232,19 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerMedicalModule(app, { db: deps.db, storage, clock });
 
   registerCalendarModule(app, { db: deps.db, clock });
+
+  // OAuth-вход (VK ID / Яндекс) — публичные роуты, оба контура. Сессии создаём через
+  // тонкие методы auth/client-auth сервисов. Без oauth-конфига провайдеры недоступны
+  // (getAuthUrl → 503), но роуты регистрируем всегда (единый composition root).
+  registerOAuthModule(app, {
+    db: deps.db,
+    clock,
+    redirectBase: deps.oauth?.redirectBase ?? 'https://app.fitbond.ru',
+    vk: deps.oauth?.vk ?? { clientId: '', clientSecret: '' },
+    yandex: deps.oauth?.yandex ?? { clientId: '', clientSecret: '' },
+    createTrainerSession: (trainerId) => svc.startSessionForTrainer(trainerId),
+    createClientSession: (clientAccountId) => clientAuthSvc.startSessionForClient(clientAccountId),
+  });
 
   healthRoutes(app);
   legalRoutes(app);

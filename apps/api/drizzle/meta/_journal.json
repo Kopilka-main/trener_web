@@ -365,6 +365,27 @@
       "when": 1782902907385,
       "tag": "0051_hot_wolfpack",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1782904234264,
+      "tag": "0052_light_karen_page",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1782913628627,
+      "tag": "0053_nebulous_rawhide_kid",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1782914164614,
+      "tag": "0054_confused_reaper",
+      "breakpoints": true
     }
   ]
 }

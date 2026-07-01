@@ -125,6 +125,58 @@ export const clientSessionsAuth = pgTable('client_sessions_auth', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+// OAuth (VK ID / Яндекс): одноразовый state CSRF-флоу. verifier — PKCE code_verifier
+// (только для VK). app — контур входа ('trainer' | 'client'). Записи старше 10 минут
+// чистит репозиторий при следующем сохранении. state одноразовый (popState удаляет строку).
+export const oauthStates = pgTable('oauth_states', {
+  state: text('state').primaryKey(),
+  provider: text('provider').notNull(), // 'vk' | 'yandex'
+  app: text('app').$type<'trainer' | 'client'>().notNull(), // контур входа
+  verifier: text('verifier'), // PKCE code_verifier (VK), NULL для Яндекса
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Привязка OAuth-аккаунта провайдера к субъекту ОДНОГО из контуров. Владелец ровно
+// один: trainerId XOR clientAccountId. Уникальность (provider, providerUserId) —
+// один и тот же аккаунт провайдера не привязывается дважды.
+export const oauthAccounts = pgTable(
+  'oauth_accounts',
+  {
+    id: text('id').primaryKey(),
+    provider: text('provider').notNull(), // 'vk' | 'yandex'
+    providerUserId: text('provider_user_id').notNull(), // id пользователя у провайдера
+    trainerId: text('trainer_id').references(() => trainers.id, { onDelete: 'cascade' }),
+    clientAccountId: text('client_account_id').references(() => clientAccounts.id, {
+      onDelete: 'cascade',
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('oauth_accounts_provider_user_uq').on(t.provider, t.providerUserId)],
+);
+
+// Одноразовые 6-значные email-коды (OTP): сброс пароля и будущие email-флоу.
+// subjectType/subjectId идентифицируют субъекта в ОДНОЙ из двух таблиц (trainers|
+// client_accounts) — поэтому внешнего ключа НЕТ (субъект в двух таблицах). Просрочен-
+// ные/осиротевшие коды безвредны: verifyCode игнорирует истёкшие и использованные,
+// createCode перезаписывает прежний код того же назначения. TTL — 15 минут (в сервисе).
+export const emailCodes = pgTable(
+  'email_codes',
+  {
+    id: text('id').primaryKey(),
+    subjectType: text('subject_type').$type<'trainer' | 'client'>().notNull(),
+    subjectId: text('subject_id').notNull(),
+    code: text('code').notNull(), // 6 цифр (plain, короткоживущий одноразовый OTP)
+    purpose: text('purpose').notNull(), // пока только 'reset-password'
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('idx_email_codes_subject').on(t.subjectType, t.subjectId),
+    check('email_codes_subject_type_chk', sql`${t.subjectType} IN ('trainer', 'client')`),
+  ],
+);
+
 // Связь тренер↔клиент (M:N) + профиль клиента глазами этого тренера.
 export const trainerClients = pgTable(
   'trainer_clients',
@@ -362,6 +414,8 @@ export const paymentPackages = pgTable(
     startsAt: text('starts_at').notNull(), // дата начала, YYYY-MM-DD
     endsAt: text('ends_at'), // дата окончания, YYYY-MM-DD (период абонемента / срок пакета)
     status: text('status').$type<'active' | 'closed' | 'cancelled'>().notNull().default('active'),
+    // Рассрочка: пакет с произвольным графиком платежей (payment_installments).
+    isInstallment: boolean('is_installment').notNull().default(false),
     note: text('note'),
     tags: text('tags').array().notNull().default([]),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -369,6 +423,34 @@ export const paymentPackages = pgTable(
   (t) => [
     index('idx_payment_packages_trainer_client').on(t.trainerId, t.clientId),
     check('payment_packages_status_chk', sql`${t.status} IN ('active', 'closed', 'cancelled')`),
+  ],
+);
+
+// График платежей рассрочки: пары {дата, сумма} по конкретному пакету.
+// Доход в бухгалтерии начисляется по факту отметки платежа 'paid' (по каждому отдельно).
+export const paymentInstallments = pgTable(
+  'payment_installments',
+  {
+    id: text('id').primaryKey(),
+    trainerId: text('trainer_id')
+      .notNull()
+      .references(() => trainers.id, { onDelete: 'cascade' }),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
+    packageId: text('package_id')
+      .notNull()
+      .references(() => paymentPackages.id, { onDelete: 'cascade' }),
+    dueDate: text('due_date').notNull(), // дата платежа, YYYY-MM-DD
+    amount: doublePrecision('amount').notNull(),
+    status: text('status').$type<'pending' | 'paid'>().notNull().default('pending'),
+    paidAt: text('paid_at'), // дата фактической оплаты, YYYY-MM-DD (nullable)
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('idx_payment_installments_package').on(t.packageId),
+    index('idx_payment_installments_due_date').on(t.dueDate),
+    check('payment_installments_status_chk', sql`${t.status} IN ('pending', 'paid')`),
   ],
 );
 

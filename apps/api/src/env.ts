@@ -12,6 +12,14 @@ const envSchema = z.object({
   VAPID_PUBLIC_KEY: z.string().default(''),
   VAPID_PRIVATE_KEY: z.string().default(''),
   VAPID_SUBJECT: z.string().default('mailto:admin@fitbond.ru'),
+  // OAuth (VK ID / Яндекс). Все опциональны: без client id/secret провайдер мягко
+  // недоступен (getAuthUrl вернёт ошибку конфигурации). OAUTH_REDIRECT_BASE — базовый
+  // публичный адрес API для redirect_uri коллбэка (без завершающего слэша).
+  VK_CLIENT_ID: z.string().default(''),
+  VK_CLIENT_SECRET: z.string().default(''),
+  YANDEX_CLIENT_ID: z.string().default(''),
+  YANDEX_CLIENT_SECRET: z.string().default(''),
+  OAUTH_REDIRECT_BASE: z.string().default('https://app.fitbond.ru'),
 });
 
 export type Env = z.infer<typeof envSchema>;

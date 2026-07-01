@@ -8,6 +8,9 @@ import type {
   UpdateTrainerRequest,
 } from '@trener/shared';
 import { hashPassword, verifyPassword } from '../../auth/password.js';
+import { createCode, verifyCode } from '../../auth/email-codes.js';
+import { sendResetPasswordEmail, type Mailer } from '../../auth/mailer.js';
+import type { Db } from '../../db/client.js';
 import { AppError, unauthorized } from '../../errors.js';
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 дней
@@ -61,6 +64,8 @@ export function makeAuthService(
   filesRepo: FilesRepo,
   storage: Storage,
   deps: AuthDeps,
+  db: Db,
+  mailer: Mailer,
 ) {
   async function startSession(trainerId: string): Promise<Session> {
     const token = deps.newId();
@@ -70,6 +75,12 @@ export function makeAuthService(
   }
 
   return {
+    // Публичная точка создания сессии по trainerId (для OAuth-входа): тонкая обёртка
+    // над приватным createSession. Токен — непрозрачный (deps.newId), TTL — как у login.
+    startSessionForTrainer(trainerId: string): Promise<Session> {
+      return startSession(trainerId);
+    },
+
     async register(
       input: RegisterRequest,
     ): Promise<{ trainer: TrainerResponse; session: Session }> {
@@ -99,6 +110,39 @@ export function makeAuthService(
 
     async logout(token: string): Promise<void> {
       await repo.deleteSession(token);
+    },
+
+    // Запрос кода сброса пароля. Не раскрываем существование email: если тренера нет —
+    // молча выходим (роут всё равно вернёт 200). Письмо шлём fire-and-forget, чтобы
+    // ответ не зависел от почтового провайдера и не выдавал тайминги.
+    async forgotPassword(email: string): Promise<void> {
+      const trainer = await repo.findTrainerByEmail(email);
+      if (!trainer) return;
+      const code = await createCode(db, {
+        subjectType: 'trainer',
+        subjectId: trainer.id,
+        purpose: 'reset-password',
+        newId: deps.newId,
+        now: deps.now(),
+      });
+      void sendResetPasswordEmail(mailer, trainer.email, code).catch(() => undefined);
+    },
+
+    // Сброс пароля по коду. Неверный/просроченный код или отсутствие тренера → 400 с
+    // общим сообщением (не раскрываем, что именно не так). Успех → новый argon2-хэш.
+    async resetPassword(email: string, code: string, password: string): Promise<void> {
+      const invalid = new AppError(400, 'INVALID_CODE', 'Неверный или просроченный код');
+      const trainer = await repo.findTrainerByEmail(email);
+      if (!trainer) throw invalid;
+      const ok = await verifyCode(db, {
+        subjectType: 'trainer',
+        subjectId: trainer.id,
+        code,
+        purpose: 'reset-password',
+        now: deps.now(),
+      });
+      if (!ok) throw invalid;
+      await repo.updatePasswordHash(trainer.id, await hashPassword(password));
     },
 
     async me(trainerId: string): Promise<TrainerResponse> {

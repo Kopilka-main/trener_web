@@ -19,6 +19,11 @@ buildApp({
     privateKey: env.VAPID_PRIVATE_KEY,
     subject: env.VAPID_SUBJECT,
   },
+  oauth: {
+    redirectBase: env.OAUTH_REDIRECT_BASE,
+    vk: { clientId: env.VK_CLIENT_ID, clientSecret: env.VK_CLIENT_SECRET },
+    yandex: { clientId: env.YANDEX_CLIENT_ID, clientSecret: env.YANDEX_CLIENT_SECRET },
+  },
 })
   .then((app) =>
     app.listen({ port: env.PORT, host: '0.0.0.0' }).then((address) => {

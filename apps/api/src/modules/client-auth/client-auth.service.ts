@@ -10,6 +10,9 @@ import type {
   UpdateClientAccountRequest,
 } from '@trener/shared';
 import { hashPassword, verifyPassword } from '../../auth/password.js';
+import { createCode, verifyCode } from '../../auth/email-codes.js';
+import { sendResetPasswordEmail, type Mailer } from '../../auth/mailer.js';
+import type { Db } from '../../db/client.js';
 import { AppError, unauthorized } from '../../errors.js';
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 дней
@@ -58,6 +61,8 @@ export function makeClientAuthService(
   filesRepo: FilesRepo,
   storage: Storage,
   deps: ClientAuthDeps,
+  db: Db,
+  mailer: Mailer,
 ) {
   async function startSession(clientAccountId: string): Promise<ClientSession> {
     const token = deps.newId();
@@ -70,6 +75,12 @@ export function makeClientAuthService(
     // Резолвер скоупа — переиспользуется фичевыми клиентскими роутами в секционных спеках.
     resolveScope(clientAccountId: string): Promise<ClientLink> {
       return repo.findScopeByAccountId(clientAccountId);
+    },
+
+    // Публичная точка создания сессии по clientAccountId (для OAuth-входа): тонкая
+    // обёртка над приватным createSession. Токен непрозрачный, TTL — как у login.
+    startSessionForClient(clientAccountId: string): Promise<ClientSession> {
+      return startSession(clientAccountId);
     },
 
     async register(
@@ -103,6 +114,38 @@ export function makeClientAuthService(
 
     async logout(token: string): Promise<void> {
       await repo.deleteSession(token);
+    },
+
+    // Запрос кода сброса пароля. Не раскрываем существование email: нет аккаунта —
+    // молча выходим (роут вернёт 200). Письмо fire-and-forget (ответ не ждёт SMTP).
+    async forgotPassword(email: string): Promise<void> {
+      const account = await repo.findAccountByEmail(email);
+      if (!account) return;
+      const code = await createCode(db, {
+        subjectType: 'client',
+        subjectId: account.id,
+        purpose: 'reset-password',
+        newId: deps.newId,
+        now: deps.now(),
+      });
+      void sendResetPasswordEmail(mailer, account.email, code).catch(() => undefined);
+    },
+
+    // Сброс пароля по коду. Неверный/просроченный код или отсутствие аккаунта → 400 с
+    // общим сообщением. Успех → новый argon2-хэш.
+    async resetPassword(email: string, code: string, password: string): Promise<void> {
+      const invalid = new AppError(400, 'INVALID_CODE', 'Неверный или просроченный код');
+      const account = await repo.findAccountByEmail(email);
+      if (!account) throw invalid;
+      const ok = await verifyCode(db, {
+        subjectType: 'client',
+        subjectId: account.id,
+        code,
+        purpose: 'reset-password',
+        now: deps.now(),
+      });
+      if (!ok) throw invalid;
+      await repo.updatePasswordHash(account.id, await hashPassword(password));
     },
 
     async me(clientAccountId: string): Promise<ClientMeResponse> {
