@@ -7,6 +7,9 @@ const Map<String, String> kAngleLabels = <String, String>{
   'back': 'Сзади',
 };
 
+/// Порядок поз для сортировки внутри одной даты: спереди → сбоку → сзади.
+const Map<String, int> kAngleOrder = <String, int>{'front': 0, 'side': 1, 'back': 2};
+
 /// Фото прогресса клиента.
 class ProgressPhoto {
   ProgressPhoto({required this.id, required this.date, required this.angle, required this.fileId, required this.note});
@@ -39,7 +42,12 @@ class ClientPhotosApi {
         .cast<Map<String, dynamic>>()
         .map(ProgressPhoto.fromJson)
         .toList();
-    list.sort((ProgressPhoto a, ProgressPhoto b) => (b.date ?? DateTime(0)).compareTo(a.date ?? DateTime(0)));
+    // Новые даты сверху; внутри одной даты — спереди → сбоку → сзади.
+    list.sort((ProgressPhoto a, ProgressPhoto b) {
+      final int byDate = (b.date ?? DateTime(0)).compareTo(a.date ?? DateTime(0));
+      if (byDate != 0) return byDate;
+      return (kAngleOrder[a.angle] ?? 99).compareTo(kAngleOrder[b.angle] ?? 99);
+    });
     return list;
   }
 

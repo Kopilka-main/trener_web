@@ -145,6 +145,9 @@ final FutureProviderFamily<List<TWorkout>, String> clientWorkoutsCardProvider =
 final FutureProviderFamily<List<TMeasurement>, String> clientMeasurementsProvider =
     FutureProvider.family<List<TMeasurement>, String>((ref, String id) => ref.read(trainerClientCardApiProvider).measurements(id));
 
+/// Порядок поз для сортировки внутри одной даты: спереди → сбоку → сзади.
+const Map<String, int> kClientPhotoAngleOrder = <String, int>{'front': 0, 'side': 1, 'back': 2};
+
 /// Фото прогресса клиента (просмотр тренером).
 class TClientPhoto {
   TClientPhoto({required this.id, required this.date, required this.angle, required this.fileId});
@@ -170,6 +173,11 @@ final FutureProviderFamily<List<TClientPhoto>, String> clientPhotosCardProvider 
       .cast<Map<String, dynamic>>()
       .map(TClientPhoto.fromJson)
       .toList();
-  list.sort((TClientPhoto a, TClientPhoto b) => (b.date ?? DateTime(0)).compareTo(a.date ?? DateTime(0)));
+  // Новые даты сверху; внутри одной даты — спереди → сбоку → сзади.
+  list.sort((TClientPhoto a, TClientPhoto b) {
+    final int byDate = (b.date ?? DateTime(0)).compareTo(a.date ?? DateTime(0));
+    if (byDate != 0) return byDate;
+    return (kClientPhotoAngleOrder[a.angle] ?? 99).compareTo(kClientPhotoAngleOrder[b.angle] ?? 99);
+  });
   return list;
 });
