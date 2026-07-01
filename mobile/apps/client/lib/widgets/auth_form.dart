@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 /// Поле формы авторизации в стиле веба: лейбл сверху (14, ink-muted), инпут
 /// rounded-xl на `chip` с рамкой `line` (или `danger` при ошибке), фокус — `accent`.
 /// Под полем при ошибке — текст 12px цвета `danger`.
-class AuthField extends StatelessWidget {
+class AuthField extends StatefulWidget {
   const AuthField({
     super.key,
     required this.controller,
@@ -29,9 +29,17 @@ class AuthField extends StatelessWidget {
   final ValueChanged<String>? onSubmitted;
 
   @override
+  State<AuthField> createState() => _AuthFieldState();
+}
+
+class _AuthFieldState extends State<AuthField> {
+  // Для полей-паролей (obscure): скрыт ли ввод. Кнопка-глазок переключает.
+  bool _hidden = true;
+
+  @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
-    final Color borderColor = error != null ? c.danger : c.line;
+    final Color borderColor = widget.error != null ? c.danger : c.line;
     OutlineInputBorder border(Color color, double width) => OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: color, width: width),
@@ -39,17 +47,18 @@ class AuthField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.inkMuted)),
+        Text(widget.label,
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.inkMuted)),
         const SizedBox(height: 6),
         SelectAllTextField(
-          controller: controller,
-          obscureText: obscure,
-          keyboardType: keyboardType,
+          controller: widget.controller,
+          obscureText: widget.obscure && _hidden,
+          keyboardType: widget.keyboardType,
           autocorrect: false,
-          autofillHints: autofillHints,
-          textInputAction: textInputAction,
-          onChanged: onChanged,
-          onSubmitted: onSubmitted,
+          autofillHints: widget.autofillHints,
+          textInputAction: widget.textInputAction,
+          onChanged: widget.onChanged,
+          onSubmitted: widget.onSubmitted,
           style: TextStyle(fontSize: 15, color: c.ink),
           decoration: InputDecoration(
             isDense: true,
@@ -57,14 +66,22 @@ class AuthField extends StatelessWidget {
             fillColor: c.chip,
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             enabledBorder: border(borderColor, 1),
-            focusedBorder: border(error != null ? c.danger : c.accent, 1.6),
+            focusedBorder: border(widget.error != null ? c.danger : c.accent, 1.6),
             border: border(borderColor, 1),
+            suffixIcon: widget.obscure
+                ? IconButton(
+                    tooltip: _hidden ? 'Показать пароль' : 'Скрыть пароль',
+                    icon: Icon(_hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                        size: 20, color: c.inkMuted),
+                    onPressed: () => setState(() => _hidden = !_hidden),
+                  )
+                : null,
           ),
         ),
-        if (error != null)
+        if (widget.error != null)
           Padding(
             padding: const EdgeInsets.only(top: 6),
-            child: Text(error!, style: TextStyle(fontSize: 12, color: c.danger)),
+            child: Text(widget.error!, style: TextStyle(fontSize: 12, color: c.danger)),
           ),
       ],
     );
@@ -102,6 +119,51 @@ class AuthPrimaryButton extends StatelessWidget {
       ),
       onPressed: busy ? null : onPressed,
       child: Text(busy ? busyLabel : label),
+    );
+  }
+}
+
+/// Разделитель «или» между основной кнопкой формы и OAuth-кнопками.
+class OAuthOrDivider extends StatelessWidget {
+  const OAuthOrDivider({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Row(
+      children: <Widget>[
+        Expanded(child: Divider(color: c.line)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text('или', style: TextStyle(fontSize: 13, color: c.inkMuted)),
+        ),
+        Expanded(child: Divider(color: c.line)),
+      ],
+    );
+  }
+}
+
+/// Кнопка OAuth-входа (VK/Яндекс): контурный стиль на `line`, текст `ink`.
+/// Совпадает по геометрии с [AuthPrimaryButton] (высота 50, rounded-xl).
+class OAuthButton extends StatelessWidget {
+  const OAuthButton({super.key, required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return OutlinedButton(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: c.ink,
+        side: BorderSide(color: c.line),
+        minimumSize: const Size.fromHeight(50),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+      ),
+      onPressed: onPressed,
+      child: Text(label),
     );
   }
 }

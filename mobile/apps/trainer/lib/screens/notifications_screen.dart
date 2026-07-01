@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../api/trainer_calendar.dart';
 import '../api/trainer_clients.dart';
 import '../api/trainer_notifications.dart';
+import '../widgets/trainer_nav_bar.dart';
 
 const List<String> _ruMonths = <String>[
   'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
@@ -85,6 +86,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     }
 
     return Scaffold(
+      bottomNavigationBar: const TrainerNavBar(),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

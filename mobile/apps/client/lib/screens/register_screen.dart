@@ -79,6 +79,28 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
   }
 
+  /// Регистрация/вход через OAuth-провайдера ([provider] ∈ {vk, yandex}):
+  /// открывает WebView, при успехе сохраняет сессию (роутер уведёт в приложение).
+  Future<void> _oauth(String provider, String title) async {
+    final String? token = await Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(
+        builder: (_) => OAuthWebViewScreen(
+          provider: provider,
+          app: 'client',
+          baseUrl: ref.read(baseUrlProvider),
+          title: title,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (token != null && token.isNotEmpty) {
+      await ref.read(sessionProvider.notifier).setToken(token);
+    } else {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Не удалось войти')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
@@ -154,6 +176,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   busyLabel: 'Создаём…',
                   busy: _busy,
                   onPressed: _submit,
+                ),
+                const SizedBox(height: 20),
+                const OAuthOrDivider(),
+                const SizedBox(height: 16),
+                OAuthButton(
+                  label: 'Войти через VK',
+                  onPressed: _busy ? null : () => _oauth('vk', 'Вход через VK'),
+                ),
+                const SizedBox(height: 10),
+                OAuthButton(
+                  label: 'Войти через Яндекс',
+                  onPressed: _busy ? null : () => _oauth('yandex', 'Вход через Яндекс'),
                 ),
                 const SizedBox(height: 16),
                 Row(

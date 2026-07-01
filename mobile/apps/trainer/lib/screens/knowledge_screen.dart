@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/trainer_assign.dart';
 import '../api/trainer_catalog.dart';
+import '../widgets/trainer_nav_bar.dart';
 import 'exercise_edit_screen.dart';
 import 'template_edit_screen.dart';
 
@@ -33,6 +34,7 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
     return Scaffold(
+      bottomNavigationBar: const TrainerNavBar(),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           final bool? saved = await Navigator.of(context).push<bool>(

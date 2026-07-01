@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'screens/calendar_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/connect_screen.dart';
+import 'screens/forgot_password_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/knowledge_screen.dart';
 import 'screens/login_screen.dart';
@@ -33,15 +34,20 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       final String loc = state.matchedLocation;
       if (status == AuthStatus.unknown) return loc == '/splash' ? null : '/splash';
       if (status == AuthStatus.unauthenticated) {
-        return (loc == '/login' || loc == '/register') ? null : '/login';
+        return (loc == '/login' || loc == '/register' || loc == '/forgot-password')
+            ? null
+            : '/login';
       }
-      if (loc == '/login' || loc == '/register' || loc == '/splash') return '/home';
+      if (loc == '/login' || loc == '/register' || loc == '/forgot-password' || loc == '/splash') {
+        return '/home';
+      }
       return null;
     },
     routes: <RouteBase>[
       GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
+      GoRoute(path: '/forgot-password', builder: (_, _) => const ForgotPasswordScreen()),
       GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
       GoRoute(path: '/calendar', builder: (_, _) => const CalendarScreen()),
       GoRoute(path: '/chat', builder: (_, _) => const ChatScreen()),

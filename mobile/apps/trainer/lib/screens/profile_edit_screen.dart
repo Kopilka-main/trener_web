@@ -25,9 +25,6 @@ const List<_ContactType> _contactTypeDefs = <_ContactType>[
 IconData _iconForType(String type) =>
     _contactTypeDefs.firstWhere((_ContactType t) => t.label == type, orElse: () => _contactTypeDefs.first).icon;
 
-String _iso(DateTime d) =>
-    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
 class _EditContact {
   _EditContact({required this.type, required this.value});
   String type;
@@ -49,7 +46,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
   late final TextEditingController _last;
   late final TextEditingController _title;
   late final TextEditingController _bio;
-  DateTime? _birth;
+  String? _birthIso; // день рождения (день+месяц, год-заглушка), ISO YYYY-MM-DD
   late final List<_EditContact> _contacts;
   late String? _avatarFileId = widget.profile.avatarFileId;
   bool _busy = false;
@@ -64,7 +61,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     _last = TextEditingController(text: p.lastName);
     _title = TextEditingController(text: p.title ?? '');
     _bio = TextEditingController(text: p.bio ?? '');
-    _birth = p.birthDate != null ? DateTime.tryParse(p.birthDate!) : null;
+    _birthIso = p.birthDate;
     _contacts = p.contacts
         .map((TrainerContact c) => _EditContact(type: c.type, value: TextEditingController(text: c.value)))
         .toList();
@@ -103,7 +100,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
       'lastName': last,
       'title': _title.text.trim().isEmpty ? null : _title.text.trim(),
       'bio': _bio.text.trim().isEmpty ? null : _bio.text.trim(),
-      'birthDate': _birth != null ? _iso(_birth!) : null,
+      'birthDate': _birthIso,
       'contacts': contacts,
     };
     try {
@@ -233,32 +230,26 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
           _Label('Дата рождения'),
           GestureDetector(
             onTap: () async {
-              final DateTime now = DateTime.now();
-              final DateTime? d = await showDatePicker(
-                context: context,
-                initialDate: _birth ?? DateTime(now.year - 25),
-                firstDate: DateTime(1900),
-                lastDate: now,
-              );
-              if (d != null) setState(() => _birth = d);
+              final ({int day, int month})? cur = dayMonthFromIso(_birthIso);
+              final ({int day, int month})? r =
+                  await pickDayMonth(context, day: cur?.day, month: cur?.month);
+              if (r != null) setState(() => _birthIso = dayMonthToIso(r.day, r.month));
             },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
               child: Row(
                 children: <Widget>[
-                  Icon(Icons.event, size: 18, color: c.inkMuted),
+                  Icon(Icons.cake_outlined, size: 18, color: c.inkMuted),
                   const SizedBox(width: 10),
                   Text(
-                    _birth != null
-                        ? '${_birth!.day.toString().padLeft(2, '0')}.${_birth!.month.toString().padLeft(2, '0')}.${_birth!.year}'
-                        : 'Не указана',
-                    style: TextStyle(fontSize: 14, color: _birth != null ? c.ink : c.inkMuted),
+                    formatDayMonth(_birthIso).isEmpty ? 'Не указан' : formatDayMonth(_birthIso),
+                    style: TextStyle(fontSize: 14, color: _birthIso != null ? c.ink : c.inkMuted),
                   ),
                   const Spacer(),
-                  if (_birth != null)
+                  if (_birthIso != null)
                     GestureDetector(
-                      onTap: () => setState(() => _birth = null),
+                      onTap: () => setState(() => _birthIso = null),
                       child: Icon(Icons.close, size: 18, color: c.inkMuted),
                     ),
                 ],

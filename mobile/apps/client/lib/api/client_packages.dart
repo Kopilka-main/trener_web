@@ -1,6 +1,33 @@
 import 'package:core/core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+/// Платёж рассрочки внутри пакета.
+class ClientInstallment {
+  ClientInstallment({
+    required this.id,
+    required this.dueDate,
+    required this.amount,
+    required this.status,
+    required this.paidAt,
+  });
+
+  final String id;
+  final String dueDate;
+  final num amount;
+  final String status;
+  final String? paidAt;
+
+  bool get isPaid => status == 'paid';
+
+  factory ClientInstallment.fromJson(Map<String, dynamic> j) => ClientInstallment(
+        id: j['id'] as String? ?? '',
+        dueDate: j['dueDate'] as String? ?? '',
+        amount: (j['amount'] as num?) ?? 0,
+        status: j['status'] as String? ?? '',
+        paidAt: j['paidAt'] as String?,
+      );
+}
+
 /// Пакет/абонемент клиента (срез для уведомлений и баланса).
 class ClientPackage {
   ClientPackage({
@@ -10,6 +37,8 @@ class ClientPackage {
     required this.lessonsUsed,
     required this.workoutType,
     required this.endsAt,
+    required this.isInstallment,
+    required this.installments,
   });
 
   final String id;
@@ -18,6 +47,8 @@ class ClientPackage {
   final int lessonsUsed;
   final String? workoutType;
   final String? endsAt;
+  final bool isInstallment;
+  final List<ClientInstallment> installments;
 
   int get remaining => lessonsPaid - lessonsUsed;
   bool get isActive => status == 'active';
@@ -29,6 +60,11 @@ class ClientPackage {
         lessonsUsed: (j['lessonsUsed'] as num?)?.toInt() ?? 0,
         workoutType: j['workoutType'] as String?,
         endsAt: j['endsAt'] as String?,
+        isInstallment: j['isInstallment'] as bool? ?? false,
+        installments: ((j['installments'] as List<dynamic>?) ?? <dynamic>[])
+            .cast<Map<String, dynamic>>()
+            .map(ClientInstallment.fromJson)
+            .toList(),
       );
 }
 

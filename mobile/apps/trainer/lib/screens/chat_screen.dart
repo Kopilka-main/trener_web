@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/trainer_chat.dart';
+import '../widgets/trainer_nav_bar.dart';
 
 /// Тред переписки тренера с конкретным клиентом. Поллинг + отметка прочтения.
 class ChatScreen extends ConsumerStatefulWidget {
@@ -84,10 +85,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  /// «Задача» из сообщения: создаём задачу с чекбоксом из текста сообщения.
+  /// «Задача» из сообщения: создаём задачу с чекбоксом из текста сообщения и
+  /// удаляем исходное сообщение, чтобы оно не дублировалось рядом с карточкой задачи.
   Future<void> _task(ChatMessage m) async {
     final bool ok = await ref.read(trainerChatApiProvider).send(widget.clientId, '/task ${m.body}', null);
     if (ok) {
+      // Задача создана → убираем оригинал (best-effort; на старом сервере просто останется).
+      await ref.read(trainerChatApiProvider).deleteMessage(widget.clientId, m.id);
       ref.invalidate(trainerChatMessagesProvider(widget.clientId));
       ref.invalidate(trainerConversationsProvider);
     }
@@ -98,6 +102,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final AsyncValue<TrainerChatThread> chat =
         ref.watch(trainerChatMessagesProvider(widget.clientId));
     return Scaffold(
+      bottomNavigationBar: const TrainerNavBar(),
       appBar: AppBar(title: Text(widget.clientName)),
       body: chat.when(
         loading: () => const Center(child: CircularProgressIndicator()),

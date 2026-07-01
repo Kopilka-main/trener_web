@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import 'api/trainer_clients.dart';
 import 'screens/accounting_screen.dart';
+import 'screens/active_workout_screen.dart';
 import 'screens/calendar_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/clients_screen.dart';
@@ -48,6 +49,14 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/knowledge', builder: (_, _) => const KnowledgeScreen()),
       GoRoute(path: '/accounting', builder: (_, _) => const AccountingScreen()),
       GoRoute(path: '/clients', builder: (_, _) => const ClientsScreen()),
+      // Проведение тренировки — для возврата по плавающему FAB «идёт тренировка».
+      GoRoute(
+        path: '/active/:clientId/:wid',
+        builder: (BuildContext context, GoRouterState state) => ActiveWorkoutScreen(
+          clientId: state.pathParameters['clientId'] ?? '',
+          workoutId: state.pathParameters['wid'] ?? '',
+        ),
+      ),
       GoRoute(
         path: '/client/:id',
         builder: (BuildContext context, GoRouterState state) {

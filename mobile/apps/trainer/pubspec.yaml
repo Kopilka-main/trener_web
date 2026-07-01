@@ -49,6 +49,8 @@ dependencies:
   qr_flutter: ^4.1.0
   # Звуковой сигнал таймера отдыха (бип за 10 с и двойной по завершении).
   audioplayers: ^6.1.0
+  # OAuth-вход через провайдера (VK/Яндекс) в WebView
+  webview_flutter: ^4.10.0
 
 dev_dependencies:
   flutter_test:

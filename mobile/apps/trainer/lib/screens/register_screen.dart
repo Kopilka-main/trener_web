@@ -63,6 +63,28 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
   }
 
+  /// Регистрация/вход через OAuth-провайдера ([provider] ∈ {vk, yandex}):
+  /// открывает WebView, при успехе сохраняет сессию (роутер уведёт на главную).
+  Future<void> _oauth(String provider, String title) async {
+    final String? token = await Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(
+        builder: (_) => OAuthWebViewScreen(
+          provider: provider,
+          app: 'trainer',
+          baseUrl: ref.read(baseUrlProvider),
+          title: title,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (token != null && token.isNotEmpty) {
+      await ref.read(sessionProvider.notifier).setToken(token);
+    } else {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Не удалось войти')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -103,6 +125,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Text('Зарегистрироваться'),
                 ),
+                const SizedBox(height: 20),
+                const _OrDivider(),
+                const SizedBox(height: 16),
+                OutlinedButton(
+                  onPressed: _busy ? null : () => _oauth('vk', 'Вход через VK'),
+                  child: const Text('Войти через VK'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: _busy ? null : () => _oauth('yandex', 'Вход через Яндекс'),
+                  child: const Text('Войти через Яндекс'),
+                ),
                 TextButton(
                   onPressed: () => context.go('/login'),
                   child: const Text('У меня уже есть аккаунт'),
@@ -112,6 +146,25 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Разделитель «или» между основной кнопкой и OAuth-кнопками.
+class _OrDivider extends StatelessWidget {
+  const _OrDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        const Expanded(child: Divider()),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text('или', style: Theme.of(context).textTheme.bodySmall),
+        ),
+        const Expanded(child: Divider()),
+      ],
     );
   }
 }

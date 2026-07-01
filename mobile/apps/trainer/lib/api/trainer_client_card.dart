@@ -3,29 +3,84 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 DateTime? _dt(String? s) => s != null ? DateTime.tryParse(s)?.toLocal() : null;
 
+/// Один платёж графика рассрочки.
+class TInstallment {
+  TInstallment({
+    required this.id,
+    required this.dueDate,
+    required this.amount,
+    required this.status,
+    required this.paidAt,
+  });
+  final String id;
+  final String dueDate; // "YYYY-MM-DD"
+  final num amount;
+  final String status; // pending | paid
+  final String? paidAt; // "YYYY-MM-DD" | null
+  bool get isPaid => status == 'paid';
+
+  factory TInstallment.fromJson(Map<String, dynamic> j) => TInstallment(
+        id: j['id'] as String? ?? '',
+        dueDate: j['dueDate'] as String? ?? '',
+        amount: (j['amount'] as num?) ?? 0,
+        status: j['status'] as String? ?? 'pending',
+        paidAt: j['paidAt'] as String?,
+      );
+}
+
 /// Пакет/абонемент клиента.
 class TPackage {
   TPackage({
+    required this.id,
     required this.workoutType,
     required this.lessonsPaid,
     required this.lessonsUsed,
     required this.endsAt,
     required this.status,
+    required this.isInstallment,
+    required this.installments,
   });
+  final String id;
   final String? workoutType;
   final int lessonsPaid;
   final int lessonsUsed;
   final String? endsAt;
   final String status;
+  final bool isInstallment;
+  final List<TInstallment> installments;
   int get remaining => lessonsPaid - lessonsUsed;
   bool get isActive => status == 'active';
 
+  /// Сумма оплаченных платежей рассрочки.
+  num get paidSum => installments.where((TInstallment i) => i.isPaid).fold<num>(0, (num s, TInstallment i) => s + i.amount);
+
+  /// Сумма всех платежей графика.
+  num get totalSum => installments.fold<num>(0, (num s, TInstallment i) => s + i.amount);
+
+  /// Остаток к оплате.
+  num get dueSum => totalSum - paidSum;
+
+  int get paidCount => installments.where((TInstallment i) => i.isPaid).length;
+
+  /// Ближайший неоплаченный платёж (по дате).
+  TInstallment? get nextDue {
+    final List<TInstallment> pending = installments.where((TInstallment i) => !i.isPaid).toList()
+      ..sort((TInstallment a, TInstallment b) => a.dueDate.compareTo(b.dueDate));
+    return pending.isEmpty ? null : pending.first;
+  }
+
   factory TPackage.fromJson(Map<String, dynamic> j) => TPackage(
+        id: j['id'] as String? ?? '',
         workoutType: j['workoutType'] as String?,
         lessonsPaid: (j['lessonsPaid'] as num?)?.toInt() ?? 0,
         lessonsUsed: (j['lessonsUsed'] as num?)?.toInt() ?? 0,
         endsAt: j['endsAt'] as String?,
         status: j['status'] as String? ?? '',
+        isInstallment: j['isInstallment'] as bool? ?? false,
+        installments: ((j['installments'] as List<dynamic>?) ?? <dynamic>[])
+            .cast<Map<String, dynamic>>()
+            .map(TInstallment.fromJson)
+            .toList(),
       );
 }
 
@@ -113,6 +168,9 @@ class TrainerClientCardApi {
   }
 
   /// Добавить пакет/абонемент клиенту.
+  ///
+  /// Если [installments] непустой — создаётся пакет в рассрочку
+  /// (пары {dueDate, amount}); сервер сам пересчитывает totalPaid.
   Future<void> createPackage(
     String clientId, {
     required int lessonsPaid,
@@ -120,7 +178,9 @@ class TrainerClientCardApi {
     String? workoutType,
     required String startsAt,
     String? endsAt,
+    List<Map<String, dynamic>>? installments,
   }) async {
+    final bool asInstallment = installments != null && installments.isNotEmpty;
     await _api.postJson('/api/clients/$clientId/packages', <String, dynamic>{
       'kind': 'package',
       'lessonsPaid': lessonsPaid,
@@ -129,7 +189,21 @@ class TrainerClientCardApi {
       'workoutType': (workoutType == null || workoutType.trim().isEmpty) ? null : workoutType.trim(),
       'startsAt': startsAt,
       'endsAt': (endsAt == null || endsAt.isEmpty) ? null : endsAt,
+      if (asInstallment) 'isInstallment': true,
+      if (asInstallment) 'installments': installments,
     });
+  }
+
+  /// Отметить платёж рассрочки оплаченным (с этого момента — доход).
+  Future<void> payInstallment(String clientId, String packageId, String installmentId) async {
+    await _api.postJson(
+        '/api/clients/$clientId/packages/$packageId/installments/$installmentId/pay', <String, dynamic>{});
+  }
+
+  /// Снять отметку об оплате платежа рассрочки.
+  Future<void> unpayInstallment(String clientId, String packageId, String installmentId) async {
+    await _api.postJson(
+        '/api/clients/$clientId/packages/$packageId/installments/$installmentId/unpay', <String, dynamic>{});
   }
 }
 

@@ -90,6 +90,20 @@ class TrainerApi {
     await _ref.read(sessionProvider.notifier).setToken(res['token'] as String);
   }
 
+  /// Запросить код восстановления пароля на email.
+  /// Сервер всегда отвечает 200 (не раскрывает, есть ли такой email).
+  Future<void> forgotPassword(String email) async {
+    await _api.postJson('/api/auth/forgot-password', <String, String>{'email': email});
+  }
+
+  /// Сбросить пароль по коду из письма. Бросает на неверном/просроченном коде (400).
+  Future<void> resetPassword(String email, String code, String password) async {
+    await _api.postJson(
+      '/api/auth/reset-password',
+      <String, String>{'email': email, 'code': code, 'password': password},
+    );
+  }
+
   Future<TrainerProfile> me() async {
     final Map<String, dynamic> res = await _api.getJson('/api/auth/me');
     return TrainerProfile.fromJson(res['trainer'] as Map<String, dynamic>);

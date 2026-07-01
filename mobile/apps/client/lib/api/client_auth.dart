@@ -87,6 +87,20 @@ class ClientApi {
     await _ref.read(sessionProvider.notifier).setToken(res['token'] as String);
   }
 
+  /// Запросить письмо с 6-значным кодом восстановления пароля.
+  /// Бэкенд всегда отвечает 200 (не раскрывает, зарегистрирован ли email).
+  Future<void> forgotPassword(String email) async {
+    await _api.postJson('/api/client/auth/forgot-password', <String, String>{'email': email});
+  }
+
+  /// Сбросить пароль по коду из письма. 400 — неверный/просроченный код.
+  Future<void> resetPassword(String email, String code, String password) async {
+    await _api.postJson(
+      '/api/client/auth/reset-password',
+      <String, String>{'email': email, 'code': code, 'password': password},
+    );
+  }
+
   Future<ClientAccount> me() async {
     final Map<String, dynamic> res = await _api.getJson('/api/client/auth/me');
     // pendingDeletionAt лежит на верхнем уровне ответа — вмешиваем в account.

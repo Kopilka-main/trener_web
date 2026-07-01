@@ -18,44 +18,8 @@ class _EditContact {
   final TextEditingController value;
 }
 
-/// Маска ввода даты рождения ДД.ММ.ГГГГ (цифры → группы 2.2.4).
-class _BirthDateFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
-    final String digits = newValue.text.replaceAll(RegExp(r'\D'), '');
-    final String d = digits.length > 8 ? digits.substring(0, 8) : digits;
-    final StringBuffer b = StringBuffer();
-    for (int i = 0; i < d.length; i++) {
-      if (i == 2 || i == 4) b.write('.');
-      b.write(d[i]);
-    }
-    final String text = b.toString();
-    return TextEditingValue(text: text, selection: TextSelection.collapsed(offset: text.length));
-  }
-}
-
-/// ISO YYYY-MM-DD → отображение ДД.ММ.ГГГГ.
-String _isoToDisplay(String? iso) {
-  if (iso == null) return '';
-  final RegExpMatch? m = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(iso);
-  return m == null ? '' : '${m.group(3)}.${m.group(2)}.${m.group(1)}';
-}
-
-/// Отображение ДД.ММ.ГГГГ → ISO YYYY-MM-DD; null при некорректной/неполной дате.
-String? _displayToIso(String display) {
-  final String digits = display.replaceAll(RegExp(r'\D'), '');
-  if (digits.length != 8) return null;
-  final int d = int.parse(digits.substring(0, 2));
-  final int mo = int.parse(digits.substring(2, 4));
-  final int y = int.parse(digits.substring(4, 8));
-  if (y < 1900 || y > 2100) return null;
-  final DateTime dt = DateTime(y, mo, d);
-  if (dt.year != y || dt.month != mo || dt.day != d) return null;
-  return '${digits.substring(4, 8)}-${digits.substring(2, 4)}-${digits.substring(0, 2)}';
-}
-
 /// Редактирование профиля клиента: аватар (выбор + квадратный кроп), имя/фамилия,
-/// дата рождения (маска ДД.ММ.ГГГГ), о себе, контакты. Зеркало web ProfilePage (правка).
+/// день рождения (день+месяц, без года), о себе, контакты.
 class ProfileEditScreen extends ConsumerStatefulWidget {
   const ProfileEditScreen({super.key, required this.account});
   final ClientAccount account;
@@ -68,7 +32,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
   late final TextEditingController _first;
   late final TextEditingController _last;
   late final TextEditingController _bio;
-  late final TextEditingController _birth;
+  String? _birthIso; // дата рождения (день+месяц, год-заглушка), ISO YYYY-MM-DD
   late final List<_EditContact> _contacts;
   late String? _avatarFileId = widget.account.avatarFileId;
   bool _busy = false;
@@ -82,7 +46,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     _first = TextEditingController(text: a.firstName);
     _last = TextEditingController(text: a.lastName);
     _bio = TextEditingController(text: a.bio ?? '');
-    _birth = TextEditingController(text: _isoToDisplay(a.birthDate));
+    _birthIso = a.birthDate;
     _contacts = a.contacts
         .map((ClientContact c) => _EditContact(type: c.type, value: TextEditingController(text: c.value)))
         .toList();
@@ -93,7 +57,6 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     _first.dispose();
     _last.dispose();
     _bio.dispose();
-    _birth.dispose();
     for (final _EditContact c in _contacts) {
       c.value.dispose();
     }
@@ -170,12 +133,11 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
         .where((_EditContact c) => c.value.text.trim().isNotEmpty)
         .map((_EditContact c) => <String, String>{'type': c.type, 'value': c.value.text.trim()})
         .toList();
-    final String birthText = _birth.text.trim();
     final Map<String, dynamic> body = <String, dynamic>{
       'firstName': first,
       'lastName': last,
       'bio': _bio.text.trim().isEmpty ? null : _bio.text.trim(),
-      'birthDate': birthText.isEmpty ? null : _displayToIso(birthText),
+      'birthDate': _birthIso,
       'contacts': contacts,
     };
     try {
@@ -270,23 +232,31 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
             const SizedBox(height: 14),
             _Label('Дата рождения'),
             const SizedBox(height: 6),
-            SelectAllTextField(
-              controller: _birth,
-              keyboardType: TextInputType.number,
-              inputFormatters: <TextInputFormatter>[_BirthDateFormatter()],
-              style: TextStyle(fontSize: 15, color: c.ink),
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: 'ДД.ММ.ГГГГ',
-                filled: true,
-                fillColor: c.chip,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.line)),
-                enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.line)),
-                focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.accent, width: 1.6)),
+            GestureDetector(
+              onTap: () async {
+                final ({int day, int month})? cur = dayMonthFromIso(_birthIso);
+                final ({int day, int month})? r =
+                    await pickDayMonth(context, day: cur?.day, month: cur?.month);
+                if (r != null) setState(() => _birthIso = dayMonthToIso(r.day, r.month));
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+                decoration: BoxDecoration(
+                  color: c.chip,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: c.line),
+                ),
+                child: Row(
+                  children: <Widget>[
+                    Icon(Icons.cake_outlined, size: 18, color: c.inkMuted),
+                    const SizedBox(width: 10),
+                    Text(
+                      formatDayMonth(_birthIso).isEmpty ? 'ДД.ММ' : formatDayMonth(_birthIso),
+                      style: TextStyle(
+                          fontSize: 15, color: _birthIso != null ? c.ink : c.inkMuted),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 14),

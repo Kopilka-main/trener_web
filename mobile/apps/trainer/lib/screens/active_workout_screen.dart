@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/active_workout_state.dart';
 import '../api/trainer_assign.dart';
 import '../api/trainer_calendar.dart';
 import '../api/trainer_client_card.dart';
@@ -121,6 +122,15 @@ class _ConductorState extends ConsumerState<_Conductor> {
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_w.status == WorkoutStatus.active) setState(() {});
     });
+    // Пока открыт экран проведения — скрываем плавающий FAB; если тренировка
+    // уже active — регистрируем её как «идущую» (на случай прямого входа/возврата).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(activeWorkoutOnScreenProvider.notifier).state = true;
+      if (_w.status == WorkoutStatus.active) {
+        ref.read(activeWorkoutProvider.notifier).set(_clientId, _w.id, _w.name);
+      }
+    });
   }
 
   @override
@@ -128,6 +138,8 @@ class _ConductorState extends ConsumerState<_Conductor> {
     _ticker?.cancel();
     _restTimer?.cancel();
     _player.dispose();
+    // Экран закрыт — снова разрешаем плавающий FAB (если тренировка ещё идёт).
+    ref.read(activeWorkoutOnScreenProvider.notifier).state = false;
     super.dispose();
   }
 
@@ -301,6 +313,14 @@ class _ConductorState extends ConsumerState<_Conductor> {
     if (next) _startRest(ex, s);
   }
 
+  /// Начать тренировку → active, и зарегистрировать её как «идущую» для FAB.
+  Future<void> _start() async {
+    await _run(() => _api.start(_clientId, _w.id));
+    if (mounted && _w.status == WorkoutStatus.active) {
+      ref.read(activeWorkoutProvider.notifier).set(_clientId, _w.id, _w.name);
+    }
+  }
+
   Future<void> _complete() async {
     final bool? ok = await showDialog<bool>(
       context: context,
@@ -319,6 +339,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
     setState(() => _busy = true);
     try {
       await _api.complete(_clientId, _w.id, durationSec: el > 0 ? el : null);
+      ref.read(activeWorkoutProvider.notifier).clear(); // тренировка завершена → убрать FAB
       ref.invalidate(clientWorkoutsCardProvider(_clientId));
       // Бэкенд при завершении отметил занятие проведённым (reconcileFromWorkout) →
       // обновляем тренерский календарь, иначе он остаётся на старом статусе.
@@ -467,8 +488,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
                   ],
                 )
               : FilledButton(
-                  onPressed:
-                      (_busy || exs.isEmpty) ? null : () => _run(() => _api.start(_clientId, _w.id)),
+                  onPressed: (_busy || exs.isEmpty) ? null : _start,
                   style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
                   child: Text(exs.isEmpty ? 'Добавьте упражнение' : 'Начать тренировку'),
                 ),

@@ -13,6 +13,7 @@ import '../api/trainer_client_stats.dart';
 import '../api/trainer_clients.dart';
 import '../api/trainer_medical.dart';
 import '../api/trainer_workouts.dart';
+import '../widgets/trainer_nav_bar.dart';
 import 'active_workout_screen.dart';
 import 'calendar_screen.dart';
 import 'client_edit_screen.dart';
@@ -96,6 +97,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
         _nextSessionByClient(ref.watch(trainerSessionsProvider).valueOrNull ?? <Session>[]);
 
     return Scaffold(
+      bottomNavigationBar: const TrainerNavBar(),
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.of(context).push<bool>(
           MaterialPageRoute<bool>(builder: (_) => const ClientEditScreen()),
@@ -346,6 +348,25 @@ const List<String> _ruMonths = <String>[
 ];
 String _date(DateTime? d) => d == null ? '' : '${d.day} ${_ruMonths[d.month - 1]} ${d.year}';
 
+/// "YYYY-MM-DD" → "ДД.ММ.ГГГГ" (для графика рассрочки).
+String _dateIso(String iso) {
+  final DateTime? d = DateTime.tryParse(iso);
+  if (d == null) return iso;
+  return '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
+}
+
+/// Разбивка числа по разрядам + «₽».
+String _moneyRu(num v) {
+  final int n = v.round();
+  final String s = n.abs().toString();
+  final StringBuffer b = StringBuffer();
+  for (int i = 0; i < s.length; i++) {
+    if (i > 0 && (s.length - i) % 3 == 0) b.write(' ');
+    b.write(s[i]);
+  }
+  return '$b ₽';
+}
+
 String _ageDecl(int n) {
   final int m10 = n % 10, m100 = n % 100;
   if (m10 == 1 && m100 != 11) return 'год';
@@ -490,6 +511,7 @@ class ClientDetailScreen extends ConsumerWidget {
     ];
 
     return Scaffold(
+      bottomNavigationBar: const TrainerNavBar(),
       // Без AppBar/стрелки назад: шапка-контент (аватар + имя) как в вебе.
       // Возврат — системным жестом/кнопкой назад.
       body: SafeArea(
@@ -1134,6 +1156,7 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
     final AppColors c = context.colors;
     final AsyncValue<List<TWorkout>> ws = ref.watch(clientWorkoutsCardProvider(_cid));
     return Scaffold(
+      bottomNavigationBar: const TrainerNavBar(),
       appBar: AppBar(title: Text('Тренировки · ${widget.client.fullName}')),
       body: ws.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -1612,6 +1635,7 @@ class ClientPaymentsScreen extends ConsumerWidget {
     final int remaining = paid - done;
 
     return Scaffold(
+      bottomNavigationBar: const TrainerNavBar(),
       appBar: AppBar(title: Text('Оплата · ${client.fullName}')),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -1685,6 +1709,7 @@ class _ClientStatsScreenState extends ConsumerState<ClientStatsScreen> {
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
     return Scaffold(
+      bottomNavigationBar: const TrainerNavBar(),
       appBar: AppBar(title: Text('Прогресс · ${widget.client.fullName}')),
       body: Column(
         children: <Widget>[
@@ -1819,6 +1844,7 @@ class ClientProfileScreen extends ConsumerWidget {
     // Свежий снимок (после правки данные обновляются без возврата старого объекта).
     final Client c = ref.watch(trainerClientProvider(client.id)).valueOrNull ?? client;
     return Scaffold(
+      bottomNavigationBar: const TrainerNavBar(),
       appBar: AppBar(
         title: const Text('Профиль'),
         actions: <Widget>[
@@ -2044,17 +2070,26 @@ class _AddPackageButton extends ConsumerWidget {
   }
 }
 
-/// Тип дохода. package/subscription → пакет; остальные → простой доход.
-enum _IncomeKind { package, subscription, online, inventory, pharma, other }
+/// Тип дохода. package/installment/subscription → пакет; остальные → простой доход.
+enum _IncomeKind { package, installment, subscription, online, inventory, pharma, other }
 
 const Map<_IncomeKind, String> _incomeLabels = <_IncomeKind, String>{
   _IncomeKind.package: 'Пакет тренировок',
+  _IncomeKind.installment: 'Рассрочка',
   _IncomeKind.subscription: 'Абонемент',
   _IncomeKind.online: 'Онлайн сопровождение',
   _IncomeKind.inventory: 'Инвентарь',
   _IncomeKind.pharma: 'Фарма',
   _IncomeKind.other: 'Прочее',
 };
+
+/// Строка редактора графика рассрочки (дата + сумма).
+class _InstallmentRow {
+  _InstallmentRow({required this.date, String amount = ''}) : amount = TextEditingController(text: amount);
+  DateTime date;
+  final TextEditingController amount;
+  void dispose() => amount.dispose();
+}
 
 /// Форма «Новый доход» (зеркало веб IncomeForm): чипы типа + поля по типу.
 class _AddIncomeForm extends ConsumerStatefulWidget {
@@ -2073,17 +2108,48 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
   DateTime _starts = DateTime.now();
   DateTime? _ends;
   bool _busy = false;
+  final List<_InstallmentRow> _plan = <_InstallmentRow>[];
 
   bool get _isPackage => _kind == _IncomeKind.package;
+  bool get _isInstallment => _kind == _IncomeKind.installment;
   bool get _isSubscription => _kind == _IncomeKind.subscription;
-  bool get _isPkgKind => _isPackage || _isSubscription;
+  bool get _isPkgKind => _isPackage || _isInstallment || _isSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _plan.add(_InstallmentRow(date: DateTime.now().add(const Duration(days: 10))));
+  }
 
   @override
   void dispose() {
     _lessons.dispose();
     _price.dispose();
     _note.dispose();
+    for (final _InstallmentRow r in _plan) {
+      r.dispose();
+    }
     super.dispose();
+  }
+
+  num _rowAmount(_InstallmentRow r) => num.tryParse(r.amount.text.trim().replaceAll(',', '.')) ?? 0;
+
+  /// Итог графика рассрочки.
+  num get _planTotal => _plan.fold<num>(0, (num s, _InstallmentRow r) => s + _rowAmount(r));
+
+  /// Валидные платежи (сумма > 0).
+  List<_InstallmentRow> get _planFilled => _plan.where((_InstallmentRow r) => _rowAmount(r) > 0).toList();
+
+  void _addPlanRow() {
+    final DateTime base = _plan.isNotEmpty ? _plan.last.date : DateTime.now();
+    setState(() => _plan.add(_InstallmentRow(date: base.add(const Duration(days: 10)))));
+  }
+
+  void _removePlanRow(_InstallmentRow r) {
+    setState(() {
+      _plan.remove(r);
+      r.dispose();
+    });
   }
 
   String _iso(DateTime d) =>
@@ -2107,7 +2173,12 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
   Future<void> _save() async {
     final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
     final NavigatorState nav = Navigator.of(context);
-    if (_priceNum <= 0) {
+    if (_isInstallment) {
+      if (_planFilled.isEmpty) {
+        m.showSnackBar(const SnackBar(content: Text('Добавьте хотя бы один платёж с суммой')));
+        return;
+      }
+    } else if (_priceNum <= 0) {
       m.showSnackBar(const SnackBar(content: Text('Укажите сумму')));
       return;
     }
@@ -2117,7 +2188,20 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
     }
     setState(() => _busy = true);
     try {
-      if (_isPkgKind) {
+      if (_isInstallment) {
+        final List<Map<String, dynamic>> installments = _planFilled
+            .map((_InstallmentRow r) => <String, dynamic>{'dueDate': _iso(r.date), 'amount': _rowAmount(r)})
+            .toList();
+        await ref.read(trainerClientCardApiProvider).createPackage(
+              widget.clientId,
+              lessonsPaid: _lessonsNum,
+              totalPaid: _planTotal,
+              startsAt: _iso(_starts),
+              endsAt: _ends != null ? _iso(_ends!) : null,
+              installments: installments,
+            );
+        ref.invalidate(clientPackagesProvider(widget.clientId));
+      } else if (_isPkgKind) {
         // package: lessonsPaid=N, totalPaid=N*price; subscription: lessonsPaid=0, totalPaid=цена периода.
         final int lessons = _isPackage ? _lessonsNum : 0;
         final num total = _isPackage ? _lessonsNum * _priceNum : _priceNum;
@@ -2175,7 +2259,28 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
                   .toList(),
             ),
             const SizedBox(height: 14),
-            if (_isPkgKind) ...<Widget>[
+            if (_isInstallment) ...<Widget>[
+              SelectAllTextField(
+                controller: _lessons,
+                keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(labelText: 'Тренировок', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: <Widget>[
+                  Expanded(child: _dateField(c, 'Дата начала', _starts, (DateTime d) => setState(() => _starts = d))),
+                  const SizedBox(width: 12),
+                  Expanded(child: _dateFieldOpt(c, 'Окончание (необяз.)', _ends,
+                      (DateTime? d) => setState(() => _ends = d))),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text('ГРАФИК ПЛАТЕЖЕЙ',
+                  style: AppFonts.mono(size: 10, color: c.inkMutedXl, weight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              ..._plan.map((_InstallmentRow r) => _planRow(c, r)),
+            ] else if (_isPkgKind) ...<Widget>[
               Row(
                 children: <Widget>[
                   if (_isPackage) ...<Widget>[
@@ -2222,11 +2327,13 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
               const SizedBox(height: 12),
               _dateField(c, 'Дата', _paidAt, (DateTime d) => setState(() => _paidAt = d)),
             ],
-            const SizedBox(height: 12),
-            SelectAllTextField(
-              controller: _note,
-              decoration: const InputDecoration(labelText: 'Заметка (необязательно)', border: OutlineInputBorder()),
-            ),
+            if (!_isInstallment) ...<Widget>[
+              const SizedBox(height: 12),
+              SelectAllTextField(
+                controller: _note,
+                decoration: const InputDecoration(labelText: 'Заметка (необязательно)', border: OutlineInputBorder()),
+              ),
+            ],
             if (_isPackage) ...<Widget>[
               const SizedBox(height: 12),
               Container(
@@ -2238,16 +2345,70 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
               ),
             ],
+            if (_isInstallment) ...<Widget>[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12)),
+                child: Text('Итого график: ${_money(_planTotal)}',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _addPlanRow,
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Добавить платёж'),
+              ),
+            ],
             const SizedBox(height: 16),
             FilledButton(
-              onPressed: _busy ? null : _save,
+              onPressed: (_busy || (_isInstallment && _planFilled.isEmpty)) ? null : _save,
               style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
               child: _busy
                   ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : Text(_isPackage ? 'Сохранить пакет' : _isSubscription ? 'Сохранить абонемент' : 'Сохранить доход'),
+                  : Text(_isPackage
+                      ? 'Сохранить пакет'
+                      : _isInstallment
+                          ? 'Сохранить рассрочку'
+                          : _isSubscription
+                              ? 'Сохранить абонемент'
+                              : 'Сохранить доход'),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Строка редактора графика: дата + сумма + удалить.
+  Widget _planRow(AppColors c, _InstallmentRow r) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            flex: 5,
+            child: _dateField(c, 'Дата', r.date, (DateTime d) => setState(() => r.date = d)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 4,
+            child: SelectAllTextField(
+              controller: r.amount,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(labelText: 'Сумма, ₽', border: OutlineInputBorder()),
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.close, size: 20, color: c.inkMuted),
+            onPressed: _plan.length <= 1 ? null : () => _removePlanRow(r),
+            tooltip: 'Удалить платёж',
+          ),
+        ],
       ),
     );
   }
@@ -2330,7 +2491,9 @@ class _PackagesBlock extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             ...active.map((TPackage p) => GestureDetector(
-                  onTap: () => _showPackageSheet(context, p),
+                  onTap: () => p.isInstallment
+                      ? _showInstallmentSheet(context, ref, clientId, p)
+                      : _showPackageSheet(context, p),
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -2341,9 +2504,34 @@ class _PackagesBlock extends ConsumerWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
-                              Text(p.workoutType?.isNotEmpty == true ? p.workoutType! : 'Пакет',
-                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
-                              if (p.endsAt != null) ...<Widget>[
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  Text(p.workoutType?.isNotEmpty == true ? p.workoutType! : 'Пакет',
+                                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                                  if (p.isInstallment) ...<Widget>[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(color: c.chip, borderRadius: BorderRadius.circular(8)),
+                                      child: Text('Рассрочка',
+                                          style: AppFonts.mono(size: 10, color: c.inkMuted, weight: FontWeight.w700)),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              if (p.isInstallment && p.nextDue != null) ...<Widget>[
+                                const SizedBox(height: 3),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: <Widget>[
+                                    Icon(Icons.local_fire_department, size: 14, color: c.coral),
+                                    const SizedBox(width: 3),
+                                    Text('платёж ${_dateIso(p.nextDue!.dueDate)}',
+                                        style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+                                  ],
+                                ),
+                              ] else if (!p.isInstallment && p.endsAt != null) ...<Widget>[
                                 const SizedBox(height: 3),
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -2361,9 +2549,15 @@ class _PackagesBlock extends ConsumerWidget {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: <Widget>[
-                            Text('${p.remaining}',
-                                style: AppFonts.display(size: 22, color: p.remaining > 0 ? c.accent : c.danger)),
-                            Text('осталось', style: AppFonts.mono(size: 9, color: c.inkMutedXl, weight: FontWeight.w700)),
+                            if (p.isInstallment) ...<Widget>[
+                              Text('${p.paidCount}/${p.installments.length}',
+                                  style: AppFonts.display(size: 22, color: c.accent)),
+                              Text('оплачено', style: AppFonts.mono(size: 9, color: c.inkMutedXl, weight: FontWeight.w700)),
+                            ] else ...<Widget>[
+                              Text('${p.remaining}',
+                                  style: AppFonts.display(size: 22, color: p.remaining > 0 ? c.accent : c.danger)),
+                              Text('осталось', style: AppFonts.mono(size: 9, color: c.inkMutedXl, weight: FontWeight.w700)),
+                            ],
                           ],
                         ),
                         const SizedBox(width: 8),
@@ -2448,6 +2642,149 @@ Widget _pkgRow(AppColors c, String label, String value,
         ],
       ),
     );
+
+/// Шит рассрочки: список платежей с отметками «Оплачено» / «Отменить оплату».
+void _showInstallmentSheet(BuildContext context, WidgetRef ref, String clientId, TPackage pkg) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: context.colors.bg,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (BuildContext ctx) => _InstallmentSheet(clientId: clientId, packageId: pkg.id),
+  );
+}
+
+class _InstallmentSheet extends ConsumerWidget {
+  const _InstallmentSheet({required this.clientId, required this.packageId});
+  final String clientId;
+  final String packageId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppColors c = context.colors;
+    final AsyncValue<List<TPackage>> pkgs = ref.watch(clientPackagesProvider(clientId));
+    final TPackage? p = pkgs.valueOrNull?.where((TPackage x) => x.id == packageId).firstOrNull;
+    if (p == null) {
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Center(child: Text('Пакет не найден', style: TextStyle(color: c.inkMuted))),
+      );
+    }
+    final List<TInstallment> items = <TInstallment>[...p.installments]
+      ..sort((TInstallment a, TInstallment b) => a.dueDate.compareTo(b.dueDate));
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 16 + MediaQuery.of(context).viewPadding.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Text(p.workoutType?.isNotEmpty == true ? p.workoutType! : 'Рассрочка',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(color: c.chip, borderRadius: BorderRadius.circular(8)),
+                child: Text('Рассрочка', style: AppFonts.mono(size: 10, color: c.inkMuted, weight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _pkgRow(c, 'Оплачено', '${p.paidCount} из ${p.installments.length}',
+              valueColor: p.paidCount > 0 ? c.success : c.ink),
+          _pkgRow(c, 'Внесено', _moneyRu(p.paidSum), valueColor: c.success),
+          _pkgRow(c, 'Остаток', _moneyRu(p.dueSum)),
+          const SizedBox(height: 8),
+          Divider(color: c.chip, height: 1),
+          const SizedBox(height: 8),
+          Flexible(
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: items.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemBuilder: (BuildContext _, int i) => _installmentRow(context, ref, c, p, items[i]),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _installmentRow(BuildContext context, WidgetRef ref, AppColors c, TPackage p, TInstallment it) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+      child: Row(
+        children: <Widget>[
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(_dateIso(it.dueDate),
+                  style: AppFonts.mono(size: 13, color: c.ink, weight: FontWeight.w600)),
+              const SizedBox(height: 2),
+              Text(_moneyRu(it.amount),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.ink)),
+            ],
+          ),
+          const Spacer(),
+          if (it.isPaid) ...<Widget>[
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: <Widget>[
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(Icons.check_circle, size: 16, color: c.success),
+                    const SizedBox(width: 4),
+                    Text(it.paidAt != null ? 'оплачено ${_dateIso(it.paidAt!)}' : 'оплачено',
+                        style: AppFonts.mono(size: 11, color: c.success, weight: FontWeight.w600)),
+                  ],
+                ),
+                TextButton(
+                  onPressed: () => _unpay(context, ref, p, it),
+                  style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 4), minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                  child: Text('Отменить оплату', style: TextStyle(fontSize: 12, color: c.inkMuted)),
+                ),
+              ],
+            ),
+          ] else
+            FilledButton(
+              onPressed: () => _pay(context, ref, p, it),
+              style: FilledButton.styleFrom(
+                  visualDensity: VisualDensity.compact, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)),
+              child: const Text('Оплачено'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pay(BuildContext context, WidgetRef ref, TPackage p, TInstallment it) async {
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(trainerClientCardApiProvider).payInstallment(clientId, p.id, it.id);
+      ref.invalidate(clientPackagesProvider(clientId));
+      ref.invalidate(trainerIncomesProvider);
+    } catch (_) {
+      m.showSnackBar(const SnackBar(content: Text('Не удалось отметить платёж')));
+    }
+  }
+
+  Future<void> _unpay(BuildContext context, WidgetRef ref, TPackage p, TInstallment it) async {
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(trainerClientCardApiProvider).unpayInstallment(clientId, p.id, it.id);
+      ref.invalidate(clientPackagesProvider(clientId));
+      ref.invalidate(trainerIncomesProvider);
+    } catch (_) {
+      m.showSnackBar(const SnackBar(content: Text('Не удалось снять отметку')));
+    }
+  }
+}
 
 class _MeasurementsBlock extends ConsumerWidget {
   const _MeasurementsBlock({required this.clientId});

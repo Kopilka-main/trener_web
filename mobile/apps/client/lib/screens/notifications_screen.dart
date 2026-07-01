@@ -13,7 +13,7 @@ const List<String> _ruMonths = <String>[
   'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
 ];
 
-enum _Kind { confirm, soon, chat, package, workout, measure }
+enum _Kind { confirm, soon, chat, package, workout, measure, payment }
 
 class _Notif {
   _Notif({required this.id, required this.kind, required this.text, required this.to, this.sessionId});
@@ -33,6 +33,7 @@ IconData _icon(_Kind k) => switch (k) {
       _Kind.package => Icons.account_balance_wallet_outlined,
       _Kind.workout => Icons.fitness_center,
       _Kind.measure => Icons.straighten,
+      _Kind.payment => Icons.payments_outlined,
     };
 
 /// Отброшенные уведомления (в памяти сессии).
@@ -41,6 +42,35 @@ final StateProvider<Set<String>> _dismissedProvider = StateProvider<Set<String>>
 String _whenLabel(Session s) {
   final DateTime d = calParseIso(s.date);
   return '${d.day} ${_ruMonths[d.month - 1]}, ${s.startTime}';
+}
+
+/// Дата платежа "YYYY-MM-DD" → DateTime (без времени). null при кривом формате.
+DateTime? _parseDate(String isoDate) {
+  final List<String> p = isoDate.split('-');
+  if (p.length != 3) return null;
+  final int? y = int.tryParse(p[0]);
+  final int? m = int.tryParse(p[1]);
+  final int? d = int.tryParse(p[2]);
+  if (y == null || m == null || d == null) return null;
+  return DateTime(y, m, d);
+}
+
+/// "YYYY-MM-DD" → "ДД.ММ".
+String _dayMonth(String isoDate) {
+  final List<String> p = isoDate.split('-');
+  return p.length == 3 ? '${p[2]}.${p[1]}' : isoDate;
+}
+
+/// Целая сумма с пробелами между тысячами (без копеек).
+String _money(num v) {
+  final int n = v.round();
+  final String s = n.abs().toString();
+  final StringBuffer b = StringBuffer();
+  for (int i = 0; i < s.length; i++) {
+    if (i > 0 && (s.length - i) % 3 == 0) b.write(' ');
+    b.write(s[i]);
+  }
+  return '${n < 0 ? '−' : ''}$b';
 }
 
 List<_Notif> _build({
@@ -111,6 +141,25 @@ List<_Notif> _build({
       text: p.remaining <= 0 ? '$what закончился — обратитесь к тренеру' : '$what заканчивается: осталось ${p.remaining}',
       to: '/chat',
     ));
+  }
+
+  // Предстоящие платежи рассрочки — в ближайшие 3 дня (включая сегодня).
+  final DateTime today = DateTime(now.year, now.month, now.day);
+  for (final ClientPackage p in packages) {
+    if (!p.isInstallment) continue;
+    for (final ClientInstallment inst in p.installments) {
+      if (inst.status != 'pending') continue;
+      final DateTime? due = _parseDate(inst.dueDate);
+      if (due == null) continue;
+      final int daysLeft = due.difference(today).inDays;
+      if (daysLeft < 0 || daysLeft > 3) continue;
+      out.add(_Notif(
+        id: 'installment:${inst.id}',
+        kind: _Kind.payment,
+        text: 'Платёж ${_money(inst.amount)} ₽ до ${_dayMonth(inst.dueDate)}',
+        to: '/notifications',
+      ));
+    }
   }
 
   if (unread > 0) {
