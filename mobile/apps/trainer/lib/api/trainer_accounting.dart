@@ -113,12 +113,20 @@ class TrainerAccountingApi {
     await _api.postJson('/api/incomes', body);
   }
 
+  Future<void> updateIncome(String id, Map<String, dynamic> body) async {
+    await _api.patchJson('/api/incomes/$id', body);
+  }
+
   Future<void> deleteIncome(String id) async {
     await _api.deleteJson('/api/incomes/$id');
   }
 
   Future<void> createExpense(Map<String, dynamic> body) async {
     await _api.postJson('/api/expenses', body);
+  }
+
+  Future<void> updateExpense(String id, Map<String, dynamic> body) async {
+    await _api.patchJson('/api/expenses/$id', body);
   }
 
   Future<void> deleteExpense(String id) async {

@@ -2,10 +2,12 @@ import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../api/trainer_accounting.dart';
 import '../api/trainer_clients.dart';
 import '../api/trainer_gyms.dart';
+import '../widgets/trainer_nav_bar.dart';
 
 // ─── Утилиты ───
 const List<String> _ruMonthsShort = <String>[
@@ -27,7 +29,31 @@ String _money(num v) {
 }
 
 enum _Mode { month, quarter, year, custom }
-enum _Tab { summary, income, expense }
+
+/// Фильтр списка операций: все / только доходы / только расходы.
+enum _Filter { all, income, expense }
+
+/// Операция в едином списке (доход или расход), для рендера общей строкой.
+class _Op {
+  _Op({
+    required this.date,
+    required this.primary,
+    required this.kicker,
+    required this.meta,
+    required this.amount,
+    required this.isIncome,
+    required this.tags,
+    this.onTap,
+  });
+  final DateTime? date;
+  final String primary;
+  final String kicker;
+  final String meta;
+  final num amount;
+  final bool isIncome;
+  final List<String> tags;
+  final VoidCallback? onTap;
+}
 
 class AccountingScreen extends ConsumerStatefulWidget {
   const AccountingScreen({super.key});
@@ -38,7 +64,7 @@ class AccountingScreen extends ConsumerStatefulWidget {
 
 class _AccountingScreenState extends ConsumerState<AccountingScreen> {
   _Mode _mode = _Mode.month;
-  _Tab _tab = _Tab.summary;
+  _Filter _filter = _Filter.all;
   DateTime _anchor = DateTime.now();
   DateTime _customFrom = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTime _customTo = DateTime.now();
@@ -114,12 +140,11 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
     return Scaffold(
-      floatingActionButton: _tab == _Tab.summary
-          ? null
-          : FloatingActionButton(
-              onPressed: () => _showAddSheet(_tab == _Tab.income),
-              child: const Icon(Icons.add),
-            ),
+      bottomNavigationBar: const TrainerNavBar(),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _onAdd,
+        child: const Icon(Icons.add),
+      ),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -130,7 +155,6 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
             ),
             _modeBar(c),
             _periodBar(c),
-            _tabBar(c),
             Expanded(child: _body(c)),
           ],
         ),
@@ -223,168 +247,220 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
     );
   }
 
-  Widget _tabBar(AppColors c) {
-    Widget tab(String label, _Tab t) => GestureDetector(
-          onTap: () => setState(() {
-            _tab = t;
-            _catFilter = '';
-            _tagFilter = '';
-          }),
-          child: Container(
-            margin: const EdgeInsets.only(right: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-                color: _tab == t ? c.accent : c.chip, borderRadius: BorderRadius.circular(20)),
-            child: Text(label,
-                style: AppFonts.mono(
-                    size: 12, color: _tab == t ? c.accentOn : c.inkMuted, weight: FontWeight.w700)),
-          ),
-        );
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
-      child: Row(children: <Widget>[tab('Сводка', _Tab.summary), tab('Доходы', _Tab.income), tab('Расходы', _Tab.expense)]),
-    );
-  }
-
   Widget _body(AppColors c) {
-    switch (_tab) {
-      case _Tab.summary:
-        return _summaryBody(c);
-      case _Tab.income:
-        return _incomeBody(c);
-      case _Tab.expense:
-        return _expenseBody(c);
-    }
-  }
-
-  // ─── Сводка ───
-  Widget _summaryBody(AppColors c) {
     final AsyncValue<List<Income>> inc = ref.watch(trainerIncomesProvider);
     final AsyncValue<List<Expense>> exp = ref.watch(trainerExpensesProvider);
     if (inc.isLoading || exp.isLoading) return const Center(child: CircularProgressIndicator());
-    final num income = (inc.valueOrNull ?? <Income>[]).where((Income e) => _inRange(e.date)).fold<num>(0, (num a, Income e) => a + e.amount);
-    final num expense = (exp.valueOrNull ?? <Expense>[]).where((Expense e) => _inRange(e.date)).fold<num>(0, (num a, Expense e) => a + e.amount);
-    final num balance = income - expense;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+    if (inc.hasError || exp.hasError) {
+      return _err(c, () {
+        ref.invalidate(trainerIncomesProvider);
+        ref.invalidate(trainerExpensesProvider);
+      });
+    }
+    final List<Income> incomes =
+        (inc.valueOrNull ?? <Income>[]).where((Income e) => _inRange(e.date)).toList();
+    final List<Expense> expenses =
+        (exp.valueOrNull ?? <Expense>[]).where((Expense e) => _inRange(e.date)).toList();
+    final num incomeTotal = incomes.fold<num>(0, (num a, Income e) => a + e.amount);
+    final num expenseTotal = expenses.fold<num>(0, (num a, Expense e) => a + e.amount);
+    final Map<String, String> names = _clientNames();
+
+    // Единый список операций по фильтру (доходы и/или расходы).
+    final List<_Op> ops = <_Op>[];
+    if (_filter != _Filter.expense) {
+      for (final Income e in incomes) {
+        ops.add(_Op(
+          date: e.date,
+          primary: e.title ?? (e.clientId != null ? (names[e.clientId] ?? e.category) : e.category),
+          kicker: e.category,
+          meta: <String>[
+            if (e.subtitle?.isNotEmpty == true) e.subtitle!,
+            if (e.note?.isNotEmpty == true) e.note!,
+          ].join(' · '),
+          amount: e.amount,
+          isIncome: true,
+          tags: e.tags,
+          onTap: e.isPackage
+              ? (e.clientId != null ? () => _openClient(e.clientId!) : null)
+              : () => _editIncome(e),
+        ));
+      }
+    }
+    if (_filter != _Filter.income) {
+      for (final Expense e in expenses) {
+        ops.add(_Op(
+          date: e.date,
+          primary: e.category,
+          kicker: e.category,
+          meta: e.note ?? '',
+          amount: e.amount,
+          isIncome: false,
+          tags: e.tags,
+          onTap: () => _editExpense(e),
+        ));
+      }
+    }
+    ops.sort((_Op a, _Op b) => (b.date ?? DateTime(0)).compareTo(a.date ?? DateTime(0)));
+    final List<String> cats = ops.map((_Op o) => o.kicker).toSet().toList()..sort();
+    final List<_Op> shown = ops.where((_Op o) {
+      if (_catFilter.isNotEmpty && o.kicker != _catFilter) return false;
+      if (_tagFilter.isNotEmpty && !o.tags.contains(_tagFilter)) return false;
+      return true;
+    }).toList();
+
+    return Column(
       children: <Widget>[
-        Container(
-          padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
-          decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(18)),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text('ПРИБЫЛЬ ЗА ПЕРИОД', style: AppFonts.mono(size: 11, color: c.inkMutedXl, weight: FontWeight.w700)),
-              const SizedBox(height: 6),
-              Text(_money(balance),
-                  style: AppFonts.display(size: 40, color: balance >= 0 ? c.accent : c.danger, letterSpacing: -1)),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: <Widget>[
-            Expanded(child: _statCard(c, 'Доходы', income, c.accent)),
-            const SizedBox(width: 10),
-            Expanded(child: _statCard(c, 'Расходы', expense, c.inkMuted)),
-          ],
+        _summaryCards(c, incomeTotal, expenseTotal),
+        _catChips(c, cats),
+        Expanded(
+          child: shown.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text('Операций нет', style: TextStyle(color: c.inkMuted)),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 96),
+                  itemCount: shown.length,
+                  itemBuilder: (BuildContext ctx, int i) {
+                    final _Op o = shown[i];
+                    return _entryRow(c, o.primary, o.kicker, o.meta, o.amount,
+                        sign: o.isIncome ? '+' : '−',
+                        color: o.isIncome ? c.accent : c.inkMuted,
+                        tags: o.tags,
+                        onTap: o.onTap);
+                  },
+                ),
         ),
       ],
     );
   }
 
-  Widget _statCard(AppColors c, String label, num value, Color color) => Container(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(label.toUpperCase(), style: AppFonts.mono(size: 10, color: c.inkMutedXl, weight: FontWeight.w700)),
-            const SizedBox(height: 6),
-            Text(_money(value), style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
-          ],
+  /// Карточки сводки: прибыль + доходы/расходы. Доходы/расходы — фильтры списка
+  /// (тап → показать только их; тап по активной/по прибыли → все операции).
+  Widget _summaryCards(AppColors c, num income, num expense) {
+    final num balance = income - expense;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          GestureDetector(
+            onTap: () => setState(() {
+              _filter = _Filter.all;
+              _catFilter = '';
+              _tagFilter = '';
+            }),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+              decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(18)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text('ПРИБЫЛЬ ЗА ПЕРИОД',
+                      style: AppFonts.mono(size: 11, color: c.inkMutedXl, weight: FontWeight.w700)),
+                  const SizedBox(height: 6),
+                  Text(_money(balance),
+                      style: AppFonts.display(
+                          size: 40, color: balance >= 0 ? c.accent : c.danger, letterSpacing: -1)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: _statCard(c, 'Доходы', income, c.accent,
+                    active: _filter == _Filter.income, onTap: () => _toggleFilter(_Filter.income)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _statCard(c, 'Расходы', expense, c.inkMuted,
+                    active: _filter == _Filter.expense, onTap: () => _toggleFilter(_Filter.expense)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _toggleFilter(_Filter f) => setState(() {
+        _filter = _filter == f ? _Filter.all : f;
+        _catFilter = '';
+        _tagFilter = '';
+      });
+
+  /// FAB: добавить операцию. В фильтре доход/расход — сразу нужную; иначе — выбор.
+  Future<void> _onAdd() async {
+    switch (_filter) {
+      case _Filter.income:
+        await _showAddSheet(true);
+      case _Filter.expense:
+        await _showAddSheet(false);
+      case _Filter.all:
+        await _showAddChooser();
+    }
+  }
+
+  Future<void> _showAddChooser() async {
+    final bool? isIncome = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: context.colors.bg,
+      showDragHandle: true,
+      builder: (BuildContext ctx) {
+        final AppColors c = ctx.colors;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                ListTile(
+                  leading: Icon(Icons.add, color: c.accent),
+                  title: const Text('Добавить доход'),
+                  onTap: () => Navigator.pop(ctx, true),
+                ),
+                ListTile(
+                  leading: Icon(Icons.remove, color: c.inkMuted),
+                  title: const Text('Добавить расход'),
+                  onTap: () => Navigator.pop(ctx, false),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (isIncome != null) await _showAddSheet(isIncome);
+  }
+
+  Widget _statCard(AppColors c, String label, num value, Color color,
+          {bool active = false, VoidCallback? onTap}) =>
+      GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+          decoration: BoxDecoration(
+            color: c.card,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: active ? c.accent : Colors.transparent, width: 1.5),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(label.toUpperCase(),
+                  style: AppFonts.mono(size: 10, color: c.inkMutedXl, weight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              Text(_money(value),
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+            ],
+          ),
         ),
       );
-
-  // ─── Доходы ───
-  Widget _incomeBody(AppColors c) {
-    final AsyncValue<List<Income>> inc = ref.watch(trainerIncomesProvider);
-    final Map<String, String> names = _clientNames();
-    return inc.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (Object e, _) => _err(c, () => ref.invalidate(trainerIncomesProvider)),
-      data: (List<Income> all) {
-        final List<Income> ranged = all.where((Income e) => _inRange(e.date)).toList()
-          ..sort((Income a, Income b) => (b.date ?? DateTime(0)).compareTo(a.date ?? DateTime(0)));
-        final List<String> cats = ranged.map((Income e) => e.category).toSet().toList()..sort();
-        final List<Income> list = ranged.where((Income e) {
-          if (_catFilter.isNotEmpty && e.category != _catFilter) return false;
-          if (_tagFilter.isNotEmpty && !e.tags.contains(_tagFilter)) return false;
-          return true;
-        }).toList();
-        final num subtotal = list.fold<num>(0, (num a, Income e) => a + e.amount);
-        return Column(
-          children: <Widget>[
-            _catChips(c, cats),
-            _subtotalBar(c, 'Доходы', subtotal, c.accent),
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
-                itemCount: list.length,
-                itemBuilder: (BuildContext ctx, int i) {
-                  final Income e = list[i];
-                  final String primary = e.title ?? (e.clientId != null ? (names[e.clientId] ?? e.category) : e.category);
-                  final String meta = <String>[
-                    if (e.subtitle?.isNotEmpty == true) e.subtitle!,
-                    if (e.note?.isNotEmpty == true) e.note!,
-                  ].join(' · ');
-                  return _entryRow(c, primary, e.category, meta, e.amount, sign: '+', color: c.accent,
-                      tags: e.tags, onDelete: e.isPackage ? null : () => _deleteIncome(e.id));
-                },
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // ─── Расходы ───
-  Widget _expenseBody(AppColors c) {
-    final AsyncValue<List<Expense>> exp = ref.watch(trainerExpensesProvider);
-    return exp.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (Object e, _) => _err(c, () => ref.invalidate(trainerExpensesProvider)),
-      data: (List<Expense> all) {
-        final List<Expense> ranged = all.where((Expense e) => _inRange(e.date)).toList()
-          ..sort((Expense a, Expense b) => (b.date ?? DateTime(0)).compareTo(a.date ?? DateTime(0)));
-        final List<String> cats = ranged.map((Expense e) => e.category).toSet().toList()..sort();
-        final List<Expense> list = ranged.where((Expense e) {
-          if (_catFilter.isNotEmpty && e.category != _catFilter) return false;
-          if (_tagFilter.isNotEmpty && !e.tags.contains(_tagFilter)) return false;
-          return true;
-        }).toList();
-        final num subtotal = list.fold<num>(0, (num a, Expense e) => a + e.amount);
-        return Column(
-          children: <Widget>[
-            _catChips(c, cats),
-            _subtotalBar(c, 'Расходы', subtotal, c.inkMuted),
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
-                itemCount: list.length,
-                itemBuilder: (BuildContext ctx, int i) {
-                  final Expense e = list[i];
-                  return _entryRow(c, e.category, e.category, e.note ?? '', e.amount,
-                      sign: '−', color: c.inkMuted, tags: e.tags, onDelete: () => _deleteExpense(e.id));
-                },
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   Widget _catChips(AppColors c, List<String> cats) {
     if (cats.isEmpty) return const SizedBox(height: 4);
@@ -401,22 +477,14 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
     );
   }
 
-  Widget _subtotalBar(AppColors c, String label, num value, Color color) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-        child: Row(
-          children: <Widget>[
-            Text('${label.toUpperCase()} ЗА ПЕРИОД', style: AppFonts.mono(size: 11, color: c.inkMutedXl, weight: FontWeight.w700)),
-            const Spacer(),
-            Text(_money(value), style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
-          ],
-        ),
-      );
-
   Widget _entryRow(AppColors c, String primary, String kicker, String meta, num amount,
-      {required String sign, required Color color, List<String> tags = const <String>[], VoidCallback? onDelete}) {
-    return Container(
+      {required String sign, required Color color, List<String> tags = const <String>[], VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+      padding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
       decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
       child: Row(
         children: <Widget>[
@@ -454,19 +522,13 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
             ),
           ),
           Text('$sign${_money(amount)}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: color)),
-          if (onDelete != null)
-            GestureDetector(
-              onTap: () async {
-                if (await confirmDelete(context, title: 'Удалить операцию?')) onDelete();
-              },
-              child: Padding(
-                padding: const EdgeInsets.only(left: 4),
-                child: Icon(Icons.delete_outline, size: 18, color: c.inkMutedXl),
-              ),
-            )
-          else
-            const SizedBox(width: 8),
+          if (onTap != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Icon(Icons.chevron_right, size: 18, color: c.inkMutedXl),
+            ),
         ],
+      ),
       ),
     );
   }
@@ -474,20 +536,6 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
   Map<String, String> _clientNames() {
     final List<Client> cs = ref.watch(trainerClientsProvider).valueOrNull ?? <Client>[];
     return <String, String>{for (final Client c in cs) c.id: c.fullName};
-  }
-
-  Future<void> _deleteIncome(String id) async {
-    try {
-      await ref.read(trainerAccountingApiProvider).deleteIncome(id);
-      ref.invalidate(trainerIncomesProvider);
-    } catch (_) {}
-  }
-
-  Future<void> _deleteExpense(String id) async {
-    try {
-      await ref.read(trainerAccountingApiProvider).deleteExpense(id);
-      ref.invalidate(trainerExpensesProvider);
-    } catch (_) {}
   }
 
   Widget _err(AppColors c, VoidCallback retry) => Center(
@@ -502,19 +550,82 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
       );
 
   Future<void> _showAddSheet(bool isIncome) async {
-    final List<String> cats = isIncome
-        ? const <String>['Тренировка', 'Консультация', 'Фарма', 'Прочее']
-        : const <String>['Аренда', 'Инвентарь', 'Обучение', 'Фарма', 'Прочее'];
     final bool? saved = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: context.colors.bg,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _AddEntrySheet(isIncome: isIncome, categories: cats),
+      builder: (_) => _AddEntrySheet(
+        isIncome: isIncome,
+        categories: isIncome ? _kIncomeCats : _kExpenseCats,
+      ),
     );
     if (saved == true) {
       ref.invalidate(isIncome ? trainerIncomesProvider : trainerExpensesProvider);
     }
+  }
+
+  Future<void> _editIncome(Income e) async {
+    final bool? changed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: context.colors.bg,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _AddEntrySheet(
+        isIncome: true,
+        categories: _withCategory(_kIncomeCats, e.category),
+        edit: _EntryEdit(
+          id: e.id,
+          category: e.category,
+          amount: e.amount,
+          date: e.date,
+          note: e.note,
+          tags: e.tags,
+          clientId: e.clientId,
+        ),
+      ),
+    );
+    if (changed == true) ref.invalidate(trainerIncomesProvider);
+  }
+
+  Future<void> _editExpense(Expense e) async {
+    final bool? changed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: context.colors.bg,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _AddEntrySheet(
+        isIncome: false,
+        categories: _withCategory(_kExpenseCats, e.category),
+        edit: _EntryEdit(
+          id: e.id,
+          category: e.category,
+          amount: e.amount,
+          date: e.date,
+          note: e.note,
+          tags: e.tags,
+          clientId: e.clientId,
+        ),
+      ),
+    );
+    if (changed == true) ref.invalidate(trainerExpensesProvider);
+  }
+
+  // Гарантируем, что текущая категория записи есть в списке чипов (для старых
+  // значений вроде «Фарма», убранных из выбора для новых записей).
+  List<String> _withCategory(List<String> base, String cat) =>
+      base.contains(cat) ? base : <String>[cat, ...base];
+
+  void _openClient(String clientId) {
+    final List<Client> cs = ref.read(trainerClientsProvider).valueOrNull ?? <Client>[];
+    Client? cl;
+    for (final Client c in cs) {
+      if (c.id == clientId) {
+        cl = c;
+        break;
+      }
+    }
+    if (cl != null) context.push('/client/${cl.id}', extra: cl);
   }
 }
 
@@ -601,24 +712,58 @@ class _Pill extends StatelessWidget {
   }
 }
 
-/// Форма добавления дохода/расхода (категория, сумма, дата, заметка).
+/// Категории источников. «Фарма» убрана из доходов.
+const List<String> _kIncomeCats = <String>['Тренировка', 'Консультация', 'Прочее'];
+const List<String> _kExpenseCats = <String>['Аренда', 'Инвентарь', 'Обучение', 'Фарма', 'Прочее'];
+
+/// Данные редактируемой записи для префилла формы.
+class _EntryEdit {
+  _EntryEdit({
+    required this.id,
+    required this.category,
+    required this.amount,
+    this.date,
+    this.note,
+    this.tags = const <String>[],
+    this.clientId,
+  });
+  final String id;
+  final String category;
+  final num amount;
+  final DateTime? date;
+  final String? note;
+  final List<String> tags;
+  final String? clientId;
+}
+
+/// Форма добавления/редактирования дохода/расхода (категория, сумма, дата,
+/// заметка, теги; для дохода — привязка клиента). В режиме правки доступны
+/// «Перейти к клиенту» и «Удалить».
 class _AddEntrySheet extends ConsumerStatefulWidget {
-  const _AddEntrySheet({required this.isIncome, required this.categories});
+  const _AddEntrySheet({required this.isIncome, required this.categories, this.edit});
   final bool isIncome;
   final List<String> categories;
+  final _EntryEdit? edit;
 
   @override
   ConsumerState<_AddEntrySheet> createState() => _AddEntrySheetState();
 }
 
 class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
-  late String _category = widget.categories.first;
-  final TextEditingController _amount = TextEditingController();
-  final TextEditingController _note = TextEditingController();
-  final TextEditingController _tags = TextEditingController();
+  late String _category = widget.edit?.category ?? widget.categories.first;
+  late final TextEditingController _amount =
+      TextEditingController(text: widget.edit != null ? _amountText(widget.edit!.amount) : '');
+  late final TextEditingController _note = TextEditingController(text: widget.edit?.note ?? '');
+  late final TextEditingController _tags = TextEditingController(
+      text: (widget.edit?.tags ?? const <String>[]).map((String t) => '#$t').join(' '));
   String? _gymId;
-  DateTime _date = DateTime.now();
+  late String? _clientId = widget.edit?.clientId;
+  late DateTime _date = widget.edit?.date ?? DateTime.now();
   bool _busy = false;
+
+  bool get _isEdit => widget.edit != null;
+
+  static String _amountText(num a) => a % 1 == 0 ? a.toInt().toString() : a.toString();
 
   @override
   void dispose() {
@@ -646,15 +791,16 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
       'amount': amount,
       'date': _iso(_date),
       'note': _note.text.trim().isEmpty ? null : _note.text.trim(),
-      if (tags.isNotEmpty) 'tags': tags,
+      'tags': tags,
+      if (widget.isIncome) 'clientId': _clientId,
       if (!widget.isIncome && _gymId != null) 'gymId': _gymId,
     };
     try {
       final TrainerAccountingApi api = ref.read(trainerAccountingApiProvider);
       if (widget.isIncome) {
-        await api.createIncome(body);
+        _isEdit ? await api.updateIncome(widget.edit!.id, body) : await api.createIncome(body);
       } else {
-        await api.createExpense(body);
+        _isEdit ? await api.updateExpense(widget.edit!.id, body) : await api.createExpense(body);
       }
       if (!mounted) return;
       nav.pop(true);
@@ -663,6 +809,44 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
       setState(() => _busy = false);
       m.showSnackBar(const SnackBar(content: Text('Не удалось сохранить')));
     }
+  }
+
+  Future<void> _delete() async {
+    if (_busy || !_isEdit) return;
+    if (!await confirmDelete(context, title: 'Удалить операцию?')) return;
+    if (!mounted) return;
+    setState(() => _busy = true);
+    final NavigatorState nav = Navigator.of(context);
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    try {
+      final TrainerAccountingApi api = ref.read(trainerAccountingApiProvider);
+      if (widget.isIncome) {
+        await api.deleteIncome(widget.edit!.id);
+      } else {
+        await api.deleteExpense(widget.edit!.id);
+      }
+      if (!mounted) return;
+      nav.pop(true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      m.showSnackBar(const SnackBar(content: Text('Не удалось удалить')));
+    }
+  }
+
+  void _goToClient() {
+    final String? id = _clientId;
+    if (id == null) return;
+    final List<Client> cs = ref.read(trainerClientsProvider).valueOrNull ?? <Client>[];
+    Client? cl;
+    for (final Client c in cs) {
+      if (c.id == id) {
+        cl = c;
+        break;
+      }
+    }
+    Navigator.of(context).pop(false);
+    if (cl != null) context.push('/client/${cl.id}', extra: cl);
   }
 
   @override
@@ -674,7 +858,10 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(widget.isIncome ? 'Новый доход' : 'Новый расход',
+          Text(
+              _isEdit
+                  ? (widget.isIncome ? 'Редактировать доход' : 'Редактировать расход')
+                  : (widget.isIncome ? 'Новый доход' : 'Новый расход'),
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
           const SizedBox(height: 14),
           Wrap(
@@ -684,6 +871,12 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
                 .map((String g) => _Chip(label: g, active: _category == g, onTap: () => setState(() => _category = g)))
                 .toList(),
           ),
+          if (widget.isIncome) ...<Widget>[
+            const SizedBox(height: 14),
+            Text('КЛИЕНТ', style: AppFonts.mono(size: 10, color: c.inkMutedXl, weight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            _ClientPicker(selected: _clientId, onPick: (String? id) => setState(() => _clientId = id)),
+          ],
           const SizedBox(height: 14),
           SelectAllTextField(
             controller: _amount,
@@ -757,8 +950,47 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
             child: const Text('Сохранить'),
           ),
+          if (widget.isIncome && _clientId != null) ...<Widget>[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _goToClient,
+              icon: const Icon(Icons.person_outline, size: 18),
+              label: const Text('Перейти к клиенту'),
+              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+            ),
+          ],
+          if (_isEdit) ...<Widget>[
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: _busy ? null : _delete,
+              icon: Icon(Icons.delete_outline, size: 18, color: c.danger),
+              label: Text('Удалить', style: TextStyle(color: c.danger)),
+              style: TextButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+            ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+/// Выбор клиента для дохода (опционально).
+class _ClientPicker extends ConsumerWidget {
+  const _ClientPicker({required this.selected, required this.onPick});
+  final String? selected;
+  final ValueChanged<String?> onPick;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final List<Client> clients = ref.watch(trainerClientsProvider).valueOrNull ?? <Client>[];
+    if (clients.isEmpty) return const SizedBox.shrink();
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: <Widget>[
+        _Pill(label: 'Без клиента', active: selected == null, onTap: () => onPick(null)),
+        ...clients.map((Client cl) =>
+            _Pill(label: cl.fullName, active: selected == cl.id, onTap: () => onPick(cl.id))),
+      ],
     );
   }
 }
