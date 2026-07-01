@@ -17,6 +17,7 @@ export 'src/storage/local_json_store.dart';
 export 'src/auth/token_store.dart';
 export 'src/push/push_service.dart';
 export 'src/search/text_search.dart';
+export 'src/settings/finance_privacy.dart';
 export 'src/settings/workout_sound.dart';
 export 'src/theme/app_theme.dart';
 export 'src/ui/confirm_dialog.dart';

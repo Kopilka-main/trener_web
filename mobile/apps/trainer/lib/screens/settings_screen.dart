@@ -120,6 +120,7 @@ class SettingsScreen extends ConsumerWidget {
             const Divider(),
             const _PushToggle(),
             const _SoundToggle(),
+            const _FinanceBlurToggle(),
             const Divider(),
             const _ThemeSwitch(),
             const Divider(),
@@ -337,6 +338,31 @@ class _SoundToggle extends ConsumerWidget {
           Switch(
             value: on,
             onChanged: (bool v) => ref.read(workoutSoundEnabledProvider.notifier).setEnabled(v),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Скрытие сумм на плитке «Финансы» главного экрана (размытие) — чтобы
+/// демонстрировать приложение коллегам, не показывая реальные деньги.
+/// Хранится локально через [financeHiddenProvider].
+class _FinanceBlurToggle extends ConsumerWidget {
+  const _FinanceBlurToggle();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bool on = ref.watch(financeHiddenProvider);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Row(
+        children: <Widget>[
+          const Icon(Icons.visibility_off_outlined, size: 22),
+          const SizedBox(width: 12),
+          const Expanded(child: Text('Скрыть финансы на главной', style: TextStyle(fontSize: 16))),
+          Switch(
+            value: on,
+            onChanged: (bool v) => ref.read(financeHiddenProvider.notifier).setHidden(v),
           ),
         ],
       ),

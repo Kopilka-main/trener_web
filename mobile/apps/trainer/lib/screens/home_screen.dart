@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -51,6 +53,8 @@ class HomeScreen extends ConsumerWidget {
     // (как в вебе: visibleAlerts.length после фильтра seen/dismissed). Реактивен:
     // после захода на /notifications алерты помечаются seen → плитка гаснет.
     final int tileAlerts = ref.watch(trainerTileAlertsCountProvider);
+    // Тумблер «скрыть финансы»: размывает сумму на плитке для демонстрации приложения.
+    final bool financeHidden = ref.watch(financeHiddenProvider);
     final AppColors c = context.colors;
     return Scaffold(
       body: SafeArea(
@@ -224,6 +228,7 @@ class HomeScreen extends ConsumerWidget {
                         metric: 'тыс ₽',
                         icon: Icons.account_balance_wallet_outlined,
                         valueColor: d.monthlyProfit < 0 ? c.danger : null,
+                        blurValue: financeHidden,
                         onTap: () => context.push('/accounting'),
                       ),
                       _Tile(
@@ -374,6 +379,7 @@ class _Tile extends StatelessWidget {
     required this.onTap,
     this.primary = false,
     this.valueColor,
+    this.blurValue = false,
   });
   final String title;
   final String sub;
@@ -383,6 +389,7 @@ class _Tile extends StatelessWidget {
   final VoidCallback onTap;
   final bool primary;
   final Color? valueColor;
+  final bool blurValue;
 
   @override
   Widget build(BuildContext context) {
@@ -417,7 +424,14 @@ class _Tile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: <Widget>[
-                Text(value, style: AppFonts.display(size: 34, color: valueColor ?? fg, letterSpacing: -1)),
+                if (blurValue)
+                  ImageFiltered(
+                    imageFilter: ImageFilter.blur(sigmaX: 9, sigmaY: 9),
+                    child: Text(value,
+                        style: AppFonts.display(size: 34, color: valueColor ?? fg, letterSpacing: -1)),
+                  )
+                else
+                  Text(value, style: AppFonts.display(size: 34, color: valueColor ?? fg, letterSpacing: -1)),
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(metric.toUpperCase(),
