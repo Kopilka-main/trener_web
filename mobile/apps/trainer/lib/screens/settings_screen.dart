@@ -6,6 +6,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../api/trainer_auth.dart';
 import '../api/trainer_gyms.dart';
+import '../widgets/trainer_nav_bar.dart';
+import 'calendar_sync_screen.dart';
 import 'profile_edit_screen.dart';
 
 /// Заголовок секции (mono uppercase) — как в вебе.
@@ -56,6 +58,7 @@ class SettingsScreen extends ConsumerWidget {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final AppColors c = context.colors;
     return Scaffold(
+      bottomNavigationBar: const TrainerNavBar(),
       appBar: AppBar(title: const Text('Профиль'), automaticallyImplyLeading: false),
       body: me.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -123,6 +126,17 @@ class SettingsScreen extends ConsumerWidget {
             const _FinanceBlurToggle(),
             const Divider(),
             const _ThemeSwitch(),
+            const Divider(),
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              leading: Icon(Icons.calendar_month_outlined, color: c.ink),
+              title: const Text('Синхронизация с календарём'),
+              subtitle: Text('Google / iPhone', style: TextStyle(fontSize: 12, color: c.inkMuted)),
+              trailing: Icon(Icons.chevron_right, color: c.inkMuted),
+              onTap: () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(builder: (_) => const CalendarSyncScreen()),
+              ),
+            ),
             const Divider(),
             // ── ID ПОЛЬЗОВАТЕЛЯ ──
             _SectionLabel('ID пользователя'),
