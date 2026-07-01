@@ -338,14 +338,14 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
               ],
             ),
             const SizedBox(height: 12),
-            TextField(
+            SelectAllTextField(
               controller: _duration,
               keyboardType: TextInputType.number,
               inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
               decoration: const InputDecoration(labelText: 'Длительность, мин', border: OutlineInputBorder()),
             ),
             const SizedBox(height: 12),
-            TextField(
+            SelectAllTextField(
               controller: _title,
               decoration: const InputDecoration(labelText: 'Название (необязательно)', border: OutlineInputBorder()),
             ),
@@ -374,7 +374,7 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
             ),
             if (!_online) ...<Widget>[
               const SizedBox(height: 4),
-              TextField(
+              SelectAllTextField(
                 controller: _location,
                 decoration: const InputDecoration(labelText: 'Место (необязательно)', border: OutlineInputBorder()),
               ),

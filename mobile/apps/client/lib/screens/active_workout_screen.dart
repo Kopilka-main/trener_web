@@ -984,7 +984,7 @@ class _NumField extends StatelessWidget {
           const SizedBox(height: 4),
           SizedBox(
             height: 40,
-            child: TextField(
+            child: SelectAllTextField(
               controller: ctrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
@@ -1208,7 +1208,19 @@ class _ExercisePickerState extends ConsumerState<_ExercisePicker> {
                                     children: <Widget>[
                                       Expanded(
                                         child: GestureDetector(
-                                          onTap: () => _showInfo(context, ex, base),
+                                          onTap: () => _showInfo(
+                                            context,
+                                            ex,
+                                            base,
+                                            count: n,
+                                            onCountChanged: (int v) => setState(() {
+                                              if (v <= 0) {
+                                                _counts.remove(ex.id);
+                                              } else {
+                                                _counts[ex.id] = v;
+                                              }
+                                            }),
+                                          ),
                                           behavior: HitTestBehavior.opaque,
                                           child: Row(
                                             children: <Widget>[
@@ -1278,7 +1290,13 @@ class _ExercisePickerState extends ConsumerState<_ExercisePicker> {
   }
 }
 
-void _showInfo(BuildContext context, CatalogExercise ex, String base) {
+void _showInfo(
+  BuildContext context,
+  CatalogExercise ex,
+  String base, {
+  int count = 0,
+  ValueChanged<int>? onCountChanged,
+}) {
   showModalBottomSheet<void>(
     context: context,
     backgroundColor: context.colors.bg,
@@ -1314,6 +1332,12 @@ void _showInfo(BuildContext context, CatalogExercise ex, String base) {
             if (ex.description?.isNotEmpty == true) ...<Widget>[
               const SizedBox(height: 8),
               Text(ex.description!, style: TextStyle(fontSize: 14, height: 1.4, color: c.ink)),
+            ],
+            // Степпер кол-ва подходов внизу шита (дубль счётчика из плитки).
+            if (onCountChanged != null) ...<Widget>[
+              const SizedBox(height: 16),
+              Divider(height: 1, color: c.line),
+              _StepperBar(initial: count, onChanged: onCountChanged),
             ],
           ],
         ),
@@ -1358,6 +1382,47 @@ class _Round extends StatelessWidget {
         height: 34,
         decoration: BoxDecoration(color: c.cardElevated, shape: BoxShape.circle),
         child: Icon(icon, size: 18, color: on ? c.ink : c.inkMutedXl),
+      ),
+    );
+  }
+}
+
+/// Нижний степпер кол-ва подходов в шите информации (дубль счётчика из плитки).
+/// Держит своё значение и сообщает наружу через onChanged.
+class _StepperBar extends StatefulWidget {
+  const _StepperBar({required this.initial, required this.onChanged});
+  final int initial;
+  final ValueChanged<int> onChanged;
+  @override
+  State<_StepperBar> createState() => _StepperBarState();
+}
+
+class _StepperBarState extends State<_StepperBar> {
+  late int _n = widget.initial;
+
+  void _set(int v) {
+    setState(() => _n = v < 0 ? 0 : v);
+    widget.onChanged(_n);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Row(
+        children: <Widget>[
+          Text('Подходов', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.ink)),
+          const Spacer(),
+          _Round(icon: Icons.remove, onTap: _n == 0 ? null : () => _set(_n - 1)),
+          SizedBox(
+            width: 46,
+            child: Text('$_n',
+                textAlign: TextAlign.center,
+                style: AppFonts.mono(size: 18, color: c.ink, weight: FontWeight.w700)),
+          ),
+          _Round(icon: Icons.add, onTap: () => _set(_n + 1)),
+        ],
       ),
     );
   }

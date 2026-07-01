@@ -319,7 +319,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
           const SizedBox(width: 10),
           SizedBox(width: 76, child: Text(ct.type, style: TextStyle(fontSize: 13, color: c.inkMuted))),
           Expanded(
-            child: TextField(
+            child: SelectAllTextField(
               controller: ct.value,
               decoration: const InputDecoration(isDense: true, border: InputBorder.none, hintText: 'значение'),
             ),
@@ -340,7 +340,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         _Label(label),
-        TextField(
+        SelectAllTextField(
           controller: ctrl,
           decoration: InputDecoration(
             hintText: hint,
@@ -437,7 +437,7 @@ class _GymsEditSectionState extends ConsumerState<_GymsEditSection> {
         Row(
           children: <Widget>[
             Expanded(
-              child: TextField(
+              child: SelectAllTextField(
                 controller: _name,
                 onSubmitted: (_) => _add(),
                 decoration: InputDecoration(

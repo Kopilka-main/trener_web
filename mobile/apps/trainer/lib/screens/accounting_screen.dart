@@ -685,7 +685,7 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
                 .toList(),
           ),
           const SizedBox(height: 14),
-          TextField(
+          SelectAllTextField(
             controller: _amount,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
@@ -728,7 +728,7 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
             ],
           ),
           const SizedBox(height: 10),
-          TextField(
+          SelectAllTextField(
             controller: _note,
             decoration: InputDecoration(
               hintText: 'Заметка (необязательно)',
@@ -738,7 +738,7 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
             ),
           ),
           const SizedBox(height: 10),
-          TextField(
+          SelectAllTextField(
             controller: _tags,
             decoration: InputDecoration(
               hintText: 'Теги через пробел: #абонемент #нал',

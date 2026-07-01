@@ -830,7 +830,7 @@ Future<String?> _showConnectDialog(BuildContext context) {
             Text('Чтобы писать клиенту, укажите его клиентский номер (ID) из приложения клиента.',
                 style: TextStyle(fontSize: 13, color: c.inkMuted)),
             const SizedBox(height: 12),
-            TextField(
+            SelectAllTextField(
               controller: code,
               autofocus: true,
               decoration: const InputDecoration(labelText: 'ID клиента', border: OutlineInputBorder()),
@@ -2180,7 +2180,7 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
                 children: <Widget>[
                   if (_isPackage) ...<Widget>[
                     Expanded(
-                      child: TextField(
+                      child: SelectAllTextField(
                         controller: _lessons,
                         keyboardType: TextInputType.number,
                         onChanged: (_) => setState(() {}),
@@ -2190,7 +2190,7 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
                     const SizedBox(width: 12),
                   ],
                   Expanded(
-                    child: TextField(
+                    child: SelectAllTextField(
                       controller: _price,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       onChanged: (_) => setState(() {}),
@@ -2213,7 +2213,7 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
                 ],
               ),
             ] else ...<Widget>[
-              TextField(
+              SelectAllTextField(
                 controller: _price,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 onChanged: (_) => setState(() {}),
@@ -2223,7 +2223,7 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
               _dateField(c, 'Дата', _paidAt, (DateTime d) => setState(() => _paidAt = d)),
             ],
             const SizedBox(height: 12),
-            TextField(
+            SelectAllTextField(
               controller: _note,
               decoration: const InputDecoration(labelText: 'Заметка (необязательно)', border: OutlineInputBorder()),
             ),

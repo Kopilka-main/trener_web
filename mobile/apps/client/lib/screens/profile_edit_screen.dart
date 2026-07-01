@@ -270,7 +270,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
             const SizedBox(height: 14),
             _Label('Дата рождения'),
             const SizedBox(height: 6),
-            TextField(
+            SelectAllTextField(
               controller: _birth,
               keyboardType: TextInputType.number,
               inputFormatters: <TextInputFormatter>[_BirthDateFormatter()],
@@ -392,7 +392,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
             ],
           ),
           const SizedBox(height: 6),
-          TextField(
+          SelectAllTextField(
             controller: ct.value,
             style: TextStyle(fontSize: 15, color: c.ink),
             decoration: InputDecoration(

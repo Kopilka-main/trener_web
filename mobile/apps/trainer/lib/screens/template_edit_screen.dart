@@ -277,7 +277,7 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: <Widget>[
           _Label('Название'),
-          TextField(
+          SelectAllTextField(
             controller: _name,
             onChanged: (_) => setState(() {}),
             decoration: _dec(c, 'Верх · Сила'),
@@ -805,7 +805,19 @@ class _ExerciseSelectState extends ConsumerState<ExerciseSelect> {
                         children: <Widget>[
                           Expanded(
                             child: GestureDetector(
-                              onTap: () => _showExerciseInfo(context, ex, base),
+                              onTap: () => _showExerciseInfo(
+                                context,
+                                ex,
+                                base,
+                                count: n,
+                                onCountChanged: (int v) => setState(() {
+                                  if (v <= 0) {
+                                    _counts.remove(ex.id);
+                                  } else {
+                                    _counts[ex.id] = v;
+                                  }
+                                }),
+                              ),
                               behavior: HitTestBehavior.opaque,
                               child: Row(
                                 children: <Widget>[
@@ -869,7 +881,13 @@ class _ExerciseSelectState extends ConsumerState<ExerciseSelect> {
 
 /// Карточка-подсказка об упражнении (по тапу в выборе): видео/фото с
 /// переключателем, название, описание, группы мышц.
-void _showExerciseInfo(BuildContext context, TExercise ex, String base) {
+void _showExerciseInfo(
+  BuildContext context,
+  TExercise ex,
+  String base, {
+  int count = 0,
+  ValueChanged<int>? onCountChanged,
+}) {
   final AppColors c = context.colors;
   final String? img = catalogMediaUrl(base, ex.imageUrl ?? ex.thumbUrl);
   final String? video = catalogMediaUrl(base, ex.videoUrl);
@@ -894,11 +912,14 @@ void _showExerciseInfo(BuildContext context, TExercise ex, String base) {
       initialChildSize: 0.7,
       minChildSize: 0.4,
       maxChildSize: 0.92,
-      builder: (BuildContext ctx, ScrollController sc) => ListView(
-        controller: sc,
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      builder: (BuildContext ctx, ScrollController sc) => Column(
         children: <Widget>[
-          if (img != null || video != null)
+          Expanded(
+            child: ListView(
+              controller: sc,
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              children: <Widget>[
+                if (img != null || video != null)
             CatalogMediaView(imageUrl: img, videoUrl: video, height: 200, showToggle: true),
           const SizedBox(height: 14),
           Text(ex.name, style: AppFonts.display(size: 22, color: c.ink)),
@@ -954,10 +975,58 @@ void _showExerciseInfo(BuildContext context, TExercise ex, String base) {
               ),
             ),
           ],
+              ],
+            ),
+          ),
+          if (onCountChanged != null)
+            _StepperBar(initial: count, onChanged: onCountChanged),
         ],
       ),
     ),
   );
+}
+
+/// Нижний степпер кол-ва подходов в шите информации (дубль счётчика из плитки).
+/// Держит своё значение и сообщает наружу через onChanged — родитель обновляет
+/// _counts, а сетка/«Далее (N)» синхронизируются.
+class _StepperBar extends StatefulWidget {
+  const _StepperBar({required this.initial, required this.onChanged});
+  final int initial;
+  final ValueChanged<int> onChanged;
+  @override
+  State<_StepperBar> createState() => _StepperBarState();
+}
+
+class _StepperBarState extends State<_StepperBar> {
+  late int _n = widget.initial;
+
+  void _set(int v) {
+    setState(() => _n = v < 0 ? 0 : v);
+    widget.onChanged(_n);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, 12, 16, 12 + MediaQuery.of(context).viewPadding.bottom),
+      decoration: BoxDecoration(color: c.bg, border: Border(top: BorderSide(color: c.line))),
+      child: Row(
+        children: <Widget>[
+          Text('Подходов', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.ink)),
+          const Spacer(),
+          _Round(icon: Icons.remove, onTap: _n == 0 ? null : () => _set(_n - 1)),
+          SizedBox(
+            width: 46,
+            child: Text('$_n',
+                textAlign: TextAlign.center,
+                style: AppFonts.mono(size: 18, color: c.ink, weight: FontWeight.w700)),
+          ),
+          _Round(icon: Icons.add, onTap: () => _set(_n + 1)),
+        ],
+      ),
+    );
+  }
 }
 
 // ─── Общие виджеты ───
@@ -1017,7 +1086,7 @@ class _Num extends StatelessWidget {
           const SizedBox(height: 4),
           SizedBox(
             height: 40,
-            child: TextField(
+            child: SelectAllTextField(
               controller: ctrl,
               onChanged: onChanged,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),

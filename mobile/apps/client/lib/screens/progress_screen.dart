@@ -1205,7 +1205,7 @@ class _NumField extends StatelessWidget {
         const SizedBox(height: 4),
         SizedBox(
           height: 38,
-          child: TextField(
+          child: SelectAllTextField(
             controller: ctrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],

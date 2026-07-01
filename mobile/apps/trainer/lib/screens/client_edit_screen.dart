@@ -470,7 +470,7 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
                     .toList(),
               ),
             ),
-          TextField(
+          SelectAllTextField(
             controller: _tagInput,
             onSubmitted: (_) => _addTag(),
             decoration: InputDecoration(
@@ -510,7 +510,7 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
           const SizedBox(width: 10),
           SizedBox(width: 76, child: Text(ct.type, style: TextStyle(fontSize: 13, color: c.inkMuted))),
           Expanded(
-            child: TextField(
+            child: SelectAllTextField(
               controller: ct.value,
               keyboardType: _contactTypes
                   .firstWhere((_ContactType t) => t.label == ct.type, orElse: () => _contactTypes.first)
@@ -530,7 +530,7 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
   }
 
   Widget _field(AppColors c, String label, TextEditingController ctrl, {ValueChanged<String>? onChanged}) {
-    return TextField(
+    return SelectAllTextField(
       controller: ctrl,
       onChanged: onChanged,
       decoration: InputDecoration(
@@ -594,7 +594,7 @@ Future<String?> _showConnectDialog(BuildContext context, {String? excludeClientI
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              TextField(
+              SelectAllTextField(
                 controller: code,
                 autofocus: true,
                 decoration: const InputDecoration(labelText: 'Код из приложения клиента', border: OutlineInputBorder()),
@@ -671,7 +671,7 @@ Future<bool> _showDeleteDialog(BuildContext context, String name) async {
             children: <Widget>[
               Text('Действие необратимо. Введите «$name» для подтверждения.', style: const TextStyle(fontSize: 14)),
               const SizedBox(height: 12),
-              TextField(
+              SelectAllTextField(
                 controller: input,
                 autofocus: true,
                 onChanged: (String v) => setLocal(() => match = v.trim() == name.trim()),

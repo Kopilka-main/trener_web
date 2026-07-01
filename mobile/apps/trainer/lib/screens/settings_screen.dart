@@ -415,7 +415,7 @@ class _GymsSectionState extends ConsumerState<_GymsSection> {
             Row(
               children: <Widget>[
                 Expanded(
-                  child: TextField(
+                  child: SelectAllTextField(
                     controller: _name,
                     autofocus: true,
                     onSubmitted: (_) => _add(),

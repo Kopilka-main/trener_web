@@ -41,7 +41,7 @@ class AuthField extends StatelessWidget {
       children: <Widget>[
         Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.inkMuted)),
         const SizedBox(height: 6),
-        TextField(
+        SelectAllTextField(
           controller: controller,
           obscureText: obscure,
           keyboardType: keyboardType,

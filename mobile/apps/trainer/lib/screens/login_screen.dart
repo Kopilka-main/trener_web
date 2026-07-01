@@ -53,14 +53,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               children: <Widget>[
                 Text('Вход', style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 20),
-                TextField(
+                SelectAllTextField(
                   controller: _email,
                   keyboardType: TextInputType.emailAddress,
                   autocorrect: false,
                   decoration: const InputDecoration(labelText: 'Почта'),
                 ),
                 const SizedBox(height: 12),
-                TextField(
+                SelectAllTextField(
                   controller: _password,
                   obscureText: true,
                   decoration: const InputDecoration(labelText: 'Пароль'),

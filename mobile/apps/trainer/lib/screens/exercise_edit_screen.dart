@@ -207,7 +207,7 @@ class _ExerciseEditScreenState extends ConsumerState<ExerciseEditScreen> {
           ],
           const SizedBox(height: 16),
           _Label('Название'),
-          TextField(
+          SelectAllTextField(
             controller: _name,
             enabled: !locked,
             onChanged: (_) => setState(() {}),

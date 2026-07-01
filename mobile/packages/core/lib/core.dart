@@ -20,4 +20,5 @@ export 'src/search/text_search.dart';
 export 'src/settings/workout_sound.dart';
 export 'src/theme/app_theme.dart';
 export 'src/ui/confirm_dialog.dart';
+export 'src/ui/select_all_text_field.dart';
 export 'src/theme/theme_controller.dart';

@@ -75,18 +75,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               shrinkWrap: true,
               padding: const EdgeInsets.all(24),
               children: <Widget>[
-                TextField(controller: _first, decoration: const InputDecoration(labelText: 'Имя')),
+                SelectAllTextField(controller: _first, decoration: const InputDecoration(labelText: 'Имя')),
                 const SizedBox(height: 12),
-                TextField(controller: _last, decoration: const InputDecoration(labelText: 'Фамилия')),
+                SelectAllTextField(controller: _last, decoration: const InputDecoration(labelText: 'Фамилия')),
                 const SizedBox(height: 12),
-                TextField(
+                SelectAllTextField(
                   controller: _email,
                   keyboardType: TextInputType.emailAddress,
                   autocorrect: false,
                   decoration: const InputDecoration(labelText: 'Почта'),
                 ),
                 const SizedBox(height: 12),
-                TextField(
+                SelectAllTextField(
                   controller: _password,
                   obscureText: true,
                   decoration: const InputDecoration(labelText: 'Пароль (от 8 символов)'),
