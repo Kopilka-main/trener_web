@@ -30,6 +30,17 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@fitbond.ru}
+      # OAuth (VK ID / Yandex) + SMTP (письма сброса пароля). Значения из /opt/trener/.env
+      VK_CLIENT_ID: ${VK_CLIENT_ID:-}
+      VK_CLIENT_SECRET: ${VK_CLIENT_SECRET:-}
+      YANDEX_CLIENT_ID: ${YANDEX_CLIENT_ID:-}
+      YANDEX_CLIENT_SECRET: ${YANDEX_CLIENT_SECRET:-}
+      OAUTH_REDIRECT_BASE: ${OAUTH_REDIRECT_BASE:-https://app.fitbond.ru}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-FitBond <no-reply@fitbond.ru>}
       # Папка глобального медиа каталога упражнений (картинки/видео).
       CATALOG_MEDIA_DIR: /data/catalog
       # FCM (нативные пуши): путь к service-account ключу. Без файла push мягко отключён.
