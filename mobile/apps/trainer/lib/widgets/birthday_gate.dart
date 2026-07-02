@@ -16,7 +16,13 @@ class BirthdayGate extends ConsumerWidget {
     if (ref.watch(sessionProvider).status != AuthStatus.authenticated) return child;
     final TrainerProfile? me = ref.watch(trainerMeProvider).valueOrNull;
     if (me == null || me.birthDate != null) return child;
-    return const _BirthdaySetup();
+    // Гейт живёт в MaterialApp.builder — ВЫШЕ роутерного Navigator, а _BirthdaySetup
+    // открывает пикер через showModalBottomSheet, которому нужен Navigator-предок.
+    // Без собственного Navigator тап по полю выбора «ничего не делает».
+    return Navigator(
+      onGenerateRoute: (RouteSettings settings) =>
+          MaterialPageRoute<void>(builder: (_) => const _BirthdaySetup()),
+    );
   }
 }
 

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/trainer_chat.dart';
-import '../widgets/trainer_nav_bar.dart';
 
 const List<String> _ruMonths = <String>[
   'янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
@@ -30,7 +29,6 @@ class ConversationsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<List<Conversation>> convos = ref.watch(trainerConversationsProvider);
     return Scaffold(
-      bottomNavigationBar: const TrainerNavBar(),
       appBar: AppBar(title: const Text('Чаты'), automaticallyImplyLeading: false),
       body: convos.when(
         loading: () => const Center(child: CircularProgressIndicator()),

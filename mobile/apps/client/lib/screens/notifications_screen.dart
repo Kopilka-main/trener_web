@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../api/client_calendar.dart';
 import '../api/client_chat.dart';
+import '../api/client_notifications.dart';
 import '../api/client_packages.dart';
 import '../api/client_workouts.dart';
 
@@ -16,11 +17,14 @@ const List<String> _ruMonths = <String>[
 enum _Kind { confirm, soon, chat, package, workout, measure, payment }
 
 class _Notif {
-  _Notif({required this.id, required this.kind, required this.text, required this.to, this.sessionId});
+  _Notif({required this.id, required this.kind, required this.text, required this.to, required this.date, this.sessionId});
   final String id;
   final _Kind kind;
   final String text;
   final String to;
+
+  /// Дата уведомления (без времени) — для группировки по дням.
+  final DateTime date;
 
   /// Для confirm-уведомлений — id занятия, чтобы открыть шторку подтверждения напрямую.
   final String? sessionId;
@@ -44,6 +48,9 @@ String _whenLabel(Session s) {
   return '${d.day} ${_ruMonths[d.month - 1]}, ${s.startTime}';
 }
 
+/// DateTime → та же дата без времени (year/month/day).
+DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
 /// Дата платежа "YYYY-MM-DD" → DateTime (без времени). null при кривом формате.
 DateTime? _parseDate(String isoDate) {
   final List<String> p = isoDate.split('-');
@@ -59,6 +66,33 @@ DateTime? _parseDate(String isoDate) {
 String _dayMonth(String isoDate) {
   final List<String> p = isoDate.split('-');
   return p.length == 3 ? '${p[2]}.${p[1]}' : isoDate;
+}
+
+/// DateTime → заголовок группы "ДД/ММ/ГГГГ" с ведущими нулями.
+String _dateHeader(DateTime d) =>
+    '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+/// Ключ группировки по дню.
+String _dateKey(DateTime d) => '${d.year}-${d.month}-${d.day}';
+
+/// Группа уведомлений одного дня (для рендера с заголовком-датой).
+class _NotifGroup {
+  _NotifGroup(this.date, this.items);
+  final DateTime date;
+  final List<_Notif> items;
+}
+
+/// Группирует уведомления по дню; ГРУППЫ — по убыванию даты (новые/будущие
+/// сверху), внутри группы — исходный порядок сбора.
+List<_NotifGroup> _groupByDate(List<_Notif> items) {
+  final Map<String, _NotifGroup> byKey = <String, _NotifGroup>{};
+  for (final _Notif n in items) {
+    final String key = _dateKey(n.date);
+    (byKey[key] ??= _NotifGroup(n.date, <_Notif>[])).items.add(n);
+  }
+  final List<_NotifGroup> groups = byKey.values.toList()
+    ..sort((_NotifGroup a, _NotifGroup b) => b.date.compareTo(a.date));
+  return groups;
 }
 
 /// Целая сумма с пробелами между тысячами (без копеек).
@@ -82,12 +116,20 @@ List<_Notif> _build({
   required Set<String> dismissed,
 }) {
   final DateTime now = DateTime.now();
+  final DateTime today = DateTime(now.year, now.month, now.day);
   final List<_Notif> out = <_Notif>[];
 
   // Назначенные тренером тренировки (черновики).
   for (final Workout w in workouts) {
     if (!w.createdByClient && w.status == WorkoutStatus.draft) {
-      out.add(_Notif(id: 'workout:${w.id}', kind: _Kind.workout, text: 'Новая тренировка от тренера: ${w.name}', to: '/workouts'));
+      final DateTime? wd = w.completedAt ?? w.startedAt;
+      out.add(_Notif(
+        id: 'workout:${w.id}',
+        kind: _Kind.workout,
+        text: 'Новая тренировка от тренера: ${w.name}',
+        to: '/workouts',
+        date: wd != null ? _dateOnly(wd) : today,
+      ));
     }
   }
 
@@ -100,6 +142,7 @@ List<_Notif> _build({
           ? 'Тренер просит сделать замеры: ${t.note!.trim()}'
           : 'Тренер просит сделать замеры',
       to: '/progress?tab=measurements',
+      date: today,
     ));
   }
 
@@ -110,7 +153,7 @@ List<_Notif> _build({
 
   for (final Session s in future) {
     if (s.confirmation == ClientConfirmation.pending) {
-      out.add(_Notif(id: 'confirm:${s.id}', kind: _Kind.confirm, text: 'Подтвердите занятие ${_whenLabel(s)}', to: '/calendar', sessionId: s.id));
+      out.add(_Notif(id: 'confirm:${s.id}', kind: _Kind.confirm, text: 'Подтвердите занятие ${_whenLabel(s)}', to: '/calendar', sessionId: s.id, date: _dateOnly(calParseIso(s.date))));
     }
   }
 
@@ -119,14 +162,14 @@ List<_Notif> _build({
   for (final Session s in sessions) {
     if (s.status != SessionStatus.completed || s.confirmation != ClientConfirmation.pending) continue;
     if (!s.start.isBefore(now) || s.start.isBefore(ago30)) continue;
-    out.add(_Notif(id: 'confirm:${s.id}', kind: _Kind.confirm, text: 'Подтвердите проведённую тренировку ${_whenLabel(s)}', to: '/calendar', sessionId: s.id));
+    out.add(_Notif(id: 'confirm:${s.id}', kind: _Kind.confirm, text: 'Подтвердите проведённую тренировку ${_whenLabel(s)}', to: '/calendar', sessionId: s.id, date: _dateOnly(calParseIso(s.date))));
   }
 
   // Скоро занятие — ближайшее не-pending в пределах 24ч.
   for (final Session s in future) {
     if (s.confirmation != ClientConfirmation.pending &&
         s.start.difference(now) <= const Duration(hours: 24)) {
-      out.add(_Notif(id: 'soon:${s.id}', kind: _Kind.soon, text: 'Скоро занятие: ${_whenLabel(s)}', to: '/calendar'));
+      out.add(_Notif(id: 'soon:${s.id}', kind: _Kind.soon, text: 'Скоро занятие: ${_whenLabel(s)}', to: '/calendar', date: _dateOnly(calParseIso(s.date))));
       break;
     }
   }
@@ -140,11 +183,11 @@ List<_Notif> _build({
       kind: _Kind.package,
       text: p.remaining <= 0 ? '$what закончился — обратитесь к тренеру' : '$what заканчивается: осталось ${p.remaining}',
       to: '/chat',
+      date: today,
     ));
   }
 
   // Предстоящие платежи рассрочки — в ближайшие 3 дня (включая сегодня).
-  final DateTime today = DateTime(now.year, now.month, now.day);
   for (final ClientPackage p in packages) {
     if (!p.isInstallment) continue;
     for (final ClientInstallment inst in p.installments) {
@@ -158,12 +201,13 @@ List<_Notif> _build({
         kind: _Kind.payment,
         text: 'Платёж ${_money(inst.amount)} ₽ до ${_dayMonth(inst.dueDate)}',
         to: '/notifications',
+        date: due,
       ));
     }
   }
 
   if (unread > 0) {
-    out.add(_Notif(id: 'chat', kind: _Kind.chat, text: 'Новые сообщения от тренера ($unread)', to: '/chat'));
+    out.add(_Notif(id: 'chat', kind: _Kind.chat, text: 'Новые сообщения от тренера ($unread)', to: '/chat', date: today));
   }
 
   return out.where((_Notif n) => !dismissed.contains(n.id)).toList();
@@ -178,6 +222,19 @@ class NotificationsScreen extends ConsumerStatefulWidget {
 
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   bool _hadUnread = false;
+
+  /// Снимок «увиденного» на момент входа — по нему рисуем кружок, чтобы markSeen
+  /// (гасящий всё) не погасил индикатор в текущий заход.
+  late final Set<String> _seenAtOpen;
+
+  /// markSeen(all) вызываем один раз, когда данные собраны.
+  bool _markedSeen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _seenAtOpen = <String>{...ref.read(clientNotifSeenProvider)};
+  }
 
   @override
   void dispose() {
@@ -225,6 +282,19 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         .where((ChatMessage m) => m.kind == MessageKind.task && m.taskDone != true)
         .toList();
 
+    final List<_NotifGroup> groups = _groupByDate(items);
+
+    // При первом показе с готовыми данными помечаем все уведомления «увиденными»
+    // (кружки погаснут при следующем заходе). Кружок в текущий заход рисуется по
+    // снимку _seenAtOpen, поэтому markSeen его не гасит.
+    if (!_markedSeen && items.isNotEmpty) {
+      _markedSeen = true;
+      final List<String> ids = <String>[for (final _Notif n in items) n.id];
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(clientNotifSeenProvider.notifier).markSeen(ids);
+      });
+    }
+
     final bool loading = sessions.isLoading && workouts.isLoading;
 
     return Scaffold(
@@ -258,12 +328,27 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                                       ref.invalidate(clientChatProvider);
                                     },
                                   )),
-                              ...items.map((_Notif n) => _NotifCard(
-                                    notif: n,
-                                    onTap: () => _openNotif(n, sessions.valueOrNull ?? <Session>[]),
-                                    onDismiss: () => ref.read(_dismissedProvider.notifier).state =
-                                        <String>{...dismissed, n.id},
-                                  )),
+                              ...groups.expand((_NotifGroup g) => <Widget>[
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 18, bottom: 8, left: 4),
+                                      child: Text(
+                                        _dateHeader(g.date),
+                                        style: AppFonts.mono(
+                                          size: 11,
+                                          color: c.inkMutedXl,
+                                          weight: FontWeight.w700,
+                                          letterSpacing: 1.5,
+                                        ),
+                                      ),
+                                    ),
+                                    ...g.items.map((_Notif n) => _NotifCard(
+                                          notif: n,
+                                          unseen: !_seenAtOpen.contains(n.id),
+                                          onTap: () => _openNotif(n, sessions.valueOrNull ?? <Session>[]),
+                                          onDismiss: () => ref.read(_dismissedProvider.notifier).state =
+                                              <String>{...dismissed, n.id},
+                                        )),
+                                  ]),
                             ],
                           ),
                         ),
@@ -448,8 +533,11 @@ class _SessionSheetState extends ConsumerState<_SessionSheet> {
 }
 
 class _NotifCard extends StatelessWidget {
-  const _NotifCard({required this.notif, required this.onTap, required this.onDismiss});
+  const _NotifCard({required this.notif, required this.unseen, required this.onTap, required this.onDismiss});
   final _Notif notif;
+
+  /// Непросмотренное на момент входа — показываем кружок-индикатор.
+  final bool unseen;
   final VoidCallback onTap;
   final VoidCallback onDismiss;
   @override
@@ -477,6 +565,14 @@ class _NotifCard extends StatelessWidget {
               Icon(_icon(notif.kind), size: 18, color: c.accent),
               const SizedBox(width: 12),
               Expanded(child: Text(notif.text, style: TextStyle(fontSize: 14, color: c.ink))),
+              if (unseen) ...<Widget>[
+                const SizedBox(width: 12),
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(color: c.accent, shape: BoxShape.circle),
+                ),
+              ],
             ],
           ),
         ),

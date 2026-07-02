@@ -21,6 +21,7 @@ class TrainerAlert {
     required this.headline,
     required this.clientName,
     required this.message,
+    required this.date,
   });
 
   final String id;
@@ -30,6 +31,20 @@ class TrainerAlert {
   final String headline;
   final String clientName;
   final String message;
+
+  /// Дата уведомления (без времени) — для группировки и сортировки на экране.
+  final DateTime date;
+}
+
+/// "YYYY-MM-DD" → DateTime (без времени). null при кривом формате.
+DateTime? parseTrainerNotifDate(String isoDate) {
+  final List<String> p = isoDate.split('-');
+  if (p.length != 3) return null;
+  final int? y = int.tryParse(p[0]);
+  final int? m = int.tryParse(p[1]);
+  final int? d = int.tryParse(p[2]);
+  if (y == null || m == null || d == null) return null;
+  return DateTime(y, m, d);
 }
 
 const List<String> _ruMonthsShort = <String>[
@@ -69,6 +84,8 @@ List<TrainerAlert> buildTrainerAlerts({
   final String ago14 = _isoDate(now.subtract(const Duration(days: 14)));
   final String in14 = _isoDate(now.add(const Duration(days: 14)));
 
+  final DateTime todayDate = DateTime(now.year, now.month, now.day);
+
   final Map<String, String> nameById = <String, String>{
     for (final Client c in clients) c.id: c.fullName,
   };
@@ -91,6 +108,7 @@ List<TrainerAlert> buildTrainerAlerts({
         headline: 'Занятие отменено',
         clientName: who,
         message: '${_labelDate(d, s.startTime)} — переназначьте или свяжитесь с клиентом',
+        date: parseTrainerNotifDate(d) ?? todayDate,
       ));
     }
 
@@ -107,6 +125,7 @@ List<TrainerAlert> buildTrainerAlerts({
         headline: 'Клиент отклонил занятие',
         clientName: who,
         message: '${_labelDate(d, s.startTime)} — согласуйте другое время',
+        date: parseTrainerNotifDate(d) ?? todayDate,
       ));
     }
 
@@ -120,6 +139,7 @@ List<TrainerAlert> buildTrainerAlerts({
         headline: 'Онлайн-тренировка сегодня',
         clientName: who,
         message: 'Сегодня в ${s.startTime}${s.title != null && s.title!.isNotEmpty ? ' · ${s.title}' : ''}',
+        date: parseTrainerNotifDate(d) ?? todayDate,
       ));
     }
   }
@@ -142,6 +162,7 @@ List<TrainerAlert> buildTrainerAlerts({
         headline: 'Нет занятий на неделю',
         clientName: c.fullName,
         message: 'Оплачены тренировки, но нет записи на ближайшие 7 дней',
+        date: todayDate,
       ));
     }
   }

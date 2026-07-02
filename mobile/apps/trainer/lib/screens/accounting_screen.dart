@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 import '../api/trainer_accounting.dart';
 import '../api/trainer_clients.dart';
 import '../api/trainer_gyms.dart';
-import '../widgets/trainer_nav_bar.dart';
 
 // ─── Утилиты ───
 const List<String> _ruMonthsShort = <String>[
@@ -140,7 +139,6 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
     return Scaffold(
-      bottomNavigationBar: const TrainerNavBar(),
       floatingActionButton: FloatingActionButton(
         onPressed: _onAdd,
         child: const Icon(Icons.add),
@@ -862,7 +860,7 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
               _isEdit
                   ? (widget.isIncome ? 'Редактировать доход' : 'Редактировать расход')
                   : (widget.isIncome ? 'Новый доход' : 'Новый расход'),
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
+              style: AppFonts.display(size: 22, color: c.ink)),
           const SizedBox(height: 14),
           Wrap(
             spacing: 8,

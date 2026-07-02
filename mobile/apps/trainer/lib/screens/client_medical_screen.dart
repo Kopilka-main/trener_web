@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../api/trainer_medical.dart';
-import '../widgets/trainer_nav_bar.dart';
 
 const List<String> _ruMonths = <String>[
   'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
@@ -108,7 +107,6 @@ class _ClientMedicalScreenState extends ConsumerState<ClientMedicalScreen> {
     final AsyncValue<List<MedicalRecord>> records = ref.watch(clientMedicalProvider(widget.clientId));
 
     return Scaffold(
-      bottomNavigationBar: const TrainerNavBar(),
       appBar: AppBar(title: const Text('Мед.карта')),
       body: Column(
         children: <Widget>[

@@ -13,7 +13,6 @@ import '../api/trainer_client_stats.dart';
 import '../api/trainer_clients.dart';
 import '../api/trainer_medical.dart';
 import '../api/trainer_workouts.dart';
-import '../widgets/trainer_nav_bar.dart';
 import 'active_workout_screen.dart';
 import 'calendar_screen.dart';
 import 'client_edit_screen.dart';
@@ -97,7 +96,6 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
         _nextSessionByClient(ref.watch(trainerSessionsProvider).valueOrNull ?? <Session>[]);
 
     return Scaffold(
-      bottomNavigationBar: const TrainerNavBar(),
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.of(context).push<bool>(
           MaterialPageRoute<bool>(builder: (_) => const ClientEditScreen()),
@@ -511,7 +509,6 @@ class ClientDetailScreen extends ConsumerWidget {
     ];
 
     return Scaffold(
-      bottomNavigationBar: const TrainerNavBar(),
       // Без AppBar/стрелки назад: шапка-контент (аватар + имя) как в вебе.
       // Возврат — системным жестом/кнопкой назад.
       body: SafeArea(
@@ -1156,7 +1153,6 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
     final AppColors c = context.colors;
     final AsyncValue<List<TWorkout>> ws = ref.watch(clientWorkoutsCardProvider(_cid));
     return Scaffold(
-      bottomNavigationBar: const TrainerNavBar(),
       appBar: AppBar(title: Text('Тренировки · ${widget.client.fullName}')),
       body: ws.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -1635,7 +1631,6 @@ class ClientPaymentsScreen extends ConsumerWidget {
     final int remaining = paid - done;
 
     return Scaffold(
-      bottomNavigationBar: const TrainerNavBar(),
       appBar: AppBar(title: Text('Оплата · ${client.fullName}')),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -1709,7 +1704,6 @@ class _ClientStatsScreenState extends ConsumerState<ClientStatsScreen> {
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
     return Scaffold(
-      bottomNavigationBar: const TrainerNavBar(),
       appBar: AppBar(title: Text('Прогресс · ${widget.client.fullName}')),
       body: Column(
         children: <Widget>[
@@ -1844,7 +1838,6 @@ class ClientProfileScreen extends ConsumerWidget {
     // Свежий снимок (после правки данные обновляются без возврата старого объекта).
     final Client c = ref.watch(trainerClientProvider(client.id)).valueOrNull ?? client;
     return Scaffold(
-      bottomNavigationBar: const TrainerNavBar(),
       appBar: AppBar(
         title: const Text('Профиль'),
         actions: <Widget>[
@@ -2071,7 +2064,7 @@ class _AddPackageButton extends ConsumerWidget {
 }
 
 /// Тип дохода. package/installment/subscription → пакет; остальные → простой доход.
-enum _IncomeKind { package, installment, subscription, online, inventory, pharma, other }
+enum _IncomeKind { package, installment, subscription, online, inventory, other }
 
 const Map<_IncomeKind, String> _incomeLabels = <_IncomeKind, String>{
   _IncomeKind.package: 'Пакет тренировок',
@@ -2079,7 +2072,6 @@ const Map<_IncomeKind, String> _incomeLabels = <_IncomeKind, String>{
   _IncomeKind.subscription: 'Абонемент',
   _IncomeKind.online: 'Онлайн сопровождение',
   _IncomeKind.inventory: 'Инвентарь',
-  _IncomeKind.pharma: 'Фарма',
   _IncomeKind.other: 'Прочее',
 };
 
@@ -2103,6 +2095,10 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
   _IncomeKind _kind = _IncomeKind.package;
   final TextEditingController _lessons = TextEditingController(text: '20');
   final TextEditingController _price = TextEditingController(); // ₽ за тренировку / период / сумма
+  final TextEditingController _total = TextEditingController(); // сумма пакета (двусторонний пересчёт с _price)
+  // Что тренер вводил последним для пакета: 'price' (цена за тренировку) или 'total' (сумма пакета).
+  // От этого зависит, какое поле пересчитывать при смене количества тренировок.
+  String _pkgAnchor = 'price';
   final TextEditingController _note = TextEditingController();
   DateTime _paidAt = DateTime.now();
   DateTime _starts = DateTime.now();
@@ -2125,6 +2121,7 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
   void dispose() {
     _lessons.dispose();
     _price.dispose();
+    _total.dispose();
     _note.dispose();
     for (final _InstallmentRow r in _plan) {
       r.dispose();
@@ -2157,7 +2154,37 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
   String _fmtRu(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
   num get _priceNum => num.tryParse(_price.text.trim().replaceAll(',', '.')) ?? 0;
+  num get _totalNum => num.tryParse(_total.text.trim().replaceAll(',', '.')) ?? 0;
   int get _lessonsNum => int.tryParse(_lessons.text.trim()) ?? 0;
+
+  /// Число → строка для поля: пусто при 0, целое без дробной части, иначе до 2 знаков.
+  String _fmtNum(num v) {
+    if (v <= 0) return '';
+    if (v == v.roundToDouble()) return v.round().toString();
+    return v.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
+  }
+
+  /// Двусторонний пересчёт цены за тренировку ↔ суммы пакета.
+  /// source: 'price' — тренер правил цену → пересчитываем сумму; 'total' — правил
+  /// сумму → пересчитываем цену; 'lessons' — сменилось кол-во → пересчитываем то,
+  /// что НЕ трогали последним ([_pkgAnchor]).
+  void _recomputePackage(String source) {
+    final int n = _lessonsNum;
+    if (source == 'price') {
+      _pkgAnchor = 'price';
+      _total.text = _fmtNum(n * _priceNum);
+    } else if (source == 'total') {
+      _pkgAnchor = 'total';
+      _price.text = n > 0 ? _fmtNum(_totalNum / n) : '';
+    } else {
+      // Сменилось количество тренировок — держим последнее введённое поле как якорь.
+      if (_pkgAnchor == 'total') {
+        _price.text = n > 0 ? _fmtNum(_totalNum / n) : '';
+      } else {
+        _total.text = _fmtNum(n * _priceNum);
+      }
+    }
+  }
 
   String _money(num v) {
     final int n = v.round();
@@ -2176,6 +2203,11 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
     if (_isInstallment) {
       if (_planFilled.isEmpty) {
         m.showSnackBar(const SnackBar(content: Text('Добавьте хотя бы один платёж с суммой')));
+        return;
+      }
+    } else if (_isPackage) {
+      if (_totalNum <= 0) {
+        m.showSnackBar(const SnackBar(content: Text('Укажите сумму пакета или стоимость тренировки')));
         return;
       }
     } else if (_priceNum <= 0) {
@@ -2202,9 +2234,10 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
             );
         ref.invalidate(clientPackagesProvider(widget.clientId));
       } else if (_isPkgKind) {
-        // package: lessonsPaid=N, totalPaid=N*price; subscription: lessonsPaid=0, totalPaid=цена периода.
+        // package: lessonsPaid=N, totalPaid=сумма пакета (двусторонний ввод);
+        // subscription: lessonsPaid=0, totalPaid=цена периода.
         final int lessons = _isPackage ? _lessonsNum : 0;
-        final num total = _isPackage ? _lessonsNum * _priceNum : _priceNum;
+        final num total = _isPackage ? _totalNum : _priceNum;
         await ref.read(trainerClientCardApiProvider).createPackage(
               widget.clientId,
               lessonsPaid: lessons,
@@ -2244,7 +2277,7 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text('Новый доход', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
+            Text('Новый доход', style: AppFonts.display(size: 22, color: c.ink)),
             const SizedBox(height: 14),
             // Чипы типа.
             Wrap(
@@ -2264,7 +2297,12 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
                 controller: _lessons,
                 keyboardType: TextInputType.number,
                 onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(labelText: 'Тренировок', border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                  labelText: 'Тренировок',
+                  filled: true,
+                  fillColor: c.card,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                ),
               ),
               const SizedBox(height: 12),
               Row(
@@ -2288,8 +2326,13 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
                       child: SelectAllTextField(
                         controller: _lessons,
                         keyboardType: TextInputType.number,
-                        onChanged: (_) => setState(() {}),
-                        decoration: const InputDecoration(labelText: 'Тренировок', border: OutlineInputBorder()),
+                        onChanged: (_) => setState(() => _recomputePackage('lessons')),
+                        decoration: InputDecoration(
+                          labelText: 'Тренировок',
+                          filled: true,
+                          fillColor: c.card,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -2298,14 +2341,34 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
                     child: SelectAllTextField(
                       controller: _price,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      onChanged: (_) => setState(() {}),
+                      onChanged: (_) => setState(() {
+                        if (_isPackage) _recomputePackage('price');
+                      }),
                       decoration: InputDecoration(
-                          labelText: _isPackage ? '₽ за тренировку' : 'Цена периода, ₽',
-                          border: const OutlineInputBorder()),
+                        labelText: _isPackage ? '₽ за тренировку' : 'Цена периода, ₽',
+                        filled: true,
+                        fillColor: c.card,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                      ),
                     ),
                   ),
                 ],
               ),
+              if (_isPackage) ...<Widget>[
+                const SizedBox(height: 12),
+                SelectAllTextField(
+                  controller: _total,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (_) => setState(() => _recomputePackage('total')),
+                  decoration: InputDecoration(
+                    labelText: 'Сумма пакета, ₽',
+                    helperText: 'Заполните любое из двух — второе посчитается само',
+                    filled: true,
+                    fillColor: c.card,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               _dateField(c, 'Дата оплаты', _paidAt, (DateTime d) => setState(() => _paidAt = d)),
               const SizedBox(height: 12),
@@ -2322,7 +2385,12 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
                 controller: _price,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(labelText: 'Сумма, ₽', border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                  labelText: 'Сумма, ₽',
+                  filled: true,
+                  fillColor: c.card,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                ),
               ),
               const SizedBox(height: 12),
               _dateField(c, 'Дата', _paidAt, (DateTime d) => setState(() => _paidAt = d)),
@@ -2331,7 +2399,12 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
               const SizedBox(height: 12),
               SelectAllTextField(
                 controller: _note,
-                decoration: const InputDecoration(labelText: 'Заметка (необязательно)', border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                  labelText: 'Заметка (необязательно)',
+                  filled: true,
+                  fillColor: c.card,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                ),
               ),
             ],
             if (_isPackage) ...<Widget>[
@@ -2341,7 +2414,7 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12)),
-                child: Text('Итого пакет: ${_money(_lessonsNum * _priceNum)}',
+                child: Text('Итого пакет: ${_money(_totalNum)}',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
               ),
             ],
@@ -2400,7 +2473,12 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
               controller: r.amount,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(labelText: 'Сумма, ₽', border: OutlineInputBorder()),
+              decoration: InputDecoration(
+                labelText: 'Сумма, ₽',
+                filled: true,
+                fillColor: c.card,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+              ),
             ),
           ),
           IconButton(
@@ -2421,7 +2499,12 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
         if (d != null) onPick(d);
       },
       child: InputDecorator(
-        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+        decoration: InputDecoration(
+          labelText: label,
+          filled: true,
+          fillColor: c.card,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+        ),
         child: Text(_fmtRu(value)),
       ),
     );
@@ -2438,7 +2521,9 @@ class _AddIncomeFormState extends ConsumerState<_AddIncomeForm> {
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: label,
-          border: const OutlineInputBorder(),
+          filled: true,
+          fillColor: c.card,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
           suffixIcon: value != null
               ? IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => onPick(null))
               : const Icon(Icons.event),

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/trainer_auth.dart';
+import '../widgets/auth_form.dart';
 
 /// Восстановление пароля по email — двухэтапный экран.
 /// Этап 1: ввод почты + «Отправить код» (POST /api/auth/forgot-password).
@@ -24,7 +25,6 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   // false → этап 1 (запрос кода); true → этап 2 (ввод кода и нового пароля).
   bool _codeSent = false;
   bool _busy = false;
-  bool _hidden = true; // скрыт ли новый пароль (глазок переключает)
   String? _error;
 
   // Простой email-regex: непустая локальная часть, домен с точкой.
@@ -99,17 +99,23 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
+            constraints: const BoxConstraints(maxWidth: 430),
             child: ListView(
               shrinkWrap: true,
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
               children: <Widget>[
-                SelectAllTextField(
+                const AuthHeader(
+                  eyebrow: 'FITFLOW · CRM',
+                  title: 'Сброс пароля',
+                  subtitle: 'Восстановление доступа к аккаунту',
+                ),
+                const SizedBox(height: 24),
+                AuthField(
                   controller: _email,
+                  label: 'Почта',
                   keyboardType: TextInputType.emailAddress,
-                  autocorrect: false,
-                  enabled: !_codeSent,
-                  decoration: const InputDecoration(labelText: 'Почта'),
+                  autofillHints: const <String>[AutofillHints.email],
+                  textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _codeSent ? null : _sendCode(),
                 ),
                 if (_codeSent) ...<Widget>[
@@ -119,47 +125,28 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                     text: 'Если email зарегистрирован, мы отправили на него '
                         '6-значный код. Он действует 15 минут.',
                   ),
-                  const SizedBox(height: 12),
-                  SelectAllTextField(
-                    controller: _code,
-                    keyboardType: TextInputType.number,
-                    maxLength: 6,
-                    autocorrect: false,
-                    inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(
-                      labelText: 'Код из письма',
-                      counterText: '', // скрыть счётчик символов
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SelectAllTextField(
+                  const SizedBox(height: 16),
+                  _CodeField(controller: _code),
+                  const SizedBox(height: 16),
+                  AuthField(
                     controller: _password,
-                    obscureText: _hidden,
-                    decoration: InputDecoration(
-                      labelText: 'Новый пароль (от 8 символов)',
-                      suffixIcon: IconButton(
-                        tooltip: _hidden ? 'Показать пароль' : 'Скрыть пароль',
-                        icon: Icon(_hidden
-                            ? Icons.visibility_off_outlined
-                            : Icons.visibility_outlined),
-                        onPressed: () => setState(() => _hidden = !_hidden),
-                      ),
-                    ),
+                    label: 'Новый пароль (от 8 символов)',
+                    obscure: true,
+                    autofillHints: const <String>[AutofillHints.newPassword],
+                    textInputAction: TextInputAction.done,
                     onSubmitted: (_) => _reset(),
                   ),
                 ],
                 if (_error != null) ...<Widget>[
                   const SizedBox(height: 12),
-                  // Текст ошибки — нейтральным ink-токеном (не красным).
-                  Text(_error!, style: TextStyle(color: c.inkMuted)),
+                  Text(_error!, style: TextStyle(fontSize: 14, color: c.danger)),
                 ],
                 const SizedBox(height: 20),
-                FilledButton(
-                  onPressed: _busy ? null : (_codeSent ? _reset : _sendCode),
-                  child: _busy
-                      ? const SizedBox(
-                          height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                      : Text(_codeSent ? 'Сбросить пароль' : 'Отправить код'),
+                AuthPrimaryButton(
+                  label: _codeSent ? 'Сбросить пароль' : 'Отправить код',
+                  busyLabel: _codeSent ? 'Сбрасываем…' : 'Отправляем…',
+                  busy: _busy,
+                  onPressed: _codeSent ? _reset : _sendCode,
                 ),
               ],
             ),
@@ -170,7 +157,49 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   }
 }
 
-/// Нейтральный информационный баннер (подсказка/ошибка) — на фоне карточки,
+/// Поле ввода 6-значного кода в стиле [AuthField], но с числовой клавиатурой,
+/// ограничением длины и скрытым счётчиком символов.
+class _CodeField extends StatelessWidget {
+  const _CodeField({required this.controller});
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    OutlineInputBorder border(Color color, double width) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: color, width: width),
+        );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text('Код из письма',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.inkMuted)),
+        const SizedBox(height: 6),
+        SelectAllTextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          autocorrect: false,
+          inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
+          style: TextStyle(fontSize: 15, color: c.ink),
+          decoration: InputDecoration(
+            isDense: true,
+            filled: true,
+            fillColor: c.chip,
+            counterText: '', // скрыть счётчик символов
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            enabledBorder: border(c.line, 1),
+            focusedBorder: border(c.accent, 1.6),
+            border: border(c.line, 1),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Нейтральный информационный баннер (подсказка) — на фоне карточки,
 /// нейтральными ink-токенами. Красный в проекте только для иконок опасности.
 class _InfoBanner extends StatelessWidget {
   const _InfoBanner({required this.text});

@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/trainer_chat.dart';
-import '../widgets/trainer_nav_bar.dart';
 
 /// Тред переписки тренера с конкретным клиентом. Поллинг + отметка прочтения.
 class ChatScreen extends ConsumerStatefulWidget {
@@ -102,7 +101,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final AsyncValue<TrainerChatThread> chat =
         ref.watch(trainerChatMessagesProvider(widget.clientId));
     return Scaffold(
-      bottomNavigationBar: const TrainerNavBar(),
       appBar: AppBar(title: Text(widget.clientName)),
       body: chat.when(
         loading: () => const Center(child: CircularProgressIndicator()),

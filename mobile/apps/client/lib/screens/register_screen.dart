@@ -116,8 +116,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               shrinkWrap: true,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
               children: <Widget>[
-                Text('Регистрация',
-                    style: AppFonts.display(size: 36, color: c.accent, letterSpacing: -0.7)),
+                const AuthHeader(
+                  eyebrow: 'FITFLOW',
+                  title: 'Регистрация',
+                  subtitle: 'Создание аккаунта',
+                ),
                 const SizedBox(height: 24),
                 AuthField(
                   controller: _first,

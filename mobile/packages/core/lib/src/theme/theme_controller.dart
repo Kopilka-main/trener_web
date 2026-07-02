@@ -5,9 +5,10 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 const String _themeKey = 'theme_mode';
 
 ThemeMode _themeFromString(String? v) => switch (v) {
-      'dark' => ThemeMode.dark,
+      'light' => ThemeMode.light,
       'system' => ThemeMode.system,
-      _ => ThemeMode.light,
+      // 'dark' и отсутствие сохранённого выбора → тёмная (тема по умолчанию).
+      _ => ThemeMode.dark,
     };
 
 /// Читает сохранённую тему ДО первого кадра (вызывать в main() с await), чтобы
@@ -17,16 +18,16 @@ Future<ThemeMode> loadThemeMode() async {
     final String? v = await const FlutterSecureStorage().read(key: _themeKey);
     return _themeFromString(v);
   } catch (_) {
-    return ThemeMode.light;
+    return ThemeMode.dark;
   }
 }
 
-/// Начальная тема для первого кадра. По умолчанию светлая; в main() переопределяется
+/// Начальная тема для первого кадра. По умолчанию тёмная; в main() переопределяется
 /// уже загруженным значением (см. [loadThemeMode]) — поэтому перескока темы нет.
 final Provider<ThemeMode> initialThemeModeProvider =
-    Provider<ThemeMode>((Ref ref) => ThemeMode.light);
+    Provider<ThemeMode>((Ref ref) => ThemeMode.dark);
 
-/// Выбор темы пользователем (по умолчанию светлая — как в вебе). Начальное
+/// Выбор темы пользователем (по умолчанию тёмная). Начальное
 /// значение берётся из [initialThemeModeProvider]. system — следовать системной.
 class ThemeController extends StateNotifier<ThemeMode> {
   ThemeController(super.initial, {FlutterSecureStorage? storage})

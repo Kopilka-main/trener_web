@@ -94,8 +94,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               shrinkWrap: true,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
               children: <Widget>[
-                Text('Вход',
-                    style: AppFonts.display(size: 40, color: c.accent, letterSpacing: -0.8)),
+                const AuthHeader(
+                  eyebrow: 'FITFLOW',
+                  title: 'Вход',
+                  subtitle: 'С возвращением',
+                ),
                 const SizedBox(height: 24),
                 AuthField(
                   controller: _email,

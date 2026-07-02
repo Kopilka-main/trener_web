@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/trainer_auth.dart';
+import '../widgets/auth_form.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -87,84 +88,92 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final AppColors c = context.colors;
     return Scaffold(
-      appBar: AppBar(title: const Text('Регистрация')),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
+            constraints: const BoxConstraints(maxWidth: 430),
             child: ListView(
               shrinkWrap: true,
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
               children: <Widget>[
-                SelectAllTextField(controller: _first, decoration: const InputDecoration(labelText: 'Имя')),
-                const SizedBox(height: 12),
-                SelectAllTextField(controller: _last, decoration: const InputDecoration(labelText: 'Фамилия')),
-                const SizedBox(height: 12),
-                SelectAllTextField(
-                  controller: _email,
-                  keyboardType: TextInputType.emailAddress,
-                  autocorrect: false,
-                  decoration: const InputDecoration(labelText: 'Почта'),
+                const AuthHeader(
+                  eyebrow: 'FITFLOW · CRM',
+                  title: 'Регистрация',
+                  subtitle: 'Создание аккаунта тренера',
                 ),
-                const SizedBox(height: 12),
-                SelectAllTextField(
+                const SizedBox(height: 24),
+                AuthField(
+                  controller: _first,
+                  label: 'Имя',
+                  autofillHints: const <String>[AutofillHints.givenName],
+                  textInputAction: TextInputAction.next,
+                ),
+                const SizedBox(height: 16),
+                AuthField(
+                  controller: _last,
+                  label: 'Фамилия',
+                  autofillHints: const <String>[AutofillHints.familyName],
+                  textInputAction: TextInputAction.next,
+                ),
+                const SizedBox(height: 16),
+                AuthField(
+                  controller: _email,
+                  label: 'Почта',
+                  keyboardType: TextInputType.emailAddress,
+                  autofillHints: const <String>[AutofillHints.email],
+                  textInputAction: TextInputAction.next,
+                ),
+                const SizedBox(height: 16),
+                AuthField(
                   controller: _password,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Пароль (от 8 символов)'),
+                  label: 'Пароль (от 8 символов)',
+                  obscure: true,
+                  autofillHints: const <String>[AutofillHints.newPassword],
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _submit(),
                 ),
                 if (_error != null) ...<Widget>[
                   const SizedBox(height: 12),
-                  Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  Text(_error!, style: TextStyle(fontSize: 14, color: c.danger)),
                 ],
                 const SizedBox(height: 20),
-                FilledButton(
-                  onPressed: _busy ? null : _submit,
-                  child: _busy
-                      ? const SizedBox(
-                          height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Зарегистрироваться'),
+                AuthPrimaryButton(
+                  label: 'Зарегистрироваться',
+                  busyLabel: 'Создаём…',
+                  busy: _busy,
+                  onPressed: _submit,
                 ),
                 const SizedBox(height: 20),
-                const _OrDivider(),
+                const OAuthOrDivider(),
                 const SizedBox(height: 16),
-                OutlinedButton(
+                OAuthButton(
+                  label: 'Войти через VK',
                   onPressed: _busy ? null : () => _oauth('vk', 'Вход через VK'),
-                  child: const Text('Войти через VK'),
                 ),
-                const SizedBox(height: 8),
-                OutlinedButton(
+                const SizedBox(height: 10),
+                OAuthButton(
+                  label: 'Войти через Яндекс',
                   onPressed: _busy ? null : () => _oauth('yandex', 'Вход через Яндекс'),
-                  child: const Text('Войти через Яндекс'),
                 ),
-                TextButton(
-                  onPressed: () => context.go('/login'),
-                  child: const Text('У меня уже есть аккаунт'),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    Text('Уже есть аккаунт? ', style: TextStyle(fontSize: 14, color: c.inkMuted)),
+                    GestureDetector(
+                      onTap: () => context.go('/login'),
+                      child: Text('Войти',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.accent)),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Разделитель «или» между основной кнопкой и OAuth-кнопками.
-class _OrDivider extends StatelessWidget {
-  const _OrDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        const Expanded(child: Divider()),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text('или', style: Theme.of(context).textTheme.bodySmall),
-        ),
-        const Expanded(child: Divider()),
-      ],
     );
   }
 }

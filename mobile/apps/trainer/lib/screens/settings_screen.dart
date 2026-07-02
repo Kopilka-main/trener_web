@@ -6,7 +6,6 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../api/trainer_auth.dart';
 import '../api/trainer_gyms.dart';
-import '../widgets/trainer_nav_bar.dart';
 import 'calendar_sync_screen.dart';
 import 'profile_edit_screen.dart';
 
@@ -58,7 +57,6 @@ class SettingsScreen extends ConsumerWidget {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final AppColors c = context.colors;
     return Scaffold(
-      bottomNavigationBar: const TrainerNavBar(),
       appBar: AppBar(title: const Text('Профиль'), automaticallyImplyLeading: false),
       body: me.when(
         loading: () => const Center(child: CircularProgressIndicator()),
