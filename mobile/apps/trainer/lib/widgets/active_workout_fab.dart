@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/active_workout_state.dart';
+import '../api/trainer_clients.dart';
 import '../router.dart';
 
 /// Оверлей поверх всего приложения: если идёт (незавершённая) тренировка и мы не
@@ -18,7 +19,7 @@ class ActiveWorkoutFab extends ConsumerStatefulWidget {
 }
 
 class _ActiveWorkoutFabState extends ConsumerState<ActiveWorkoutFab> {
-  static const double _w = 72;
+  static const double _w = 190;
   static const double _h = 56;
   Offset? _pos; // null → позиция по умолчанию (справа снизу)
 
@@ -61,15 +62,29 @@ class _ActiveWorkoutFabState extends ConsumerState<ActiveWorkoutFab> {
     // сработал любой признак: активный маршрут ИЛИ флаг «экран смонтирован».
     final bool onActiveScreen =
         _location.startsWith('/active/') || ref.watch(activeWorkoutOnScreenProvider);
+    final bool show = authed && aw != null && !onActiveScreen;
+    // Имя занимающегося (клиента) по clientId; если ещё не подгрузился — покажем
+    // название тренировки как запасной вариант.
+    String label = '';
+    if (show) {
+      final List<Client> clients = ref.watch(trainerClientsProvider).valueOrNull ?? <Client>[];
+      for (final Client cl in clients) {
+        if (cl.id == aw!.clientId) {
+          label = cl.fullName;
+          break;
+        }
+      }
+      if (label.isEmpty) label = aw!.name;
+    }
     return Stack(
       children: <Widget>[
         widget.child,
-        if (authed && aw != null && !onActiveScreen) _fab(context, aw),
+        if (show) _fab(context, aw!, label),
       ],
     );
   }
 
-  Widget _fab(BuildContext context, ActiveWorkoutRef aw) {
+  Widget _fab(BuildContext context, ActiveWorkoutRef aw, String label) {
     final AppColors c = context.colors;
     final Size size = MediaQuery.of(context).size;
     final EdgeInsets pad = MediaQuery.of(context).padding;
@@ -102,10 +117,16 @@ class _ActiveWorkoutFabState extends ConsumerState<ActiveWorkoutFab> {
               ],
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
                 Icon(Icons.fitness_center, size: 20, color: c.accentOn),
-                Icon(Icons.chevron_right, size: 20, color: c.accentOn),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.accentOn)),
+                ),
+                Icon(Icons.chevron_right, size: 18, color: c.accentOn),
               ],
             ),
           ),

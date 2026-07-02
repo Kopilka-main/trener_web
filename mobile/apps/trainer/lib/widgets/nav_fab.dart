@@ -53,7 +53,6 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab> with SingleTickerPr
   double? _top; // позиция кнопки по вертикали (null → по умолчанию снизу)
 
   static const double _fabSize = 56;
-  static const double _gap = 62; // шаг между пунктами меню
 
   @override
   void dispose() {
@@ -107,7 +106,6 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab> with SingleTickerPr
               // Кнопка нужна там, откуда есть куда вернуться (не на главной) и не
               // на проведении тренировки.
               final bool show = navCanGoBack.value && !onConduct;
-              debugPrint('NAVFAB canBack=${navCanGoBack.value} conduct=$onConduct show=$show');
               if (!show) {
                 if (_open) {
                   _open = false;
@@ -132,13 +130,15 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab> with SingleTickerPr
     final double defTop = size.height - _fabSize - pad.bottom - 110;
     final double fabTop = (_top ?? defTop).clamp(minTop, maxTop);
 
-    // Пункты меню снизу вверх: ближайший к кнопке — первый.
+    // 3 пункта по дуге вокруг кнопки (кнопка у левого края → раскрываются вправо):
+    // вверх-вправо, вправо, вниз-вправо. Отдельный «Назад» не нужен — это сама
+    // главная кнопка.
     final List<(IconData, VoidCallback)> items = <(IconData, VoidCallback)>[
-      (Icons.arrow_back_rounded, _back),
       (Icons.home_rounded, _gohome),
       (Icons.calendar_month_rounded, () => _goto('/calendar')),
       (Icons.account_balance_wallet_rounded, () => _goto('/accounting')),
     ];
+    const List<Offset> arc = <Offset>[Offset(68, -68), Offset(96, 0), Offset(68, 68)];
 
     return AnimatedBuilder(
       animation: _c,
@@ -157,9 +157,8 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab> with SingleTickerPr
               ),
             for (int i = 0; i < items.length; i++)
               Positioned(
-                left: left,
-                // Раскрываются ВВЕРХ от кнопки (пункты «всплывают» по мере анимации).
-                top: fabTop - (i + 1) * _gap * vp,
+                left: left + 4 + arc[i].dx * vp,
+                top: fabTop + 4 + arc[i].dy * vp,
                 child: IgnorePointer(
                   ignoring: v < 0.85,
                   child: Opacity(
@@ -191,7 +190,9 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab> with SingleTickerPr
       gestures: <Type, GestureRecognizerFactory>{
         TapGestureRecognizer: GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
           () => TapGestureRecognizer(),
-          (TapGestureRecognizer r) => r.onTap = _open ? _close : _back,
+          // Тап всегда — назад (даже при раскрытом меню; _back сам его закроет).
+          // Закрыть меню без перехода можно тапом по затемнённому фону.
+          (TapGestureRecognizer r) => r.onTap = _back,
         ),
         LongPressGestureRecognizer: GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
           () => LongPressGestureRecognizer(duration: const Duration(milliseconds: 220)),
