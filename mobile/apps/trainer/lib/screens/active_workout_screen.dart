@@ -11,6 +11,7 @@ import '../api/trainer_assign.dart';
 import '../api/trainer_calendar.dart';
 import '../api/trainer_client_card.dart';
 import '../api/trainer_client_stats.dart';
+import '../api/trainer_home.dart';
 import '../api/trainer_workouts.dart';
 import 'template_edit_screen.dart' show ExerciseSelect;
 
@@ -316,9 +317,14 @@ class _ConductorState extends ConsumerState<_Conductor> {
   /// Начать тренировку → active, и зарегистрировать её как «идущую» для FAB.
   Future<void> _start() async {
     await _run(() => _api.start(_clientId, _w.id));
-    if (mounted && _w.status == WorkoutStatus.active) {
-      ref.read(activeWorkoutProvider.notifier).set(_clientId, _w.id, _w.name);
-    }
+    if (!mounted || _w.status != WorkoutStatus.active) return;
+    ref.read(activeWorkoutProvider.notifier).set(_clientId, _w.id, _w.name);
+    // Главная и карточка клиента должны сразу отразить идущую тренировку
+    // (блок «Вернуться к тренировке» / «ближайшая»), иначе остаются на кэше и
+    // предлагают «назначить новую». Инвалидируем — как при завершении.
+    ref.invalidate(trainerHomeProvider);
+    ref.invalidate(clientWorkoutsCardProvider(_clientId));
+    ref.invalidate(clientWorkoutsRawProvider(_clientId));
   }
 
   Future<void> _complete() async {
