@@ -113,6 +113,10 @@ class _ConductorState extends ConsumerState<_Conductor> {
   final AudioPlayer _player = AudioPlayer();
   // Дата исторической записи (excludedFromBalance) — по умолчанию сегодня.
   DateTime _historyDate = DateTime.now();
+  // Контроллер флага «экран проведения открыт» — захватываем заранее, чтобы
+  // сбросить его ПОСЛЕ dispose (менять провайдер прямо в dispose нельзя — флаг
+  // застревал true и FAB пропадал везде).
+  late final _onScreenCtrl = ref.read(activeWorkoutOnScreenProvider.notifier);
 
   String get _clientId => widget.clientId;
   TrainerWorkoutsApi get _api => ref.read(trainerWorkoutsApiProvider);
@@ -127,7 +131,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
     // уже active — регистрируем её как «идущую» (на случай прямого входа/возврата).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref.read(activeWorkoutOnScreenProvider.notifier).state = true;
+      _onScreenCtrl.state = true;
       if (_w.status == WorkoutStatus.active) {
         ref.read(activeWorkoutProvider.notifier).set(_clientId, _w.id, _w.name);
       }
@@ -140,7 +144,9 @@ class _ConductorState extends ConsumerState<_Conductor> {
     _restTimer?.cancel();
     _player.dispose();
     // Экран закрыт — снова разрешаем плавающий FAB (если тренировка ещё идёт).
-    ref.read(activeWorkoutOnScreenProvider.notifier).state = false;
+    // Сброс откладываем на следующий кадр: менять провайдер в dispose нельзя,
+    // иначе флаг застревает true и FAB не появляется.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onScreenCtrl.state = false);
     super.dispose();
   }
 
