@@ -130,15 +130,14 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab> with SingleTickerPr
     final double defTop = size.height - _fabSize - pad.bottom - 110;
     final double fabTop = (_top ?? defTop).clamp(minTop, maxTop);
 
-    // 3 пункта по дуге вокруг кнопки (кнопка у левого края → раскрываются вправо):
-    // вверх-вправо, вправо, вниз-вправо. Отдельный «Назад» не нужен — это сама
+    // 3 пункта столбиком НАД кнопкой. Отдельный «Назад» не нужен — это сама
     // главная кнопка.
     final List<(IconData, VoidCallback)> items = <(IconData, VoidCallback)>[
       (Icons.home_rounded, _gohome),
       (Icons.calendar_month_rounded, () => _goto('/calendar')),
       (Icons.account_balance_wallet_rounded, () => _goto('/accounting')),
     ];
-    const List<Offset> arc = <Offset>[Offset(68, -68), Offset(96, 0), Offset(68, 68)];
+    const List<Offset> arc = <Offset>[Offset(0, -62), Offset(0, -124), Offset(0, -186)];
 
     return AnimatedBuilder(
       animation: _c,
@@ -195,7 +194,7 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab> with SingleTickerPr
           (TapGestureRecognizer r) => r.onTap = _back,
         ),
         LongPressGestureRecognizer: GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
-          () => LongPressGestureRecognizer(duration: const Duration(milliseconds: 220)),
+          () => LongPressGestureRecognizer(duration: const Duration(milliseconds: 176)),
           (LongPressGestureRecognizer r) => r.onLongPress = _toggle,
         ),
         VerticalDragGestureRecognizer: GestureRecognizerFactoryWithHandlers<VerticalDragGestureRecognizer>(
