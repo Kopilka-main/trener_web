@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'api/trainer_clients.dart';
+import 'widgets/nav_fab.dart';
 import 'screens/accounting_screen.dart';
 import 'screens/active_workout_screen.dart';
 import 'screens/calendar_screen.dart';
@@ -28,6 +29,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/splash',
     refreshListenable: refresh,
+    // Считает глубину стека (для навигационной кнопки «Назад»).
+    observers: <NavigatorObserver>[NavStackObserver()],
     redirect: (BuildContext context, GoRouterState state) {
       final AuthStatus status = ref.read(sessionProvider).status;
       final String loc = state.matchedLocation;

@@ -6,6 +6,35 @@ import 'package:go_router/go_router.dart';
 import '../api/active_workout_state.dart';
 import '../router.dart';
 
+/// Можно ли вернуться назад = в стеке корневого навигатора больше одного экрана.
+/// go_router-location для этого негоден: при imperative `push`/`MaterialPageRoute`
+/// он остаётся «/home». Наблюдатель ниже ловит ОБА вида переходов (они в одном
+/// Navigator) и держит этот флаг актуальным.
+final ValueNotifier<bool> navCanGoBack = ValueNotifier<bool>(false);
+
+/// Наблюдатель глубины стека — вешается в GoRouter(observers: [...]).
+class NavStackObserver extends NavigatorObserver {
+  int _depth = 0;
+  void _sync() => navCanGoBack.value = _depth > 1;
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _depth++;
+    _sync();
+  }
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (_depth > 0) _depth--;
+    _sync();
+  }
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (_depth > 0) _depth--;
+    _sync();
+  }
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) => _sync();
+}
+
 /// Глобальная навигационная FAB-кнопка (замена нижнего меню). Стоит у ЛЕВОГО
 /// края, перетаскивается вдоль него по вертикали. Тап — раскрывает меню переходов
 /// (Назад / Главная / Календарь / Финансы) вверх; тап по затемнению — закрыть.
@@ -26,9 +55,6 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab> with SingleTickerPr
 
   static const double _fabSize = 56;
   static const double _gap = 62; // шаг между пунктами меню
-
-  // Экраны, где кнопка не нужна: корневые и проведение тренировки.
-  static const Set<String> _hidden = <String>{'/home', '/splash', '/login', '/register'};
 
   @override
   void dispose() {
@@ -55,31 +81,35 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab> with SingleTickerPr
 
   void _goto(String path) {
     _close();
-    ref.read(routerProvider).go(path);
+    // push (не go): переход добавляется в стек — остаётся возможность вернуться,
+    // и кнопка «Назад» продолжает показываться на разделе.
+    ref.read(routerProvider).push(path);
   }
 
-  bool _isHidden(String loc) => _hidden.contains(loc) || loc.startsWith('/active');
+  void _gohome() {
+    _close();
+    // Главная — сброс к корню (go): стек схлопывается, кнопка прячется, как и надо.
+    ref.read(routerProvider).go('/home');
+  }
 
   @override
   Widget build(BuildContext context) {
     final bool authed = ref.watch(sessionProvider).status == AuthStatus.authenticated;
-    // Экран проведения тренировки открывается и через MaterialPageRoute (маршрут
-    // роутера при этом не /active), поэтому дополнительно скрываем по флагу.
+    // Прячем на экране проведения (он открывается через MaterialPageRoute — по
+    // маршруту не поймать, поэтому по флагу).
     final bool onConduct = ref.watch(activeWorkoutOnScreenProvider);
-    final GoRouter router = ref.watch(routerProvider);
     return Stack(
       children: <Widget>[
         widget.child,
         if (authed)
           ListenableBuilder(
-            listenable: router.routerDelegate,
+            listenable: navCanGoBack,
             builder: (BuildContext context, Widget? _) {
-              // currentConfiguration отражает ФАКТИЧЕСКИ показанный экран (после
-              // редиректов) — в отличие от routeInformationProvider, который мог
-              // отдавать до-редиректный/устаревший путь (из-за чего кнопка висела
-              // на главной).
-              final String loc = router.routerDelegate.currentConfiguration.uri.path;
-              if (_isHidden(loc) || onConduct) {
+              // Кнопка нужна там, откуда есть куда вернуться (не на главной) и не
+              // на проведении тренировки.
+              final bool show = navCanGoBack.value && !onConduct;
+              debugPrint('NAVFAB canBack=${navCanGoBack.value} conduct=$onConduct show=$show');
+              if (!show) {
                 if (_open) {
                   _open = false;
                   _c.value = 0;
@@ -106,7 +136,7 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab> with SingleTickerPr
     // Пункты меню снизу вверх: ближайший к кнопке — первый.
     final List<(IconData, String, VoidCallback)> items = <(IconData, String, VoidCallback)>[
       (Icons.arrow_back_rounded, 'Назад', _back),
-      (Icons.home_rounded, 'Главная', () => _goto('/home')),
+      (Icons.home_rounded, 'Главная', _gohome),
       (Icons.calendar_month_rounded, 'Календарь', () => _goto('/calendar')),
       (Icons.account_balance_wallet_rounded, 'Финансы', () => _goto('/accounting')),
     ];
