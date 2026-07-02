@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../api/active_workout_state.dart';
 import '../router.dart';
 
-/// Глобальная навигационная FAB-кнопка (замена нижнего меню).
-/// Тап — назад (как свайп). Удержание — раскрывает вокруг радиальное меню
-/// с переходами: Главная / Календарь / Финансы. Ставится в MaterialApp.builder.
+/// Глобальная навигационная FAB-кнопка (замена нижнего меню). Стоит у ЛЕВОГО
+/// края, перетаскивается вдоль него по вертикали. Тап — раскрывает меню переходов
+/// (Назад / Главная / Календарь / Финансы) вверх; тап по затемнению — закрыть.
+/// Ставится в MaterialApp.builder.
 class GlobalNavFab extends ConsumerStatefulWidget {
   const GlobalNavFab({super.key, required this.child});
   final Widget child;
@@ -16,22 +18,17 @@ class GlobalNavFab extends ConsumerStatefulWidget {
   ConsumerState<GlobalNavFab> createState() => _GlobalNavFabState();
 }
 
-class _GlobalNavFabState extends ConsumerState<GlobalNavFab>
-    with SingleTickerProviderStateMixin {
+class _GlobalNavFabState extends ConsumerState<GlobalNavFab> with SingleTickerProviderStateMixin {
   late final AnimationController _c =
       AnimationController(vsync: this, duration: const Duration(milliseconds: 220));
   bool _open = false;
+  double? _top; // позиция кнопки по вертикали (null → по умолчанию снизу)
+
+  static const double _fabSize = 56;
+  static const double _gap = 62; // шаг между пунктами меню
 
   // Экраны, где кнопка не нужна: корневые и проведение тренировки.
   static const Set<String> _hidden = <String>{'/home', '/splash', '/login', '/register'};
-
-  // Смещения пунктов от главной кнопки (right, bottom), радиус ~120.
-  // Финансы — влево, Календарь — вверх-влево, Главная — вверх.
-  static const List<Offset> _bases = <Offset>[
-    Offset(120, 6),
-    Offset(88, 88),
-    Offset(6, 120),
-  ];
 
   @override
   void dispose() {
@@ -51,6 +48,7 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab>
   }
 
   void _back() {
+    _close();
     final GoRouter r = ref.read(routerProvider);
     r.canPop() ? r.pop() : r.go('/home');
   }
@@ -65,6 +63,9 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab>
   @override
   Widget build(BuildContext context) {
     final bool authed = ref.watch(sessionProvider).status == AuthStatus.authenticated;
+    // Экран проведения тренировки открывается и через MaterialPageRoute (маршрут
+    // роутера при этом не /active), поэтому дополнительно скрываем по флагу.
+    final bool onConduct = ref.watch(activeWorkoutOnScreenProvider);
     final GoRouter router = ref.watch(routerProvider);
     return Stack(
       children: <Widget>[
@@ -74,8 +75,7 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab>
             listenable: router.routeInformationProvider,
             builder: (BuildContext context, Widget? _) {
               final String loc = router.routeInformationProvider.value.uri.path;
-              if (_isHidden(loc)) {
-                // Пока кнопка скрыта — держим меню закрытым.
+              if (_isHidden(loc) || onConduct) {
                 if (_open) {
                   _open = false;
                   _c.value = 0;
@@ -91,7 +91,22 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab>
 
   Widget _overlay(BuildContext context) {
     final AppColors c = context.colors;
+    final Size size = MediaQuery.of(context).size;
     final EdgeInsets pad = MediaQuery.of(context).padding;
+    final double left = 16 + pad.left;
+    final double minTop = pad.top + 8;
+    final double maxTop = size.height - _fabSize - pad.bottom - 8;
+    final double defTop = size.height - _fabSize - pad.bottom - 110;
+    final double fabTop = (_top ?? defTop).clamp(minTop, maxTop);
+
+    // Пункты меню снизу вверх: ближайший к кнопке — первый.
+    final List<(IconData, String, VoidCallback)> items = <(IconData, String, VoidCallback)>[
+      (Icons.arrow_back_rounded, 'Назад', _back),
+      (Icons.home_rounded, 'Главная', () => _goto('/home')),
+      (Icons.calendar_month_rounded, 'Календарь', () => _goto('/calendar')),
+      (Icons.account_balance_wallet_rounded, 'Финансы', () => _goto('/accounting')),
+    ];
+
     return AnimatedBuilder(
       animation: _c,
       builder: (BuildContext context, Widget? _) {
@@ -107,67 +122,51 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab>
                   child: ColoredBox(color: Color.fromRGBO(0, 0, 0, 0.45 * v)),
                 ),
               ),
-            Positioned(
-              right: 16,
-              bottom: 24 + pad.bottom,
-              child: SizedBox(
-                width: 280,
-                height: 280,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: <Widget>[
-                    _item(c, 0, vp, v, Icons.account_balance_wallet_rounded, 'Финансы',
-                        () => _goto('/accounting')),
-                    _item(c, 1, vp, v, Icons.calendar_month_rounded, 'Календарь',
-                        () => _goto('/calendar')),
-                    _item(c, 2, vp, v, Icons.home_rounded, 'Главная', () => _goto('/home')),
-                    Positioned(right: 0, bottom: 0, child: _mainFab(c)),
-                  ],
+            for (int i = 0; i < items.length; i++)
+              Positioned(
+                left: left,
+                // Раскрываются ВВЕРХ от кнопки (пункты «всплывают» по мере анимации).
+                top: fabTop - (i + 1) * _gap * vp,
+                child: IgnorePointer(
+                  ignoring: v < 0.85,
+                  child: Opacity(
+                    opacity: v.clamp(0.0, 1.0),
+                    child: _MenuButton(icon: items[i].$1, label: items[i].$2, onTap: items[i].$3),
+                  ),
                 ),
               ),
-            ),
+            Positioned(left: left, top: fabTop, child: _mainFab(c)),
           ],
         );
       },
     );
   }
 
-  Widget _item(AppColors c, int i, double vp, double v, IconData icon, String label,
-      VoidCallback onTap) {
-    final Offset b = _bases[i];
-    return Positioned(
-      right: b.dx * vp,
-      bottom: b.dy * vp,
-      child: IgnorePointer(
-        ignoring: v < 0.85,
-        child: Opacity(
-          opacity: v.clamp(0.0, 1.0),
-          child: _MenuButton(icon: icon, label: label, onTap: onTap),
-        ),
-      ),
-    );
-  }
-
   Widget _mainFab(AppColors c) {
     return GestureDetector(
-      onTap: _open ? _close : _back,
-      onLongPress: _toggle,
+      onTap: _toggle,
+      // Перетаскивание вдоль левого края (только по вертикали).
+      onVerticalDragUpdate: (DragUpdateDetails d) {
+        final Size size = MediaQuery.of(context).size;
+        final EdgeInsets pad = MediaQuery.of(context).padding;
+        final double minTop = pad.top + 8;
+        final double maxTop = size.height - _fabSize - pad.bottom - 8;
+        final double base = _top ?? (size.height - _fabSize - pad.bottom - 110);
+        setState(() => _top = (base + d.delta.dy).clamp(minTop, maxTop));
+      },
       child: Container(
-        width: 56,
-        height: 56,
+        width: _fabSize,
+        height: _fabSize,
         decoration: BoxDecoration(
           color: c.accent,
           shape: BoxShape.circle,
           boxShadow: <BoxShadow>[
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.28),
-                blurRadius: 12,
-                offset: const Offset(0, 4)),
+            BoxShadow(color: Colors.black.withValues(alpha: 0.28), blurRadius: 12, offset: const Offset(0, 4)),
           ],
         ),
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 150),
-          child: Icon(_open ? Icons.close_rounded : Icons.arrow_back_rounded,
+          child: Icon(_open ? Icons.close_rounded : Icons.menu_rounded,
               key: ValueKey<bool>(_open), color: c.accentOn, size: 26),
         ),
       ),
@@ -175,7 +174,8 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab>
   }
 }
 
-/// Пункт радиального меню: подпись слева + круглая мини-кнопка с иконкой.
+/// Пункт меню: круглая мини-кнопка с иконкой + подпись справа (кнопка у левого
+/// края, поэтому подпись уходит в сторону экрана, а не за край).
 class _MenuButton extends StatelessWidget {
   const _MenuButton({required this.icon, required this.label, required this.onTap});
   final IconData icon;
@@ -192,22 +192,6 @@ class _MenuButton extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            decoration: BoxDecoration(
-              color: c.card,
-              borderRadius: BorderRadius.circular(10),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.18),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2)),
-              ],
-            ),
-            child: Text(label,
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.ink)),
-          ),
-          const SizedBox(width: 10),
-          Container(
             width: 48,
             height: 48,
             decoration: BoxDecoration(
@@ -215,13 +199,22 @@ class _MenuButton extends StatelessWidget {
               shape: BoxShape.circle,
               border: Border.all(color: c.line),
               boxShadow: <BoxShadow>[
-                BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.18),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2)),
+                BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 8, offset: const Offset(0, 2)),
               ],
             ),
             child: Icon(icon, color: c.accent, size: 22),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: c.card,
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: <BoxShadow>[
+                BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 8, offset: const Offset(0, 2)),
+              ],
+            ),
+            child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.ink)),
           ),
         ],
       ),
