@@ -72,9 +72,13 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab> with SingleTickerPr
         widget.child,
         if (authed)
           ListenableBuilder(
-            listenable: router.routeInformationProvider,
+            listenable: router.routerDelegate,
             builder: (BuildContext context, Widget? _) {
-              final String loc = router.routeInformationProvider.value.uri.path;
+              // currentConfiguration отражает ФАКТИЧЕСКИ показанный экран (после
+              // редиректов) — в отличие от routeInformationProvider, который мог
+              // отдавать до-редиректный/устаревший путь (из-за чего кнопка висела
+              // на главной).
+              final String loc = router.routerDelegate.currentConfiguration.uri.path;
               if (_isHidden(loc) || onConduct) {
                 if (_open) {
                   _open = false;
@@ -144,8 +148,11 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab> with SingleTickerPr
 
   Widget _mainFab(AppColors c) {
     return GestureDetector(
-      onTap: _toggle,
-      // Перетаскивание вдоль левого края (только по вертикали).
+      // Тап — назад (кнопка «Назад»); удержание — меню переходов.
+      onTap: _open ? _close : _back,
+      onLongPress: _toggle,
+      // Перетаскивание вдоль левого края. onVerticalDragUpdate (а не onPanUpdate) —
+      // он специфичнее и не перехватывает удержание (long-press для меню).
       onVerticalDragUpdate: (DragUpdateDetails d) {
         final Size size = MediaQuery.of(context).size;
         final EdgeInsets pad = MediaQuery.of(context).padding;
@@ -166,7 +173,7 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab> with SingleTickerPr
         ),
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 150),
-          child: Icon(_open ? Icons.close_rounded : Icons.menu_rounded,
+          child: Icon(_open ? Icons.close_rounded : Icons.arrow_back_rounded,
               key: ValueKey<bool>(_open), color: c.accentOn, size: 26),
         ),
       ),
