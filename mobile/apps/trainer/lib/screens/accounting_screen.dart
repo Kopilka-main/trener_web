@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../api/trainer_accounting.dart';
 import '../api/trainer_clients.dart';
 import '../api/trainer_gyms.dart';
+import '../widgets/income_form.dart';
 
 // ─── Утилиты ───
 const List<String> _ruMonthsShort = <String>[
@@ -548,15 +549,16 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
       );
 
   Future<void> _showAddSheet(bool isIncome) async {
+    // Доход добавляется полной формой IncomeForm (типы Пакет/Абонемент/…,
+    // график рассрочки, выбор клиента поиском). Расход — прежней шторкой.
     final bool? saved = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: context.colors.bg,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _AddEntrySheet(
-        isIncome: isIncome,
-        categories: isIncome ? _kIncomeCats : _kExpenseCats,
-      ),
+      builder: (_) => isIncome
+          ? const IncomeForm()
+          : const _AddEntrySheet(isIncome: false, categories: _kExpenseCats),
     );
     if (saved == true) {
       ref.invalidate(isIncome ? trainerIncomesProvider : trainerExpensesProvider);
@@ -832,6 +834,59 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
     }
   }
 
+  /// Имя выбранного клиента по id (для показа в поле-кнопке).
+  String? _clientName() {
+    final String? id = _clientId;
+    if (id == null) return null;
+    final List<Client> cs = ref.read(trainerClientsProvider).valueOrNull ?? <Client>[];
+    for (final Client c in cs) {
+      if (c.id == id) return c.fullName;
+    }
+    return null;
+  }
+
+  /// Поле-кнопка выбора клиента через поиск (общая с формой дохода).
+  Widget _clientField(AppColors c) {
+    final String? name = _clientName();
+    final bool picked = _clientId != null;
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: InkWell(
+            onTap: () async {
+              final Client? cl = await pickClientSearch(context, ref, selectedId: _clientId);
+              if (cl != null) setState(() => _clientId = cl.id);
+            },
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+              child: Row(
+                children: <Widget>[
+                  Icon(picked ? Icons.person : Icons.person_search, size: 18, color: c.inkMuted),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      picked ? (name ?? 'Клиент') : 'Выбрать клиента',
+                      style: TextStyle(fontSize: 14, color: picked ? c.ink : c.inkMuted),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (picked)
+          IconButton(
+            icon: Icon(Icons.close, size: 18, color: c.inkMuted),
+            onPressed: () => setState(() => _clientId = null),
+            tooltip: 'Без клиента',
+          ),
+      ],
+    );
+  }
+
   void _goToClient() {
     final String? id = _clientId;
     if (id == null) return;
@@ -845,6 +900,31 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
     }
     Navigator.of(context).pop(false);
     if (cl != null) context.push('/client/${cl.id}', extra: cl);
+  }
+
+  // Поле даты в едином стиле формы (как в IncomeForm): подписанное, filled, radius 14.
+  Widget _dateField(AppColors c) {
+    return InkWell(
+      onTap: () async {
+        final DateTime now = DateTime.now();
+        final DateTime? d = await showDatePicker(
+          context: context,
+          initialDate: _date,
+          firstDate: DateTime(now.year - 5),
+          lastDate: DateTime(now.year + 1),
+        );
+        if (d != null) setState(() => _date = d);
+      },
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Дата',
+          filled: true,
+          fillColor: c.card,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+        ),
+        child: Text('${_date.day} ${_ruMonthsShort[_date.month - 1]} ${_date.year}'),
+      ),
+    );
   }
 
   @override
@@ -873,56 +953,27 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
             const SizedBox(height: 14),
             Text('КЛИЕНТ', style: AppFonts.mono(size: 10, color: c.inkMutedXl, weight: FontWeight.w600)),
             const SizedBox(height: 8),
-            _ClientPicker(selected: _clientId, onPick: (String? id) => setState(() => _clientId = id)),
+            _clientField(c),
           ],
           const SizedBox(height: 14),
           SelectAllTextField(
             controller: _amount,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
-            style: AppFonts.display(size: 28, color: c.ink),
             decoration: InputDecoration(
-              hintText: '0 ₽',
+              labelText: 'Сумма, ₽',
               filled: true,
               fillColor: c.card,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
             ),
           ),
           const SizedBox(height: 10),
-          Row(
-            children: <Widget>[
-              GestureDetector(
-                onTap: () async {
-                  final DateTime now = DateTime.now();
-                  final DateTime? d = await showDatePicker(
-                    context: context,
-                    initialDate: _date,
-                    firstDate: DateTime(now.year - 5),
-                    lastDate: DateTime(now.year + 1),
-                  );
-                  if (d != null) setState(() => _date = d);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12)),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Icon(Icons.event, size: 16, color: c.inkMuted),
-                      const SizedBox(width: 8),
-                      Text('${_date.day} ${_ruMonthsShort[_date.month - 1]} ${_date.year}',
-                          style: TextStyle(fontSize: 13, color: c.ink)),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+          _dateField(c),
           const SizedBox(height: 10),
           SelectAllTextField(
             controller: _note,
             decoration: InputDecoration(
-              hintText: 'Заметка (необязательно)',
+              labelText: 'Заметка (необязательно)',
               filled: true,
               fillColor: c.card,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
@@ -972,23 +1023,3 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
   }
 }
 
-/// Выбор клиента для дохода (опционально).
-class _ClientPicker extends ConsumerWidget {
-  const _ClientPicker({required this.selected, required this.onPick});
-  final String? selected;
-  final ValueChanged<String?> onPick;
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final List<Client> clients = ref.watch(trainerClientsProvider).valueOrNull ?? <Client>[];
-    if (clients.isEmpty) return const SizedBox.shrink();
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: <Widget>[
-        _Pill(label: 'Без клиента', active: selected == null, onTap: () => onPick(null)),
-        ...clients.map((Client cl) =>
-            _Pill(label: cl.fullName, active: selected == cl.id, onTap: () => onPick(cl.id))),
-      ],
-    );
-  }
-}
