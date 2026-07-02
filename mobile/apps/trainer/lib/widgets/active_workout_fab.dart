@@ -1,6 +1,7 @@
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../api/active_workout_state.dart';
 import '../router.dart';
@@ -21,15 +22,44 @@ class _ActiveWorkoutFabState extends ConsumerState<ActiveWorkoutFab> {
   static const double _h = 56;
   Offset? _pos; // null → позиция по умолчанию (справа снизу)
 
+  GoRouter? _router;
+  String _location = '/';
+
+  @override
+  void initState() {
+    super.initState();
+    // «Мы на экране проведения?» определяем по текущему маршруту роутера, а не
+    // по ручному флагу — тот застревал при навигации вперёд (go_router держит
+    // экран в стеке, dispose не вызывается) и FAB пропадал до перезапуска.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _router = ref.read(routerProvider);
+      _router!.routerDelegate.addListener(_onRouteChange);
+      _onRouteChange();
+    });
+  }
+
+  void _onRouteChange() {
+    if (!mounted) return;
+    final String loc = _router?.routerDelegate.currentConfiguration.uri.path ?? '/';
+    if (loc != _location) setState(() => _location = loc);
+  }
+
+  @override
+  void dispose() {
+    _router?.routerDelegate.removeListener(_onRouteChange);
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool authed = ref.watch(sessionProvider).status == AuthStatus.authenticated;
     final ActiveWorkoutRef? aw = ref.watch(activeWorkoutProvider);
-    final bool onScreen = ref.watch(activeWorkoutOnScreenProvider);
+    final bool onActiveScreen = _location.startsWith('/active/');
     return Stack(
       children: <Widget>[
         widget.child,
-        if (authed && aw != null && !onScreen) _fab(context, aw),
+        if (authed && aw != null && !onActiveScreen) _fab(context, aw),
       ],
     );
   }
