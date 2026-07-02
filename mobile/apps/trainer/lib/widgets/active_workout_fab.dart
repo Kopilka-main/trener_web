@@ -18,7 +18,7 @@ class ActiveWorkoutFab extends ConsumerStatefulWidget {
 }
 
 class _ActiveWorkoutFabState extends ConsumerState<ActiveWorkoutFab> {
-  static const double _w = 208;
+  static const double _w = 72;
   static const double _h = 56;
   Offset? _pos; // null → позиция по умолчанию (справа снизу)
 
@@ -102,28 +102,9 @@ class _ActiveWorkoutFabState extends ConsumerState<ActiveWorkoutFab> {
               ],
             ),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
                 Icon(Icons.fitness_center, size: 20, color: c.accentOn),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text('Идёт тренировка',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.w700, color: c.accentOn)),
-                      Text(aw.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: 11, color: c.accentOn.withValues(alpha: 0.8))),
-                    ],
-                  ),
-                ),
                 Icon(Icons.chevron_right, size: 20, color: c.accentOn),
               ],
             ),

@@ -1,4 +1,5 @@
 import 'package:core/core.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,25 +13,23 @@ import '../router.dart';
 /// Navigator) и держит этот флаг актуальным.
 final ValueNotifier<bool> navCanGoBack = ValueNotifier<bool>(false);
 
-/// Наблюдатель глубины стека — вешается в GoRouter(observers: [...]).
+/// Наблюдатель стека — вешается в GoRouter(observers: [...]). Спрашивает сам
+/// навигатор `canPop()` (есть ли под текущим экраном ещё маршруты) — надёжнее
+/// ручного счётчика (тот промахивается на начальных push до подписки). Сверку
+/// откладываем на кадр, чтобы состояние навигатора успело устаканиться.
 class NavStackObserver extends NavigatorObserver {
-  int _depth = 0;
-  void _sync() => navCanGoBack.value = _depth > 1;
-  @override
-  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    _depth++;
-    _sync();
+  void _sync() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      navCanGoBack.value = navigator?.canPop() ?? false;
+    });
   }
+
   @override
-  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    if (_depth > 0) _depth--;
-    _sync();
-  }
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) => _sync();
   @override
-  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    if (_depth > 0) _depth--;
-    _sync();
-  }
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) => _sync();
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) => _sync();
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) => _sync();
 }
@@ -134,11 +133,11 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab> with SingleTickerPr
     final double fabTop = (_top ?? defTop).clamp(minTop, maxTop);
 
     // Пункты меню снизу вверх: ближайший к кнопке — первый.
-    final List<(IconData, String, VoidCallback)> items = <(IconData, String, VoidCallback)>[
-      (Icons.arrow_back_rounded, 'Назад', _back),
-      (Icons.home_rounded, 'Главная', _gohome),
-      (Icons.calendar_month_rounded, 'Календарь', () => _goto('/calendar')),
-      (Icons.account_balance_wallet_rounded, 'Финансы', () => _goto('/accounting')),
+    final List<(IconData, VoidCallback)> items = <(IconData, VoidCallback)>[
+      (Icons.arrow_back_rounded, _back),
+      (Icons.home_rounded, _gohome),
+      (Icons.calendar_month_rounded, () => _goto('/calendar')),
+      (Icons.account_balance_wallet_rounded, () => _goto('/accounting')),
     ];
 
     return AnimatedBuilder(
@@ -165,7 +164,7 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab> with SingleTickerPr
                   ignoring: v < 0.85,
                   child: Opacity(
                     opacity: v.clamp(0.0, 1.0),
-                    child: _MenuButton(icon: items[i].$1, label: items[i].$2, onTap: items[i].$3),
+                    child: _MenuButton(icon: items[i].$1, onTap: items[i].$2),
                   ),
                 ),
               ),
@@ -176,20 +175,32 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab> with SingleTickerPr
     );
   }
 
+  void _drag(DragUpdateDetails d) {
+    final Size size = MediaQuery.of(context).size;
+    final EdgeInsets pad = MediaQuery.of(context).padding;
+    final double minTop = pad.top + 8;
+    final double maxTop = size.height - _fabSize - pad.bottom - 8;
+    final double base = _top ?? (size.height - _fabSize - pad.bottom - 110);
+    setState(() => _top = (base + d.delta.dy).clamp(minTop, maxTop));
+  }
+
   Widget _mainFab(AppColors c) {
-    return GestureDetector(
-      // Тап — назад (кнопка «Назад»); удержание — меню переходов.
-      onTap: _open ? _close : _back,
-      onLongPress: _toggle,
-      // Перетаскивание вдоль левого края. onVerticalDragUpdate (а не onPanUpdate) —
-      // он специфичнее и не перехватывает удержание (long-press для меню).
-      onVerticalDragUpdate: (DragUpdateDetails d) {
-        final Size size = MediaQuery.of(context).size;
-        final EdgeInsets pad = MediaQuery.of(context).padding;
-        final double minTop = pad.top + 8;
-        final double maxTop = size.height - _fabSize - pad.bottom - 8;
-        final double base = _top ?? (size.height - _fabSize - pad.bottom - 110);
-        setState(() => _top = (base + d.delta.dy).clamp(minTop, maxTop));
+    // RawGestureDetector — чтобы задать КОРОТКОЕ удержание (по умолчанию ~500 мс).
+    // Тап — назад; удержание ~220 мс — меню; вертикальный драг — перенос вдоль края.
+    return RawGestureDetector(
+      gestures: <Type, GestureRecognizerFactory>{
+        TapGestureRecognizer: GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
+          () => TapGestureRecognizer(),
+          (TapGestureRecognizer r) => r.onTap = _open ? _close : _back,
+        ),
+        LongPressGestureRecognizer: GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
+          () => LongPressGestureRecognizer(duration: const Duration(milliseconds: 220)),
+          (LongPressGestureRecognizer r) => r.onLongPress = _toggle,
+        ),
+        VerticalDragGestureRecognizer: GestureRecognizerFactoryWithHandlers<VerticalDragGestureRecognizer>(
+          () => VerticalDragGestureRecognizer(),
+          (VerticalDragGestureRecognizer r) => r.onUpdate = _drag,
+        ),
       },
       child: Container(
         width: _fabSize,
@@ -201,22 +212,17 @@ class _GlobalNavFabState extends ConsumerState<GlobalNavFab> with SingleTickerPr
             BoxShadow(color: Colors.black.withValues(alpha: 0.28), blurRadius: 12, offset: const Offset(0, 4)),
           ],
         ),
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 150),
-          child: Icon(_open ? Icons.close_rounded : Icons.arrow_back_rounded,
-              key: ValueKey<bool>(_open), color: c.accentOn, size: 26),
-        ),
+        // При раскрытом меню тоже стрелка «Назад» (крестик не ставим).
+        child: Icon(Icons.arrow_back_rounded, color: c.accentOn, size: 26),
       ),
     );
   }
 }
 
-/// Пункт меню: круглая мини-кнопка с иконкой + подпись справа (кнопка у левого
-/// края, поэтому подпись уходит в сторону экрана, а не за край).
+/// Пункт меню: круглая мини-кнопка с иконкой (без подписи).
 class _MenuButton extends StatelessWidget {
-  const _MenuButton({required this.icon, required this.label, required this.onTap});
+  const _MenuButton({required this.icon, required this.onTap});
   final IconData icon;
-  final String label;
   final VoidCallback onTap;
 
   @override
@@ -225,35 +231,18 @@ class _MenuButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: c.card,
-              shape: BoxShape.circle,
-              border: Border.all(color: c.line),
-              boxShadow: <BoxShadow>[
-                BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 8, offset: const Offset(0, 2)),
-              ],
-            ),
-            child: Icon(icon, color: c.accent, size: 22),
-          ),
-          const SizedBox(width: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            decoration: BoxDecoration(
-              color: c.card,
-              borderRadius: BorderRadius.circular(10),
-              boxShadow: <BoxShadow>[
-                BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 8, offset: const Offset(0, 2)),
-              ],
-            ),
-            child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.ink)),
-          ),
-        ],
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: c.card,
+          shape: BoxShape.circle,
+          border: Border.all(color: c.line),
+          boxShadow: <BoxShadow>[
+            BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 8, offset: const Offset(0, 2)),
+          ],
+        ),
+        child: Icon(icon, color: c.accent, size: 22),
       ),
     );
   }
