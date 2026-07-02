@@ -10,6 +10,7 @@ import 'api/trainer_home.dart';
 import 'router.dart';
 import 'widgets/active_workout_fab.dart';
 import 'widgets/birthday_gate.dart';
+import 'widgets/nav_fab.dart';
 
 /// Наблюдатель data-провайдеров: при смене пользователя сбрасываем их кэш,
 /// иначе после входа под другим аккаунтом видны данные предыдущего.
@@ -120,8 +121,10 @@ class _TrainerAppState extends ConsumerState<TrainerApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      builder: (BuildContext context, Widget? child) => ActiveWorkoutFab(
-        child: BirthdayGate(child: child ?? const SizedBox.shrink()),
+      builder: (BuildContext context, Widget? child) => GlobalNavFab(
+        child: ActiveWorkoutFab(
+          child: BirthdayGate(child: child ?? const SizedBox.shrink()),
+        ),
       ),
       routerConfig: router,
     );

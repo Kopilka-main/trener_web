@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../api/trainer_accounting.dart';
 import '../api/trainer_clients.dart';
 import '../api/trainer_gyms.dart';
+import '../widgets/expense_form.dart';
 import '../widgets/income_form.dart';
 
 // ─── Утилиты ───
@@ -556,9 +557,7 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
       backgroundColor: context.colors.bg,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => isIncome
-          ? const IncomeForm()
-          : const _AddEntrySheet(isIncome: false, categories: _kExpenseCats),
+      builder: (_) => isIncome ? const IncomeForm() : const ExpenseForm(),
     );
     if (saved == true) {
       ref.invalidate(isIncome ? trainerIncomesProvider : trainerExpensesProvider);

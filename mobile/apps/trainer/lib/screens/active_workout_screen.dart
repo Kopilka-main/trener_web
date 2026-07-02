@@ -315,6 +315,8 @@ class _ConductorState extends ConsumerState<_Conductor> {
   }
 
   Future<void> _toggleDone(WorkoutExercise ex, WorkoutSet s) async {
+    // Лёгкая тактильная отдача — понятно, что нажатие «выполнено» сработало.
+    HapticFeedback.lightImpact();
     final bool next = !s.done;
     final Map<String, dynamic> body = <String, dynamic>{'done': next};
     if (next && !s.hasFact) {
