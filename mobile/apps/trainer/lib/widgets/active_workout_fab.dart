@@ -55,7 +55,12 @@ class _ActiveWorkoutFabState extends ConsumerState<ActiveWorkoutFab> {
   Widget build(BuildContext context) {
     final bool authed = ref.watch(sessionProvider).status == AuthStatus.authenticated;
     final ActiveWorkoutRef? aw = ref.watch(activeWorkoutProvider);
-    final bool onActiveScreen = _location.startsWith('/active/');
+    // Экран проведения открывается двумя путями: go_router (`/active/...` из
+    // самого FAB) и Navigator.push(MaterialPageRoute) (с главной/карточки/
+    // календаря — маршрут роутера при этом НЕ меняется). Прячем FAB, если
+    // сработал любой признак: активный маршрут ИЛИ флаг «экран смонтирован».
+    final bool onActiveScreen =
+        _location.startsWith('/active/') || ref.watch(activeWorkoutOnScreenProvider);
     return Stack(
       children: <Widget>[
         widget.child,
