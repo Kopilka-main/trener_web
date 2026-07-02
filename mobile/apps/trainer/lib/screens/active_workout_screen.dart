@@ -178,6 +178,12 @@ class _ConductorState extends ConsumerState<_Conductor> {
         _busy = false;
         _editing = null;
       });
+      // Пока работаем с идущей тренировкой — держим указатель «идёт тренировка»
+      // актуальным (для FAB «Вернуться» после выхода назад), а не только при
+      // старте/загрузке.
+      if (updated.status == WorkoutStatus.active) {
+        ref.read(activeWorkoutProvider.notifier).set(_clientId, updated.id, updated.name);
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() => _busy = false);
