@@ -6,13 +6,15 @@ import '../api/trainer_accounting.dart';
 import '../api/trainer_client_card.dart';
 import '../api/trainer_clients.dart';
 
-/// Тип дохода. package/installment/subscription → пакет; остальные → простой доход.
-enum _IncomeKind { package, installment, subscription, online, inventory, other }
+/// Тип дохода. package/installment/subscription → пакет; остальные → простой
+/// доход (сумма + дата + заметка + опц. клиент).
+enum _IncomeKind { package, installment, subscription, consultation, online, inventory, other }
 
 const Map<_IncomeKind, String> _incomeLabels = <_IncomeKind, String>{
   _IncomeKind.package: 'Пакет тренировок',
   _IncomeKind.installment: 'Рассрочка',
   _IncomeKind.subscription: 'Абонемент',
+  _IncomeKind.consultation: 'Консультация',
   _IncomeKind.online: 'Онлайн сопровождение',
   _IncomeKind.inventory: 'Инвентарь',
   _IncomeKind.other: 'Прочее',

@@ -211,7 +211,7 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
         }).toList();
         final List<WorkoutTemplate> list =
             rankBySearch(filtered, _query, (WorkoutTemplate t) => t.name);
-        if (all.isEmpty) return _empty(c, 'Пока нет тренировок. Создайте первую.');
+        if (all.isEmpty) return _emptyTemplates(c);
         return Column(
           children: <Widget>[
             _groupChips(c, tags),
@@ -301,6 +301,29 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
     return <String>[...ordered, ...extras];
   }
 
+  Future<void> _openCreateTemplate() async {
+    final bool? saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(builder: (_) => const TemplateEditScreen()),
+    );
+    if (saved == true && mounted) setState(() {});
+  }
+
+  /// Пустое состояние вкладки «Тренировки»: текст + неяркая пунктирная кнопка.
+  Widget _emptyTemplates(AppColors c) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text('Пока нет тренировок. Создайте первую.',
+                  textAlign: TextAlign.center, style: TextStyle(color: c.inkMuted)),
+              const SizedBox(height: 20),
+              _DashedAddButton(label: 'Добавить тренировку', onTap: _openCreateTemplate),
+            ],
+          ),
+        ),
+      );
+
   Widget _empty(AppColors c, String text) =>
       Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(text, textAlign: TextAlign.center, style: TextStyle(color: c.inkMuted))));
 
@@ -314,6 +337,64 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
           ],
         ),
       );
+}
+
+/// Неяркая пунктирная кнопка добавления: пунктирная рамка + «+» и текст
+/// приглушённым цветом (для пустых состояний).
+class _DashedAddButton extends StatelessWidget {
+  const _DashedAddButton({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return GestureDetector(
+      onTap: onTap,
+      child: CustomPaint(
+        painter: _DashedBorderPainter(color: c.line, radius: 16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(Icons.add, size: 18, color: c.inkMuted),
+              const SizedBox(width: 8),
+              Text(label,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.inkMuted)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DashedBorderPainter extends CustomPainter {
+  _DashedBorderPainter({required this.color, required this.radius});
+  final Color color;
+  final double radius;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    final Path path = Path()
+      ..addRRect(RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius)));
+    const double dash = 6;
+    const double gap = 4;
+    for (final metric in path.computeMetrics()) {
+      double dist = 0;
+      while (dist < metric.length) {
+        final double end = (dist + dash).clamp(0, metric.length).toDouble();
+        canvas.drawPath(metric.extractPath(dist, end), paint);
+        dist += dash + gap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedBorderPainter old) => old.color != color || old.radius != radius;
 }
 
 /// Подпись карточки упражнения: категория + повторы/вес/время/отдых (как в вебе).
