@@ -3,7 +3,7 @@
     "apps": [],
     "details": [
       {
-        "appID": "REPLACE_TEAMID.ru.fitbond.trener_trainer",
+        "appID": "J826P275V2.ru.fitbond.trenerTrainer",
         "paths": [ "/link/*" ]
       }
     ]
