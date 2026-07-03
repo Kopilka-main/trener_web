@@ -4,6 +4,7 @@ library;
 
 export 'src/api/api_client.dart';
 export 'src/api/api_provider.dart';
+export 'src/auth/oauth_availability.dart';
 export 'src/auth/oauth_webview_screen.dart';
 export 'src/auth/session.dart';
 export 'src/auth/user_scope.dart';

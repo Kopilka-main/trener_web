@@ -135,18 +135,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   busy: _busy,
                   onPressed: _submit,
                 ),
-                const SizedBox(height: 20),
-                const OAuthOrDivider(),
-                const SizedBox(height: 16),
-                OAuthButton(
-                  label: 'Войти через VK',
-                  onPressed: _busy ? null : () => _oauth('vk', 'Вход через VK'),
-                ),
-                const SizedBox(height: 10),
-                OAuthButton(
-                  label: 'Войти через Яндекс',
-                  onPressed: _busy ? null : () => _oauth('yandex', 'Вход через Яндекс'),
-                ),
+                if (oauthLoginEnabled) ...<Widget>[
+                  const SizedBox(height: 20),
+                  const OAuthOrDivider(),
+                  const SizedBox(height: 16),
+                  OAuthButton(
+                    label: 'Войти через VK',
+                    onPressed: _busy ? null : () => _oauth('vk', 'Вход через VK'),
+                  ),
+                  const SizedBox(height: 10),
+                  OAuthButton(
+                    label: 'Войти через Яндекс',
+                    onPressed: _busy ? null : () => _oauth('yandex', 'Вход через Яндекс'),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 Center(
                   child: GestureDetector(
