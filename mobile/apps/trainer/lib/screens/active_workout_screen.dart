@@ -249,9 +249,16 @@ class _ConductorState extends ConsumerState<_Conductor> {
         onCancel: () => Navigator.of(ctx).pop(),
         onDone: (Map<String, int> counts, List<TExercise> catalog) async {
           Navigator.of(ctx).pop();
-          for (final TExercise ex in catalog) {
-            final int n = counts[ex.id] ?? 0;
-            for (int i = 0; i < n; i++) {
+          // Добавляем в порядке ВЫБОРА (counts сохраняет порядок вставки), а не в
+          // порядке каталога — иначе первое выбранное упражнение оказывается не
+          // первым в списке.
+          final Map<String, TExercise> byId = <String, TExercise>{
+            for (final TExercise ex in catalog) ex.id: ex,
+          };
+          for (final MapEntry<String, int> e in counts.entries) {
+            final TExercise? ex = byId[e.key];
+            if (ex == null) continue;
+            for (int i = 0; i < e.value; i++) {
               await _run(() => _api.addExercise(_clientId, _w.id, ex));
             }
           }

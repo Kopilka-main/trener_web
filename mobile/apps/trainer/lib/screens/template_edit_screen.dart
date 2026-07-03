@@ -186,11 +186,15 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
         },
         onDone: (Map<String, int> counts, List<TExercise> catalog) {
           setState(() {
-            // полностью пересобираем по счётчикам (сохраняя редактируемые значения нельзя — упрощённо)
+            // Пересобираем по счётчикам в порядке ВЫБОРА (counts сохраняет порядок
+            // вставки), а не по каталогу — иначе порядок упражнений сбивается.
             _positions.clear();
-            for (final TExercise ex in catalog) {
-              final int n = counts[ex.id] ?? 0;
-              if (n > 0) _addFromCatalog(ex, n);
+            final Map<String, TExercise> byId = <String, TExercise>{
+              for (final TExercise ex in catalog) ex.id: ex,
+            };
+            for (final MapEntry<String, int> e in counts.entries) {
+              final TExercise? ex = byId[e.key];
+              if (ex != null && e.value > 0) _addFromCatalog(ex, e.value);
             }
             _step1 = false;
           });
