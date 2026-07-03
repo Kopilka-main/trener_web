@@ -2,9 +2,9 @@ import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../api/trainer_accounting.dart';
+import '../api/trainer_client_card.dart';
 import '../api/trainer_clients.dart';
 import '../api/trainer_gyms.dart';
 import '../widgets/expense_form.dart';
@@ -280,9 +280,7 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
           amount: e.amount,
           isIncome: true,
           tags: e.tags,
-          onTap: e.isPackage
-              ? (e.clientId != null ? () => _openClient(e.clientId!) : null)
-              : () => _editIncome(e),
+          onTap: () => _editIncome(e),
         ));
       }
     }
@@ -523,9 +521,13 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
           ),
           Text('$sign${_money(amount)}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: color)),
           if (onTap != null)
-            Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: Icon(Icons.chevron_right, size: 18, color: c.inkMutedXl),
+            GestureDetector(
+              onTap: onTap,
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Icon(Icons.edit_outlined, size: 18, color: c.inkMutedXl),
+              ),
             ),
         ],
       ),
@@ -581,6 +583,9 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
           note: e.note,
           tags: e.tags,
           clientId: e.clientId,
+          isPackage: e.isPackage,
+          // id пакета-дохода: 'pkg:<packageId>' → сам packageId.
+          packageId: e.isPackage ? e.id.replaceFirst('pkg:', '') : null,
         ),
       ),
     );
@@ -615,17 +620,6 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
   List<String> _withCategory(List<String> base, String cat) =>
       base.contains(cat) ? base : <String>[cat, ...base];
 
-  void _openClient(String clientId) {
-    final List<Client> cs = ref.read(trainerClientsProvider).valueOrNull ?? <Client>[];
-    Client? cl;
-    for (final Client c in cs) {
-      if (c.id == clientId) {
-        cl = c;
-        break;
-      }
-    }
-    if (cl != null) context.push('/client/${cl.id}', extra: cl);
-  }
 }
 
 class _Round extends StatelessWidget {
@@ -725,6 +719,8 @@ class _EntryEdit {
     this.note,
     this.tags = const <String>[],
     this.clientId,
+    this.isPackage = false,
+    this.packageId,
   });
   final String id;
   final String category;
@@ -733,6 +729,10 @@ class _EntryEdit {
   final String? note;
   final List<String> tags;
   final String? clientId;
+  // Доход-пакет (id `pkg:<packageId>`): правится/удаляется через packages API,
+  // а не через incomes. packageId — id самого пакета (без префикса).
+  final bool isPackage;
+  final String? packageId;
 }
 
 /// Форма добавления/редактирования дохода/расхода (категория, сумма, дата,
@@ -761,6 +761,8 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
   bool _busy = false;
 
   bool get _isEdit => widget.edit != null;
+  // Доход-пакет: правится через packages API, показываем только сумму+дату.
+  bool get _isPkg => widget.edit?.isPackage == true;
 
   static String _amountText(num a) => a % 1 == 0 ? a.toInt().toString() : a.toString();
 
@@ -797,7 +799,18 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
     try {
       final TrainerAccountingApi api = ref.read(trainerAccountingApiProvider);
       if (widget.isIncome) {
-        _isEdit ? await api.updateIncome(widget.edit!.id, body) : await api.createIncome(body);
+        if (_isEdit && widget.edit!.isPackage) {
+          // Доход-пакет: правим сам пакет (сумма → totalPaid, дата → paidAt).
+          await ref.read(trainerClientCardApiProvider).updatePackage(
+            widget.edit!.clientId!,
+            widget.edit!.packageId!,
+            <String, dynamic>{'totalPaid': amount, 'paidAt': _iso(_date)},
+          );
+        } else if (_isEdit) {
+          await api.updateIncome(widget.edit!.id, body);
+        } else {
+          await api.createIncome(body);
+        }
       } else {
         _isEdit ? await api.updateExpense(widget.edit!.id, body) : await api.createExpense(body);
       }
@@ -820,7 +833,11 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
     try {
       final TrainerAccountingApi api = ref.read(trainerAccountingApiProvider);
       if (widget.isIncome) {
-        await api.deleteIncome(widget.edit!.id);
+        if (widget.edit!.isPackage) {
+          await ref.read(trainerClientCardApiProvider).deletePackage(widget.edit!.clientId!, widget.edit!.packageId!);
+        } else {
+          await api.deleteIncome(widget.edit!.id);
+        }
       } else {
         await api.deleteExpense(widget.edit!.id);
       }
@@ -886,19 +903,23 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
     );
   }
 
-  void _goToClient() {
-    final String? id = _clientId;
-    if (id == null) return;
-    final List<Client> cs = ref.read(trainerClientsProvider).valueOrNull ?? <Client>[];
-    Client? cl;
-    for (final Client c in cs) {
-      if (c.id == id) {
-        cl = c;
-        break;
-      }
-    }
-    Navigator.of(context).pop(false);
-    if (cl != null) context.push('/client/${cl.id}', extra: cl);
+  /// Клиент в режиме правки — только для показа (менять нельзя).
+  Widget _clientReadOnly(AppColors c) {
+    final String name = _clientName() ?? 'Без клиента';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.person, size: 18, color: c.inkMuted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(name,
+                style: TextStyle(fontSize: 14, color: c.ink), overflow: TextOverflow.ellipsis),
+          ),
+        ],
+      ),
+    );
   }
 
   // Поле даты в едином стиле формы (как в IncomeForm): подписанное, filled, radius 14.
@@ -940,19 +961,22 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
                   ? (widget.isIncome ? 'Редактировать доход' : 'Редактировать расход')
                   : (widget.isIncome ? 'Новый доход' : 'Новый расход'),
               style: AppFonts.display(size: 22, color: c.ink)),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: widget.categories
-                .map((String g) => _Chip(label: g, active: _category == g, onTap: () => setState(() => _category = g)))
-                .toList(),
-          ),
+          if (!_isPkg) ...<Widget>[
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: widget.categories
+                  .map((String g) => _Chip(label: g, active: _category == g, onTap: () => setState(() => _category = g)))
+                  .toList(),
+            ),
+          ],
           if (widget.isIncome) ...<Widget>[
             const SizedBox(height: 14),
             Text('КЛИЕНТ', style: AppFonts.mono(size: 10, color: c.inkMutedXl, weight: FontWeight.w600)),
             const SizedBox(height: 8),
-            _clientField(c),
+            // В правке клиент не меняется — показываем только имя.
+            _isEdit ? _clientReadOnly(c) : _clientField(c),
           ],
           const SizedBox(height: 14),
           SelectAllTextField(
@@ -968,26 +992,28 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
           ),
           const SizedBox(height: 10),
           _dateField(c),
-          const SizedBox(height: 10),
-          SelectAllTextField(
-            controller: _note,
-            decoration: InputDecoration(
-              labelText: 'Заметка (необязательно)',
-              filled: true,
-              fillColor: c.card,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+          if (!_isPkg) ...<Widget>[
+            const SizedBox(height: 10),
+            SelectAllTextField(
+              controller: _note,
+              decoration: InputDecoration(
+                labelText: 'Заметка (необязательно)',
+                filled: true,
+                fillColor: c.card,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
-          SelectAllTextField(
-            controller: _tags,
-            decoration: InputDecoration(
-              hintText: 'Теги через пробел: #абонемент #нал',
-              filled: true,
-              fillColor: c.card,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+            const SizedBox(height: 10),
+            SelectAllTextField(
+              controller: _tags,
+              decoration: InputDecoration(
+                hintText: 'Теги через пробел: #абонемент #нал',
+                filled: true,
+                fillColor: c.card,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+              ),
             ),
-          ),
+          ],
           if (!widget.isIncome) ...<Widget>[
             const SizedBox(height: 10),
             _GymPicker(selected: _gymId, onPick: (String? id) => setState(() => _gymId = id)),
@@ -998,15 +1024,6 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
             child: const Text('Сохранить'),
           ),
-          if (widget.isIncome && _clientId != null) ...<Widget>[
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: _busy ? null : _goToClient,
-              icon: const Icon(Icons.person_outline, size: 18),
-              label: const Text('Перейти к клиенту'),
-              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
-            ),
-          ],
           if (_isEdit) ...<Widget>[
             const SizedBox(height: 8),
             TextButton.icon(

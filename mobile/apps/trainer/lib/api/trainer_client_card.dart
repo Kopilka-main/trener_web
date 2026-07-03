@@ -167,6 +167,31 @@ class TrainerClientCardApi {
     await _api.postJson('/api/clients/$clientId/measurement-tasks', <String, dynamic>{'note': ?note});
   }
 
+  /// Добавить замер тела клиента (пишет в общий скоуп — клиент увидит его сам).
+  /// [body] уже содержит `date` и только заполненные метрики/заметку.
+  Future<void> addMeasurement(String clientId, Map<String, dynamic> body) async {
+    await _api.postJson('/api/clients/$clientId/measurements', body);
+  }
+
+  /// Загрузить фото прогресса клиента (multipart, поле `photo`). Пишет в общий
+  /// скоуп — клиент увидит фото автоматически.
+  Future<void> uploadPhoto(
+    String clientId, {
+    required String date,
+    required String angle,
+    required String filePath,
+    required String fileName,
+    String? note,
+  }) async {
+    await _api.postForm(
+      '/api/clients/$clientId/progress-photos',
+      <String, String>{'date': date, 'angle': angle, if (note != null && note.isNotEmpty) 'note': note},
+      fileField: 'photo',
+      filePath: filePath,
+      fileName: fileName,
+    );
+  }
+
   /// Добавить пакет/абонемент клиенту.
   ///
   /// Если [installments] непустой — создаётся пакет в рассрочку
@@ -204,6 +229,16 @@ class TrainerClientCardApi {
   Future<void> unpayInstallment(String clientId, String packageId, String installmentId) async {
     await _api.postJson(
         '/api/clients/$clientId/packages/$packageId/installments/$installmentId/unpay', <String, dynamic>{});
+  }
+
+  /// Правка пакета (частичная): totalPaid/paidAt/даты и т.п.
+  Future<void> updatePackage(String clientId, String packageId, Map<String, dynamic> body) async {
+    await _api.patchJson('/api/clients/$clientId/packages/$packageId', body);
+  }
+
+  /// Удалить пакет клиента.
+  Future<void> deletePackage(String clientId, String packageId) async {
+    await _api.deleteJson('/api/clients/$clientId/packages/$packageId');
   }
 }
 
