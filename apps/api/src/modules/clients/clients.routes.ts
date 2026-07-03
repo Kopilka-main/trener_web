@@ -8,11 +8,15 @@ import {
   clientListResponseSchema,
   accountProfileResponseSchema,
   connectCodeCheckResponseSchema,
+  linkPreviewResponseSchema,
+  claimRequestSchema,
+  claimResponseSchema,
 } from '@trener/shared';
 import type { ClientsService, AvatarUploadInput } from './clients.service.js';
+import type { Storage } from '../../files/storage.js';
 import { requireAuth } from '../../plugins/tenant-context.js';
 import { makeRequireClientAccess } from '../../plugins/require-client-access.js';
-import { AppError, unauthorized } from '../../errors.js';
+import { AppError, notFound, unauthorized } from '../../errors.js';
 
 // guard связи тренер↔клиент — импортируем тип из плагина (не repo/db),
 // чтобы HTTP-слой не нарушал границу *.routes.ts ↔ *.repo/**/db.
@@ -27,6 +31,7 @@ export function clientsRoutes(
   app: FastifyInstance,
   svc: ClientsService,
   requireClientAccess: RequireClientAccess,
+  storage: Storage,
 ): void {
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
@@ -110,6 +115,49 @@ export function clientsRoutes(
       trainerId(req); // гард: только авторизованный тренер
       return { profile: await svc.getAccountProfile(req.query.accountId) };
     },
+  );
+
+  // Превью аккаунта по коду привязки (QR/код) для карточки подтверждения ДО создания
+  // клиента. Статический сегмент link-preview не пересекается с параметрическим /:id.
+  typed.get(
+    '/api/clients/link-preview',
+    {
+      preHandler: requireAuth,
+      schema: {
+        querystring: z.object({ code: z.string() }),
+        response: { 200: linkPreviewResponseSchema },
+      },
+    },
+    async (req) => svc.linkPreview(trainerId(req), req.query.code),
+  );
+
+  // Раздача аватара клиентского аккаунта по коду — картинка в карточке подтверждения
+  // до создания клиента. Тело — бинарь, потому без zod response-схемы. Резолв через
+  // accountId → avatarFileId → files.storagePath. Нет аватара/файла → 404.
+  typed.get(
+    '/api/clients/account-avatar',
+    {
+      preHandler: requireAuth,
+      schema: { querystring: z.object({ accountId: z.string().min(1) }) },
+    },
+    async (req, reply) => {
+      trainerId(req); // гард: только авторизованный тренер
+      const row = await svc.accountAvatar(req.query.accountId);
+      if (!row) throw notFound('Аватар не найден');
+      reply.header('Content-Type', row.mime);
+      return reply.send(storage.openRead(row.storagePath));
+    },
+  );
+
+  // Привязка «создать клиента из кода» (QR/код): атомарно создаёт клиента из профиля
+  // аккаунта и подтягивает аватар, либо возвращает уже привязанного (alreadyExisted).
+  typed.post(
+    '/api/clients/claim',
+    {
+      preHandler: requireAuth,
+      schema: { body: claimRequestSchema, response: { 200: claimResponseSchema } },
+    },
+    async (req) => svc.claim(trainerId(req), req.body.code),
   );
 
   typed.get(

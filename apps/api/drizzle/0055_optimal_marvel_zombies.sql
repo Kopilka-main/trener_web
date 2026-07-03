@@ -1,0 +1,1 @@
+ALTER TABLE "client_accounts" ADD COLUMN "session_reminder_enabled" boolean DEFAULT true NOT NULL;

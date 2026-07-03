@@ -82,12 +82,26 @@ type AccountProfileFn = (id: string) => Promise<{
 
 const defaultAccountProfile: AccountProfileFn = () => Promise.resolve(null);
 
+type NotifyLinkedFn = (
+  trainerId: string,
+  clientId: string,
+  firstName: string,
+  lastName: string,
+) => void;
+
 function makeDeps(
   accountExists: (id: string) => Promise<boolean> = vi.fn(() => Promise.resolve(true)),
   accountProfile: AccountProfileFn = defaultAccountProfile,
   accountAvatarFileId: (id: string) => Promise<string | null> = () => Promise.resolve(null),
+  notifyLinked?: NotifyLinkedFn,
 ) {
-  return { newId: () => 'newid', accountExists, accountProfile, accountAvatarFileId };
+  return {
+    newId: () => 'newid',
+    accountExists,
+    accountProfile,
+    accountAvatarFileId,
+    ...(notifyLinked ? { notifyLinked } : {}),
+  };
 }
 const deps = makeDeps();
 
@@ -98,15 +112,26 @@ function makeSvc(
     storage?: Partial<Storage>;
     accountExists?: (id: string) => Promise<boolean>;
     accountProfile?: AccountProfileFn;
+    accountAvatarFileId?: (id: string) => Promise<string | null>;
+    notifyLinked?: NotifyLinkedFn;
   } = {},
 ) {
-  const hasDepOverride = over.accountExists !== undefined || over.accountProfile !== undefined;
+  const hasDepOverride =
+    over.accountExists !== undefined ||
+    over.accountProfile !== undefined ||
+    over.accountAvatarFileId !== undefined ||
+    over.notifyLinked !== undefined;
   return makeClientsService(
     fakeRepo(over.repo),
     fakeFilesRepo(over.filesRepo),
     fakeStorage(over.storage),
     hasDepOverride
-      ? makeDeps(over.accountExists ?? (() => Promise.resolve(true)), over.accountProfile)
+      ? makeDeps(
+          over.accountExists ?? (() => Promise.resolve(true)),
+          over.accountProfile,
+          over.accountAvatarFileId ?? (() => Promise.resolve(null)),
+          over.notifyLinked,
+        )
       : deps,
   );
 }
@@ -410,5 +435,229 @@ describe('clients.service', () => {
     ).rejects.toMatchObject({ status: 422, code: 'CLIENT_ACCOUNT_NOT_FOUND' });
     expect(accountExists).toHaveBeenCalledWith('ghost');
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('linkPreview: пустой код → exists=false, всё null, без обращений к deps', async () => {
+    const accountExists = vi.fn(() => Promise.resolve(true));
+    const svc = makeSvc({ accountExists });
+    const res = await svc.linkPreview('A', '   ');
+    expect(res).toEqual({
+      preview: {
+        exists: false,
+        firstName: null,
+        lastName: null,
+        hasAvatar: false,
+        linkedClientId: null,
+        linkedClientName: null,
+      },
+    });
+    expect(accountExists).not.toHaveBeenCalled();
+  });
+
+  it('linkPreview: существующий аккаунт с аватаром, ещё не привязан у тренера', async () => {
+    const accountExists = vi.fn(() => Promise.resolve(true));
+    const accountProfile: AccountProfileFn = () =>
+      Promise.resolve({ firstName: 'Имя', lastName: 'Фам', birthDate: null, contacts: [] });
+    const accountAvatarFileId = () => Promise.resolve('file-1');
+    const findByAccountId = vi.fn(() => Promise.resolve(null));
+    const svc = makeSvc({
+      accountExists,
+      accountProfile,
+      accountAvatarFileId,
+      repo: { findByAccountId },
+    });
+    const res = await svc.linkPreview('A', ' code1 ');
+    expect(res.preview).toEqual({
+      exists: true,
+      firstName: 'Имя',
+      lastName: 'Фам',
+      hasAvatar: true,
+      linkedClientId: null,
+      linkedClientName: null,
+    });
+    expect(findByAccountId).toHaveBeenCalledWith('A', 'code1');
+  });
+
+  it('linkPreview: аккаунт уже привязан к клиенту тренера → linkedClientId/Name', async () => {
+    const svc = makeSvc({
+      accountExists: () => Promise.resolve(true),
+      accountProfile: () =>
+        Promise.resolve({ firstName: 'Имя', lastName: 'Фам', birthDate: null, contacts: [] }),
+      repo: {
+        findByAccountId: vi.fn(() =>
+          Promise.resolve({ id: 'c2', firstName: 'Иван', lastName: 'Петров' }),
+        ),
+      },
+    });
+    const res = await svc.linkPreview('A', 'code1');
+    expect(res.preview.linkedClientId).toBe('c2');
+    expect(res.preview.linkedClientName).toBe('Иван Петров');
+  });
+
+  it('accountAvatar: возвращает {mime, storagePath} по avatarFileId аккаунта', async () => {
+    const getById = vi.fn(() =>
+      Promise.resolve(fileRow({ id: 'file-1', mime: 'image/png', storagePath: 'p/x.png' })),
+    );
+    const svc = makeSvc({
+      accountAvatarFileId: () => Promise.resolve('file-1'),
+      filesRepo: { getById },
+    });
+    expect(await svc.accountAvatar(' acc-1 ')).toEqual({
+      mime: 'image/png',
+      storagePath: 'p/x.png',
+    });
+    expect(getById).toHaveBeenCalledWith('file-1');
+  });
+
+  it('accountAvatar: нет avatarFileId → null', async () => {
+    const svc = makeSvc({ accountAvatarFileId: () => Promise.resolve(null) });
+    expect(await svc.accountAvatar('acc-1')).toBeNull();
+  });
+
+  it('claim: несуществующий аккаунт → 422 CLIENT_ACCOUNT_NOT_FOUND', async () => {
+    const create = vi.fn(() => Promise.resolve(row()));
+    const svc = makeSvc({ accountExists: () => Promise.resolve(false), repo: { create } });
+    await expect(svc.claim('A', 'ghost')).rejects.toMatchObject({
+      status: 422,
+      code: 'CLIENT_ACCOUNT_NOT_FOUND',
+    });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('claim: пустой код → 422, без создания', async () => {
+    const create = vi.fn(() => Promise.resolve(row()));
+    const svc = makeSvc({ repo: { create } });
+    await expect(svc.claim('A', '   ')).rejects.toMatchObject({
+      status: 422,
+      code: 'CLIENT_ACCOUNT_NOT_FOUND',
+    });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('claim: аккаунт уже привязан у тренера → возвращает клиента, alreadyExisted=true', async () => {
+    const findByAccountId = vi.fn(() =>
+      Promise.resolve({ id: 'c2', firstName: 'Иван', lastName: 'Петров' }),
+    );
+    const getForTrainer = vi.fn(() => Promise.resolve(row({ id: 'c2', accountId: 'acc-1' })));
+    const create = vi.fn(() => Promise.resolve(row()));
+    const svc = makeSvc({
+      accountExists: () => Promise.resolve(true),
+      repo: { findByAccountId, getForTrainer, create },
+    });
+    const res = await svc.claim('A', 'acc-1');
+    expect(res.alreadyExisted).toBe(true);
+    expect(res.client.id).toBe('c2');
+    expect(getForTrainer).toHaveBeenCalledWith('A', 'c2');
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('claim: новый аккаунт → создаёт клиента из профиля, alreadyExisted=false', async () => {
+    const accountProfile: AccountProfileFn = () =>
+      Promise.resolve({
+        firstName: 'Имя',
+        lastName: 'Фам',
+        birthDate: '1990-01-01',
+        contacts: [{ type: 'Телефон', value: '+7900' }],
+      });
+    const create = vi.fn(() =>
+      Promise.resolve(row({ id: 'c9', accountId: 'acc-1', firstName: 'Имя', lastName: 'Фам' })),
+    );
+    // avatarFromAccount: клиент есть, но у аккаунта аватара нет (accountAvatarFileId=null) → no-op.
+    const getForTrainer = vi.fn(() =>
+      Promise.resolve(row({ id: 'c9', accountId: 'acc-1', firstName: 'Имя', lastName: 'Фам' })),
+    );
+    const svc = makeSvc({
+      accountExists: () => Promise.resolve(true),
+      accountProfile,
+      accountAvatarFileId: () => Promise.resolve(null),
+      repo: { findByAccountId: () => Promise.resolve(null), create, getForTrainer },
+    });
+    const res = await svc.claim('A', ' acc-1 ');
+    expect(res.alreadyExisted).toBe(false);
+    expect(res.client.id).toBe('c9');
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        firstName: 'Имя',
+        lastName: 'Фам',
+        accountId: 'acc-1',
+        birthDate: '1990-01-01',
+        contacts: [{ type: 'Телефон', value: '+7900' }],
+      }),
+    );
+  });
+
+  it('claim нового клиента → шлёт notifyLinked (подключение) тренеру', async () => {
+    const notifyLinked = vi.fn();
+    const accountProfile: AccountProfileFn = () =>
+      Promise.resolve({ firstName: 'Имя', lastName: 'Фам', birthDate: null, contacts: [] });
+    const create = vi.fn(() =>
+      Promise.resolve(row({ id: 'c9', accountId: 'acc-1', firstName: 'Имя', lastName: 'Фам' })),
+    );
+    const getForTrainer = vi.fn(() =>
+      Promise.resolve(row({ id: 'c9', accountId: 'acc-1', firstName: 'Имя', lastName: 'Фам' })),
+    );
+    const svc = makeSvc({
+      accountExists: () => Promise.resolve(true),
+      accountProfile,
+      accountAvatarFileId: () => Promise.resolve(null),
+      repo: { findByAccountId: () => Promise.resolve(null), create, getForTrainer },
+      notifyLinked,
+    });
+    await svc.claim('A', 'acc-1');
+    expect(notifyLinked).toHaveBeenCalledWith('A', 'c9', 'Имя', 'Фам');
+  });
+
+  it('claim уже привязанного (alreadyExisted) → notifyLinked НЕ шлётся', async () => {
+    const notifyLinked = vi.fn();
+    const findByAccountId = vi.fn(() =>
+      Promise.resolve({ id: 'c2', firstName: 'Иван', lastName: 'Петров' }),
+    );
+    const getForTrainer = vi.fn(() => Promise.resolve(row({ id: 'c2', accountId: 'acc-1' })));
+    const svc = makeSvc({
+      accountExists: () => Promise.resolve(true),
+      repo: { findByAccountId, getForTrainer },
+      notifyLinked,
+    });
+    const res = await svc.claim('A', 'acc-1');
+    expect(res.alreadyExisted).toBe(true);
+    expect(notifyLinked).not.toHaveBeenCalled();
+  });
+
+  it('update: привязка accountId (null→value) → notifyLinked тренеру', async () => {
+    const notifyLinked = vi.fn();
+    // before: клиент без привязки; после update — с accountId.
+    const getForTrainer = vi.fn(() => Promise.resolve(row({ id: 'c1', accountId: null })));
+    const update = vi.fn(() =>
+      Promise.resolve(row({ id: 'c1', accountId: 'acc-1', firstName: 'Кли', lastName: 'Ент' })),
+    );
+    const svc = makeSvc({
+      accountExists: () => Promise.resolve(true),
+      repo: { getForTrainer, update, findByAccountId: () => Promise.resolve(null) },
+      notifyLinked,
+    });
+    await svc.update('A', 'c1', { accountId: 'acc-1' });
+    expect(notifyLinked).toHaveBeenCalledWith('A', 'c1', 'Кли', 'Ент');
+  });
+
+  it('update: тот же accountId (уже был привязан) → notifyLinked НЕ шлётся', async () => {
+    const notifyLinked = vi.fn();
+    // before: клиент УЖЕ привязан к acc-1 → перехода null→value нет.
+    const getForTrainer = vi.fn(() => Promise.resolve(row({ id: 'c1', accountId: 'acc-1' })));
+    const update = vi.fn(() => Promise.resolve(row({ id: 'c1', accountId: 'acc-1' })));
+    const svc = makeSvc({
+      accountExists: () => Promise.resolve(true),
+      repo: { getForTrainer, update, findByAccountId: () => Promise.resolve(null) },
+      notifyLinked,
+    });
+    await svc.update('A', 'c1', { accountId: 'acc-1' });
+    expect(notifyLinked).not.toHaveBeenCalled();
+  });
+
+  it('update: отвязка (accountId=null) → notifyLinked НЕ шлётся', async () => {
+    const notifyLinked = vi.fn();
+    const update = vi.fn(() => Promise.resolve(row({ id: 'c1', accountId: null })));
+    const svc = makeSvc({ repo: { update }, notifyLinked });
+    await svc.update('A', 'c1', { accountId: null });
+    expect(notifyLinked).not.toHaveBeenCalled();
   });
 });

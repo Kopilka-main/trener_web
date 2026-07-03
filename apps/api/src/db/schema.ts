@@ -107,6 +107,9 @@ export const clientAccounts = pgTable(
     avatarFileId: text('avatar_file_id').references((): AnyPgColumn => files.id, {
       onDelete: 'set null',
     }),
+    // Настройка клиента: слать ли пуш-напоминание «за час до тренировки». По умолчанию
+    // включено; клиент может выключить в профиле (PATCH /api/client/auth/me).
+    sessionReminderEnabled: boolean('session_reminder_enabled').notNull().default(true),
     // Запрошено удаление аккаунта: момент окончательного удаления (окно отмены).
     // NULL = удаление не запланировано. Планировщик сносит аккаунт по достижении.
     pendingDeletionAt: timestamp('pending_deletion_at', { withTimezone: true }),

@@ -165,12 +165,20 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     db: deps.db,
     clock,
     resolveScope: (id) => clientAuthSvc.resolveScope(id),
+    // Клиент добавил замер → пуш тренеру (с именем клиента).
+    notifyTrainer: (trainerId, clientId, build) => {
+      void pushSvc.notifyTrainerFrom(trainerId, clientId, build).catch(() => undefined);
+    },
   });
   registerClientAppProgressPhotosModule(app, {
     db: deps.db,
     storage,
     clock,
     resolveScope: (id) => clientAuthSvc.resolveScope(id),
+    // Клиент добавил фото прогресса → пуш тренеру (с именем клиента).
+    notifyTrainer: (trainerId, clientId, build) => {
+      void pushSvc.notifyTrainerFrom(trainerId, clientId, build).catch(() => undefined);
+    },
   });
   registerClientAppExercisesModule(app, {
     db: deps.db,
@@ -189,7 +197,21 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
   await registerTelemetryRoutes(app, telemetry);
 
-  registerClientsModule(app, { db: deps.db, storage, clock });
+  registerClientsModule(app, {
+    db: deps.db,
+    storage,
+    clock,
+    // Клиент подключён (привязка accountId) → пуш тренеру. Fire-and-forget.
+    notifyLinked: (trainerId, clientId, firstName, lastName) => {
+      void pushSvc
+        .notifyTrainer(trainerId, {
+          title: 'Клиент подключён',
+          body: `${firstName} ${lastName}`.trim(),
+          url: `/clients/${clientId}`,
+        })
+        .catch(() => undefined);
+    },
+  });
   registerExercisesModule(app, { db: deps.db, clock });
   registerTemplatesModule(app, { db: deps.db, clock });
   // Сессии регистрируем РАНЬШE тренировок: их сервис нужен client-workouts

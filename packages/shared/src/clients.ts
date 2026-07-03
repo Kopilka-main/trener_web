@@ -95,3 +95,34 @@ export const connectCodeCheckResponseSchema = z.object({
     .nullable(),
 });
 export type ConnectCodeCheckResponse = z.infer<typeof connectCodeCheckResponseSchema>;
+
+// Превью аккаунта по коду привязки (QR/код) ДО создания клиента — для карточки
+// подтверждения. exists — аккаунт существует; firstName/lastName из профиля (null,
+// если аккаунта нет); hasAvatar — у аккаунта есть аватар (показать превью-картинку);
+// linkedClientId/linkedClientName — если этот аккаунт уже привязан к клиенту ЭТОГО
+// тренера (чтобы сказать «уже ваш клиент» и открыть его), иначе null.
+export const linkPreviewResponseSchema = z.object({
+  preview: z.object({
+    exists: z.boolean(),
+    firstName: z.string().nullable(),
+    lastName: z.string().nullable(),
+    hasAvatar: z.boolean(),
+    linkedClientId: z.string().nullable(),
+    linkedClientName: z.string().nullable(),
+  }),
+});
+export type LinkPreviewResponse = z.infer<typeof linkPreviewResponseSchema>;
+
+// Запрос привязки «создать клиента из кода»: code = client_accounts.id (QR/код).
+export const claimRequestSchema = z.object({
+  code: z.string().trim().min(1),
+});
+export type ClaimRequest = z.infer<typeof claimRequestSchema>;
+
+// Результат привязки: созданный (или уже существовавший) клиент + флаг, был ли он
+// уже привязан к этому аккаунту у тренера (alreadyExisted=true → дубль не создавали).
+export const claimResponseSchema = z.object({
+  client: clientResponseSchema,
+  alreadyExisted: z.boolean(),
+});
+export type ClaimResponse = z.infer<typeof claimResponseSchema>;

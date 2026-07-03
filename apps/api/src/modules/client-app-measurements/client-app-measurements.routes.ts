@@ -17,11 +17,20 @@ const midParams = z.object({ mid: z.string().min(1) });
 const measurementWrap = z.object({ measurement: measurementResponseSchema });
 const okResponse = z.object({ ok: z.literal(true) });
 
+// Структурно совпадает с push PushPayload (HTTP-слой не импортирует push-модуль).
+type TrainerPushPayload = { title: string; body: string; url?: string };
+
 export function clientAppMeasurementsRoutes(
   app: FastifyInstance,
   svc: MeasurementsService,
   tasksSvc: MeasurementTasksService,
   resolveScope: ResolveScope,
+  // Пуш ТРЕНЕРУ при добавлении замера клиентом (fire-and-forget, опционален).
+  notifyTrainer?: (
+    trainerId: string,
+    clientId: string,
+    build: (clientName: string) => TrainerPushPayload,
+  ) => void,
 ): void {
   const typed = app.withTypeProvider<ZodTypeProvider>();
   const scope = makeClientScope(resolveScope);
@@ -54,6 +63,14 @@ export function clientAppMeasurementsRoutes(
     async (req, reply) => {
       const { trainerId, clientId } = await scope(req);
       const measurement = await svc.create(trainerId, clientId, req.body);
+      // Уведомить тренера: клиент добавил замеры. Fire-and-forget.
+      if (notifyTrainer) {
+        notifyTrainer(trainerId, clientId, (clientName) => ({
+          title: clientName,
+          body: 'Добавил замеры',
+          url: `/clients/${clientId}`,
+        }));
+      }
       void reply.status(201);
       return { measurement };
     },

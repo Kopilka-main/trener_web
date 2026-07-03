@@ -8,6 +8,8 @@ import { makeProgressPhotosService } from '../progress-photos/progress-photos.se
 import { makeFilesRepo } from '../files/files.repo.js';
 import { clientAppProgressPhotosRoutes } from './client-app-progress-photos.routes.js';
 
+type TrainerPushPayload = { title: string; body: string; url?: string };
+
 // Регистрация progress-photos для клиентского приложения: переиспользует сервис
 // тренерского модуля (scoped по trainerId+clientId), scope приходит из resolveScope.
 export function registerClientAppProgressPhotosModule(
@@ -17,6 +19,12 @@ export function registerClientAppProgressPhotosModule(
     storage: Storage;
     clock: Clock;
     resolveScope: (id: string) => Promise<ClientLink>;
+    // Пуш ТРЕНЕРУ (клиент добавил фото): build получает имя КЛИЕНТА. Fire-and-forget.
+    notifyTrainer?: (
+      trainerId: string,
+      clientId: string,
+      build: (clientName: string) => TrainerPushPayload,
+    ) => void;
   },
 ): void {
   const repo = makeProgressPhotosRepo(deps.db);
@@ -24,5 +32,12 @@ export function registerClientAppProgressPhotosModule(
   const svc = makeProgressPhotosService(repo, filesRepo, deps.storage, {
     newId: deps.clock.newId,
   });
-  clientAppProgressPhotosRoutes(app, svc, filesRepo, deps.storage, deps.resolveScope);
+  clientAppProgressPhotosRoutes(
+    app,
+    svc,
+    filesRepo,
+    deps.storage,
+    deps.resolveScope,
+    deps.notifyTrainer,
+  );
 }

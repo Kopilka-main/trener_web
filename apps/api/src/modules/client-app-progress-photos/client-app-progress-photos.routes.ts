@@ -28,6 +28,9 @@ const photoWrap = z.object({ photo: photoResponseSchema });
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const noteSchema = z.string().trim().max(2000);
 
+// Структурно совпадает с push PushPayload (HTTP-слой не импортирует push-модуль).
+type TrainerPushPayload = { title: string; body: string; url?: string };
+
 // HTTP-слой progress-photos (клиентское приложение): /api/client/progress-photos*.
 // Клиент НЕ выбирает scope сам — он приходит из resolveScope (clients.accountId + связь).
 export function clientAppProgressPhotosRoutes(
@@ -36,6 +39,12 @@ export function clientAppProgressPhotosRoutes(
   filePort: ClientFileReadPort,
   storage: Storage,
   resolveScope: ResolveScope,
+  // Пуш ТРЕНЕРУ при добавлении фото клиентом (fire-and-forget, опционален).
+  notifyTrainer?: (
+    trainerId: string,
+    clientId: string,
+    build: (clientName: string) => TrainerPushPayload,
+  ) => void,
 ): void {
   const typed = app.withTypeProvider<ZodTypeProvider>();
   const scope = makeClientScope(resolveScope);
@@ -86,6 +95,14 @@ export function clientAppProgressPhotosRoutes(
       const { trainerId, clientId } = await scope(req);
       const input = await readMultipart(req);
       const photo = await svc.upload(trainerId, clientId, input);
+      // Уведомить тренера: клиент добавил фото прогресса. Fire-and-forget.
+      if (notifyTrainer) {
+        notifyTrainer(trainerId, clientId, (clientName) => ({
+          title: clientName,
+          body: 'Добавил фото прогресса',
+          url: `/clients/${clientId}`,
+        }));
+      }
       void reply.status(201);
       return { photo };
     },

@@ -172,6 +172,48 @@ describe('client-auth.service', () => {
     expect(res.bio).toBe('цель');
   });
 
+  it('updateMe пробрасывает sessionReminderEnabled в patch', async () => {
+    const updateAccount = vi.fn((id: string, patch: Record<string, unknown>) =>
+      Promise.resolve({
+        id,
+        email: 'a@b.co',
+        firstName: 'И',
+        lastName: 'К',
+        avatarFileId: null,
+        birthDate: null,
+        contacts: [],
+        bio: null,
+        sessionReminderEnabled: true,
+        ...patch,
+      }),
+    );
+    const svc = svcWith(fakeRepo({ updateAccount }));
+    const res = await svc.updateMe('ca1', { sessionReminderEnabled: false });
+    expect(updateAccount).toHaveBeenCalledWith('ca1', { sessionReminderEnabled: false });
+    expect(res.sessionReminderEnabled).toBe(false);
+  });
+
+  it('me отдаёт sessionReminderEnabled=true по умолчанию (поле есть в профиле)', async () => {
+    const repo = fakeRepo({
+      findAccountById: vi.fn(() =>
+        Promise.resolve({
+          id: 'ca1',
+          email: 'a@b.co',
+          firstName: 'И',
+          lastName: 'К',
+          avatarFileId: null,
+          birthDate: null,
+          contacts: [],
+          bio: null,
+          sessionReminderEnabled: true,
+        }),
+      ),
+    });
+    const svc = svcWith(repo);
+    const res = await svc.me('ca1');
+    expect(res.account.sessionReminderEnabled).toBe(true);
+  });
+
   it('setAvatar сохраняет файл аккаунта (accountId, без trainerId/clientId)', async () => {
     const save = vi.fn(() => Promise.resolve({ storagePath: 'acct_ca1/_/id.jpg', sizeBytes: 10 }));
     const create = vi.fn(() => Promise.resolve(fileRow({ id: 'id' })));

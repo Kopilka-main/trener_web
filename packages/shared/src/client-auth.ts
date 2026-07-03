@@ -30,6 +30,8 @@ export const updateClientAccountRequestSchema = z.object({
     .nullish(),
   contacts: z.array(contactSchema).max(20).optional(),
   bio: z.string().trim().max(2000).nullish(),
+  // Настройка: слать ли пуш «за час до тренировки». Опционально — отсутствие не меняет.
+  sessionReminderEnabled: z.boolean().optional(),
 });
 export type UpdateClientAccountRequest = z.infer<typeof updateClientAccountRequestSchema>;
 
@@ -42,6 +44,8 @@ export const clientAccountResponseSchema = z.object({
   birthDate: z.string().nullable(),
   contacts: z.array(contactSchema),
   bio: z.string().nullable(),
+  // Настройка пуш-напоминания «за час до тренировки» (по умолчанию true).
+  sessionReminderEnabled: z.boolean(),
 });
 export type ClientAccountResponse = z.infer<typeof clientAccountResponseSchema>;
 

@@ -3,8 +3,10 @@ import type { FilesRepo } from '../files/files.repo.js';
 import type { Storage } from '../../files/storage.js';
 import type {
   AccountProfileResponse,
+  ClaimResponse,
   ClientResponse,
   CreateClientRequest,
+  LinkPreviewResponse,
   UpdateClientRequest,
 } from '@trener/shared';
 import { AppError, notFound } from '../../errors.js';
@@ -23,6 +25,11 @@ export type ClientsDeps = {
   accountProfile: (id: string) => Promise<AccountProfile | null>;
   /** avatarFileId подключённого аккаунта (для «подтянуть аватар»), либо null. */
   accountAvatarFileId: (id: string) => Promise<string | null>;
+  /**
+   * Пуш ТРЕНЕРУ при появлении привязки аккаунта к клиенту (переход null→value).
+   * Fire-and-forget, опционален. Шлётся только когда accountId РАНЬШЕ был пуст.
+   */
+  notifyLinked?: (trainerId: string, clientId: string, firstName: string, lastName: string) => void;
 };
 
 // Расширение файла выводим ИЗ MIME по whitelist (НЕ из имени файла клиента).
@@ -110,7 +117,7 @@ export function makeClientsService(
     return toResponse(row);
   }
 
-  return {
+  const service = {
     async create(trainerId: string, input: CreateClientRequest): Promise<ClientResponse> {
       // Привязка при создании: непустой accountId должен существовать (как в update)
       // и не должен быть уже привязан к другому клиенту тренера (дубль в записной книжке).
@@ -194,6 +201,9 @@ export function makeClientsService(
     ): Promise<ClientResponse> {
       // Привязка клиентского аккаунта: непустой accountId должен существовать и не быть
       // уже привязан к ДРУГОМУ клиенту тренера. Пустая строка/null = отвязка — не проверяем.
+      // Прежнее значение accountId нужно, чтобы уведомить тренера ТОЛЬКО при переходе
+      // null→value (а не при каждом сохранении с тем же accountId).
+      let wasUnlinked = false;
       if (patch.accountId != null && patch.accountId !== '') {
         const exists = await deps.accountExists(patch.accountId);
         if (!exists) {
@@ -207,6 +217,8 @@ export function makeClientsService(
             `Клиент с таким ID уже есть: ${dup.firstName} ${dup.lastName}`.trim(),
           );
         }
+        const before = await repo.getForTrainer(trainerId, clientId);
+        wasUnlinked = before != null && (before.accountId == null || before.accountId === '');
       }
 
       // exactOptionalPropertyTypes: задаём только определённые поля.
@@ -226,6 +238,10 @@ export function makeClientsService(
       if (patch.isOnline !== undefined) repoPatch.isOnline = patch.isOnline;
       const row = await repo.update(trainerId, clientId, repoPatch);
       if (!row) throw notFound('Клиент не найден');
+      // Клиент только что подключён (accountId перешёл из пустого в заданный) → пуш тренеру.
+      if (wasUnlinked && row.accountId != null && row.accountId !== '') {
+        deps.notifyLinked?.(trainerId, clientId, row.firstName, row.lastName);
+      }
       return toResponse(row);
     },
 
@@ -284,7 +300,103 @@ export function makeClientsService(
         if (old) await storage.remove(old.storagePath).catch(() => undefined);
       }
     },
+
+    // Превью аккаунта по коду привязки (QR/код) ДО создания клиента — для карточки
+    // подтверждения. Собирает существование аккаунта, имя из профиля, наличие аватара
+    // и уже-привязанного клиента ЭТОГО тренера (чтобы открыть его вместо дубля).
+    async linkPreview(trainerId: string, code: string): Promise<LinkPreviewResponse> {
+      const c = code.trim();
+      if (c === '') {
+        return {
+          preview: {
+            exists: false,
+            firstName: null,
+            lastName: null,
+            hasAvatar: false,
+            linkedClientId: null,
+            linkedClientName: null,
+          },
+        };
+      }
+      const [exists, profile, avatarFileId, linked] = await Promise.all([
+        deps.accountExists(c),
+        deps.accountProfile(c),
+        deps.accountAvatarFileId(c),
+        repo.findByAccountId(trainerId, c),
+      ]);
+      return {
+        preview: {
+          exists,
+          firstName: profile?.firstName ?? null,
+          lastName: profile?.lastName ?? null,
+          hasAvatar: avatarFileId != null,
+          linkedClientId: linked?.id ?? null,
+          linkedClientName: linked ? `${linked.firstName} ${linked.lastName}`.trim() : null,
+        },
+      };
+    },
+
+    // Раздача аватара клиентского аккаунта по коду (для карточки подтверждения до
+    // создания клиента): accountId → avatarFileId → files-строка. Возвращает данные
+    // для стрима ({mime, storagePath}) либо null (нет аккаунта/аватара/файла).
+    // Уровень доступа — тренерский (как и getAccountProfile).
+    async accountAvatar(accountId: string): Promise<{ mime: string; storagePath: string } | null> {
+      const id = accountId.trim();
+      if (id === '') return null;
+      const fileId = await deps.accountAvatarFileId(id);
+      if (!fileId) return null;
+      const file = await filesRepo.getById(fileId);
+      if (!file) return null;
+      return { mime: file.mime, storagePath: file.storagePath };
+    },
+
+    // Атомарная привязка «создать клиента из кода» (QR/код). Аккаунта нет → 422
+    // CLIENT_ACCOUNT_NOT_FOUND. Если у тренера уже есть клиент с этим accountId —
+    // возвращаем его (alreadyExisted=true), дубль не создаём. Иначе создаём клиента
+    // из профиля аккаунта и подтягиваем аватар (best-effort: нет аватара — не роняем).
+    async claim(trainerId: string, code: string): Promise<ClaimResponse> {
+      const c = code.trim();
+      if (c === '') {
+        throw new AppError(422, 'CLIENT_ACCOUNT_NOT_FOUND', 'Клиентский аккаунт не найден');
+      }
+      const exists = await deps.accountExists(c);
+      if (!exists) {
+        throw new AppError(422, 'CLIENT_ACCOUNT_NOT_FOUND', 'Клиентский аккаунт не найден');
+      }
+      const existing = await repo.findByAccountId(trainerId, c);
+      if (existing) {
+        const row = await repo.getForTrainer(trainerId, existing.id);
+        if (!row) throw notFound('Клиент не найден');
+        return { client: toResponse(row), alreadyExisted: true };
+      }
+      const profile = await deps.accountProfile(c);
+      if (!profile) {
+        // Аккаунт существует, но профиль недоступен — трактуем как отсутствие аккаунта.
+        throw new AppError(422, 'CLIENT_ACCOUNT_NOT_FOUND', 'Клиентский аккаунт не найден');
+      }
+      const created = await service.create(trainerId, {
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        accountId: c,
+        birthDate: profile.birthDate,
+        contacts: profile.contacts,
+        tags: [],
+        isOnline: false,
+      });
+      // Новая привязка (QR/код) → пуш тренеру о подключении клиента. Fire-and-forget.
+      deps.notifyLinked?.(trainerId, created.id, created.firstName, created.lastName);
+      // Подтянуть аватар аккаунта в карточку. Нет аватара/файла → no-op внутри;
+      // ошибку не пробрасываем, чтобы не откатывать успешный claim.
+      try {
+        const withAvatar = await service.avatarFromAccount(trainerId, created.id);
+        return { client: withAvatar, alreadyExisted: false };
+      } catch {
+        return { client: created, alreadyExisted: false };
+      }
+    },
   };
+
+  return service;
 }
 
 export type ClientsService = ReturnType<typeof makeClientsService>;

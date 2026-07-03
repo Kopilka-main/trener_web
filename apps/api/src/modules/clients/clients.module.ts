@@ -13,7 +13,18 @@ import { clientsRoutes } from './clients.routes.js';
 // и навешивает HTTP-роуты. Здесь (НЕ в *.routes.ts) допустим импорт repo/db/storage.
 export function registerClientsModule(
   app: FastifyInstance,
-  deps: { db: Db; storage: Storage; clock: Clock },
+  deps: {
+    db: Db;
+    storage: Storage;
+    clock: Clock;
+    // Пуш ТРЕНЕРУ при подключении клиента (привязка accountId). Fire-and-forget.
+    notifyLinked?: (
+      trainerId: string,
+      clientId: string,
+      firstName: string,
+      lastName: string,
+    ) => void;
+  },
 ): void {
   const repo = makeClientsRepo(deps.db);
   const filesRepo = makeFilesRepo(deps.db);
@@ -32,7 +43,8 @@ export function registerClientsModule(
       };
     },
     accountAvatarFileId: (id) => clientAuthRepo.findAvatarFileId(id),
+    ...(deps.notifyLinked ? { notifyLinked: deps.notifyLinked } : {}),
   });
   const requireClientAccess = makeRequireClientAccess(repo);
-  clientsRoutes(app, svc, requireClientAccess);
+  clientsRoutes(app, svc, requireClientAccess, deps.storage);
 }

@@ -108,6 +108,50 @@ async function tick(repo: RemindersRepo, push: PushService, now: Date): Promise<
       });
     }
   }
+
+  // 4) День рождения тренера сегодня → каждому его привязанному клиенту.
+  for (const t of await repo.trainerBirthdaysToday(mmdd)) {
+    if (await repo.markIfNew(`tbday:${t.clientId}:${year}`, now)) {
+      await push.notifyByClientId(t.clientId, {
+        title: 'День рождения тренера',
+        body: 'Сегодня день рождения у вашего тренера 🎂',
+        url: '/chat',
+      });
+    }
+  }
+
+  // 5) Напоминание за ~1 час до тренировки → клиенту (если не выключил в настройках).
+  // Окно [30..90] мин от now: попадёт в 30-минутный тик хотя бы раз, дедуп по sessionId.
+  const windowSessions = await repo.sessionsInWindow(today, tomorrow);
+  for (const s of windowSessions) {
+    if (!s.reminderEnabled) continue;
+    const diffMin = (whenMs(s.date, s.startTime) - now.getTime()) / 60000;
+    if (Number.isNaN(diffMin) || diffMin < 30 || diffMin > 90) continue;
+    if (await repo.markIfNew(`soon1h:${s.id}`, now)) {
+      await push.notifyByClientId(s.clientId, {
+        title: 'Через час тренировка',
+        body: `Занятие в ${s.startTime}`,
+        url: '/calendar',
+      });
+    }
+  }
+
+  // 6) Платёж рассрочки за 1 день (срок завтра) → тренеру и клиенту.
+  const dueTomorrow = isoDate(addDays(now, 1));
+  for (const inst of await repo.installmentsDueOn(dueTomorrow)) {
+    if (await repo.markIfNew(`inst:${inst.id}`, now)) {
+      await push.notifyTrainer(inst.trainerId, {
+        title: 'Платёж завтра',
+        body: `${inst.firstName} ${inst.lastName}: платёж по рассрочке ${inst.amount} ₽ завтра`,
+        url: `/clients/${inst.clientId}`,
+      });
+      await push.notifyByClientId(inst.clientId, {
+        title: 'Напоминание об оплате',
+        body: `Завтра платёж по рассрочке: ${inst.amount} ₽`,
+        url: '/chat',
+      });
+    }
+  }
 }
 
 export type SchedulerDeps = {

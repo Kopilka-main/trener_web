@@ -43,6 +43,7 @@ function toAccountResponse(a: {
   birthDate: string | null;
   contacts: { type: string; value: string }[];
   bio: string | null;
+  sessionReminderEnabled?: boolean;
 }): ClientAccountResponse {
   return {
     id: a.id,
@@ -53,6 +54,8 @@ function toAccountResponse(a: {
     birthDate: a.birthDate,
     contacts: a.contacts ?? [],
     bio: a.bio,
+    // Дефолт true, если поле не пришло из старой строки (миграция ставит default true).
+    sessionReminderEnabled: a.sessionReminderEnabled ?? true,
   };
 }
 
@@ -207,12 +210,16 @@ export function makeClientAuthService(
         birthDate?: string | null;
         contacts?: { type: string; value: string }[];
         bio?: string | null;
+        sessionReminderEnabled?: boolean;
       } = {};
       if (input.firstName !== undefined) patch.firstName = input.firstName;
       if (input.lastName !== undefined) patch.lastName = input.lastName;
       if (input.birthDate !== undefined) patch.birthDate = input.birthDate ?? null;
       if (input.contacts !== undefined) patch.contacts = input.contacts;
       if (input.bio !== undefined) patch.bio = input.bio ?? null;
+      if (input.sessionReminderEnabled !== undefined) {
+        patch.sessionReminderEnabled = input.sessionReminderEnabled;
+      }
       const account = await repo.updateAccount(clientAccountId, patch);
       if (!account) throw unauthorized('Сессия недействительна');
       return toAccountResponse(account);
