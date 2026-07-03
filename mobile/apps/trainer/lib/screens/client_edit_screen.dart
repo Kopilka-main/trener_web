@@ -31,6 +31,8 @@ class _EditContact {
   _EditContact({required this.type, required this.value});
   final String type;
   final TextEditingController value;
+  // Фокус на поле значения — чтобы автофокусировать только что добавленный контакт.
+  final FocusNode focus = FocusNode();
 }
 
 /// Создание/правка клиента тренером. Зеркало веб ClientEditPage: X/✓-шапка,
@@ -90,8 +92,16 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
     _tagInput.dispose();
     for (final _EditContact c in _contacts) {
       c.value.dispose();
+      c.focus.dispose();
     }
     super.dispose();
+  }
+
+  /// Добавить новый контакт и сразу сфокусировать его поле значения.
+  void _addContact(String type) {
+    final _EditContact ct = _EditContact(type: type, value: TextEditingController());
+    setState(() => _contacts.add(ct));
+    WidgetsBinding.instance.addPostFrameCallback((_) => ct.focus.requestFocus());
   }
 
   String _iso(DateTime d) =>
@@ -399,7 +409,7 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
           ..._contactTypes.map((_ContactType t) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: GestureDetector(
-                  onTap: () => setState(() => _contacts.add(_EditContact(type: t.label, value: TextEditingController()))),
+                  onTap: () => _addContact(t.label),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
@@ -522,6 +532,7 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
           Expanded(
             child: SelectAllTextField(
               controller: ct.value,
+              focusNode: ct.focus,
               keyboardType: _contactTypes
                   .firstWhere((_ContactType t) => t.label == ct.type, orElse: () => _contactTypes.first)
                   .keyboard,
@@ -533,7 +544,9 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
           ),
           GestureDetector(
             onTap: () => setState(() {
-              _contacts.removeAt(i).value.dispose();
+              final _EditContact removed = _contacts.removeAt(i);
+              removed.value.dispose();
+              removed.focus.dispose();
             }),
             child: Padding(padding: const EdgeInsets.all(6), child: Icon(Icons.close, size: 18, color: c.inkMuted)),
           ),

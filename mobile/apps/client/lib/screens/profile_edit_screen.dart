@@ -16,6 +16,8 @@ class _EditContact {
   _EditContact({required this.type, required this.value});
   String type;
   final TextEditingController value;
+  // Фокус на поле значения — чтобы автофокусировать только что добавленный контакт.
+  final FocusNode focus = FocusNode();
 }
 
 /// Редактирование профиля клиента: аватар (выбор + квадратный кроп), имя/фамилия,
@@ -59,8 +61,16 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     _bio.dispose();
     for (final _EditContact c in _contacts) {
       c.value.dispose();
+      c.focus.dispose();
     }
     super.dispose();
+  }
+
+  /// Добавить контакт и сразу сфокусировать его поле значения.
+  void _addContact() {
+    final _EditContact ct = _EditContact(type: _contactTypes.first, value: TextEditingController());
+    setState(() => _contacts.add(ct));
+    WidgetsBinding.instance.addPostFrameCallback((_) => ct.focus.requestFocus());
   }
 
   Future<void> _pickAvatar() async {
@@ -264,8 +274,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
             const SizedBox(height: 6),
             ..._contacts.asMap().entries.map((MapEntry<int, _EditContact> e) => _contactCard(c, e.key, e.value)),
             OutlinedButton.icon(
-              onPressed: () => setState(() =>
-                  _contacts.add(_EditContact(type: _contactTypes.first, value: TextEditingController()))),
+              onPressed: _addContact,
               icon: Icon(Icons.add, size: 16, color: c.inkMuted),
               label: Text('Добавить контакт', style: TextStyle(color: c.inkMuted, fontWeight: FontWeight.w600)),
               style: OutlinedButton.styleFrom(
@@ -352,7 +361,9 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
               ),
               GestureDetector(
                 onTap: () => setState(() {
-                  _contacts.removeAt(i).value.dispose();
+                  final _EditContact removed = _contacts.removeAt(i);
+                  removed.value.dispose();
+                  removed.focus.dispose();
                 }),
                 child: Padding(
                   padding: const EdgeInsets.only(left: 4),
@@ -364,6 +375,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
           const SizedBox(height: 6),
           SelectAllTextField(
             controller: ct.value,
+            focusNode: ct.focus,
             style: TextStyle(fontSize: 15, color: c.ink),
             decoration: InputDecoration(
               isDense: true,
