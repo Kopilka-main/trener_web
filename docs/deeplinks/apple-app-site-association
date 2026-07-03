@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "REPLACE_TEAMID.ru.fitbond.trener_trainer",
+        "paths": [ "/link/*" ]
+      }
+    ]
+  }
+}

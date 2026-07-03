@@ -23,6 +23,7 @@ class ClientAccount {
     required this.bio,
     required this.contacts,
     required this.pendingDeletionAt,
+    required this.sessionReminderEnabled,
   });
 
   factory ClientAccount.fromJson(Map<String, dynamic> j) => ClientAccount(
@@ -38,6 +39,7 @@ class ClientAccount {
             .map(ClientContact.fromJson)
             .toList(),
         pendingDeletionAt: j['pendingDeletionAt'] as String?,
+        sessionReminderEnabled: j['sessionReminderEnabled'] as bool? ?? true,
       );
 
   final String id;
@@ -50,6 +52,8 @@ class ClientAccount {
   final List<ClientContact> contacts;
   // ISO-момент окончательного удаления аккаунта (окно отмены), либо null.
   final String? pendingDeletionAt;
+  // Слать ли пуш «Через час тренировка» (24-часовое «скоро занятие» независимо).
+  final bool sessionReminderEnabled;
 
   String get fullName => '$firstName $lastName'.trim();
   String get initials {

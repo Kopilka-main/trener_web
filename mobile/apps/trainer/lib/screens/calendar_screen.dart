@@ -63,9 +63,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (Object e, _) => _Retry(onRetry: () => ref.invalidate(trainerSessionsProvider)),
                 data: (List<Session> raw) {
-                  // Онлайн-занятия скрыты (как в вебе); при scoped — фильтр по клиенту.
+                  // Онлайн-занятия видны только в КЛИЕНТСКОМ календаре (scoped —
+                  // все занятия этого клиента, включая онлайн). В ОБЩЕМ календаре
+                  // тренера (с главной) онлайн скрыты — только очные занятия.
                   final List<Session> all = raw
-                      .where((Session s) => !s.isOnline && (clientId == null || s.clientId == clientId))
+                      .where((Session s) => scoped ? s.clientId == clientId : !s.isOnline)
                       .toList();
                   final Map<String, Session> byId = <String, Session>{for (final Session s in all) s.id: s};
                   return SessionsCalendar(

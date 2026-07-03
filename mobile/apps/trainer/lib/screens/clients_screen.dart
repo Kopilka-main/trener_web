@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../api/trainer_accounting.dart';
@@ -1822,7 +1823,14 @@ class _ClientStatsScreenState extends ConsumerState<ClientStatsScreen> {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: <Widget>[
-            Align(alignment: Alignment.centerRight, child: _RequestMeasureButton(clientId: widget.client.id)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: <Widget>[
+                _AddMeasureButton(clientId: widget.client.id),
+                const SizedBox(width: 4),
+                _RequestMeasureButton(clientId: widget.client.id),
+              ],
+            ),
             const SizedBox(height: 4),
             _MeasurementsBlock(clientId: widget.client.id),
           ],
@@ -1856,60 +1864,298 @@ class _ProgSeg extends StatelessWidget {
   }
 }
 
-/// Вкладка «Фото»: сетка фото прогресса клиента (просмотр), по ракурсам.
-class _PhotosTab extends ConsumerWidget {
+/// Ракурсы фото прогресса: ключ API → подпись (зеркало клиентского kAngleLabels).
+const Map<String, String> _kAngleLabels = <String, String>{
+  'front': 'Спереди',
+  'side': 'Сбоку',
+  'back': 'Сзади',
+};
+
+/// Вкладка «Фото»: карточка загрузки (дата + гид ракурса + выбор фото) и ниже
+/// сетка фото прогресса клиента по ракурсам. Тренер добавляет фото сам (зеркало
+/// клиентского `_PhotosTab`): выбор через image_picker, ракурс/дата — как у
+/// клиента, загрузка идёт в общий скоуп (клиент увидит фото автоматически).
+class _PhotosTab extends ConsumerStatefulWidget {
   const _PhotosTab({required this.clientId});
   final String clientId;
-  static const Map<String, String> _angles = <String, String>{'front': 'Спереди', 'side': 'Сбоку', 'back': 'Сзади'};
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_PhotosTab> createState() => _PhotosTabState();
+}
+
+class _PhotosTabState extends ConsumerState<_PhotosTab> {
+  String _angle = 'front';
+  DateTime _date = DateTime.now();
+  bool _uploading = false;
+  String? _error;
+
+  Future<void> _pick() async {
+    if (_uploading) return;
+    // Захватываем messenger до async-гэпа (pickImage) — иначе линт на context.
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    final XFile? p =
+        await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 85);
+    if (p == null) return;
+    setState(() {
+      _uploading = true;
+      _error = null;
+    });
+    try {
+      await ref.read(trainerClientCardApiProvider).uploadPhoto(
+            widget.clientId,
+            date: _isoDate(_date),
+            angle: _angle,
+            filePath: p.path,
+            fileName: p.name,
+          );
+      if (!mounted) return;
+      ref.invalidate(clientPhotosCardProvider(widget.clientId));
+      m.showSnackBar(const SnackBar(content: Text('Фото добавлено')));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'Не удалось загрузить фото.');
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final AppColors c = context.colors;
-    final AsyncValue<List<TClientPhoto>> photos = ref.watch(clientPhotosCardProvider(clientId));
+    final AsyncValue<List<TClientPhoto>> photos = ref.watch(clientPhotosCardProvider(widget.clientId));
     final String? token = ref.watch(sessionProvider).token;
     final String base = ref.read(baseUrlProvider).replaceAll(RegExp(r'/$'), '');
-    return photos.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (Object e, _) => Center(child: Text('Не удалось загрузить фото', style: TextStyle(color: c.inkMuted))),
-      data: (List<TClientPhoto> list) {
-        if (list.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text('Фото прогресса пока нет.', textAlign: TextAlign.center, style: TextStyle(color: c.inkMuted)),
-            ),
-          );
-        }
-        return GridView.builder(
-          padding: const EdgeInsets.all(16),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3, mainAxisSpacing: 8, crossAxisSpacing: 8, childAspectRatio: 0.7),
-          itemCount: list.length,
-          itemBuilder: (BuildContext ctx, int i) {
-            final TClientPhoto p = list[i];
-            return Stack(
-              fit: StackFit.expand,
-              children: <Widget>[
-                AuthedImage(url: '$base/api/files/${p.fileId}', token: token, radius: 12),
-                Positioned(
-                  left: 0, right: 0, bottom: 0,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.45),
-                        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12))),
-                    child: Text(_angles[p.angle] ?? p.angle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600)),
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: <Widget>[
+        // Карточка загрузки: дата + силуэтный гид ракурса + кнопка выбора фото.
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              GestureDetector(
+                onTap: () async {
+                  final DateTime now = DateTime.now();
+                  final DateTime? d = await showDatePicker(
+                      context: context, initialDate: _date, firstDate: DateTime(now.year - 5), lastDate: now);
+                  if (d != null) setState(() => _date = d);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(color: c.cardElevated, borderRadius: BorderRadius.circular(12)),
+                  child: Row(children: <Widget>[
+                    Icon(Icons.event, size: 16, color: c.inkMuted),
+                    const SizedBox(width: 8),
+                    Text(_fullDate(_date), style: TextStyle(fontSize: 14, color: c.ink)),
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _BodyPoseGuide(value: _angle, onSelect: (String a) => setState(() => _angle = a)),
+              const SizedBox(height: 12),
+              _DashedPickButton(
+                icon: Icons.add_photo_alternate_outlined,
+                label: _uploading
+                    ? 'Загрузка · ${_kAngleLabels[_angle]}…'
+                    : 'Выбрать фото · ${_kAngleLabels[_angle]}',
+                onTap: _uploading ? null : _pick,
+              ),
+            ],
+          ),
+        ),
+        if (_error != null) ...<Widget>[
+          const SizedBox(height: 12),
+          Text(_error!, style: TextStyle(fontSize: 13, color: c.danger)),
+        ],
+        const SizedBox(height: 16),
+        ...photos.when(
+          loading: () => <Widget>[
+            const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator())),
+          ],
+          error: (Object e, _) => <Widget>[
+            Text('Не удалось загрузить фото', style: TextStyle(color: c.inkMuted)),
+          ],
+          data: (List<TClientPhoto> list) {
+            if (list.isEmpty) {
+              return <Widget>[
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Center(
+                    child: Text('Фото прогресса пока нет.',
+                        textAlign: TextAlign.center, style: TextStyle(color: c.inkMuted)),
                   ),
                 ),
-              ],
-            );
+              ];
+            }
+            return <Widget>[
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3, mainAxisSpacing: 8, crossAxisSpacing: 8, childAspectRatio: 0.7),
+                itemCount: list.length,
+                itemBuilder: (BuildContext ctx, int i) {
+                  final TClientPhoto p = list[i];
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: <Widget>[
+                      AuthedImage(url: '$base/api/files/${p.fileId}', token: token, radius: 12),
+                      Positioned(
+                        left: 0, right: 0, bottom: 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.45),
+                              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12))),
+                          child: Text(_kAngleLabels[p.angle] ?? p.angle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ];
           },
-        );
-      },
+        ),
+      ],
     );
   }
+}
+
+/// Пунктирная кнопка выбора фото (зеркало клиентского _DashedButton).
+class _DashedPickButton extends StatelessWidget {
+  const _DashedPickButton({required this.icon, required this.label, required this.onTap});
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: c.line),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Icon(icon, size: 18, color: c.ink),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.ink)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Силуэтный гид «как встать»: три позы (спереди/сбоку/сзади), активная подсвечена.
+/// Зеркало клиентского `_BodyPoseGuide`.
+class _BodyPoseGuide extends StatelessWidget {
+  const _BodyPoseGuide({required this.value, required this.onSelect});
+  final String value;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text('В облегающей одежде или белье, телефон на уровне пояса, ровный фон, вся фигура в кадре.',
+            style: TextStyle(fontSize: 12, height: 1.3, color: c.inkMuted)),
+        const SizedBox(height: 8),
+        Row(
+          children: <Widget>[
+            for (final MapEntry<String, String> e in _kAngleLabels.entries) ...<Widget>[
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => onSelect(e.key),
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: value == e.key ? c.accent.withValues(alpha: 0.10) : c.cardElevated,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: value == e.key ? c.accent : c.line),
+                    ),
+                    child: Column(
+                      children: <Widget>[
+                        SizedBox(
+                          height: 56,
+                          child: CustomPaint(
+                            size: const Size(40, 56),
+                            painter: _SilhouettePainter(
+                              pose: e.key,
+                              color: value == e.key ? c.accent : c.inkMutedXl,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(e.value,
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: value == e.key ? c.ink : c.inkMuted)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (e.key != _kAngleLabels.keys.last) const SizedBox(width: 8),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Силуэт-«тушка» для подсказки ракурса (фронт/спина — симметрично, сбоку —
+/// профиль). Зеркало клиентского `_SilhouettePainter`.
+class _SilhouettePainter extends CustomPainter {
+  _SilhouettePainter({required this.pose, required this.color});
+  final String pose;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double sx = size.width / 80;
+    final double sy = size.height / 170;
+    final Paint paint = Paint()..color = color..style = PaintingStyle.fill;
+    Rect r(double x, double y, double w, double h) =>
+        Rect.fromLTWH(x * sx, y * sy, w * sx, h * sy);
+    void rr(double x, double y, double w, double h, double rad) => canvas.drawRRect(
+        RRect.fromRectAndRadius(r(x, y, w, h), Radius.circular(rad * sx)), paint);
+
+    if (pose == 'side') {
+      canvas.drawCircle(Offset(33 * sx, 16 * sy), 11 * sx, paint);
+      rr(30, 30, 17, 56, 8.5);
+      rr(32, 84, 9, 66, 4.5);
+      rr(39, 84, 9, 66, 4.5);
+    } else {
+      canvas.drawCircle(Offset(40 * sx, 15 * sy), 11 * sx, paint);
+      rr(25, 32, 30, 52, 9); // торс
+      rr(30, 83, 9, 66, 4.5);
+      rr(41, 83, 9, 66, 4.5);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SilhouettePainter old) => old.pose != pose || old.color != color;
 }
 
 /// Раздел «Профиль»: контакты/данные + замеры + правка через ClientEditScreen.
@@ -2559,6 +2805,281 @@ class _RequestMeasureButton extends ConsumerWidget {
       label: const Text('Запросить'),
     );
   }
+}
+
+/// Кнопка «Добавить замер»: открывает шторку с формой замера (зеркало клиентской
+/// `_MeasureForm`). После сохранения инвалидирует замеры клиента.
+class _AddMeasureButton extends ConsumerWidget {
+  const _AddMeasureButton({required this.clientId});
+  final String clientId;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return TextButton.icon(
+      onPressed: () async {
+        final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+        final bool? saved = await showModalBottomSheet<bool>(
+          context: context,
+          backgroundColor: context.colors.bg,
+          isScrollControlled: true,
+          showDragHandle: true,
+          builder: (_) => _MeasureForm(clientId: clientId),
+        );
+        if (saved == true) {
+          ref.invalidate(clientMeasurementsProvider(clientId));
+          m.showSnackBar(const SnackBar(content: Text('Замер добавлен')));
+        }
+      },
+      icon: const Icon(Icons.add, size: 16),
+      label: const Text('Добавить замер'),
+    );
+  }
+}
+
+// ─── Замеры: описание метрик + форма (зеркало клиентских kMetrics/_MeasureForm) ──
+
+/// Описание метрики замера: ключ поля API, подпись, единица (зеркало клиентского
+/// MetricDef — определён локально, т.к. клиентский код не импортируем).
+class _MetricDef {
+  const _MetricDef(this.key, this.label, this.unit);
+  final String key;
+  final String label;
+  final String unit;
+}
+
+/// «Состав тела» (2 колонки у клиента) — вес и % жира.
+const List<_MetricDef> _kBodyComposition = <_MetricDef>[
+  _MetricDef('weightKg', 'Вес', 'кг'),
+  _MetricDef('bodyFatPct', '% жира', '%'),
+];
+
+/// «Обхваты» (3 колонки у клиента).
+const List<_MetricDef> _kGirths = <_MetricDef>[
+  _MetricDef('bicepsCm', 'Бицепс', 'см'),
+  _MetricDef('chestCm', 'Грудь', 'см'),
+  _MetricDef('underbustCm', 'Под грудью', 'см'),
+  _MetricDef('waistCm', 'Талия', 'см'),
+  _MetricDef('bellyCm', 'Живот', 'см'),
+  _MetricDef('glutesCm', 'Ягодицы', 'см'),
+  _MetricDef('hipsCm', 'Бёдра', 'см'),
+  _MetricDef('thighCm', 'Бедро', 'см'),
+  _MetricDef('calfCm', 'Голень', 'см'),
+];
+
+/// Все метрики замера (порядок как в клиентском kMetrics).
+const List<_MetricDef> _kMetrics = <_MetricDef>[..._kBodyComposition, ..._kGirths];
+
+/// "YYYY-MM-DD" из даты (для тела запроса замера/фото).
+String _isoDate(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+/// Короткая дата «5 янв» (для чипа даты в форме замера).
+String _shortDate(DateTime d) => '${d.day} ${_ruMonths[d.month - 1]}';
+
+/// Полная дата «5 янв 2026» (для строки даты в карточке загрузки фото). Отдельная
+/// функция, а не `_date`, т.к. в `_PhotosTabState` поле `_date` затеняет её.
+String _fullDate(DateTime d) => '${d.day} ${_ruMonths[d.month - 1]} ${d.year}';
+
+/// Форма добавления замера тела клиента тренером. Зеркало клиентской
+/// `_MeasureForm` (только создание): те же поля/раскладка/тексты, отличие —
+/// вызов тренерского API (`addMeasurement`) в общий скоуп. Возвращает `true`
+/// через Navigator.pop при успешном сохранении.
+class _MeasureForm extends ConsumerStatefulWidget {
+  const _MeasureForm({required this.clientId});
+  final String clientId;
+  @override
+  ConsumerState<_MeasureForm> createState() => _MeasureFormState();
+}
+
+class _MeasureFormState extends ConsumerState<_MeasureForm> {
+  late final Map<String, TextEditingController> _ctrls = <String, TextEditingController>{
+    for (final _MetricDef m in _kMetrics) m.key: TextEditingController(),
+  };
+  final TextEditingController _note = TextEditingController();
+  DateTime _date = DateTime.now();
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    for (final TextEditingController c in _ctrls.values) {
+      c.dispose();
+    }
+    _note.dispose();
+    super.dispose();
+  }
+
+  num? _n(String s) => num.tryParse(s.trim().replaceAll(',', '.'));
+
+  Future<void> _save() async {
+    if (_busy) return;
+    // Только заполненные метрики (пустые не шлём); дату шлём всегда.
+    final Map<String, dynamic> body = <String, dynamic>{'date': _isoDate(_date)};
+    for (final _MetricDef m in _kMetrics) {
+      final String raw = _ctrls[m.key]!.text.trim();
+      if (raw.isNotEmpty) {
+        final num? v = _n(raw);
+        if (v != null) body[m.key] = v;
+      }
+    }
+    final String note = _note.text.trim();
+    if (note.isNotEmpty) body['note'] = note;
+    if (body.length == 1) return; // только дата — нечего сохранять
+    setState(() => _busy = true);
+    final NavigatorState nav = Navigator.of(context);
+    final ScaffoldMessengerState msg = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(trainerClientCardApiProvider).addMeasurement(widget.clientId, body);
+      if (!mounted) return;
+      nav.pop(true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      msg.showSnackBar(const SnackBar(content: Text('Не удалось сохранить замер')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 4, 16, 16 + MediaQuery.of(context).viewInsets.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Text('Новый замер',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
+              const Spacer(),
+              _dateChip(c),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Flexible(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  _MeasureSectionLabel('Состав тела'),
+                  _fieldsGrid(_kBodyComposition),
+                  const SizedBox(height: 14),
+                  _MeasureSectionLabel('Обхваты'),
+                  _fieldsGrid(_kGirths),
+                  const SizedBox(height: 14),
+                  _MeasureSectionLabel('Заметка'),
+                  TextField(
+                    controller: _note,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      hintText: 'Например: утро натощак',
+                      filled: true,
+                      fillColor: c.card,
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _busy ? null : _save,
+              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+              child: Text(_busy ? 'Сохранение…' : 'Сохранить'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dateChip(AppColors c) => GestureDetector(
+        onTap: () async {
+          final DateTime now = DateTime.now();
+          final DateTime? d = await showDatePicker(
+              context: context, initialDate: _date, firstDate: DateTime(now.year - 5), lastDate: now);
+          if (d != null) setState(() => _date = d);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(10)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: <Widget>[
+            Icon(Icons.event, size: 15, color: c.inkMuted),
+            const SizedBox(width: 6),
+            Text(_shortDate(_date), style: TextStyle(fontSize: 13, color: c.ink)),
+          ]),
+        ),
+      );
+
+  Widget _fieldsGrid(List<_MetricDef> fields) => GridView.count(
+        crossAxisCount: 3,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+        childAspectRatio: 1.5,
+        children: <Widget>[
+          for (final _MetricDef m in fields)
+            _MeasureNumField(label: '${m.label}, ${m.unit}', ctrl: _ctrls[m.key]!),
+        ],
+      );
+}
+
+/// Числовое поле метрики (зеркало клиентского _NumField).
+class _MeasureNumField extends StatelessWidget {
+  const _MeasureNumField({required this.label, required this.ctrl});
+  final String label;
+  final TextEditingController ctrl;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: <Widget>[
+        Text(label.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppFonts.mono(size: 9, color: c.inkMutedXl, weight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        SizedBox(
+          height: 38,
+          child: SelectAllTextField(
+            controller: ctrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+            textAlign: TextAlign.center,
+            style: AppFonts.mono(size: 15, color: c.ink, weight: FontWeight.w600),
+            decoration: InputDecoration(
+              isDense: true,
+              filled: true,
+              fillColor: c.chip,
+              hintText: '—',
+              contentPadding: const EdgeInsets.symmetric(vertical: 6),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c.line)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c.line)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c.accent)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Мелкая подпись-секция в форме замера (зеркало клиентского _SectionLabel).
+class _MeasureSectionLabel extends StatelessWidget {
+  const _MeasureSectionLabel(this.text);
+  final String text;
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(left: 4, bottom: 8),
+        child: Text(text.toUpperCase(),
+            style: AppFonts.mono(size: 11, color: context.colors.inkMutedXl, weight: FontWeight.w600, letterSpacing: 0.6)),
+      );
 }
 
 // Сводные плитки заменены пер-упражнение обзором (ExerciseProgressTab) —

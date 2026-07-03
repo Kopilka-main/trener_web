@@ -15,9 +15,15 @@ import 'screens/home_screen.dart';
 import 'screens/knowledge_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/link_confirm_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/splash_screen.dart';
+
+/// Код привязки клиента (accountId из QR-ссылки `/link/<code>`), пришедший до
+/// авторизации: запоминаем, уводим на вход, после входа возвращаемся на `/link`.
+/// Module-level — переживает пересоздание виджетов; чистится при resume.
+String? pendingLinkCode;
 
 /// Роутер с редиректом по статусу сессии: пока неизвестно → сплеш,
 /// не авторизован → вход, авторизован → главная.
@@ -36,8 +42,27 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       final String loc = state.matchedLocation;
       if (status == AuthStatus.unknown) return loc == '/splash' ? null : '/splash';
       if (status == AuthStatus.unauthenticated) {
+        // Ссылка привязки пришла до входа — запоминаем код и уводим на вход,
+        // после авторизации вернёмся на `/link/<code>`.
+        if (loc.startsWith('/link/')) {
+          pendingLinkCode = state.pathParameters['code'];
+          return '/login';
+        }
         return (loc == '/login' || loc == '/register') ? null : '/login';
       }
+      // Авторизован: если ждёт отложенная ссылка — доводим до неё (и гасим
+      // pending, чтобы не зациклиться). Уже находясь на своём `/link/<code>`,
+      // pending гасим и никуда не редиректим.
+      if (pendingLinkCode != null) {
+        final String code = pendingLinkCode!;
+        if (loc == '/link/$code') {
+          pendingLinkCode = null;
+          return null;
+        }
+        pendingLinkCode = null;
+        return '/link/$code';
+      }
+      if (loc.startsWith('/link/')) return null; // авторизованному путь разрешён
       if (loc == '/login' || loc == '/register' || loc == '/splash') return '/home';
       return null;
     },
@@ -65,8 +90,15 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         builder: (BuildContext context, GoRouterState state) {
           final Object? extra = state.extra;
           if (extra is Client) return ClientDetailScreen(client: extra);
-          return const ClientsScreen();
+          // Открыт из пуша/deep-link — есть только id, грузим клиента по нему.
+          return _ClientById(id: state.pathParameters['id'] ?? '');
         },
+      ),
+      // Привязка клиента по QR: deep-link https://app.fitbond.ru/link/<accountId>.
+      GoRoute(
+        path: '/link/:code',
+        builder: (BuildContext context, GoRouterState state) =>
+            LinkConfirmScreen(code: state.pathParameters['code'] ?? ''),
       ),
       GoRoute(path: '/chats', builder: (_, _) => const ConversationsScreen()),
       GoRoute(
@@ -79,3 +111,20 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+/// Карточка клиента по id — когда экран открыт из пуша/deep-link и объект Client
+/// ещё не под рукой: подгружаем его и показываем карточку.
+class _ClientById extends ConsumerWidget {
+  const _ClientById({required this.id});
+  final String id;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (id.isEmpty) return const ClientsScreen();
+    return ref.watch(trainerClientProvider(id)).when(
+          data: (Client cl) => ClientDetailScreen(client: cl),
+          loading: () => const SplashScreen(),
+          error: (Object _, StackTrace _) => const ClientsScreen(),
+        );
+  }
+}

@@ -10,6 +10,10 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../api/client_auth.dart';
 import '../widgets/auth_form.dart';
 
+/// Deep-ссылка на привязку в тренерском приложении. Тренер сканирует QR родной
+/// камерой → открывается app.fitbond.ru и предлагает создать клиента.
+String _linkFor(String accountId) => 'https://app.fitbond.ru/link/$accountId';
+
 /// Подключение к тренеру: клиент показывает свой код (id аккаунта) + QR и
 /// передаёт тренеру. Экран сам сменится на приложение после привязки (поллинг /me).
 class ConnectScreen extends ConsumerStatefulWidget {
@@ -67,7 +71,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                     style: TextStyle(fontSize: 14, color: c.inkMuted, height: 1.35),
                   ),
                   const SizedBox(height: 24),
-                  // QR на тёмной подложке (значение = код = id аккаунта).
+                  // QR на тёмной подложке (значение = deep-ссылка на привязку).
                   Center(
                     child: Container(
                       padding: const EdgeInsets.all(16),
@@ -76,7 +80,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: QrImageView(
-                        data: acc.id,
+                        data: _linkFor(acc.id),
                         version: QrVersions.auto,
                         size: 180,
                         backgroundColor: const Color(0xFFEEEEE8),
@@ -87,8 +91,12 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  // Кнопка-код + подсказка.
+                  const SizedBox(height: 12),
+                  Text('Покажите QR тренеру — он отсканирует камерой.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12, color: c.inkMuted)),
+                  const SizedBox(height: 16),
+                  // Кнопка-код (сырой id) + подсказка — запасной ручной ввод.
                   GestureDetector(
                     onTap: () => _copy(acc.id),
                     child: Container(

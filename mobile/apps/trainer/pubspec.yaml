@@ -53,6 +53,9 @@ dependencies:
   webview_flutter: ^4.10.0
   # Набор номера телефона клиента (tel:) из карточки
   url_launcher: ^6.3.0
+  # Приём deep-link/app-link (https://app.fitbond.ru/link/<accountId>) для
+  # привязки клиента по QR — холодный старт и когда приложение уже открыто.
+  app_links: ^6.3.0
 
 dev_dependencies:
   flutter_test:

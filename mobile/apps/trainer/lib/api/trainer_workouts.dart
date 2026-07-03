@@ -189,6 +189,27 @@ class TrainerWorkoutsApi {
     return _unwrap(r);
   }
 
+  /// Дублировать упражнение: добавляет копию с теми же ПЛАНОВЫМИ подходами
+  /// (повторы/вес/время/отдых из плана оригинала; факт и выполненность не копируем —
+  /// копия свежая). Новое упражнение уходит в конец; порядок правит вызывающий.
+  Future<Workout> duplicateExercise(String clientId, String wid, WorkoutExercise ex) async {
+    final List<Map<String, dynamic>> sets = ex.sets.isEmpty
+        ? <Map<String, dynamic>>[<String, dynamic>{}]
+        : ex.sets
+            .map((WorkoutSet s) => <String, dynamic>{
+                  if (s.plannedReps != null) 'plannedReps': s.plannedReps,
+                  if (s.plannedWeightKg != null) 'plannedWeightKg': s.plannedWeightKg,
+                  if (s.plannedTimeSec != null) 'plannedTimeSec': s.plannedTimeSec,
+                  if (s.plannedRestSec != null) 'plannedRestSec': s.plannedRestSec,
+                })
+            .toList();
+    final Map<String, dynamic> r = await _api.postJson(
+      '${_base(clientId, wid)}/exercises',
+      <String, dynamic>{'exerciseId': ex.exerciseId, 'sets': sets},
+    );
+    return _unwrap(r);
+  }
+
   Future<Workout> removeExercise(String clientId, String wid, int position) async {
     final Map<String, dynamic> r =
         await _api.deleteJson('${_base(clientId, wid)}/exercises/$position');

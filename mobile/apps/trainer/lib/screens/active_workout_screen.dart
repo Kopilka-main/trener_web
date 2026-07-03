@@ -335,6 +335,25 @@ class _ConductorState extends ConsumerState<_Conductor> {
     if (next) _startRest(ex, s);
   }
 
+  /// Дубль упражнения по удержанию: копия с теми же плановыми подходами встаёт
+  /// сразу ПОД оригиналом. Средняя тактильная отдача — понятно, что сработало.
+  Future<void> _duplicateExercise(WorkoutExercise ex) async {
+    HapticFeedback.mediumImpact();
+    await _run(() async {
+      final Workout added = await _api.duplicateExercise(_clientId, _w.id, ex);
+      // Копия добавлена в конец (макс. позиция) — переставляем сразу после оригинала.
+      final List<int> positions =
+          added.exercises.map((WorkoutExercise e) => e.position).toList()..sort();
+      if (positions.isEmpty) return added;
+      final int newPos = positions.last;
+      final List<int> rest = positions.where((int p) => p != newPos).toList();
+      final int idx = rest.indexOf(ex.position);
+      if (idx < 0) return added; // оригинал не найден — оставляем копию в конце
+      final List<int> order = <int>[...rest]..insert(idx + 1, newPos);
+      return _api.reorderExercises(_clientId, _w.id, order);
+    });
+  }
+
   /// Начать тренировку → active, и зарегистрировать её как «идущую» для FAB.
   Future<void> _start() async {
     await _run(() => _api.start(_clientId, _w.id));
@@ -713,6 +732,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
               onDelete: editingThis
                   ? () => _run(() => _api.removeExercise(_clientId, _w.id, ex.position))
                   : null,
+              onDuplicate: _busy ? null : () => _duplicateExercise(ex),
               child: Column(children: ex.sets.map((WorkoutSet s) => _activeSetRow(ex, s)).toList()),
             );
           },
@@ -786,16 +806,21 @@ class _ActiveExerciseCard extends StatelessWidget {
     required this.listIndex,
     required this.child,
     this.onDelete,
+    this.onDuplicate,
   });
   final String title;
   final int listIndex;
   final Widget child;
   final VoidCallback? onDelete;
+  // Удержание карточки — дублировать упражнение (копия встаёт ниже).
+  final VoidCallback? onDuplicate;
 
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
-    return Container(
+    return GestureDetector(
+      onLongPress: onDuplicate,
+      child: Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.fromLTRB(10, 10, 14, 10),
       decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
@@ -833,6 +858,7 @@ class _ActiveExerciseCard extends StatelessWidget {
           const SizedBox(height: 4),
           Padding(padding: const EdgeInsets.only(left: 26), child: child),
         ],
+      ),
       ),
     );
   }

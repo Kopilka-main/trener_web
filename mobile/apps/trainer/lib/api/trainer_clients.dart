@@ -1,6 +1,44 @@
 import 'package:core/core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+/// Бросается при claim, когда аккаунт по коду не найден (бэк отвечает 422 с
+/// кодом CLIENT_ACCOUNT_NOT_FOUND). Экран показывает «Аккаунт не найден».
+class ClientAccountNotFound implements Exception {
+  const ClientAccountNotFound();
+}
+
+/// Превью аккаунта по коду привязки (accountId из QR): существует ли аккаунт,
+/// имя/фамилия, есть ли аватар и не привязан ли он уже к клиенту тренера.
+/// Зеркало ответа GET /api/clients/link-preview → поле `preview`.
+class LinkPreview {
+  LinkPreview({
+    required this.exists,
+    required this.firstName,
+    required this.lastName,
+    required this.hasAvatar,
+    required this.linkedClientId,
+    required this.linkedClientName,
+  });
+
+  final bool exists;
+  final String? firstName;
+  final String? lastName;
+  final bool hasAvatar;
+  final String? linkedClientId;
+  final String? linkedClientName;
+
+  String get fullName => '${firstName ?? ''} ${lastName ?? ''}'.trim();
+
+  factory LinkPreview.fromJson(Map<String, dynamic> j) => LinkPreview(
+        exists: j['exists'] as bool? ?? false,
+        firstName: j['firstName'] as String?,
+        lastName: j['lastName'] as String?,
+        hasAvatar: j['hasAvatar'] as bool? ?? false,
+        linkedClientId: j['linkedClientId'] as String?,
+        linkedClientName: j['linkedClientName'] as String?,
+      );
+}
+
 /// Статус клиента (зеркало clientStatusSchema).
 enum ClientStatus { active, archived, unknown }
 
@@ -204,6 +242,33 @@ class TrainerClientsApi {
         ? '${lc['firstName'] ?? ''} ${lc['lastName'] ?? ''}'.trim()
         : null;
     return (exists: r['exists'] as bool? ?? false, linkedClientName: name);
+  }
+
+  /// Превью аккаунта по коду из QR перед привязкой (кто это, есть ли аватар,
+  /// не привязан ли уже). Для экрана «Создать клиента?».
+  Future<LinkPreview> linkPreview(String code) async {
+    final Map<String, dynamic> r =
+        await _api.getJson('/api/clients/link-preview?code=${Uri.encodeComponent(code)}');
+    return LinkPreview.fromJson((r['preview'] as Map<String, dynamic>?) ?? <String, dynamic>{});
+  }
+
+  /// Привязать аккаунт по коду из QR: создаёт клиента (или возвращает уже
+  /// существующего, alreadyExisted=true). На 422/CLIENT_ACCOUNT_NOT_FOUND
+  /// бросает [ClientAccountNotFound] — экран покажет «Аккаунт не найден».
+  Future<({Client client, bool alreadyExisted})> claim(String code) async {
+    try {
+      final Map<String, dynamic> r =
+          await _api.postJson('/api/clients/claim', <String, dynamic>{'code': code});
+      return (
+        client: Client.fromJson((r['client'] as Map<String, dynamic>?) ?? <String, dynamic>{}),
+        alreadyExisted: r['alreadyExisted'] as bool? ?? false,
+      );
+    } catch (e) {
+      if (apiErrorStatus(e) == 422 || apiErrorCode(e) == 'CLIENT_ACCOUNT_NOT_FOUND') {
+        throw const ClientAccountNotFound();
+      }
+      rethrow;
+    }
   }
 
   /// Профиль аккаунта клиента по коду (для авто-заполнения формы).

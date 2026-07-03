@@ -75,6 +75,8 @@ class SettingsScreen extends ConsumerWidget {
               const SizedBox(height: 6),
               const _PushToggle(),
               const SizedBox(height: 6),
+              _SessionReminderToggle(enabled: a.sessionReminderEnabled),
+              const SizedBox(height: 6),
               const _SoundToggle(),
               const SizedBox(height: 20),
               _SectionLabel('Тема'),
@@ -589,6 +591,80 @@ class _PushToggleState extends ConsumerState<_PushToggle> {
   }
 }
 
+/// Тумблер «Напоминать за час до тренировки». Значение живёт в профиле
+/// (account.sessionReminderEnabled); переключение шлёт PATCH /me и инвалидирует
+/// провайдер. Оптимистично обновляем локально, при ошибке — откат + снекбар.
+class _SessionReminderToggle extends ConsumerStatefulWidget {
+  const _SessionReminderToggle({required this.enabled});
+  final bool enabled;
+  @override
+  ConsumerState<_SessionReminderToggle> createState() => _SessionReminderToggleState();
+}
+
+class _SessionReminderToggleState extends ConsumerState<_SessionReminderToggle> {
+  late bool _enabled = widget.enabled;
+  bool _busy = false;
+
+  @override
+  void didUpdateWidget(_SessionReminderToggle old) {
+    super.didUpdateWidget(old);
+    // Профиль перечитан извне — подхватываем актуальное значение (если не в полёте).
+    if (!_busy && widget.enabled != old.enabled) _enabled = widget.enabled;
+  }
+
+  Future<void> _onChanged(bool v) async {
+    if (_busy) return;
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    final bool prev = _enabled;
+    setState(() {
+      _enabled = v;
+      _busy = true;
+    });
+    try {
+      await ref.read(clientApiProvider).updateProfile(<String, dynamic>{'sessionReminderEnabled': v});
+      ref.invalidate(clientMeProvider);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _enabled = prev);
+      m.showSnackBar(const SnackBar(content: Text('Не удалось сохранить')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.alarm_outlined, size: 22, color: c.ink),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('Напоминать за час до тренировки',
+                    style: TextStyle(fontSize: 15, color: c.ink)),
+                const SizedBox(height: 2),
+                Text('Пуш за час до начала занятия',
+                    style: TextStyle(fontSize: 12, color: c.inkMutedXl)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          if (_busy)
+            const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+          else
+            Switch(value: _enabled, onChanged: _onChanged),
+        ],
+      ),
+    );
+  }
+}
+
 /// Тумблер звука при проведении тренировки (бип таймера отдыха). Хранится
 /// локально через [workoutSoundEnabledProvider].
 class _SoundToggle extends ConsumerWidget {
@@ -614,6 +690,10 @@ class _SoundToggle extends ConsumerWidget {
     );
   }
 }
+
+/// Deep-ссылка на привязку в тренерском приложении. Тренер сканирует QR родной
+/// камерой → открывается app.fitbond.ru и предлагает создать клиента.
+String _linkFor(String accountId) => 'https://app.fitbond.ru/link/$accountId';
 
 /// Карточка ID пользователя: копировать + показать QR.
 class _IdCard extends StatelessWidget {
@@ -672,7 +752,7 @@ void _showQr(BuildContext context, String id) {
             Container(
               padding: const EdgeInsets.all(12),
               color: Colors.white,
-              child: QrImageView(data: id, size: 220, backgroundColor: Colors.white),
+              child: QrImageView(data: _linkFor(id), size: 220, backgroundColor: Colors.white),
             ),
             const SizedBox(height: 12),
             Text(id, textAlign: TextAlign.center, style: AppFonts.mono(size: 12, color: c.inkMuted)),

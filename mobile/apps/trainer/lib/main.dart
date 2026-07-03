@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:app_links/app_links.dart';
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -52,8 +55,29 @@ void _openFromPush(GoRouter router, String? url) {
     router.go('/calendar');
     return;
   }
+  // «Голый» /clients/<id> (клиент привязан / добавил фото или замер / платёж) —
+  // открываем карточку этого клиента (грузится по id в маршруте /client/:id).
+  final RegExpMatch? card = RegExp(r'^/clients/([^/]+)/?$').firstMatch(path);
+  if (card != null) {
+    router.go('/clients');
+    router.push('/client/${card.group(1)}');
+    return;
+  }
   // Неизвестный url — безопасный дефолт в список диалогов.
   router.go('/chats');
+}
+
+/// Deep-link привязки клиента по QR: `https://app.fitbond.ru/link/<accountId>`.
+/// Извлекаем код (последний сегмент пути или `?code=`) и уводим на `/link/<code>`.
+/// Если пришло до авторизации — redirect роутера запомнит код и вернёт после входа.
+void _openFromLink(GoRouter router, Uri uri) {
+  if (uri.host != 'app.fitbond.ru') return;
+  final List<String> segs = uri.pathSegments.where((String s) => s.isNotEmpty).toList();
+  if (segs.isEmpty || segs.first != 'link') return;
+  final String code =
+      uri.queryParameters['code'] ?? (segs.length > 1 ? segs.last : '');
+  if (code.isEmpty) return;
+  router.go('/link/$code');
 }
 
 /// Пуш пришёл/открыт — сбрасываем кэш ключевых данных, чтобы экран сразу показал
@@ -76,12 +100,40 @@ class TrainerApp extends ConsumerStatefulWidget {
 }
 
 class _TrainerAppState extends ConsumerState<TrainerApp> {
+  final AppLinks _appLinks = AppLinks();
+  StreamSubscription<Uri>? _linkSub;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(sessionProvider.notifier).bootstrap();
+      _initDeepLinks();
     });
+  }
+
+  /// Подписка на deep-link/app-link привязки клиента по QR:
+  ///   • `getInitialLink()` — приложение открыто по ссылке из закрытого состояния;
+  ///   • `uriLinkStream` — ссылка пришла, когда приложение уже запущено.
+  /// Логику пушей не трогаем — это отдельный источник навигации.
+  Future<void> _initDeepLinks() async {
+    final GoRouter router = ref.read(routerProvider);
+    try {
+      final Uri? initial = await _appLinks.getInitialLink();
+      if (initial != null) _openFromLink(router, initial);
+    } catch (_) {
+      // Плагин недоступен/битая ссылка — не мешаем старту.
+    }
+    _linkSub = _appLinks.uriLinkStream.listen(
+      (Uri uri) => _openFromLink(ref.read(routerProvider), uri),
+      onError: (_) {},
+    );
+  }
+
+  @override
+  void dispose() {
+    _linkSub?.cancel();
+    super.dispose();
   }
 
   @override
