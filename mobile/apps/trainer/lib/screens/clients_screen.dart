@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../api/trainer_accounting.dart';
 import '../api/trainer_assign.dart';
@@ -21,6 +22,29 @@ import 'client_medical_screen.dart';
 import 'exercise_progress.dart';
 
 enum _Format { all, online, gym }
+
+/// ID клиентов, у которых сейчас есть оплаченные тренировки (для фильтра
+/// «Активные»). Активный = paidBalance > 0 = оплачено (активные пакеты) −
+/// проведено (как в бейдже). Тянет пакеты и тренировки по каждому клиенту —
+/// провайдер запрашивается только когда фильтр включён.
+final FutureProvider<Set<String>> clientsWithPaidLessonsProvider = FutureProvider<Set<String>>((Ref ref) async {
+  final List<Client> clients = ref.watch(trainerClientsProvider).valueOrNull ?? <Client>[];
+  final TrainerClientCardApi api = ref.read(trainerClientCardApiProvider);
+  final List<(String, bool)> results = await Future.wait(clients.map((Client cl) async {
+    try {
+      final List<TPackage> pkgs = await api.packages(cl.id);
+      final List<TWorkout> workouts = await api.workouts(cl.id);
+      final int paidLessons =
+          pkgs.where((TPackage p) => p.isActive).fold<int>(0, (int a, TPackage p) => a + p.lessonsPaid);
+      final int completed =
+          workouts.where((TWorkout w) => w.status == 'completed' && !w.createdByClient).length;
+      return (cl.id, paidLessons - completed > 0);
+    } catch (_) {
+      return (cl.id, false);
+    }
+  }));
+  return <String>{for (final (String, bool) r in results) if (r.$2) r.$1};
+});
 
 const List<String> _ruMonthsGen = <String>[
   'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
@@ -71,6 +95,7 @@ class ClientsScreen extends ConsumerStatefulWidget {
 class _ClientsScreenState extends ConsumerState<ClientsScreen> {
   String _query = '';
   bool _sortBySession = false; // false → алфавит, true → по ближайшему занятию
+  bool _activeOnly = false; // показывать только клиентов с оплаченными тренировками
   _Format _format = _Format.all;
 
   bool _matchesQuery(Client c) {
@@ -93,6 +118,9 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
     final AsyncValue<List<Client>> clients = ref.watch(trainerClientsProvider);
+    // Множество «активных» клиентов подтягиваем только когда фильтр включён.
+    final AsyncValue<Set<String>>? activeAsync =
+        _activeOnly ? ref.watch(clientsWithPaidLessonsProvider) : null;
     final Map<String, Session> nextByClient =
         _nextSessionByClient(ref.watch(trainerSessionsProvider).valueOrNull ?? <Session>[]);
 
@@ -149,6 +177,24 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  // Фильтр «Активные»: только клиенты с оплаченными тренировками.
+                  GestureDetector(
+                    onTap: () => setState(() => _activeOnly = !_activeOnly),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                      decoration: BoxDecoration(
+                        color: _activeOnly ? c.accent : c.card,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: _activeOnly ? c.accent : c.line),
+                      ),
+                      child: Text('Активные',
+                          style: AppFonts.mono(
+                              size: 11,
+                              color: _activeOnly ? c.accentOn : c.inkMuted,
+                              weight: FontWeight.w600)),
+                    ),
+                  ),
                   const Spacer(),
                   _FormatSeg(value: _format, onChanged: (_Format f) => setState(() => _format = f)),
                 ],
@@ -170,8 +216,17 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                   ),
                 ),
                 data: (List<Client> all) {
-                  final List<Client> filtered =
-                      all.where((Client x) => _matchesQuery(x) && _matchesFormat(x)).toList();
+                  if (_activeOnly && activeAsync!.isLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final Set<String>? activeIds =
+                      _activeOnly ? (activeAsync!.valueOrNull ?? <String>{}) : null;
+                  final List<Client> filtered = all
+                      .where((Client x) =>
+                          _matchesQuery(x) &&
+                          _matchesFormat(x) &&
+                          (activeIds == null || activeIds.contains(x.id)))
+                      .toList();
                   if (filtered.isEmpty) {
                     return Center(
                       child: Padding(
@@ -297,7 +352,7 @@ class _ClientRow extends ConsumerWidget {
         : null;
     final String subtitle = next != null
         ? '${_groupLabel(next!.date)}, ${next!.startTime}'
-        : (client.phone?.trim().isNotEmpty == true ? client.phone!.trim() : 'без телефона');
+        : (client.phone?.trim().isNotEmpty == true ? formatPhone(client.phone!.trim()) : 'без телефона');
     return Opacity(
       opacity: client.status == ClientStatus.archived ? 0.6 : 1,
       child: GestureDetector(
@@ -602,6 +657,7 @@ class ClientDetailScreen extends ConsumerWidget {
                   iconColor: col.accent,
                   text: c.phone!.trim(),
                   textColor: col.ink,
+                  phone: c.phone!.trim(),
                 ),
               if (_birthLine(c.birthDate) case final String b) ...<Widget>[
                 if (c.phone?.trim().isNotEmpty == true) const SizedBox(height: 12),
@@ -811,24 +867,51 @@ class _ContactRow extends StatelessWidget {
     required this.iconColor,
     required this.text,
     required this.textColor,
+    this.phone,
   });
   final IconData icon;
   final Color iconColor;
   final String text;
   final Color textColor;
+
+  /// Если задан — строка становится телефоном: тап звонит (набор номера),
+  /// удержание копирует сырой номер. Отображается через [formatPhone].
+  final String? phone;
+
+  Future<void> _dial(BuildContext context) async {
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    try {
+      await launchUrl(phoneTelUri(phone!), mode: LaunchMode.externalApplication);
+    } catch (_) {
+      m.showSnackBar(const SnackBar(content: Text('Не удалось открыть набор')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
-    return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
-        child: Row(
-          children: <Widget>[
-            Icon(icon, size: 18, color: iconColor),
-            const SizedBox(width: 12),
-            Expanded(child: Text(text, style: TextStyle(fontSize: 15, color: textColor))),
-          ],
-        ),
+    final bool isPhone = phone != null;
+    final String display = isPhone ? formatPhone(text) : text;
+    final Widget row = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
+      child: Row(
+        children: <Widget>[
+          Icon(icon, size: 18, color: iconColor),
+          const SizedBox(width: 12),
+          Expanded(child: Text(display, style: TextStyle(fontSize: 15, color: textColor))),
+          if (isPhone) Icon(Icons.call, size: 16, color: c.inkMutedXl),
+        ],
+      ),
+    );
+    if (!isPhone) return row;
+    return GestureDetector(
+      onTap: () => _dial(context),
+      onLongPress: () {
+        Clipboard.setData(ClipboardData(text: phone!));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скопировано')));
+      },
+      child: row,
     );
   }
 }
@@ -1893,7 +1976,7 @@ class ClientProfileScreen extends ConsumerWidget {
               c.birthDate != null || c.accountId != null) ...<Widget>[
             _SettingsLabel('Данные'),
             if (c.phone?.trim().isNotEmpty == true)
-              _DataRow(icon: Icons.phone_outlined, type: 'Телефон', value: c.phone!.trim()),
+              _DataRow(icon: Icons.phone_outlined, type: 'Телефон', value: c.phone!.trim(), phone: c.phone!.trim()),
             ...c.contacts.map((ClientContact ct) =>
                 _DataRow(icon: Icons.alternate_email, type: ct.type, value: ct.value)),
             if (_birthLine(c.birthDate) case final String b)
@@ -1967,25 +2050,50 @@ class _SettingsLabel extends StatelessWidget {
 
 /// Строка данных: иконка + тип + значение; long-press копирует.
 class _DataRow extends StatelessWidget {
-  const _DataRow({required this.icon, required this.type, required this.value, this.copyable = false});
+  const _DataRow({
+    required this.icon,
+    required this.type,
+    required this.value,
+    this.copyable = false,
+    this.phone,
+  });
   final IconData icon;
   final String type;
   final String value;
   final bool copyable;
+
+  /// Если задан — строка становится телефоном: тап звонит (набор номера),
+  /// удержание копирует сырой номер. Отображается через [formatPhone].
+  final String? phone;
+
+  void _copy(BuildContext context, String text) {
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скопировано')));
+  }
+
+  Future<void> _dial(BuildContext context) async {
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    try {
+      await launchUrl(phoneTelUri(phone!), mode: LaunchMode.externalApplication);
+    } catch (_) {
+      m.showSnackBar(const SnackBar(content: Text('Не удалось открыть набор')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
+    final bool isPhone = phone != null;
+    // Активна (accent-цвет значения), если это телефон или copyable.
+    final bool active = isPhone || copyable;
+    final String display = isPhone ? formatPhone(value) : value;
     return GestureDetector(
-      onLongPress: () {
-        Clipboard.setData(ClipboardData(text: value));
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скопировано')));
-      },
-      onTap: copyable
-          ? () {
-              Clipboard.setData(ClipboardData(text: value));
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скопировано')));
-            }
-          : null,
+      onLongPress: () => _copy(context, isPhone ? phone! : value),
+      onTap: isPhone
+          ? () => _dial(context)
+          : copyable
+              ? () => _copy(context, value)
+              : null,
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1997,11 +2105,12 @@ class _DataRow extends StatelessWidget {
             Text(type, style: TextStyle(fontSize: 14, color: c.inkMuted)),
             const Spacer(),
             Flexible(
-              child: Text(value,
+              child: Text(display,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: copyable ? c.accent : c.ink)),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: active ? c.accent : c.ink)),
             ),
+            if (isPhone) ...<Widget>[const SizedBox(width: 6), Icon(Icons.call, size: 15, color: c.inkMutedXl)],
             if (copyable) ...<Widget>[const SizedBox(width: 6), Icon(Icons.copy, size: 15, color: c.inkMutedXl)],
           ],
         ),

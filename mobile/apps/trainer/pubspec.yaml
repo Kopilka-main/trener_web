@@ -51,6 +51,8 @@ dependencies:
   audioplayers: ^6.1.0
   # OAuth-вход через провайдера (VK/Яндекс) в WebView
   webview_flutter: ^4.10.0
+  # Набор номера телефона клиента (tel:) из карточки
+  url_launcher: ^6.3.0
 
 dev_dependencies:
   flutter_test:

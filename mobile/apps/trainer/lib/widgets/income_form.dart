@@ -178,9 +178,19 @@ class _IncomeFormState extends ConsumerState<IncomeForm> {
   /// Валидные платежи (сумма > 0).
   List<_InstallmentRow> get _planFilled => _plan.where((_InstallmentRow r) => _rowAmount(r) > 0).toList();
 
+  /// Рассрочка готова к сохранению: указана полная сумма, есть платежи и график
+  /// покрывает всю сумму (с точностью до копейки).
+  bool get _installmentComplete =>
+      _totalNum > 0 && _planFilled.isNotEmpty && (_planTotal - _totalNum).abs() < 0.01;
+
   void _addPlanRow() {
     final DateTime base = _plan.isNotEmpty ? _plan.last.date : DateTime.now();
-    setState(() => _plan.add(_InstallmentRow(date: base.add(const Duration(days: 10)))));
+    // В новую строку подставляем остаток к распределению — график быстро сходится.
+    final num remaining = _totalNum - _planTotal;
+    setState(() => _plan.add(_InstallmentRow(
+          date: base.add(const Duration(days: 10)),
+          amount: remaining > 0 ? _fmtNum(remaining) : '',
+        )));
   }
 
   void _removePlanRow(_InstallmentRow r) {
@@ -257,8 +267,20 @@ class _IncomeFormState extends ConsumerState<IncomeForm> {
       return;
     }
     if (_isInstallment) {
+      if (_totalNum <= 0) {
+        m.showSnackBar(const SnackBar(content: Text('Укажите полную сумму рассрочки')));
+        return;
+      }
       if (_planFilled.isEmpty) {
         m.showSnackBar(const SnackBar(content: Text('Добавьте хотя бы один платёж с суммой')));
+        return;
+      }
+      if ((_planTotal - _totalNum).abs() >= 0.01) {
+        final num rem = _totalNum - _planTotal;
+        m.showSnackBar(SnackBar(
+            content: Text(rem > 0
+                ? 'Распределите всю сумму: осталось ${_money(rem)}'
+                : 'Платежи превышают сумму на ${_money(-rem)}')));
         return;
       }
     } else if (_isPackage) {
@@ -283,7 +305,7 @@ class _IncomeFormState extends ConsumerState<IncomeForm> {
         await ref.read(trainerClientCardApiProvider).createPackage(
               effClientId!,
               lessonsPaid: _lessonsNum,
-              totalPaid: _planTotal,
+              totalPaid: _totalNum,
               startsAt: _iso(_starts),
               endsAt: _ends != null ? _iso(_ends!) : null,
               installments: installments,
@@ -357,12 +379,47 @@ class _IncomeFormState extends ConsumerState<IncomeForm> {
             ),
             const SizedBox(height: 14),
             if (_isInstallment) ...<Widget>[
+              // Сначала задаём ПОЛНУЮ сумму (кол-во + цена за тренировку ↔ сумма),
+              // затем разбиваем её на платежи в графике ниже.
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: SelectAllTextField(
+                      controller: _lessons,
+                      keyboardType: TextInputType.number,
+                      onChanged: (_) => setState(() => _recomputePackage('lessons')),
+                      decoration: InputDecoration(
+                        labelText: 'Тренировок',
+                        filled: true,
+                        fillColor: c.card,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SelectAllTextField(
+                      controller: _price,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      onChanged: (_) => setState(() => _recomputePackage('price')),
+                      decoration: InputDecoration(
+                        labelText: '₽ за тренировку',
+                        filled: true,
+                        fillColor: c.card,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
               SelectAllTextField(
-                controller: _lessons,
-                keyboardType: TextInputType.number,
-                onChanged: (_) => setState(() {}),
+                controller: _total,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (_) => setState(() => _recomputePackage('total')),
                 decoration: InputDecoration(
-                  labelText: 'Тренировок',
+                  labelText: 'Полная сумма, ₽',
+                  helperText: 'Укажите сумму (или цену за тренировку) — ниже разбейте её на платежи',
                   filled: true,
                   fillColor: c.card,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
@@ -484,14 +541,7 @@ class _IncomeFormState extends ConsumerState<IncomeForm> {
             ],
             if (_isInstallment) ...<Widget>[
               const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12)),
-                child: Text('Итого график: ${_money(_planTotal)}',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
-              ),
+              _remainingHint(c),
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: _addPlanRow,
@@ -502,7 +552,7 @@ class _IncomeFormState extends ConsumerState<IncomeForm> {
             ],
             const SizedBox(height: 16),
             FilledButton(
-              onPressed: (_busy || (_isInstallment && _planFilled.isEmpty)) ? null : _save,
+              onPressed: (_busy || (_isInstallment && !_installmentComplete)) ? null : _save,
               style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
               child: _busy
                   ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
@@ -593,6 +643,34 @@ class _IncomeFormState extends ConsumerState<IncomeForm> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Подсказка под графиком: сколько ещё нужно распределить по платежам.
+  Widget _remainingHint(AppColors c) {
+    final num total = _totalNum;
+    final num remaining = total - _planTotal;
+    final String text;
+    final Color color;
+    if (total <= 0) {
+      text = 'Сначала укажите полную сумму';
+      color = c.inkMuted;
+    } else if (remaining > 0.01) {
+      text = 'Осталось распределить: ${_money(remaining)}';
+      color = c.ink;
+    } else if (remaining < -0.01) {
+      text = 'Платежи больше суммы на ${_money(-remaining)}';
+      color = c.amber;
+    } else {
+      text = 'График готов · ${_money(total)}';
+      color = c.accent;
+    }
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12)),
+      child: Text(text, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: color)),
     );
   }
 

@@ -1,5 +1,6 @@
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -62,14 +63,21 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
 
   bool get _isEdit => widget.client != null;
 
+  /// Телефонные значения показываем сразу в читаемом виде «8 XXX XXX XX XX»
+  /// (маска ввода срабатывает лишь при редактировании, поэтому нормализуем тут).
+  String _contactInitial(String type, String value) =>
+      type == 'Телефон' ? formatPhone(value.trim()) : value;
+
   List<_EditContact> _initContacts() {
     final List<ClientContact> src = widget.client?.contacts ?? <ClientContact>[];
     final List<_EditContact> list = src
-        .map((ClientContact c) => _EditContact(type: c.type, value: TextEditingController(text: c.value)))
+        .map((ClientContact c) =>
+            _EditContact(type: c.type, value: TextEditingController(text: _contactInitial(c.type, c.value))))
         .toList();
     // Если контактов нет, но есть телефон — подставляем как контакт «Телефон».
     if (list.isEmpty && widget.client?.phone?.trim().isNotEmpty == true) {
-      list.add(_EditContact(type: 'Телефон', value: TextEditingController(text: widget.client!.phone!.trim())));
+      list.add(_EditContact(
+          type: 'Телефон', value: TextEditingController(text: formatPhone(widget.client!.phone!.trim()))));
     }
     return list;
   }
@@ -208,7 +216,9 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
           final String value = ct['value'] as String? ?? '';
           if (value.trim().isEmpty) continue;
           final bool exists = _contacts.any((_EditContact e) => e.type == type && e.value.text.trim() == value.trim());
-          if (!exists) _contacts.add(_EditContact(type: type, value: TextEditingController(text: value)));
+          if (!exists) {
+            _contacts.add(_EditContact(type: type, value: TextEditingController(text: _contactInitial(type, value))));
+          }
         }
       });
       // Аватар тянем только при редактировании (нужен clientId; копия делается на
@@ -515,6 +525,9 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
               keyboardType: _contactTypes
                   .firstWhere((_ContactType t) => t.label == ct.type, orElse: () => _contactTypes.first)
                   .keyboard,
+              // Телефонные поля форматируем по мере ввода в «8 XXX XXX XX XX».
+              inputFormatters:
+                  ct.type == 'Телефон' ? const <TextInputFormatter>[RuPhoneInputFormatter()] : null,
               decoration: const InputDecoration(isDense: true, border: InputBorder.none, hintText: 'значение'),
             ),
           ),

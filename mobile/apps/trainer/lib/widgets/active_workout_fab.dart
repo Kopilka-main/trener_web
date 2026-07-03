@@ -69,17 +69,17 @@ class _ActiveWorkoutFabState extends ConsumerState<ActiveWorkoutFab> {
     if (show) {
       final List<Client> clients = ref.watch(trainerClientsProvider).valueOrNull ?? <Client>[];
       for (final Client cl in clients) {
-        if (cl.id == aw!.clientId) {
+        if (cl.id == aw.clientId) {
           label = cl.fullName;
           break;
         }
       }
-      if (label.isEmpty) label = aw!.name;
+      if (label.isEmpty) label = aw.name;
     }
     return Stack(
       children: <Widget>[
         widget.child,
-        if (show) _fab(context, aw!, label),
+        if (show) _fab(context, aw, label),
       ],
     );
   }
