@@ -4,7 +4,9 @@
     "target": {
       "namespace": "android_app",
       "package_name": "ru.fitbond.trener_trainer",
-      "sha256_cert_fingerprints": ["REPLACE_WITH_YOUR_APP_SIGNING_SHA256_FINGERPRINT"]
+      "sha256_cert_fingerprints": [
+        "5B:BC:EC:C8:E8:5F:D0:C4:F2:2E:4C:00:AF:20:71:C9:D8:65:35:75:AD:7A:45:4D:A5:07:50:79:28:74:4D:EC"
+      ]
     }
   }
 ]
