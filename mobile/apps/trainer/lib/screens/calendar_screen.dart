@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/trainer_calendar.dart';
 import '../api/trainer_clients.dart';
+import '../api/trainer_home.dart';
 import '../api/trainer_workouts.dart';
 import 'active_workout_screen.dart';
 import 'clients_screen.dart' show ClientDetailScreen;
@@ -203,6 +204,7 @@ class _SessionSheetState extends ConsumerState<_SessionSheet> {
     ));
     if (!mounted) return;
     ref.invalidate(trainerSessionsProvider);
+    ref.invalidate(trainerHomeProvider);
     nav.pop(); // закрыть шит занятия
   }
 
@@ -213,6 +215,7 @@ class _SessionSheetState extends ConsumerState<_SessionSheet> {
     try {
       await ref.read(trainerCalendarApiProvider).setStatus(widget.session.id, status);
       ref.invalidate(trainerSessionsProvider);
+      ref.invalidate(trainerHomeProvider);
       if (!mounted) return;
       nav.pop();
       messenger.showSnackBar(SnackBar(content: Text(done)));

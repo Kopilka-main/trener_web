@@ -8,6 +8,7 @@ import '../api/trainer_calendar.dart';
 import '../api/trainer_catalog.dart';
 import '../api/trainer_clients.dart';
 import '../api/trainer_gyms.dart';
+import '../api/trainer_home.dart';
 
 /// Выбор тренировки-плана для занятия: уже привязанная (existing) или шаблон.
 class _WorkoutPick {
@@ -239,6 +240,7 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
         );
       }
       ref.invalidate(trainerSessionsProvider);
+      ref.invalidate(trainerHomeProvider);
       if (!mounted) return;
       nav.pop(true);
     } catch (_) {
@@ -266,6 +268,7 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
     try {
       await ref.read(trainerCalendarApiProvider).delete(widget.session!.id);
       ref.invalidate(trainerSessionsProvider);
+      ref.invalidate(trainerHomeProvider);
       if (!mounted) return;
       nav.pop(true);
     } catch (_) {
