@@ -264,15 +264,23 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerProgressPhotosModule(app, { db: deps.db, storage, clock });
   registerMedicalModule(app, { db: deps.db, storage, clock });
 
-  // «Написать в поддержку» (оба контура): обращение в БД + дубль письмом администратору.
+  // «Написать в поддержку» (оба контура): обращение в БД + дубль в Telegram/письмом.
   // Клиентская часть скоуплена через resolveScope (trainerId в записи — best-effort).
-  // SUPPORT_EMAIL читаем из env здесь; пусто → письмо не шлётся, только запись в БД.
+  // SUPPORT_EMAIL и TELEGRAM_* читаем из env здесь; пусто → канал не используется.
   registerSupportModule(app, {
     db: deps.db,
     clock,
     mailer,
     resolveScope: (id) => clientAuthSvc.resolveScope(id),
     ...(process.env.SUPPORT_EMAIL ? { supportEmail: process.env.SUPPORT_EMAIL } : {}),
+    ...(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_SUPPORT_CHAT_ID
+      ? {
+          telegram: {
+            botToken: process.env.TELEGRAM_BOT_TOKEN,
+            chatId: process.env.TELEGRAM_SUPPORT_CHAT_ID,
+          },
+        }
+      : {}),
   });
 
   registerCalendarModule(app, { db: deps.db, clock });

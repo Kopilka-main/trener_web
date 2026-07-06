@@ -29,6 +29,10 @@ const envSchema = z.object({
   // Email администратора для дубля обращений в поддержку. Пусто → обращение только
   // сохраняется в БД (support_messages), письмо не шлётся.
   SUPPORT_EMAIL: z.string().default(''),
+  // Telegram-бот саппорта: обращения дублируются сообщением в чат/группу. Оба пусты
+  // → в Telegram не шлём (только БД). Токен от @BotFather; chat_id — id группы/чата.
+  TELEGRAM_BOT_TOKEN: z.string().default(''),
+  TELEGRAM_SUPPORT_CHAT_ID: z.string().default(''),
 });
 
 export type Env = z.infer<typeof envSchema>;

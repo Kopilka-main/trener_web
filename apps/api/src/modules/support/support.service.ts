@@ -1,5 +1,6 @@
 import type { SupportRepo, SupportSource } from './support.repo.js';
 import type { Mailer } from '../../auth/mailer.js';
+import type { SupportNotifier } from './telegram.js';
 
 export type SupportServiceDeps = {
   newId: () => string;
@@ -7,6 +8,8 @@ export type SupportServiceDeps = {
   // Email администратора для дубля обращений. Пусто/undefined → письмо не шлётся,
   // обращение только сохраняется в БД.
   supportEmail?: string;
+  // Уведомление о новом обращении в Telegram. undefined → в Telegram не шлём.
+  notifier?: SupportNotifier;
 };
 
 export type SubmitSupportInput = {
@@ -41,13 +44,22 @@ export function makeSupportService(repo: SupportRepo, mailer: Mailer, deps: Supp
         createdAt: deps.now(),
       });
 
-      if (!deps.supportEmail) return;
-
       const sender = [input.name, input.email].filter((v) => !!v).join(' ');
       const body =
         `Источник: ${sourceLabel[input.source]}\n` +
         `Отправитель: ${sender || '—'}\n\n` +
         input.text;
+
+      // Telegram (best-effort): ошибка не роняет запрос — обращение уже в БД.
+      if (deps.notifier) {
+        try {
+          await deps.notifier.notify(`🆘 Обращение в поддержку\n\n${body}`);
+        } catch {
+          // доставка best-effort
+        }
+      }
+
+      if (!deps.supportEmail) return;
 
       try {
         await mailer.send({

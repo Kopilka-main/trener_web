@@ -5,6 +5,7 @@ import type { ClientLink } from '@trener/shared';
 import type { Mailer } from '../../auth/mailer.js';
 import { makeSupportRepo } from './support.repo.js';
 import { makeSupportService } from './support.service.js';
+import { makeTelegramNotifier, type SupportNotifier } from './telegram.js';
 import { supportTrainerRoutes, supportClientRoutes } from './support.routes.js';
 
 // Composition root модуля поддержки: собирает repo+service и навешивает ОБА роута —
@@ -19,13 +20,20 @@ export function registerSupportModule(
     resolveScope: (id: string) => Promise<ClientLink>;
     // Email администратора (env SUPPORT_EMAIL). Пусто → обращения только в БД, без письма.
     supportEmail?: string;
+    // Telegram-бот саппорта (env TELEGRAM_BOT_TOKEN + TELEGRAM_SUPPORT_CHAT_ID).
+    // Оба заданы → дублируем обращение сообщением в чат.
+    telegram?: { botToken: string; chatId: string };
   },
 ): void {
   const repo = makeSupportRepo(deps.db);
+  const notifier: SupportNotifier | undefined = deps.telegram
+    ? makeTelegramNotifier(deps.telegram.botToken, deps.telegram.chatId)
+    : undefined;
   const svc = makeSupportService(repo, deps.mailer, {
     newId: deps.clock.newId,
     now: deps.clock.now,
     ...(deps.supportEmail ? { supportEmail: deps.supportEmail } : {}),
+    ...(notifier ? { notifier } : {}),
   });
 
   supportTrainerRoutes(app, svc, (id) => repo.findTrainerContact(id));
