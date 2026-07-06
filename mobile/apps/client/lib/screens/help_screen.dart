@@ -88,6 +88,75 @@ class _HelpScreenState extends ConsumerState<HelpScreen> {
     }
   }
 
+  /// Композер обращения: поле ввода с кнопкой-отправкой ВНУТРИ, закреплён снизу —
+  /// при открытии клавиатуры Scaffold поджимает тело и композер остаётся над ней.
+  Widget _composer(AppColors c, bool canSend) {
+    return Container(
+      decoration: BoxDecoration(
+        color: c.bg,
+        border: Border(top: BorderSide(color: c.line)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+          child: Container(
+            decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(24)),
+            padding: const EdgeInsets.fromLTRB(16, 2, 6, 2),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: <Widget>[
+                Expanded(
+                  child: TextField(
+                    controller: _text,
+                    minLines: 1,
+                    maxLines: 5,
+                    maxLength: 5000,
+                    enabled: !_sending,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    onChanged: (_) => setState(() {}),
+                    style: TextStyle(fontSize: 15, height: 1.35, color: c.ink),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      border: InputBorder.none,
+                      counterText: '',
+                      hintText: 'Написать в поддержку…',
+                      hintStyle: TextStyle(color: c.inkMuted),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Material(
+                    color: canSend ? c.accent : c.chip,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: canSend ? _send : null,
+                      child: SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: _sending
+                            ? Padding(
+                                padding: const EdgeInsets.all(11),
+                                child: CircularProgressIndicator(strokeWidth: 2, color: c.accentOn),
+                              )
+                            : Icon(Icons.arrow_upward,
+                                size: 20, color: canSend ? c.accentOn : c.inkMuted),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
@@ -95,47 +164,19 @@ class _HelpScreenState extends ConsumerState<HelpScreen> {
     return Scaffold(
       backgroundColor: c.bg,
       appBar: AppBar(title: const Text('Помощь с приложением')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      body: Column(
         children: <Widget>[
-          const _SectionLabel('Частые вопросы'),
-          const SizedBox(height: 8),
-          for (final _Faq f in _faqs) _FaqTile(faq: f),
-          const SizedBox(height: 20),
-          const _SectionLabel('Написать в поддержку'),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-            decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
-            child: TextField(
-              controller: _text,
-              minLines: 5,
-              maxLines: 6,
-              maxLength: 5000,
-              enabled: !_sending,
-              keyboardType: TextInputType.multiline,
-              textInputAction: TextInputAction.newline,
-              onChanged: (_) => setState(() {}),
-              style: TextStyle(fontSize: 15, height: 1.4, color: c.ink),
-              decoration: InputDecoration(
-                border: InputBorder.none,
-                counterText: '',
-                hintText: 'Опишите проблему или вопрос',
-                hintStyle: TextStyle(color: c.inkMuted),
-              ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+              children: <Widget>[
+                const _SectionLabel('Частые вопросы'),
+                const SizedBox(height: 8),
+                for (final _Faq f in _faqs) _FaqTile(faq: f),
+              ],
             ),
           ),
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: canSend ? _send : null,
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
-            child: _sending
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Отправить'),
-          ),
-          const SizedBox(height: 8),
-          Text('Мы ответим в чате или на почту, указанную в профиле.',
-              style: TextStyle(fontSize: 13, color: c.inkMutedXl)),
+          _composer(c, canSend),
         ],
       ),
     );
