@@ -1,8 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { ClientLink } from '@trener/shared';
-import { submitSupportRequestSchema, submitSupportResponseSchema } from '@trener/shared';
-import type { SupportService } from './support.service.js';
+import {
+  submitSupportRequestSchema,
+  submitSupportResponseSchema,
+  supportThreadResponseSchema,
+} from '@trener/shared';
+import type { SupportService, SupportThreadItem } from './support.service.js';
 import { requireAuth } from '../../plugins/tenant-context.js';
 import { requireClient } from '../../plugins/client-context.js';
 import { unauthorized } from '../../errors.js';
@@ -17,6 +21,20 @@ function fullName(c: SupportContact | null): string | null {
   if (!c) return null;
   const name = `${c.firstName} ${c.lastName}`.trim();
   return name || null;
+}
+
+// Сериализация ленты переписки под supportThreadResponseSchema (createdAt → ISO-строка).
+function toThreadResponse(items: SupportThreadItem[]): {
+  messages: { id: string; direction: 'in' | 'out'; text: string; createdAt: string }[];
+} {
+  return {
+    messages: items.map((m) => ({
+      id: m.id,
+      direction: m.direction,
+      text: m.text,
+      createdAt: m.createdAt.toISOString(),
+    })),
+  };
 }
 
 // Тренерский роут поддержки: POST /api/support (auth тренера, cookie sid → req.trainerId).
@@ -47,6 +65,16 @@ export function supportTrainerRoutes(
         text: req.body.text,
       });
       return { ok: true };
+    },
+  );
+
+  // Переписка тренера с поддержкой (обращения + ответы саппорта), ASC по времени.
+  typed.get(
+    '/api/support/thread',
+    { preHandler: requireAuth, schema: { response: { 200: supportThreadResponseSchema } } },
+    async (req) => {
+      if (!req.trainerId) throw unauthorized('Требуется вход');
+      return toThreadResponse(await svc.threadForTrainer(req.trainerId));
     },
   );
 }
@@ -84,6 +112,18 @@ export function supportClientRoutes(
         text: req.body.text,
       });
       return { ok: true };
+    },
+  );
+
+  // Переписка клиента с поддержкой. Скоуплено по clientAccountId (как и запись обращения) —
+  // работает и для неподключённого клиента, поэтому resolveScope (который 409-ит без
+  // привязки) к чтению НЕ применяем.
+  typed.get(
+    '/api/client-app/support/thread',
+    { preHandler: requireClient, schema: { response: { 200: supportThreadResponseSchema } } },
+    async (req) => {
+      if (!req.clientAccountId) throw unauthorized('Требуется вход');
+      return toThreadResponse(await svc.threadForClient(req.clientAccountId));
     },
   );
 }

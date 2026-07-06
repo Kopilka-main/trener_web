@@ -5,6 +5,7 @@ import {
   uniqueIndex,
   primaryKey,
   integer,
+  bigint,
   doublePrecision,
   boolean,
   foreignKey,
@@ -684,20 +685,31 @@ export const medicalRecords = pgTable(
 // и дублируется письмом администратору (если задан SUPPORT_EMAIL). Админ-инбокс без
 // тенант-скоупа (как telemetry/analytics): владелец необязателен, source различает контур,
 // email/name — снимок отправителя на момент обращения. FK намеренно нет: запись —
-// аудит, переживает удаление отправителя.
+// аудит, переживает удаление отправителя. Двусторонняя поддержка: direction различает
+// обращение пользователя ('in') и ответ саппорта ('out'); telegramTopicId связывает
+// переписку с темой (forum topic) в Telegram-супергруппе для роутинга ответов обратно.
 export const supportMessages = pgTable(
   'support_messages',
   {
     id: text('id').primaryKey(),
     source: text('source').$type<'trainer' | 'client'>().notNull(),
+    direction: text('direction').$type<'in' | 'out'>().notNull().default('in'),
     trainerId: text('trainer_id'),
     clientAccountId: text('client_account_id'),
+    // id темы (forum topic) в Telegram-супергруппе — ключ роутинга ответов саппорта.
+    telegramTopicId: bigint('telegram_topic_id', { mode: 'number' }),
     email: text('email'),
     name: text('name'),
     text: text('text').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [check('support_messages_source_chk', sql`${t.source} IN ('trainer', 'client')`)],
+  (t) => [
+    check('support_messages_source_chk', sql`${t.source} IN ('trainer', 'client')`),
+    check('support_messages_direction_chk', sql`${t.direction} IN ('in', 'out')`),
+    index('support_messages_topic_idx').on(t.telegramTopicId),
+    index('support_messages_trainer_idx').on(t.trainerId),
+    index('support_messages_client_idx').on(t.clientAccountId),
+  ],
 );
 
 export const analyticsEvents = pgTable(

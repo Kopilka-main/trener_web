@@ -267,11 +267,20 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // «Написать в поддержку» (оба контура): обращение в БД + дубль в Telegram/письмом.
   // Клиентская часть скоуплена через resolveScope (trainerId в записи — best-effort).
   // SUPPORT_EMAIL и TELEGRAM_* читаем из env здесь; пусто → канал не используется.
+  // onAgentReply: ответ саппорта из темы Telegram → пуш владельцу (тренеру/клиенту).
   registerSupportModule(app, {
     db: deps.db,
     clock,
     mailer,
     resolveScope: (id) => clientAuthSvc.resolveScope(id),
+    onAgentReply: (owner, text) => {
+      const payload = { title: 'Поддержка FitBond', body: text, url: '/support' };
+      if (owner.source === 'trainer' && owner.trainerId) {
+        void pushSvc.notifyTrainer(owner.trainerId, payload).catch(() => undefined);
+      } else if (owner.source === 'client' && owner.clientAccountId) {
+        void pushSvc.notifyClientAccount(owner.clientAccountId, payload).catch(() => undefined);
+      }
+    },
     ...(process.env.SUPPORT_EMAIL ? { supportEmail: process.env.SUPPORT_EMAIL } : {}),
     ...(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_SUPPORT_CHAT_ID
       ? {

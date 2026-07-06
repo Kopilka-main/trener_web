@@ -3,6 +3,10 @@
 export {
   submitSupportRequestSchema,
   submitSupportResponseSchema,
+  supportThreadMessageSchema,
+  supportThreadResponseSchema,
   type SubmitSupportRequest,
   type SubmitSupportResponse,
+  type SupportThreadMessage,
+  type SupportThreadResponse,
 } from '@trener/shared';

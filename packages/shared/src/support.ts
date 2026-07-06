@@ -12,3 +12,18 @@ export const submitSupportResponseSchema = z.object({
   ok: z.boolean(),
 });
 export type SubmitSupportResponse = z.infer<typeof submitSupportResponseSchema>;
+
+// Переписка с поддержкой (двусторонняя): обращения пользователя (direction 'in') и
+// ответы саппорта (direction 'out') одной ленты, по возрастанию времени. createdAt — ISO.
+export const supportThreadMessageSchema = z.object({
+  id: z.string(),
+  direction: z.enum(['in', 'out']),
+  text: z.string(),
+  createdAt: z.string(),
+});
+export type SupportThreadMessage = z.infer<typeof supportThreadMessageSchema>;
+
+export const supportThreadResponseSchema = z.object({
+  messages: z.array(supportThreadMessageSchema),
+});
+export type SupportThreadResponse = z.infer<typeof supportThreadResponseSchema>;

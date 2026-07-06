@@ -1,14 +1,34 @@
-// Доставка обращений поддержки в Telegram через Bot API. Отдельный интерфейс —
-// как Mailer: сервис от него зависит, реализация инъектится модулем.
+// Клиент Telegram Bot API для двусторонней поддержки. Отдельный интерфейс — как Mailer:
+// сервис зависит от абстракции, реализация инъектится модулем. Направления два:
+//  - исходящее (notify/sendToTopic) — обращение/ответ уходит в тему (forum topic);
+//  - входящее (getUpdates) — long-poll забирает ответы саппорта из тем обратно в приложение.
 import { fetch, type Dispatcher } from 'undici';
 import { socksDispatcher } from 'fetch-socks';
 
+// Совместимость с сервисом поддержки: ему достаточно notify (создать тему + запостить).
+// notify возвращает message_thread_id созданной темы (или undefined при откате/ошибке).
 export interface SupportNotifier {
   // title — заголовок темы (forum topic) на обращение; text — тело сообщения.
-  notify(title: string, text: string): Promise<void>;
+  // Возвращает id темы (message_thread_id) либо undefined, если тему создать не удалось.
+  notify(title: string, text: string): Promise<number | undefined>;
 }
 
-export type TelegramNotifierOpts = {
+// Ответ саппорта из темы Telegram (результат long-poll getUpdates).
+export type TelegramReply = {
+  updateId: number; // update_id — для сдвига offset (nextOffset = maxUpdateId + 1)
+  topicId: number; // message_thread_id темы — ключ роутинга к владельцу обращения
+  text: string;
+  fromId: number;
+  fromName: string;
+};
+
+// Полный клиент: notify (совместимость) + sendToTopic (ответ в тему) + getUpdates (приём).
+export interface TelegramClient extends SupportNotifier {
+  sendToTopic(topicId: number, text: string): Promise<void>;
+  getUpdates(offset: number | undefined): Promise<TelegramReply[]>;
+}
+
+export type TelegramClientOpts = {
   // База Bot API. По умолчанию https://api.telegram.org; можно указать релей,
   // если api.telegram.org недоступен с сервера.
   apiBase?: string;
@@ -30,16 +50,26 @@ function parseSocks(v: string): { host: string; port: number } | null {
   return { host, port };
 }
 
-type TgResult = { ok: boolean; description?: string; result?: { message_thread_id?: number } };
+type TgResponse<T> = { ok: boolean; description?: string; result?: T };
 
-// Отправка обращений в Telegram: на каждое создаётся отдельная тема (forum topic),
+// Сырое обновление getUpdates: интересует только message с темой и текстом.
+type TgUpdate = {
+  update_id: number;
+  message?: {
+    message_thread_id?: number;
+    text?: string;
+    from?: { id?: number; first_name?: string; last_name?: string; username?: string };
+  };
+};
+
+// Клиент Telegram-поддержки: на каждое обращение создаётся отдельная тема (forum topic),
 // сообщение постится в неё. Если тему создать нельзя (бот не админ / не форум) —
-// откатываемся на общий чат. Логирует и кидает при сбое (вызывающий — best-effort).
-export function makeTelegramNotifier(
+// откатываемся на общий чат. Ответы саппорта в темах забираются long-poll getUpdates.
+export function makeTelegramClient(
   botToken: string,
   chatId: string,
-  opts: TelegramNotifierOpts = {},
-): SupportNotifier {
+  opts: TelegramClientOpts = {},
+): TelegramClient {
   const base = opts.apiBase?.trim()
     ? opts.apiBase.trim().replace(/\/+$/, '')
     : 'https://api.telegram.org';
@@ -47,15 +77,17 @@ export function makeTelegramNotifier(
   const dispatcher: Dispatcher | undefined = socks
     ? socksDispatcher({ type: 5, host: socks.host, port: socks.port })
     : undefined;
+  // id бота — число до ':' в токене: свои же сообщения из getUpdates игнорируем.
+  const botId = Number(botToken.split(':')[0]);
 
-  async function call(method: string, payload: Record<string, unknown>): Promise<TgResult> {
+  async function call<T>(method: string, payload: Record<string, unknown>): Promise<TgResponse<T>> {
     const res = await fetch(`${base}/bot${botToken}/${method}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload),
       ...(dispatcher ? { dispatcher } : {}),
     });
-    const json = (await res.json().catch(() => ({ ok: false }))) as TgResult;
+    const json = (await res.json().catch(() => ({ ok: false }))) as TgResponse<T>;
     if (!res.ok || !json.ok) {
       throw new Error(
         `telegram ${method} ${res.status}: ${(json.description ?? '').slice(0, 200)}`,
@@ -65,12 +97,15 @@ export function makeTelegramNotifier(
   }
 
   return {
-    async notify(title: string, text: string): Promise<void> {
+    async notify(title: string, text: string): Promise<number | undefined> {
       try {
         // Отдельная тема на обращение. Не вышло (нет прав/не форум) → общий чат.
         let threadId: number | undefined;
         try {
-          const t = await call('createForumTopic', { chat_id: chatId, name: title.slice(0, 128) });
+          const t = await call<{ message_thread_id?: number }>('createForumTopic', {
+            chat_id: chatId,
+            name: title.slice(0, 128),
+          });
           threadId = t.result?.message_thread_id;
         } catch (e) {
           opts.logWarn?.(`createForumTopic failed, fallback to general chat: ${String(e)}`);
@@ -81,10 +116,58 @@ export function makeTelegramNotifier(
           disable_web_page_preview: true,
           ...(threadId ? { message_thread_id: threadId } : {}),
         });
+        return threadId;
       } catch (err) {
         opts.logWarn?.(`support telegram notify failed: ${String(err)}`);
         throw err;
       }
     },
+
+    async sendToTopic(topicId: number, text: string): Promise<void> {
+      await call('sendMessage', {
+        chat_id: chatId,
+        text,
+        disable_web_page_preview: true,
+        message_thread_id: topicId,
+      });
+    },
+
+    async getUpdates(offset: number | undefined): Promise<TelegramReply[]> {
+      const r = await call<TgUpdate[]>('getUpdates', {
+        ...(offset !== undefined ? { offset } : {}),
+        timeout: 25,
+        allowed_updates: ['message'],
+      });
+      const replies: TelegramReply[] = [];
+      for (const u of r.result ?? []) {
+        const m = u.message;
+        // Только сообщения в теме, с текстом и НЕ от самого бота. Прочее (сервисные
+        // сообщения о создании темы, апдейты без темы) игнорируем.
+        if (!m || m.message_thread_id === undefined || !m.text) continue;
+        const fromId = m.from?.id;
+        if (fromId === undefined || fromId === botId) continue;
+        const fromName =
+          [m.from?.first_name, m.from?.last_name].filter((v) => !!v).join(' ') ||
+          m.from?.username ||
+          '';
+        replies.push({
+          updateId: u.update_id,
+          topicId: m.message_thread_id,
+          text: m.text,
+          fromId,
+          fromName,
+        });
+      }
+      return replies;
+    },
   };
+}
+
+// Тонкая обёртка обратной совместимости: сервису поддержки нужен только SupportNotifier.
+export function makeTelegramNotifier(
+  botToken: string,
+  chatId: string,
+  opts: TelegramClientOpts = {},
+): SupportNotifier {
+  return makeTelegramClient(botToken, chatId, opts);
 }

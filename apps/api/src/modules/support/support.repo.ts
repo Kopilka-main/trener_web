@@ -1,15 +1,27 @@
-import { eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { supportMessages, trainers, clientAccounts } from '../../db/schema.js';
 
 export type SupportSource = 'trainer' | 'client';
+export type SupportDirection = 'in' | 'out';
 
-// Строка обращения в поддержку (снимок отправителя фиксируется на момент записи).
-export type SupportMessageRow = {
-  id: string;
+// Владелец переписки (для роутинга ответа и пуша). source различает контур.
+export type SupportOwner = {
   source: SupportSource;
   trainerId: string | null;
   clientAccountId: string | null;
+};
+
+// Строка обращения/ответа поддержки (снимок отправителя фиксируется на момент записи).
+// direction: 'in' — от пользователя, 'out' — ответ саппорта. telegramTopicId связывает
+// переписку с темой (forum topic) в Telegram.
+export type SupportMessageRow = {
+  id: string;
+  source: SupportSource;
+  direction: SupportDirection;
+  trainerId: string | null;
+  clientAccountId: string | null;
+  telegramTopicId: number | null;
   email: string | null;
   name: string | null;
   text: string;
@@ -26,6 +38,41 @@ export function makeSupportRepo(db: Db) {
   return {
     async insert(row: SupportMessageRow): Promise<void> {
       await db.insert(supportMessages).values(row);
+    },
+
+    // Владелец обращения по id темы Telegram (для роутинга ответа саппорта обратно).
+    // Ищем ПО 'in'-строке: тему создаёт обращение пользователя, ответы её лишь наследуют.
+    async findOwnerByTopicId(topicId: number): Promise<SupportOwner | null> {
+      const [row] = await db
+        .select({
+          source: supportMessages.source,
+          trainerId: supportMessages.trainerId,
+          clientAccountId: supportMessages.clientAccountId,
+        })
+        .from(supportMessages)
+        .where(
+          and(eq(supportMessages.telegramTopicId, topicId), eq(supportMessages.direction, 'in')),
+        )
+        .limit(1);
+      return row ?? null;
+    },
+
+    // Вся переписка тренера (обращения + ответы), по возрастанию времени.
+    async listForTrainer(trainerId: string): Promise<SupportMessageRow[]> {
+      return db
+        .select()
+        .from(supportMessages)
+        .where(eq(supportMessages.trainerId, trainerId))
+        .orderBy(asc(supportMessages.createdAt));
+    },
+
+    // Вся переписка клиента (обращения + ответы), по возрастанию времени.
+    async listForClient(clientAccountId: string): Promise<SupportMessageRow[]> {
+      return db
+        .select()
+        .from(supportMessages)
+        .where(eq(supportMessages.clientAccountId, clientAccountId))
+        .orderBy(asc(supportMessages.createdAt));
     },
 
     // Контакт тренера-отправителя (для снимка), либо null если тренер не найден.
