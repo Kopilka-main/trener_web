@@ -43,7 +43,7 @@ export function registerSupportModule(
     newId: deps.clock.newId,
     now: deps.clock.now,
     ...(deps.supportEmail ? { supportEmail: deps.supportEmail } : {}),
-    ...(client ? { notifier: client } : {}),
+    ...(client ? { telegram: client } : {}),
   });
 
   supportTrainerRoutes(app, svc, (id) => repo.findTrainerContact(id));

@@ -2,12 +2,13 @@ import { describe, it, expect, vi } from 'vitest';
 import type { SupportRepo, SupportMessageRow, SupportOwner } from './support.repo.js';
 import type { Mailer, Email } from '../../auth/mailer.js';
 import { makeSupportService, type SupportServiceDeps } from './support.service.js';
-import type { SupportNotifier } from './telegram.js';
+import type { TelegramClient } from './telegram.js';
 
 function fakeRepo(over: Partial<SupportRepo> = {}): SupportRepo {
   return {
     insert: vi.fn(() => Promise.resolve()),
     findOwnerByTopicId: vi.fn(() => Promise.resolve(null)),
+    findCurrentTopicForOwner: vi.fn(() => Promise.resolve<number | null>(null)),
     listForTrainer: vi.fn(() => Promise.resolve([])),
     listForClient: vi.fn(() => Promise.resolve([])),
     findTrainerContact: vi.fn(() => Promise.resolve(null)),
@@ -20,11 +21,16 @@ function fakeMailer(send: (email: Email) => Promise<void> = () => Promise.resolv
   return { send: vi.fn(send) };
 }
 
-function fakeNotifier(
-  notify: (title: string, text: string) => Promise<number | undefined> = () =>
-    Promise.resolve(undefined),
-): SupportNotifier {
-  return { notify: vi.fn(notify) };
+// Мок Telegram-клиента доставки: createTopic по умолчанию не создаёт тему (undefined),
+// оба sendTo* успешны. Тесты подменяют нужное поведение через over.
+type FakeTelegram = Pick<TelegramClient, 'createTopic' | 'sendToTopic' | 'sendToGeneral'>;
+function fakeTelegram(over: Partial<FakeTelegram> = {}): FakeTelegram {
+  return {
+    createTopic: vi.fn(() => Promise.resolve<number | undefined>(undefined)),
+    sendToTopic: vi.fn(() => Promise.resolve()),
+    sendToGeneral: vi.fn(() => Promise.resolve()),
+    ...over,
+  };
 }
 
 const baseDeps: SupportServiceDeps = { newId: () => 'sup1', now: () => new Date(0) };
@@ -47,7 +53,7 @@ function row(over: Partial<SupportMessageRow>): SupportMessageRow {
 
 describe('support.service', () => {
   it('submit сохраняет обращение в repo со снимком отправителя и сгенерированным id', async () => {
-    const insert = vi.fn(() => Promise.resolve());
+    const insert = vi.fn((_row: SupportMessageRow) => Promise.resolve());
     const svc = makeSupportService(fakeRepo({ insert }), fakeMailer(), baseDeps);
 
     await svc.submit({
@@ -72,36 +78,132 @@ describe('support.service', () => {
     });
   });
 
-  it('submit сохраняет telegramTopicId, полученный из notifier.notify', async () => {
-    const insert = vi.fn(() => Promise.resolve());
-    const notify = vi.fn(() => Promise.resolve(42));
-    const svc = makeSupportService(fakeRepo({ insert }), fakeMailer(), {
+  it('(а) нет текущей темы → createTopic + sendToTopic(new), topicId сохранён', async () => {
+    const insert = vi.fn((_row: SupportMessageRow) => Promise.resolve());
+    const tg = fakeTelegram({ createTopic: vi.fn(() => Promise.resolve<number | undefined>(42)) });
+    const findCurrentTopicForOwner = vi.fn(() => Promise.resolve<number | null>(null));
+    const svc = makeSupportService(fakeRepo({ insert, findCurrentTopicForOwner }), fakeMailer(), {
       ...baseDeps,
-      notifier: { notify },
+      telegram: tg,
     });
 
     await svc.submit({ source: 'client', clientAccountId: 'C', text: 'Вопрос' });
 
-    expect(notify).toHaveBeenCalledTimes(1);
-    const saved = insert.mock.calls[0]![0] as SupportMessageRow;
+    // Владелец текущей темы искался по contour клиента.
+    expect(findCurrentTopicForOwner).toHaveBeenCalledWith({
+      source: 'client',
+      trainerId: null,
+      clientAccountId: 'C',
+    });
+    expect(tg.createTopic).toHaveBeenCalledTimes(1);
+    expect(tg.sendToTopic).toHaveBeenCalledTimes(1);
+    expect(tg.sendToTopic).toHaveBeenCalledWith(42, expect.stringContaining('Вопрос'));
+    expect(tg.sendToGeneral).not.toHaveBeenCalled();
+    const saved = insert.mock.calls[0]![0];
     expect(saved.direction).toBe('in');
     expect(saved.telegramTopicId).toBe(42);
     expect(saved.clientAccountId).toBe('C');
   });
 
-  it('обращение сохраняется даже если telegram упал (topicId остаётся null)', async () => {
-    const insert = vi.fn(() => Promise.resolve());
-    const notify = vi.fn(() => Promise.reject(new Error('tg down')));
+  it('(б) есть текущая тема → sendToTopic(current) переиспользована, createTopic НЕ вызван', async () => {
+    const insert = vi.fn((_row: SupportMessageRow) => Promise.resolve());
+    const tg = fakeTelegram();
+    const findCurrentTopicForOwner = vi.fn(() => Promise.resolve<number | null>(7));
+    const svc = makeSupportService(fakeRepo({ insert, findCurrentTopicForOwner }), fakeMailer(), {
+      ...baseDeps,
+      telegram: tg,
+    });
+
+    await svc.submit({ source: 'trainer', trainerId: 'A', text: 'Ещё вопрос' });
+
+    expect(tg.sendToTopic).toHaveBeenCalledTimes(1);
+    expect(tg.sendToTopic).toHaveBeenCalledWith(7, expect.stringContaining('Ещё вопрос'));
+    expect(tg.createTopic).not.toHaveBeenCalled();
+    expect(tg.sendToGeneral).not.toHaveBeenCalled();
+    const saved = insert.mock.calls[0]![0];
+    expect(saved.telegramTopicId).toBe(7);
+  });
+
+  it('(в) тема удалена (sendToTopic(current) throws) → createTopic(new) + sendToTopic(new)', async () => {
+    const insert = vi.fn((_row: SupportMessageRow) => Promise.resolve());
+    const sendToTopic = vi
+      .fn<TelegramClient['sendToTopic']>()
+      .mockRejectedValueOnce(new Error('topic deleted'))
+      .mockResolvedValueOnce(undefined);
+    const tg = fakeTelegram({
+      sendToTopic,
+      createTopic: vi.fn(() => Promise.resolve<number | undefined>(99)),
+    });
+    const findCurrentTopicForOwner = vi.fn(() => Promise.resolve<number | null>(7));
+    const svc = makeSupportService(fakeRepo({ insert, findCurrentTopicForOwner }), fakeMailer(), {
+      ...baseDeps,
+      telegram: tg,
+    });
+
+    await svc.submit({ source: 'trainer', trainerId: 'A', text: 'Привет' });
+
+    expect(sendToTopic).toHaveBeenNthCalledWith(1, 7, expect.any(String));
+    expect(tg.createTopic).toHaveBeenCalledTimes(1);
+    expect(sendToTopic).toHaveBeenNthCalledWith(2, 99, expect.any(String));
+    expect(tg.sendToGeneral).not.toHaveBeenCalled();
+    const saved = insert.mock.calls[0]![0];
+    expect(saved.telegramTopicId).toBe(99);
+  });
+
+  it('(г) createTopic вернул undefined → фолбэк sendToGeneral, topicId остаётся null', async () => {
+    const insert = vi.fn((_row: SupportMessageRow) => Promise.resolve());
+    const tg = fakeTelegram({
+      createTopic: vi.fn(() => Promise.resolve<number | undefined>(undefined)),
+    });
     const svc = makeSupportService(fakeRepo({ insert }), fakeMailer(), {
       ...baseDeps,
-      notifier: { notify },
+      telegram: tg,
+    });
+
+    await svc.submit({ source: 'client', clientAccountId: 'C', text: 'Вопрос по оплате' });
+
+    expect(tg.createTopic).toHaveBeenCalledTimes(1);
+    expect(tg.sendToTopic).not.toHaveBeenCalled();
+    expect(tg.sendToGeneral).toHaveBeenCalledTimes(1);
+    expect(tg.sendToGeneral).toHaveBeenCalledWith(expect.stringContaining('Вопрос по оплате'));
+    const saved = insert.mock.calls[0]![0];
+    expect(saved.telegramTopicId).toBeNull();
+  });
+
+  it('тело сообщения в Telegram содержит текст обращения и источник', async () => {
+    const tg = fakeTelegram({ createTopic: vi.fn(() => Promise.resolve<number | undefined>(1)) });
+    const svc = makeSupportService(fakeRepo(), fakeMailer(), { ...baseDeps, telegram: tg });
+
+    await svc.submit({ source: 'client', clientAccountId: 'C', text: 'Вопрос по оплате' });
+
+    expect(tg.sendToTopic).toHaveBeenCalledWith(1, expect.stringContaining('Вопрос по оплате'));
+    expect(tg.sendToTopic).toHaveBeenCalledWith(1, expect.stringContaining('клиент'));
+  });
+
+  it('(д) submit пишет in-строку даже если вся доставка в Telegram упала (topicId null)', async () => {
+    // Тема есть, но пост упал (удалена); создать новую нельзя (createTopic → undefined);
+    // общий чат тоже недоступен. Все ветви доставки провалились, но обращение сохранено.
+    const insert = vi.fn((_row: SupportMessageRow) => Promise.resolve());
+    const tg = fakeTelegram({
+      createTopic: vi.fn(() => Promise.resolve<number | undefined>(undefined)),
+      sendToTopic: vi.fn(() => Promise.reject(new Error('topic deleted'))),
+      sendToGeneral: vi.fn(() => Promise.reject(new Error('chat down'))),
+    });
+    const findCurrentTopicForOwner = vi.fn(() => Promise.resolve<number | null>(5));
+    const svc = makeSupportService(fakeRepo({ insert, findCurrentTopicForOwner }), fakeMailer(), {
+      ...baseDeps,
+      telegram: tg,
     });
 
     await expect(
       svc.submit({ source: 'trainer', trainerId: 'A', text: 'Hi' }),
     ).resolves.toBeUndefined();
 
-    const saved = insert.mock.calls[0]![0] as SupportMessageRow;
+    expect(tg.sendToTopic).toHaveBeenCalledTimes(1);
+    expect(tg.createTopic).toHaveBeenCalledTimes(1);
+    expect(tg.sendToGeneral).toHaveBeenCalledTimes(1);
+    expect(insert).toHaveBeenCalledTimes(1);
+    const saved = insert.mock.calls[0]![0];
     expect(saved.telegramTopicId).toBeNull();
     expect(saved.direction).toBe('in');
   });
@@ -135,7 +237,7 @@ describe('support.service', () => {
   });
 
   it('без SUPPORT_EMAIL письмо не шлётся — обращение только сохраняется в БД', async () => {
-    const insert = vi.fn(() => Promise.resolve());
+    const insert = vi.fn((_row: SupportMessageRow) => Promise.resolve());
     const send = vi.fn((_email: Email) => Promise.resolve());
     const svc = makeSupportService(fakeRepo({ insert }), { send }, baseDeps);
 
@@ -146,7 +248,7 @@ describe('support.service', () => {
   });
 
   it('ошибка mailer НЕ роняет submit — обращение всё равно сохранено', async () => {
-    const insert = vi.fn(() => Promise.resolve());
+    const insert = vi.fn((_row: SupportMessageRow) => Promise.resolve());
     const send = vi.fn((_email: Email) => Promise.reject(new Error('smtp down')));
     const svc = makeSupportService(
       fakeRepo({ insert }),
@@ -165,41 +267,9 @@ describe('support.service', () => {
     expect(send).toHaveBeenCalledTimes(1);
   });
 
-  it('при заданном notifier шлёт уведомление в Telegram с текстом и источником', async () => {
-    const notify = vi.fn((_title: string, _text: string) => Promise.resolve(undefined));
-    const svc = makeSupportService(fakeRepo(), fakeMailer(), {
-      ...baseDeps,
-      notifier: fakeNotifier(notify),
-    });
-
-    await svc.submit({ source: 'client', clientAccountId: 'C', text: 'Вопрос по оплате' });
-
-    expect(notify).toHaveBeenCalledTimes(1);
-    const [title, text] = notify.mock.calls[0]!;
-    expect(title).toContain('клиент');
-    expect(text).toContain('Вопрос по оплате');
-    expect(text).toContain('клиент');
-  });
-
-  it('ошибка notifier НЕ роняет submit — обращение всё равно сохранено', async () => {
-    const insert = vi.fn(() => Promise.resolve());
-    const notify = vi.fn((_title: string, _text: string) => Promise.reject(new Error('tg down')));
-    const svc = makeSupportService(fakeRepo({ insert }), fakeMailer(), {
-      ...baseDeps,
-      notifier: fakeNotifier(notify),
-    });
-
-    await expect(
-      svc.submit({ source: 'trainer', trainerId: 'A', text: 'Hi' }),
-    ).resolves.toBeUndefined();
-
-    expect(insert).toHaveBeenCalledTimes(1);
-    expect(notify).toHaveBeenCalledTimes(1);
-  });
-
   it('addAgentReply при известном topicId сохраняет out-строку и возвращает владельца', async () => {
     const owner: SupportOwner = { source: 'client', trainerId: 'T', clientAccountId: 'C' };
-    const insert = vi.fn(() => Promise.resolve());
+    const insert = vi.fn((_row: SupportMessageRow) => Promise.resolve());
     const svc = makeSupportService(
       fakeRepo({ insert, findOwnerByTopicId: vi.fn(() => Promise.resolve(owner)) }),
       fakeMailer(),
@@ -210,7 +280,7 @@ describe('support.service', () => {
 
     expect(result).toEqual(owner);
     expect(insert).toHaveBeenCalledTimes(1);
-    const saved = insert.mock.calls[0]![0] as SupportMessageRow;
+    const saved = insert.mock.calls[0]![0];
     expect(saved).toMatchObject({
       source: 'client',
       direction: 'out',
@@ -224,7 +294,7 @@ describe('support.service', () => {
   });
 
   it('addAgentReply при неизвестном topicId возвращает null и ничего не пишет', async () => {
-    const insert = vi.fn(() => Promise.resolve());
+    const insert = vi.fn((_row: SupportMessageRow) => Promise.resolve());
     const svc = makeSupportService(
       fakeRepo({ insert, findOwnerByTopicId: vi.fn(() => Promise.resolve(null)) }),
       fakeMailer(),

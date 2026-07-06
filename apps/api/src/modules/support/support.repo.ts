@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { supportMessages, trainers, clientAccounts } from '../../db/schema.js';
 
@@ -55,6 +55,34 @@ export function makeSupportRepo(db: Db) {
         )
         .limit(1);
       return row ?? null;
+    },
+
+    // «Текущая тема» владельца: telegram_topic_id ПОСЛЕДНЕГО (max createdAt) его сообщения,
+    // где тема задана. Одна тема на пользователя — новые обращения идут в неё; null → темы
+    // ещё нет (заведём новую). Скоуп по контуру: тренер по trainer_id, клиент по account.
+    async findCurrentTopicForOwner(owner: SupportOwner): Promise<number | null> {
+      const ownerCond =
+        owner.source === 'trainer'
+          ? owner.trainerId != null
+            ? and(
+                eq(supportMessages.source, 'trainer'),
+                eq(supportMessages.trainerId, owner.trainerId),
+              )
+            : null
+          : owner.clientAccountId != null
+            ? and(
+                eq(supportMessages.source, 'client'),
+                eq(supportMessages.clientAccountId, owner.clientAccountId),
+              )
+            : null;
+      if (!ownerCond) return null;
+      const [row] = await db
+        .select({ telegramTopicId: supportMessages.telegramTopicId })
+        .from(supportMessages)
+        .where(and(ownerCond, isNotNull(supportMessages.telegramTopicId)))
+        .orderBy(desc(supportMessages.createdAt))
+        .limit(1);
+      return row?.telegramTopicId ?? null;
     },
 
     // Вся переписка тренера (обращения + ответы), по возрастанию времени.

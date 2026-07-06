@@ -1,6 +1,6 @@
 import type { SupportRepo, SupportSource, SupportOwner, SupportDirection } from './support.repo.js';
 import type { Mailer } from '../../auth/mailer.js';
-import type { SupportNotifier } from './telegram.js';
+import type { TelegramClient } from './telegram.js';
 
 export type SupportServiceDeps = {
   newId: () => string;
@@ -8,8 +8,9 @@ export type SupportServiceDeps = {
   // Email администратора для дубля обращений. Пусто/undefined → письмо не шлётся,
   // обращение только сохраняется в БД.
   supportEmail?: string;
-  // Уведомление о новом обращении в Telegram. undefined → в Telegram не шлём.
-  notifier?: SupportNotifier;
+  // Telegram-клиент доставки обращения: одна тема на пользователя (создаём/переиспользуем),
+  // фолбэк в общий чат. undefined → в Telegram не шлём.
+  telegram?: Pick<TelegramClient, 'createTopic' | 'sendToTopic' | 'sendToGeneral'>;
 };
 
 export type SubmitSupportInput = {
@@ -39,9 +40,11 @@ const sourceLabel: Record<SupportSource, string> = {
 };
 
 // Сервис поддержки без HTTP: сохраняет обращение в repo и (если задан SUPPORT_EMAIL)
-// дублирует письмом администратору. Двусторонняя связь: обращение создаёт тему в Telegram
-// (topicId запоминается), ответ саппорта из той же темы возвращается 'out'-строкой и пушем
-// владельцу. Почта/Telegram — best-effort: их ошибка НЕ роняет запрос, обращение уже в БД.
+// дублирует письмом администратору. Двусторонняя связь: у каждого пользователя ОДНА тема в
+// Telegram — обращение уходит в его существующую тему, а если её нет/она удалена, заводится
+// новая (её topicId запоминается). Ответ саппорта из той же темы возвращается 'out'-строкой
+// и пушем владельцу. Почта/Telegram — best-effort: их ошибка НЕ роняет запрос, обращение уже
+// в БД.
 export function makeSupportService(repo: SupportRepo, mailer: Mailer, deps: SupportServiceDeps) {
   return {
     async submit(input: SubmitSupportInput): Promise<void> {
@@ -53,14 +56,44 @@ export function makeSupportService(repo: SupportRepo, mailer: Mailer, deps: Supp
         `Отправитель: ${sender || '—'}\n\n` +
         input.text;
 
-      // Telegram (best-effort): создаём тему и запоминаем её id для роутинга ответов.
-      // Ошибка не роняет запрос — обращение всё равно сохраним ниже (topicId = null).
+      // Одна тема на пользователя: текущая тема владельца = topicId его последнего сообщения.
+      const owner: SupportOwner = {
+        source: input.source,
+        trainerId: input.trainerId ?? null,
+        clientAccountId: input.clientAccountId ?? null,
+      };
+      const current = await repo.findCurrentTopicForOwner(owner);
+
+      // Доставка (best-effort): шлём в существующую тему; если её нет/удалена (пост упал) —
+      // создаём новую и шлём в неё; если тему завести нельзя — фолбэк в общий чат. Любая
+      // ошибка НЕ роняет запрос — обращение всё равно сохраним ниже (topicId = null).
+      const client = deps.telegram;
       let topicId: number | undefined;
-      if (deps.notifier) {
-        try {
-          topicId = await deps.notifier.notify(title, body);
-        } catch {
-          // доставка best-effort
+      if (client) {
+        if (current != null) {
+          try {
+            await client.sendToTopic(current, body);
+            topicId = current;
+          } catch {
+            // тема удалена/недоступна → создадим новую ниже
+          }
+        }
+        if (topicId === undefined) {
+          const t = await client.createTopic(title);
+          if (t !== undefined) {
+            try {
+              await client.sendToTopic(t, body);
+              topicId = t;
+            } catch {
+              // пост в новую тему упал — оставим topicId undefined
+            }
+          } else {
+            try {
+              await client.sendToGeneral(body);
+            } catch {
+              // общий чат тоже недоступен — доставку пропускаем
+            }
+          }
         }
       }
 

@@ -1,17 +1,10 @@
 // Клиент Telegram Bot API для двусторонней поддержки. Отдельный интерфейс — как Mailer:
 // сервис зависит от абстракции, реализация инъектится модулем. Направления два:
-//  - исходящее (notify/sendToTopic) — обращение/ответ уходит в тему (forum topic);
+//  - исходящее (createTopic/sendToTopic/sendToGeneral) — обращение/ответ уходит в тему
+//    (forum topic) пользователя либо в общий чат (фолбэк, когда темы недоступны);
 //  - входящее (getUpdates) — long-poll забирает ответы саппорта из тем обратно в приложение.
 import { fetch, type Dispatcher } from 'undici';
 import { socksDispatcher } from 'fetch-socks';
-
-// Совместимость с сервисом поддержки: ему достаточно notify (создать тему + запостить).
-// notify возвращает message_thread_id созданной темы (или undefined при откате/ошибке).
-export interface SupportNotifier {
-  // title — заголовок темы (forum topic) на обращение; text — тело сообщения.
-  // Возвращает id темы (message_thread_id) либо undefined, если тему создать не удалось.
-  notify(title: string, text: string): Promise<number | undefined>;
-}
 
 // Ответ саппорта из темы Telegram (результат long-poll getUpdates).
 export type TelegramReply = {
@@ -22,9 +15,18 @@ export type TelegramReply = {
   fromName: string;
 };
 
-// Полный клиент: notify (совместимость) + sendToTopic (ответ в тему) + getUpdates (приём).
-export interface TelegramClient extends SupportNotifier {
+// Полный клиент Telegram-поддержки. Доставка разложена на примитивы: тема создаётся один раз
+// на пользователя (createTopic), сообщения постятся в неё (sendToTopic); при отказе (тема
+// удалена / нет прав) — откат в общий чат (sendToGeneral). getUpdates — приём ответов саппорта.
+export interface TelegramClient {
+  // Создать тему (forum topic) под заголовком title. Возвращает message_thread_id новой темы
+  // либо undefined, если создать не удалось (бот не админ / чат не форум) — сбой логируется.
+  createTopic(title: string): Promise<number | undefined>;
+  // Пост в тему topicId (message_thread_id). КИДАЕТ при ошибке — сервис трактует это как
+  // «тема удалена/недоступна» и заводит новую.
   sendToTopic(topicId: number, text: string): Promise<void>;
+  // Пост в общий чат (без message_thread_id) — фолбэк, когда тему создать не удалось.
+  sendToGeneral(text: string): Promise<void>;
   getUpdates(offset: number | undefined): Promise<TelegramReply[]>;
 }
 
@@ -62,9 +64,10 @@ type TgUpdate = {
   };
 };
 
-// Клиент Telegram-поддержки: на каждое обращение создаётся отдельная тема (forum topic),
-// сообщение постится в неё. Если тему создать нельзя (бот не админ / не форум) —
-// откатываемся на общий чат. Ответы саппорта в темах забираются long-poll getUpdates.
+// Клиент Telegram-поддержки: одна тема (forum topic) на пользователя, все его обращения
+// постятся в неё (createTopic один раз + sendToTopic). Если тему создать нельзя
+// (бот не админ / не форум) — откатываемся на общий чат (sendToGeneral). Ответы саппорта
+// в темах забираются long-poll getUpdates.
 export function makeTelegramClient(
   botToken: string,
   chatId: string,
@@ -97,38 +100,37 @@ export function makeTelegramClient(
   }
 
   return {
-    async notify(title: string, text: string): Promise<number | undefined> {
+    // Создать тему (forum topic). undefined, если создать не удалось (нет прав / чат не
+    // форум) — сбой логируем, submit не роняем (сервис откатится на общий чат).
+    async createTopic(title: string): Promise<number | undefined> {
       try {
-        // Отдельная тема на обращение. Не вышло (нет прав/не форум) → общий чат.
-        let threadId: number | undefined;
-        try {
-          const t = await call<{ message_thread_id?: number }>('createForumTopic', {
-            chat_id: chatId,
-            name: title.slice(0, 128),
-          });
-          threadId = t.result?.message_thread_id;
-        } catch (e) {
-          opts.logWarn?.(`createForumTopic failed, fallback to general chat: ${String(e)}`);
-        }
-        await call('sendMessage', {
+        const t = await call<{ message_thread_id?: number }>('createForumTopic', {
           chat_id: chatId,
-          text,
-          disable_web_page_preview: true,
-          ...(threadId ? { message_thread_id: threadId } : {}),
+          name: title.slice(0, 128),
         });
-        return threadId;
-      } catch (err) {
-        opts.logWarn?.(`support telegram notify failed: ${String(err)}`);
-        throw err;
+        return t.result?.message_thread_id;
+      } catch (e) {
+        opts.logWarn?.(`support telegram createForumTopic failed: ${String(e)}`);
+        return undefined;
       }
     },
 
+    // Пост в тему. КИДАЕТ при ошибке — сервис трактует сбой как «тема удалена» и заводит новую.
     async sendToTopic(topicId: number, text: string): Promise<void> {
       await call('sendMessage', {
         chat_id: chatId,
         text,
         disable_web_page_preview: true,
         message_thread_id: topicId,
+      });
+    },
+
+    // Пост в общий чат (без message_thread_id) — фолбэк, когда тему создать не удалось.
+    async sendToGeneral(text: string): Promise<void> {
+      await call('sendMessage', {
+        chat_id: chatId,
+        text,
+        disable_web_page_preview: true,
       });
     },
 
@@ -164,13 +166,4 @@ export function makeTelegramClient(
       return replies;
     },
   };
-}
-
-// Тонкая обёртка обратной совместимости: сервису поддержки нужен только SupportNotifier.
-export function makeTelegramNotifier(
-  botToken: string,
-  chatId: string,
-  opts: TelegramClientOpts = {},
-): SupportNotifier {
-  return makeTelegramClient(botToken, chatId, opts);
 }
