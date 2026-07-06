@@ -41,6 +41,9 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-FitBond <no-reply@fitbond.ru>}
+      # Telegram-бот саппорта: обращения из «Написать в поддержку» дублируются в чат.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_SUPPORT_CHAT_ID: ${TELEGRAM_SUPPORT_CHAT_ID:-}
       # Папка глобального медиа каталога упражнений (картинки/видео).
       CATALOG_MEDIA_DIR: /data/catalog
       # FCM (нативные пуши): путь к service-account ключу. Без файла push мягко отключён.
