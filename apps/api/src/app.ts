@@ -279,6 +279,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
             botToken: process.env.TELEGRAM_BOT_TOKEN,
             chatId: process.env.TELEGRAM_SUPPORT_CHAT_ID,
             ...(process.env.TELEGRAM_API_BASE ? { apiBase: process.env.TELEGRAM_API_BASE } : {}),
+            ...(process.env.TELEGRAM_SOCKS_PROXY
+              ? { socksProxy: process.env.TELEGRAM_SOCKS_PROXY }
+              : {}),
           },
         }
       : {}),

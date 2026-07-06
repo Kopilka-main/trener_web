@@ -23,13 +23,14 @@ export function registerSupportModule(
     // Telegram-бот саппорта (env TELEGRAM_BOT_TOKEN + TELEGRAM_SUPPORT_CHAT_ID).
     // Оба заданы → дублируем обращение сообщением в чат. apiBase — опциональный
     // релей (TELEGRAM_API_BASE), если api.telegram.org недоступен с сервера.
-    telegram?: { botToken: string; chatId: string; apiBase?: string };
+    telegram?: { botToken: string; chatId: string; apiBase?: string; socksProxy?: string };
   },
 ): void {
   const repo = makeSupportRepo(deps.db);
   const notifier: SupportNotifier | undefined = deps.telegram
     ? makeTelegramNotifier(deps.telegram.botToken, deps.telegram.chatId, {
         ...(deps.telegram.apiBase ? { apiBase: deps.telegram.apiBase } : {}),
+        ...(deps.telegram.socksProxy ? { socksProxy: deps.telegram.socksProxy } : {}),
         logWarn: (m) => app.log.warn(m),
       })
     : undefined;

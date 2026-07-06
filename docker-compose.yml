@@ -44,6 +44,10 @@ services:
       # Telegram-бот саппорта: обращения из «Написать в поддержку» дублируются в чат.
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_SUPPORT_CHAT_ID: ${TELEGRAM_SUPPORT_CHAT_ID:-}
+      # SOCKS5-прокси для Telegram (обход блокировки через SSH-туннель на зарубежный VPS).
+      TELEGRAM_SOCKS_PROXY: ${TELEGRAM_SOCKS_PROXY:-}
+      # Аналитика экранов: ключ админ-выборки GET /api/analytics/sessions (x-admin-key). Пусто → 503.
+      ANALYTICS_ADMIN_KEY: ${ANALYTICS_ADMIN_KEY:-}
       # Папка глобального медиа каталога упражнений (картинки/видео).
       CATALOG_MEDIA_DIR: /data/catalog
       # FCM (нативные пуши): путь к service-account ключу. Без файла push мягко отключён.

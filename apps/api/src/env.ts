@@ -36,6 +36,9 @@ const envSchema = z.object({
   // База Telegram Bot API. Пусто → https://api.telegram.org. Если api.telegram.org
   // недоступен с сервера (блокировка) — указать URL релея-прокси (зарубежный VPS).
   TELEGRAM_API_BASE: z.string().default(''),
+  // SOCKS5-прокси для запросов к Telegram (host:port или socks5://host:port).
+  // Обход блокировки: запрос идёт через SSH-туннель на зарубежный VPS. Пусто → напрямую.
+  TELEGRAM_SOCKS_PROXY: z.string().default(''),
 });
 
 export type Env = z.infer<typeof envSchema>;
