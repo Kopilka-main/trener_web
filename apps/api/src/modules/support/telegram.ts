@@ -5,18 +5,39 @@ export interface SupportNotifier {
   notify(text: string): Promise<void>;
 }
 
-// Отправка сообщения в чат/группу саппорта через Telegram Bot API. Кидает при
-// не-2xx — вызывающий оборачивает в try/catch (доставка best-effort).
-export function makeTelegramNotifier(botToken: string, chatId: string): SupportNotifier {
+export type TelegramNotifierOpts = {
+  // База Bot API. По умолчанию https://api.telegram.org; можно указать релей
+  // (напр. зарубежный VPS-прокси), если api.telegram.org недоступен с сервера.
+  apiBase?: string;
+  // Логгер для сбоя доставки (доставка best-effort, но молчать не должна).
+  logWarn?: (msg: string) => void;
+};
+
+// Отправка сообщения в чат/группу саппорта через Telegram Bot API. Логирует и
+// кидает при сбое/не-2xx — вызывающий оборачивает в try/catch (best-effort).
+export function makeTelegramNotifier(
+  botToken: string,
+  chatId: string,
+  opts: TelegramNotifierOpts = {},
+): SupportNotifier {
+  const base = opts.apiBase?.trim()
+    ? opts.apiBase.trim().replace(/\/+$/, '')
+    : 'https://api.telegram.org';
   return {
     async notify(text: string): Promise<void> {
-      const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
-      });
-      if (!res.ok) {
-        throw new Error(`telegram sendMessage failed: ${res.status}`);
+      try {
+        const res = await fetch(`${base}/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
+        });
+        if (!res.ok) {
+          const body = await res.text().catch(() => '');
+          throw new Error(`telegram sendMessage ${res.status}: ${body.slice(0, 200)}`);
+        }
+      } catch (err) {
+        opts.logWarn?.(`support telegram notify failed: ${String(err)}`);
+        throw err;
       }
     },
   };

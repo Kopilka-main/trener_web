@@ -33,6 +33,9 @@ const envSchema = z.object({
   // → в Telegram не шлём (только БД). Токен от @BotFather; chat_id — id группы/чата.
   TELEGRAM_BOT_TOKEN: z.string().default(''),
   TELEGRAM_SUPPORT_CHAT_ID: z.string().default(''),
+  // База Telegram Bot API. Пусто → https://api.telegram.org. Если api.telegram.org
+  // недоступен с сервера (блокировка) — указать URL релея-прокси (зарубежный VPS).
+  TELEGRAM_API_BASE: z.string().default(''),
 });
 
 export type Env = z.infer<typeof envSchema>;
