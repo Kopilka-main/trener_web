@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../api/onboarding_flag.dart';
 import '../api/trainer_auth.dart';
 import '../widgets/auth_form.dart';
 
@@ -56,6 +57,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     });
     try {
       await ref.read(trainerApiProvider).register(email, password, first, last);
+      // Новый тренер: помечаем онбординг к показу (register уже установил токен →
+      // сессия authenticated, флаг поднимаем следом — гейт поймает переход).
+      // При входе через логин этот хук не срабатывает, поэтому существующие
+      // пользователи карусель не видят.
+      ref.read(onboardingPendingProvider.notifier).setPending();
     } catch (e) {
       setState(() =>
           _error = describeApiError(e, fallback: 'Не удалось зарегистрироваться. Попробуйте снова.'));

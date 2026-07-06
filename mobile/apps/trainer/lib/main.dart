@@ -7,6 +7,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'analytics_hook.dart';
 import 'api/trainer_calendar.dart';
 import 'api/trainer_chat.dart';
 import 'api/trainer_home.dart';
@@ -14,6 +15,7 @@ import 'router.dart';
 import 'widgets/active_workout_fab.dart';
 import 'widgets/birthday_gate.dart';
 import 'widgets/nav_fab.dart';
+import 'widgets/onboarding_gate.dart';
 
 /// Наблюдатель data-провайдеров: при смене пользователя сбрасываем их кэш,
 /// иначе после входа под другим аккаунтом видны данные предыдущего.
@@ -102,6 +104,7 @@ class TrainerApp extends ConsumerStatefulWidget {
 class _TrainerAppState extends ConsumerState<TrainerApp> {
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSub;
+  ScreenAnalytics? _analytics;
 
   @override
   void initState() {
@@ -109,6 +112,8 @@ class _TrainerAppState extends ConsumerState<TrainerApp> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(sessionProvider.notifier).bootstrap();
       _initDeepLinks();
+      // Лог экранов (аналитика): один на приложение, слушает смену маршрута.
+      _analytics = ScreenAnalytics(ref)..start();
     });
   }
 
@@ -132,6 +137,7 @@ class _TrainerAppState extends ConsumerState<TrainerApp> {
 
   @override
   void dispose() {
+    _analytics?.dispose();
     _linkSub?.cancel();
     super.dispose();
   }
@@ -175,7 +181,9 @@ class _TrainerAppState extends ConsumerState<TrainerApp> {
       ],
       builder: (BuildContext context, Widget? child) => GlobalNavFab(
         child: ActiveWorkoutFab(
-          child: BirthdayGate(child: child ?? const SizedBox.shrink()),
+          child: BirthdayGate(
+            child: OnboardingGate(child: child ?? const SizedBox.shrink()),
+          ),
         ),
       ),
       routerConfig: router,

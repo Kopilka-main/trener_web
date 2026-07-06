@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'analytics_hook.dart';
 import 'api/client_calendar.dart';
 import 'api/client_chat.dart';
 import 'api/client_home.dart';
@@ -10,6 +11,7 @@ import 'api/client_packages.dart';
 import 'api/client_workouts.dart';
 import 'router.dart';
 import 'widgets/birthday_gate.dart';
+import 'widgets/onboarding_gate.dart';
 
 /// Наблюдатель data-провайдеров: при смене пользователя сбрасываем их кэш,
 /// иначе после входа под другим аккаунтом видны данные предыдущего.
@@ -69,12 +71,22 @@ class ClientApp extends ConsumerStatefulWidget {
 }
 
 class _ClientAppState extends ConsumerState<ClientApp> {
+  ScreenAnalytics? _analytics;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(sessionProvider.notifier).bootstrap();
+      // Лог экранов (аналитика): один на приложение, слушает смену маршрута.
+      _analytics = ScreenAnalytics(ref)..start();
     });
+  }
+
+  @override
+  void dispose() {
+    _analytics?.dispose();
+    super.dispose();
   }
 
   @override
@@ -107,8 +119,9 @@ class _ClientAppState extends ConsumerState<ClientApp> {
       theme: buildAppTheme(AppColors.light),
       darkTheme: buildAppTheme(AppColors.dark),
       themeMode: ref.watch(themeModeProvider),
-      builder: (BuildContext context, Widget? child) =>
-          BirthdayGate(child: child ?? const SizedBox.shrink()),
+      builder: (BuildContext context, Widget? child) => BirthdayGate(
+        child: OnboardingGate(child: child ?? const SizedBox.shrink()),
+      ),
       routerConfig: router,
     );
   }

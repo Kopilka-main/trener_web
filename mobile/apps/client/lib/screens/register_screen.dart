@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/client_auth.dart';
+import '../api/onboarding_flag.dart';
 import '../widgets/auth_form.dart';
 
 final RegExp _emailRe = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
@@ -66,6 +67,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             _first.text.trim(),
             _last.text.trim(),
           );
+      // Новый аккаунт: один раз после регистрации показать онбординг с QR/ID
+      // для тренера (гейт снимет флаг по «Готово»). Логин этот флаг не ставит.
+      ref.read(onboardingPendingProvider.notifier).setPending();
       // Навигации нет: роутер уведёт в приложение по смене состояния сессии.
     } catch (e) {
       if (apiErrorCode(e) == 'EMAIL_TAKEN') {

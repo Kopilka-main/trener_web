@@ -2,6 +2,7 @@
 /// Модели и пуши добавятся по мере роста фаз.
 library;
 
+export 'src/analytics/screen_log.dart';
 export 'src/api/api_client.dart';
 export 'src/api/api_provider.dart';
 export 'src/auth/oauth_availability.dart';
