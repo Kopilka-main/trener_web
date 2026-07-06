@@ -4,7 +4,8 @@ import { fetch, type Dispatcher } from 'undici';
 import { socksDispatcher } from 'fetch-socks';
 
 export interface SupportNotifier {
-  notify(text: string): Promise<void>;
+  // title — заголовок темы (forum topic) на обращение; text — тело сообщения.
+  notify(title: string, text: string): Promise<void>;
 }
 
 export type TelegramNotifierOpts = {
@@ -29,8 +30,11 @@ function parseSocks(v: string): { host: string; port: number } | null {
   return { host, port };
 }
 
-// Отправка сообщения в чат/группу саппорта через Telegram Bot API. Логирует и
-// кидает при сбое/не-2xx — вызывающий оборачивает в try/catch (best-effort).
+type TgResult = { ok: boolean; description?: string; result?: { message_thread_id?: number } };
+
+// Отправка обращений в Telegram: на каждое создаётся отдельная тема (forum topic),
+// сообщение постится в неё. Если тему создать нельзя (бот не админ / не форум) —
+// откатываемся на общий чат. Логирует и кидает при сбое (вызывающий — best-effort).
 export function makeTelegramNotifier(
   botToken: string,
   chatId: string,
@@ -43,19 +47,40 @@ export function makeTelegramNotifier(
   const dispatcher: Dispatcher | undefined = socks
     ? socksDispatcher({ type: 5, host: socks.host, port: socks.port })
     : undefined;
+
+  async function call(method: string, payload: Record<string, unknown>): Promise<TgResult> {
+    const res = await fetch(`${base}/bot${botToken}/${method}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+      ...(dispatcher ? { dispatcher } : {}),
+    });
+    const json = (await res.json().catch(() => ({ ok: false }))) as TgResult;
+    if (!res.ok || !json.ok) {
+      throw new Error(
+        `telegram ${method} ${res.status}: ${(json.description ?? '').slice(0, 200)}`,
+      );
+    }
+    return json;
+  }
+
   return {
-    async notify(text: string): Promise<void> {
+    async notify(title: string, text: string): Promise<void> {
       try {
-        const res = await fetch(`${base}/bot${botToken}/sendMessage`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
-          ...(dispatcher ? { dispatcher } : {}),
-        });
-        if (!res.ok) {
-          const body = await res.text().catch(() => '');
-          throw new Error(`telegram sendMessage ${res.status}: ${body.slice(0, 200)}`);
+        // Отдельная тема на обращение. Не вышло (нет прав/не форум) → общий чат.
+        let threadId: number | undefined;
+        try {
+          const t = await call('createForumTopic', { chat_id: chatId, name: title.slice(0, 128) });
+          threadId = t.result?.message_thread_id;
+        } catch (e) {
+          opts.logWarn?.(`createForumTopic failed, fallback to general chat: ${String(e)}`);
         }
+        await call('sendMessage', {
+          chat_id: chatId,
+          text,
+          disable_web_page_preview: true,
+          ...(threadId ? { message_thread_id: threadId } : {}),
+        });
       } catch (err) {
         opts.logWarn?.(`support telegram notify failed: ${String(err)}`);
         throw err;

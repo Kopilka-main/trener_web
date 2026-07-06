@@ -45,6 +45,8 @@ export function makeSupportService(repo: SupportRepo, mailer: Mailer, deps: Supp
       });
 
       const sender = [input.name, input.email].filter((v) => !!v).join(' ');
+      // Заголовок темы (forum topic) на обращение: источник + отправитель.
+      const title = `🆘 ${sourceLabel[input.source]} · ${input.name || input.email || 'аноним'}`;
       const body =
         `Источник: ${sourceLabel[input.source]}\n` +
         `Отправитель: ${sender || '—'}\n\n` +
@@ -53,7 +55,7 @@ export function makeSupportService(repo: SupportRepo, mailer: Mailer, deps: Supp
       // Telegram (best-effort): ошибка не роняет запрос — обращение уже в БД.
       if (deps.notifier) {
         try {
-          await deps.notifier.notify(`🆘 Обращение в поддержку\n\n${body}`);
+          await deps.notifier.notify(title, body);
         } catch {
           // доставка best-effort
         }

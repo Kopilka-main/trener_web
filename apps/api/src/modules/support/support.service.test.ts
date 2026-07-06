@@ -18,7 +18,7 @@ function fakeMailer(send: (email: Email) => Promise<void> = () => Promise.resolv
 }
 
 function fakeNotifier(
-  notify: (text: string) => Promise<void> = () => Promise.resolve(),
+  notify: (title: string, text: string) => Promise<void> = () => Promise.resolve(),
 ): SupportNotifier {
   return { notify: vi.fn(notify) };
 }
@@ -110,7 +110,7 @@ describe('support.service', () => {
   });
 
   it('при заданном notifier шлёт уведомление в Telegram с текстом и источником', async () => {
-    const notify = vi.fn((_text: string) => Promise.resolve());
+    const notify = vi.fn((_title: string, _text: string) => Promise.resolve());
     const svc = makeSupportService(fakeRepo(), fakeMailer(), {
       ...baseDeps,
       notifier: fakeNotifier(notify),
@@ -119,14 +119,15 @@ describe('support.service', () => {
     await svc.submit({ source: 'client', clientAccountId: 'C', text: 'Вопрос по оплате' });
 
     expect(notify).toHaveBeenCalledTimes(1);
-    const text = notify.mock.calls[0]![0];
+    const [title, text] = notify.mock.calls[0]!;
+    expect(title).toContain('клиент');
     expect(text).toContain('Вопрос по оплате');
     expect(text).toContain('клиент');
   });
 
   it('ошибка notifier НЕ роняет submit — обращение всё равно сохранено', async () => {
     const insert = vi.fn(() => Promise.resolve());
-    const notify = vi.fn((_text: string) => Promise.reject(new Error('tg down')));
+    const notify = vi.fn((_title: string, _text: string) => Promise.reject(new Error('tg down')));
     const svc = makeSupportService(fakeRepo({ insert }), fakeMailer(), {
       ...baseDeps,
       notifier: fakeNotifier(notify),
