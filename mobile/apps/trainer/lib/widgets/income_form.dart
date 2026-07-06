@@ -286,8 +286,9 @@ class _IncomeFormState extends ConsumerState<IncomeForm> {
         return;
       }
     } else if (_isPackage) {
-      if (_totalNum <= 0) {
-        m.showSnackBar(const SnackBar(content: Text('Укажите сумму пакета или стоимость тренировки')));
+      // Пакет может быть бесплатным (0 ₽) — важно лишь количество тренировок.
+      if (_lessonsNum <= 0) {
+        m.showSnackBar(const SnackBar(content: Text('Укажите количество тренировок')));
         return;
       }
     } else if (_priceNum <= 0) {

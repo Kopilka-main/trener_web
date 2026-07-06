@@ -12,13 +12,14 @@ const noteField = z.string().trim().max(2000).nullish();
 const dateField = z.string().regex(/^\d{4}-\d{2}-\d{2}$/); // YYYY-MM-DD
 
 // --- Создание пакета ---
-// lessonsPaid/pricePerLesson допускают 0 — для абонемента (только период).
+// lessonsPaid/pricePerLesson/totalPaid допускают 0: абонемент (только период) и
+// бесплатный пакет тренировок (N тренировок с нулевой стоимостью).
 
 export const createPackageRequestSchema = z.object({
   kind: packageKindSchema.default('package'),
   lessonsPaid: z.number().int().min(0),
   pricePerLesson: z.number().min(0),
-  totalPaid: z.number().positive(),
+  totalPaid: z.number().nonnegative(),
   workoutType: workoutTypeField,
   paidAt: dateField.nullish(), // дата оплаты
   startsAt: dateField, // дата начала
