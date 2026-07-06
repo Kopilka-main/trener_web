@@ -17,3 +17,5 @@ export * from './files.js';
 export * from './progress-photos.js';
 export * from './medical.js';
 export * from './telemetry.js';
+export * from './analytics.js';
+export * from './support.js';

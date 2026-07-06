@@ -26,6 +26,9 @@ const envSchema = z.object({
   SMTP_USER: z.string().default(''),
   SMTP_PASS: z.string().default(''),
   SMTP_FROM: z.string().default('FitBond <no-reply@fitbond.ru>'),
+  // Email администратора для дубля обращений в поддержку. Пусто → обращение только
+  // сохраняется в БД (support_messages), письмо не шлётся.
+  SUPPORT_EMAIL: z.string().default(''),
 });
 
 export type Env = z.infer<typeof envSchema>;

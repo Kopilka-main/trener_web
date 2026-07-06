@@ -680,6 +680,26 @@ export const medicalRecords = pgTable(
   (t) => [index('idx_medical_records_trainer_client_date').on(t.trainerId, t.clientId, t.date)],
 );
 
+// Обращение в поддержку из тренерского/клиентского приложения. Всегда сохраняется здесь
+// и дублируется письмом администратору (если задан SUPPORT_EMAIL). Админ-инбокс без
+// тенант-скоупа (как telemetry/analytics): владелец необязателен, source различает контур,
+// email/name — снимок отправителя на момент обращения. FK намеренно нет: запись —
+// аудит, переживает удаление отправителя.
+export const supportMessages = pgTable(
+  'support_messages',
+  {
+    id: text('id').primaryKey(),
+    source: text('source').$type<'trainer' | 'client'>().notNull(),
+    trainerId: text('trainer_id'),
+    clientAccountId: text('client_account_id'),
+    email: text('email'),
+    name: text('name'),
+    text: text('text').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check('support_messages_source_chk', sql`${t.source} IN ('trainer', 'client')`)],
+);
+
 export const analyticsEvents = pgTable(
   'analytics_events',
   {
@@ -791,3 +811,34 @@ export const pushReminders = pgTable('push_reminders', {
   key: text('key').primaryKey(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Аналитика экранов: приложение (тренер/клиент) шлёт лог «какой экран открывали и
+// сколько секунд». Одна строка = одно событие. Админ-данные без тенант-скоупа и без FK
+// (как telemetry): субъект — ЛИБО тренер, ЛИБО клиент (subject_type + subject_id).
+export const analyticsScreenEvents = pgTable(
+  'analytics_screen_events',
+  {
+    id: text('id').primaryKey(),
+    subjectType: text('subject_type').$type<'trainer' | 'client'>().notNull(),
+    subjectId: text('subject_id').notNull(),
+    sessionId: text('session_id').notNull(),
+    screen: text('screen').notNull(),
+    durationSec: integer('duration_sec').notNull(),
+    enteredAt: timestamp('entered_at', { withTimezone: true }).notNull(),
+    appVersion: text('app_version'),
+    platform: text('platform'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('idx_analytics_screen_events_subject_session').on(
+      t.subjectType,
+      t.subjectId,
+      t.sessionId,
+    ),
+    index('idx_analytics_screen_events_subject_entered').on(t.subjectId, t.enteredAt),
+    check(
+      'analytics_screen_events_subject_type_chk',
+      sql`${t.subjectType} IN ('trainer', 'client')`,
+    ),
+  ],
+);

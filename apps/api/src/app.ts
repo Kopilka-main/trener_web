@@ -41,7 +41,9 @@ import { registerFilesModule } from './modules/files/files.module.js';
 import { catalogMediaRoutes } from './modules/catalog-media/catalog-media.routes.js';
 import { registerProgressPhotosModule } from './modules/progress-photos/progress-photos.module.js';
 import { registerMedicalModule } from './modules/medical-records/medical.module.js';
+import { registerSupportModule } from './modules/support/support.module.js';
 import { makeTelemetry, registerTelemetryRoutes } from './modules/telemetry/telemetry.module.js';
+import { registerAnalyticsModule } from './modules/analytics/analytics.module.js';
 import { registerPushModule, type VapidConfig } from './modules/push/push.module.js';
 import { registerOAuthModule } from './modules/oauth/oauth.module.js';
 import type { PushService } from './modules/push/push.service.js';
@@ -197,6 +199,15 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
   await registerTelemetryRoutes(app, telemetry);
 
+  // Аналитика экранов: приём от тренера/клиента + админ-выборка сессий под x-admin-key.
+  // Ключ читаем из env здесь; пустой → GET /api/analytics/sessions вернёт 503.
+  registerAnalyticsModule(app, {
+    db: deps.db,
+    newId: clock.newId,
+    resolveScope: (id) => clientAuthSvc.resolveScope(id),
+    ...(process.env.ANALYTICS_ADMIN_KEY ? { adminKey: process.env.ANALYTICS_ADMIN_KEY } : {}),
+  });
+
   registerClientsModule(app, {
     db: deps.db,
     storage,
@@ -252,6 +263,17 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   catalogMediaRoutes(app, deps.catalogMediaDir ?? path.resolve(process.cwd(), 'media/catalog'));
   registerProgressPhotosModule(app, { db: deps.db, storage, clock });
   registerMedicalModule(app, { db: deps.db, storage, clock });
+
+  // «Написать в поддержку» (оба контура): обращение в БД + дубль письмом администратору.
+  // Клиентская часть скоуплена через resolveScope (trainerId в записи — best-effort).
+  // SUPPORT_EMAIL читаем из env здесь; пусто → письмо не шлётся, только запись в БД.
+  registerSupportModule(app, {
+    db: deps.db,
+    clock,
+    mailer,
+    resolveScope: (id) => clientAuthSvc.resolveScope(id),
+    ...(process.env.SUPPORT_EMAIL ? { supportEmail: process.env.SUPPORT_EMAIL } : {}),
+  });
 
   registerCalendarModule(app, { db: deps.db, clock });
 
