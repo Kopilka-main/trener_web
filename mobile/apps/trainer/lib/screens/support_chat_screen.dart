@@ -133,7 +133,7 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen> {
             decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(24)),
             padding: const EdgeInsets.fromLTRB(16, 2, 6, 2),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
                 Expanded(
                   child: TextField(
