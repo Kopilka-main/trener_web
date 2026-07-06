@@ -11,6 +11,10 @@ export type SupportPollerDeps = {
   logger: (msg: string, err?: unknown) => void;
   // Пауза перед повтором после ошибки (по умолчанию 5с). Не роняем процесс.
   backoffMs?: number;
+  // Пауза между короткими опросами, когда новых ответов нет (по умолчанию 2с).
+  // Long-poll (getUpdates timeout>0) не проходит через SOCKS-туннель, поэтому
+  // опрашиваем коротко (timeout=0) с этой паузой.
+  pollIntervalMs?: number;
 };
 
 function sleep(ms: number): Promise<void> {
@@ -24,6 +28,7 @@ export function startSupportPoller(deps: SupportPollerDeps): () => void {
   let stopped = false;
   let nextOffset: number | undefined;
   const backoff = deps.backoffMs ?? 5000;
+  const pollMs = deps.pollIntervalMs ?? 2000;
 
   async function loop(): Promise<void> {
     while (!stopped) {
@@ -42,6 +47,9 @@ export function startSupportPoller(deps: SupportPollerDeps): () => void {
         }
         // Подтверждаем обработанный батч: следующий getUpdates сдвинет очередь.
         if (maxId >= 0) nextOffset = maxId + 1;
+        // Пусто → пауза перед следующим коротким опросом; есть апдейты → сразу
+        // за следующей порцией (дренаж без задержки).
+        if (!stopped && updates.length === 0) await sleep(pollMs);
       } catch (err) {
         deps.logger('[support-poller] getUpdates failed', err);
         await sleep(backoff);

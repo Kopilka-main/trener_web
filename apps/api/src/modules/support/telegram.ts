@@ -133,9 +133,12 @@ export function makeTelegramClient(
     },
 
     async getUpdates(offset: number | undefined): Promise<TelegramReply[]> {
+      // timeout: 0 (короткий опрос) — long-poll (timeout>0) не проходит через SOCKS-
+      // туннель (соединение долго висит → SOCKS establish timeout). Поллер сам делает
+      // паузу между короткими запросами.
       const r = await call<TgUpdate[]>('getUpdates', {
         ...(offset !== undefined ? { offset } : {}),
-        timeout: 25,
+        timeout: 0,
         allowed_updates: ['message'],
       });
       const replies: TelegramReply[] = [];
