@@ -7,6 +7,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../api/client_auth.dart';
 import '../api/client_trainer.dart';
+import 'help_screen.dart';
 import 'profile_edit_screen.dart';
 
 /// Профиль клиента (зеркало web ProfilePage, режим просмотра): карточка клиента,
@@ -86,6 +87,12 @@ class SettingsScreen extends ConsumerWidget {
               _SectionLabel('ID пользователя'),
               const SizedBox(height: 6),
               _IdCard(id: a.id),
+              const SizedBox(height: 20),
+              _HelpButton(
+                onTap: () => Navigator.of(context).push<void>(
+                  MaterialPageRoute<void>(builder: (_) => const HelpScreen()),
+                ),
+              ),
               const SizedBox(height: 24),
               _LogoutButton(onLogout: () => _confirmLogout(context, ref)),
               if (a.pendingDeletionAt == null) ...<Widget>[
@@ -382,6 +389,35 @@ class _LogoutButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
         child: Text('Выйти', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
+      ),
+    );
+  }
+}
+
+/// Пункт «Помощь с приложением» → экран FAQ и обращения в поддержку.
+class _HelpButton extends StatelessWidget {
+  const _HelpButton({required this.onTap});
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
+        child: Row(
+          children: <Widget>[
+            Icon(Icons.help_outline, size: 22, color: c.ink),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text('Помощь с приложением',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+            ),
+            Icon(Icons.chevron_right, size: 20, color: c.inkMutedXl),
+          ],
+        ),
       ),
     );
   }

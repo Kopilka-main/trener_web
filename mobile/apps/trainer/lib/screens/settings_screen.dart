@@ -7,6 +7,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../api/trainer_auth.dart';
 import '../api/trainer_gyms.dart';
 import 'calendar_sync_screen.dart';
+import 'help_screen.dart';
 import 'profile_edit_screen.dart';
 
 /// Заголовок секции (mono uppercase) — как в вебе.
@@ -133,6 +134,17 @@ class SettingsScreen extends ConsumerWidget {
               trailing: Icon(Icons.chevron_right, color: c.inkMuted),
               onTap: () => Navigator.of(context).push<void>(
                 MaterialPageRoute<void>(builder: (_) => const CalendarSyncScreen()),
+              ),
+            ),
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              leading: Icon(Icons.help_outline, color: c.ink),
+              title: const Text('Помощь с приложением'),
+              subtitle: Text('Частые вопросы и поддержка',
+                  style: TextStyle(fontSize: 12, color: c.inkMuted)),
+              trailing: Icon(Icons.chevron_right, color: c.inkMuted),
+              onTap: () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(builder: (_) => const HelpScreen()),
               ),
             ),
             const Divider(),
