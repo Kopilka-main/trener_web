@@ -18,6 +18,7 @@ class KnowledgeScreen extends ConsumerStatefulWidget {
 
 class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
   bool _templatesTab = true;
+  bool _personal = false; // вкладка «Тренировки»: false → общие, true → персональные
   String _query = '';
   String _group = '';
   String _subgroup = ''; // второй уровень (только вкладка «Упражнения»)
@@ -91,6 +92,8 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
                 ),
               ),
             ),
+            // Подпереключатель «Общие / Персональные» — только на вкладке «Тренировки».
+            if (_templatesTab) _buildScopeSwitcher(c),
             Expanded(child: _templatesTab ? _buildTemplates(c) : _buildExercises(c)),
           ],
         ),
@@ -194,19 +197,35 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
     );
   }
 
+  /// Подпереключатель scope шаблонов: «Общие» (clientId == null) / «Персональные».
+  Widget _buildScopeSwitcher(AppColors c) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: Row(
+          children: <Widget>[
+            _Chip(label: 'Общие', active: !_personal, onTap: () => setState(() => _personal = false)),
+            _Chip(label: 'Персональные', active: _personal, onTap: () => setState(() => _personal = true)),
+          ],
+        ),
+      );
+
   Widget _buildTemplates(AppColors c) {
     final AsyncValue<List<WorkoutTemplate>> templates = ref.watch(trainerTemplatesProvider);
     return templates.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (Object e, _) => _err(c, () => ref.invalidate(trainerTemplatesProvider)),
       data: (List<WorkoutTemplate> all) {
+        // Общие/персональные по clientId. Чипы categoryTag — только для общих.
+        final List<WorkoutTemplate> general =
+            all.where((WorkoutTemplate t) => !t.isPersonal).toList();
+        final List<WorkoutTemplate> scoped =
+            _personal ? all.where((WorkoutTemplate t) => t.isPersonal).toList() : general;
         final List<String> tags = <String>{
-          for (final WorkoutTemplate t in all)
+          for (final WorkoutTemplate t in general)
             if (t.categoryTag?.isNotEmpty == true) t.categoryTag!,
         }.toList()
           ..sort();
-        final List<WorkoutTemplate> filtered = all.where((WorkoutTemplate t) {
-          if (_group.isNotEmpty && t.categoryTag != _group) return false;
+        final List<WorkoutTemplate> filtered = scoped.where((WorkoutTemplate t) {
+          if (!_personal && _group.isNotEmpty && t.categoryTag != _group) return false;
           return true;
         }).toList();
         final List<WorkoutTemplate> list =
@@ -214,10 +233,14 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
         if (all.isEmpty) return _emptyTemplates(c);
         return Column(
           children: <Widget>[
-            _groupChips(c, tags),
+            if (!_personal) _groupChips(c, tags),
             Expanded(
               child: list.isEmpty
-                  ? _empty(c, 'Ничего не нашлось.')
+                  ? _empty(
+                      c,
+                      scoped.isEmpty
+                          ? (_personal ? 'Пока нет персональных тренировок.' : 'Пока нет общих тренировок.')
+                          : 'Ничего не нашлось.')
                   : ListView.builder(
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
                       itemCount: list.length,
@@ -260,6 +283,11 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
                                         ].join(' · '),
                                         style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500),
                                       ),
+                                      if (t.isPersonal && t.clientName?.isNotEmpty == true)
+                                        Text('для: ${t.clientName}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
                                     ],
                                   ),
                                 ),

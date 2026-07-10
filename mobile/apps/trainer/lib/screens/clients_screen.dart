@@ -21,6 +21,7 @@ import 'calendar_screen.dart';
 import 'client_edit_screen.dart';
 import 'client_medical_screen.dart';
 import 'exercise_progress.dart';
+import 'template_edit_screen.dart';
 
 enum _Format { all, online, gym }
 
@@ -998,6 +999,17 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
     }
   }
 
+  /// Создать ПЕРСОНАЛЬНЫЙ шаблон тренировки для этого клиента (база знаний,
+  /// scope = клиент). Сразу назначать не нужно — шаблон появится в базе.
+  Future<void> _createTemplate() async {
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => TemplateEditScreen(clientId: _cid, clientName: widget.client.fullName),
+      ),
+    );
+    ref.invalidate(trainerTemplatesProvider);
+  }
+
   Future<void> _pickTemplate({bool excluded = false}) async {
     final WorkoutTemplate? t = await showModalBottomSheet<WorkoutTemplate>(
       context: context,
@@ -1005,6 +1017,7 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) => _TemplatePickerSheet(
+        clientId: _cid,
         onCreateNew: () =>
             _createAndOpen('Новая тренировка', <Map<String, dynamic>>[], excluded: excluded),
       ),
@@ -1263,6 +1276,7 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
                   busy: _busy,
                   onCreate: () => _createAndOpen('Новая тренировка', <Map<String, dynamic>>[]),
                   onTemplate: _pickTemplate,
+                  onCreateTemplate: _createTemplate,
                 ),
               if (history.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 20),
@@ -1556,12 +1570,18 @@ class _CurrentWorkoutCard extends StatelessWidget {
   }
 }
 
-/// Пустая «ближайшая»: создать пустую / выбрать из базы.
+/// Пустая «ближайшая»: создать пустую / выбрать из базы / создать шаблон клиенту.
 class _EmptyCurrent extends StatelessWidget {
-  const _EmptyCurrent({required this.busy, required this.onCreate, required this.onTemplate});
+  const _EmptyCurrent({
+    required this.busy,
+    required this.onCreate,
+    required this.onTemplate,
+    required this.onCreateTemplate,
+  });
   final bool busy;
   final VoidCallback onCreate;
   final VoidCallback onTemplate;
+  final VoidCallback onCreateTemplate;
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
@@ -1595,6 +1615,16 @@ class _EmptyCurrent extends StatelessWidget {
               child: const Text('Выбрать из базы'),
             ),
           ),
+          const SizedBox(height: 8),
+          // Создать персональный шаблон тренировки для этого клиента.
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: busy ? null : onCreateTemplate,
+              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+              child: const Text('Создать тренировку'),
+            ),
+          ),
         ],
       ),
     );
@@ -1603,13 +1633,19 @@ class _EmptyCurrent extends StatelessWidget {
 
 /// Шит выбора шаблона тренировки.
 class _TemplatePickerSheet extends ConsumerWidget {
-  const _TemplatePickerSheet({this.onCreateNew});
+  const _TemplatePickerSheet({required this.clientId, this.onCreateNew});
+  // Клиент, для которого выбираем: показываем общие + его персональные шаблоны.
+  final String clientId;
   // Вызывается из пустого состояния (шаблонов нет) — создать тренировку с нуля.
   final VoidCallback? onCreateNew;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AppColors c = context.colors;
-    final List<WorkoutTemplate> templates = ref.watch(trainerTemplatesProvider).valueOrNull ?? <WorkoutTemplate>[];
+    // Общие (clientId == null) + персональные этого клиента.
+    final List<WorkoutTemplate> templates =
+        (ref.watch(trainerTemplatesProvider).valueOrNull ?? <WorkoutTemplate>[])
+            .where((WorkoutTemplate t) => t.clientId == null || t.clientId == clientId)
+            .toList();
     return SizedBox(
       height: MediaQuery.of(context).size.height * 0.7,
       child: Column(
@@ -2840,47 +2876,55 @@ class _MeasurementsBlock extends ConsumerWidget {
       error: (Object e, _) => const _Empty('Не удалось загрузить'),
       data: (List<TMeasurement> all) {
         if (all.isEmpty) return const _Empty('Замеров пока нет');
-        final TMeasurement last = all.first;
-        final List<String> chips = <String>[
-          if (last.weightKg != null) '${last.weightKg} кг',
-          if (last.bodyFatPct != null) '${last.bodyFatPct}% жира',
-          ...last.metrics.entries.map((MapEntry<String, num> e) => '${e.key} ${e.value}'),
-        ];
-        return Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Text(_date(last.date), style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
-                  const SizedBox(width: 8),
-                  Text('· ${last.createdByClient ? 'Клиент' : 'Тренер'}',
-                      style: TextStyle(fontSize: 12, color: c.inkMutedXl)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: chips
-                    .map((String s) => Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(color: c.chip, borderRadius: BorderRadius.circular(10)),
-                          child: Text(s, style: TextStyle(fontSize: 13, color: c.ink)),
-                        ))
-                    .toList(),
-              ),
-              if (all.length > 1) ...<Widget>[
-                const SizedBox(height: 8),
-                Text('Всего замеров: ${all.length}',
-                    style: TextStyle(fontSize: 12, color: c.inkMutedXl)),
-              ],
+        // Показываем ВСЕ замеры (newest-first), каждый — отдельной карточкой.
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            for (int i = 0; i < all.length; i++) ...<Widget>[
+              if (i > 0) const SizedBox(height: 12),
+              _measureCard(c, all[i]),
             ],
-          ),
+          ],
         );
       },
+    );
+  }
+
+  Widget _measureCard(AppColors c, TMeasurement m) {
+    final List<String> chips = <String>[
+      if (m.weightKg != null) '${m.weightKg} кг',
+      if (m.skeletalMuscleKg != null) 'Мышцы ${m.skeletalMuscleKg} кг',
+      if (m.bodyFatPct != null) '${m.bodyFatPct}% жира',
+      ...m.metrics.entries.map((MapEntry<String, num> e) => '${e.key} ${e.value}'),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Text(_date(m.date), style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+              const SizedBox(width: 8),
+              Text('· ${m.createdByClient ? 'Клиент' : 'Тренер'}',
+                  style: TextStyle(fontSize: 12, color: c.inkMutedXl)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: chips
+                .map((String s) => Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(color: c.chip, borderRadius: BorderRadius.circular(10)),
+                      child: Text(s, style: TextStyle(fontSize: 13, color: c.ink)),
+                    ))
+                .toList(),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2945,9 +2989,10 @@ class _MetricDef {
   final String unit;
 }
 
-/// «Состав тела» (2 колонки у клиента) — вес и % жира.
+/// «Состав тела» (3 колонки) — вес, скелетные мышцы, % жира.
 const List<_MetricDef> _kBodyComposition = <_MetricDef>[
   _MetricDef('weightKg', 'Вес', 'кг'),
+  _MetricDef('skeletalMuscleKg', 'Скел. мышцы', 'кг'),
   _MetricDef('bodyFatPct', '% жира', '%'),
 ];
 
@@ -2959,7 +3004,6 @@ const List<_MetricDef> _kGirths = <_MetricDef>[
   _MetricDef('waistCm', 'Талия', 'см'),
   _MetricDef('bellyCm', 'Живот', 'см'),
   _MetricDef('glutesCm', 'Ягодицы', 'см'),
-  _MetricDef('hipsCm', 'Бёдра', 'см'),
   _MetricDef('thighCm', 'Бедро', 'см'),
   _MetricDef('calfCm', 'Голень', 'см'),
 ];

@@ -73,12 +73,21 @@ class WorkoutTemplate {
     required this.categoryTag,
     required this.shortDescription,
     required this.exercises,
+    this.clientId,
+    this.clientName,
   });
   final String id;
   final String name;
   final String? categoryTag;
   final String? shortDescription;
   final List<TemplateExercise> exercises;
+
+  /// Персональный шаблон привязан к клиенту (`clientId != null`, `clientName` —
+  /// его имя). Общий шаблон — оба null.
+  final String? clientId;
+  final String? clientName;
+
+  bool get isPersonal => clientId != null;
 
   factory WorkoutTemplate.fromJson(Map<String, dynamic> j) => WorkoutTemplate(
         id: j['id'] as String? ?? '',
@@ -89,6 +98,8 @@ class WorkoutTemplate {
             .cast<Map<String, dynamic>>()
             .map(TemplateExercise.fromJson)
             .toList(),
+        clientId: j['clientId'] as String?,
+        clientName: j['clientName'] as String?,
       );
 }
 
@@ -123,8 +134,12 @@ class TrainerCatalogApi {
     return list;
   }
 
-  Future<void> createTemplate(Map<String, dynamic> body) async {
-    await _api.postJson('/api/workout-templates', body);
+  /// [clientId] задан → персональный шаблон для этого клиента; иначе общий.
+  Future<void> createTemplate(Map<String, dynamic> body, {String? clientId}) async {
+    await _api.postJson('/api/workout-templates', <String, dynamic>{
+      ...body,
+      'clientId': ?clientId,
+    });
   }
 
   Future<void> updateTemplate(String id, Map<String, dynamic> body) async {

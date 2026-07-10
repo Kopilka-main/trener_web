@@ -148,7 +148,12 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
       showDragHandle: true,
       builder: (BuildContext ctx) {
         final AppColors c = ctx.colors;
-        final List<WorkoutTemplate> templates = ref.watch(trainerTemplatesProvider).valueOrNull ?? <WorkoutTemplate>[];
+        // Общие (clientId == null) + персональные клиента занятия; без клиента — только общие.
+        final String? cid = _clientId;
+        final List<WorkoutTemplate> templates =
+            (ref.watch(trainerTemplatesProvider).valueOrNull ?? <WorkoutTemplate>[])
+                .where((WorkoutTemplate t) => t.clientId == null || t.clientId == cid)
+                .toList();
         return SizedBox(
           height: MediaQuery.of(ctx).size.height * 0.7,
           child: Column(

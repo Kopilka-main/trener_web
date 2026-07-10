@@ -38,8 +38,13 @@ class _Pos {
 /// Создание/правка шаблона тренировки. Зеркало веб TemplateEditPage:
 /// шаг 1 — выбор упражнений (счётчик подходов), шаг 2 — детали + порядок + сохранить.
 class TemplateEditScreen extends ConsumerStatefulWidget {
-  const TemplateEditScreen({super.key, this.template});
+  const TemplateEditScreen({super.key, this.template, this.clientId, this.clientName});
   final WorkoutTemplate? template;
+
+  /// При создании НОВОГО шаблона: задан → персональный для клиента [clientName].
+  /// Правка существующего шаблона scope не меняет (эти поля не передаются).
+  final String? clientId;
+  final String? clientName;
 
   @override
   ConsumerState<TemplateEditScreen> createState() => _TemplateEditScreenState();
@@ -130,7 +135,7 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
       if (_isEdit) {
         await api.updateTemplate(widget.template!.id, body);
       } else {
-        await api.createTemplate(body);
+        await api.createTemplate(body, clientId: widget.clientId);
       }
       ref.invalidate(trainerTemplatesProvider);
       if (!mounted) return;
@@ -267,6 +272,10 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
 
   Widget _buildDetails(BuildContext context) {
     final AppColors c = context.colors;
+    // Персональный scope: создаём для клиента (clientId) или правим уже
+    // персональный шаблон. Имя берём из переданного или из самого шаблона.
+    final bool isPersonal = widget.clientId != null || (widget.template?.isPersonal ?? false);
+    final String? personalFor = widget.clientName ?? widget.template?.clientName;
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEdit ? 'Шаблон' : 'Новый шаблон'),
@@ -280,6 +289,10 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: <Widget>[
+          if (isPersonal) ...<Widget>[
+            _PersonalBanner(clientName: personalFor),
+            const SizedBox(height: 16),
+          ],
           _Label('Название'),
           SelectAllTextField(
             controller: _name,
@@ -1041,6 +1054,38 @@ InputDecoration _dec(AppColors c, String hint) => InputDecoration(
       fillColor: c.card,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
     );
+
+/// Нейтральная плашка вверху формы: шаблон персональный (для клиента).
+class _PersonalBanner extends StatelessWidget {
+  const _PersonalBanner({required this.clientName});
+  final String? clientName;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: c.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: c.line),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.person_outline, size: 18, color: c.inkMuted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              clientName?.isNotEmpty == true
+                  ? 'Персональная тренировка для $clientName'
+                  : 'Персональная тренировка',
+              style: TextStyle(fontSize: 13, height: 1.35, color: c.inkMuted),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _Label extends StatelessWidget {
   const _Label(this.text);
