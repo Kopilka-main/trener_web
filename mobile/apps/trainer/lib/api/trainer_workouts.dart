@@ -189,24 +189,25 @@ class TrainerWorkoutsApi {
     return _unwrap(r);
   }
 
-  /// Дублировать упражнение: добавляет копию с теми же ПЛАНОВЫМИ подходами
-  /// (повторы/вес/время/отдых из плана оригинала; факт и выполненность не копируем —
-  /// копия свежая). Новое упражнение уходит в конец; порядок правит вызывающий.
-  Future<Workout> duplicateExercise(String clientId, String wid, WorkoutExercise ex) async {
-    final List<Map<String, dynamic>> sets = ex.sets.isEmpty
-        ? <Map<String, dynamic>>[<String, dynamic>{}]
-        : ex.sets
-            .map((WorkoutSet s) => <String, dynamic>{
-                  if (s.plannedReps != null) 'plannedReps': s.plannedReps,
-                  if (s.plannedWeightKg != null) 'plannedWeightKg': s.plannedWeightKg,
-                  if (s.plannedTimeSec != null) 'plannedTimeSec': s.plannedTimeSec,
-                  if (s.plannedRestSec != null) 'plannedRestSec': s.plannedRestSec,
-                })
-            .toList();
+  /// Добавить один подход к упражнению на позиции pos (копия плановых параметров
+  /// шаблона — используется для «+1» без удержания).
+  Future<Workout> addSet(String clientId, String wid, int pos, WorkoutSet template) async {
     final Map<String, dynamic> r = await _api.postJson(
-      '${_base(clientId, wid)}/exercises',
-      <String, dynamic>{'exerciseId': ex.exerciseId, 'sets': sets},
+      '${_base(clientId, wid)}/exercises/$pos/sets',
+      <String, dynamic>{
+        if (template.plannedReps != null) 'plannedReps': template.plannedReps,
+        if (template.plannedWeightKg != null) 'plannedWeightKg': template.plannedWeightKg,
+        if (template.plannedTimeSec != null) 'plannedTimeSec': template.plannedTimeSec,
+        if (template.plannedRestSec != null) 'plannedRestSec': template.plannedRestSec,
+      },
     );
+    return _unwrap(r);
+  }
+
+  /// Удалить подход (pos, idx). Последний подход упражнения удаляет и само упражнение.
+  Future<Workout> deleteSet(String clientId, String wid, int pos, int idx) async {
+    final Map<String, dynamic> r =
+        await _api.deleteJson('${_base(clientId, wid)}/exercises/$pos/sets/$idx');
     return _unwrap(r);
   }
 

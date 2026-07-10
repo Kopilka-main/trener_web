@@ -47,6 +47,10 @@ export type AddWorkoutToHistoryRequest = z.infer<typeof addWorkoutToHistoryReque
 export const addWorkoutExerciseRequestSchema = workoutExercisePlanSchema;
 export type AddWorkoutExerciseRequest = z.infer<typeof addWorkoutExerciseRequestSchema>;
 
+// Добавление ОДНОГО подхода к упражнению (плановые параметры, все опциональны).
+export const addWorkoutSetRequestSchema = plannedSetSchema;
+export type AddWorkoutSetRequest = z.infer<typeof addWorkoutSetRequestSchema>;
+
 // order = массив текущих position в новом порядке (перестановка существующих позиций).
 export const reorderWorkoutExercisesRequestSchema = z.object({
   order: z.array(z.number().int().min(0)).min(1),

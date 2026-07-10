@@ -6,6 +6,7 @@ import {
   updateSetRequestSchema,
   completeWorkoutRequestSchema,
   addWorkoutExerciseRequestSchema,
+  addWorkoutSetRequestSchema,
   addWorkoutToHistoryRequestSchema,
   reorderWorkoutExercisesRequestSchema,
   workoutResponseSchema,
@@ -128,6 +129,44 @@ export function clientWorkoutsRoutes(
         req.params.pos,
         req.params.idx,
         req.body,
+      ),
+    }),
+  );
+
+  typed.post(
+    '/api/clients/:id/workouts/:wid/exercises/:pos/sets',
+    {
+      preHandler,
+      schema: {
+        params: exerciseParams,
+        body: addWorkoutSetRequestSchema,
+        response: { 200: workoutWrap },
+      },
+    },
+    async (req) => ({
+      workout: await svc.addSet(
+        trainerId(req),
+        req.params.id,
+        req.params.wid,
+        req.params.pos,
+        req.body,
+      ),
+    }),
+  );
+
+  typed.delete(
+    '/api/clients/:id/workouts/:wid/exercises/:pos/sets/:idx',
+    {
+      preHandler,
+      schema: { params: setParams, response: { 200: workoutWrap } },
+    },
+    async (req) => ({
+      workout: await svc.deleteSet(
+        trainerId(req),
+        req.params.id,
+        req.params.wid,
+        req.params.pos,
+        req.params.idx,
       ),
     }),
   );

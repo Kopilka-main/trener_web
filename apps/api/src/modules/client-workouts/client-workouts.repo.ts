@@ -612,6 +612,149 @@ export function makeClientWorkoutsRepo(db: Db) {
       return getFull(trainerId, clientId, workoutId);
     },
 
+    // Добавляет один подход В КОНЕЦ упражнения на позиции pos (следующий set_index).
+    // 'not_found_pos' — такой позиции нет; null — тренировки нет в паре.
+    async addSet(
+      trainerId: string,
+      clientId: string,
+      workoutId: string,
+      pos: number,
+      planned: PlannedSetInput,
+      ownedByClientOnly = false,
+    ): Promise<WorkoutRow | null | 'not_found_pos'> {
+      const head = await loadHead(trainerId, clientId, workoutId);
+      if (!head || (ownedByClientOnly && !head.createdByClient)) return null;
+
+      const result = await db.transaction(async (tx) => {
+        const [exists] = await tx
+          .select({ position: clientWorkoutExercises.position })
+          .from(clientWorkoutExercises)
+          .where(
+            and(
+              eq(clientWorkoutExercises.workoutId, workoutId),
+              eq(clientWorkoutExercises.position, pos),
+            ),
+          );
+        if (!exists) return 'not_found_pos' as const;
+
+        const sets = await tx
+          .select({ setIndex: clientWorkoutSets.setIndex })
+          .from(clientWorkoutSets)
+          .where(
+            and(
+              eq(clientWorkoutSets.workoutId, workoutId),
+              eq(clientWorkoutSets.exercisePosition, pos),
+            ),
+          );
+        const nextIndex = sets.reduce((max, s) => Math.max(max, s.setIndex + 1), 0);
+
+        await tx.insert(clientWorkoutSets).values({
+          workoutId,
+          exercisePosition: pos,
+          setIndex: nextIndex,
+          plannedReps: planned.plannedReps ?? null,
+          plannedWeightKg: planned.plannedWeightKg ?? null,
+          plannedTimeSec: planned.plannedTimeSec ?? null,
+          plannedRestSec: planned.plannedRestSec ?? null,
+          done: 0,
+        });
+        return 'ok' as const;
+      });
+
+      if (result === 'not_found_pos') return 'not_found_pos';
+      return getFull(trainerId, clientId, workoutId);
+    },
+
+    // Удаляет подход (pos, idx), переиндексирует оставшиеся подходы упражнения 0..n-1.
+    // Если удалён последний подход упражнения — удаляет само упражнение (перенумеровав
+    // оставшиеся упражнения). null — нет в паре; 'not_found_pos'/'not_found_set' — нет позиции/подхода.
+    async deleteSet(
+      trainerId: string,
+      clientId: string,
+      workoutId: string,
+      pos: number,
+      idx: number,
+      ownedByClientOnly = false,
+    ): Promise<WorkoutRow | null | 'not_found_pos' | 'not_found_set'> {
+      const head = await loadHead(trainerId, clientId, workoutId);
+      if (!head || (ownedByClientOnly && !head.createdByClient)) return null;
+
+      const result = await db.transaction(async (tx) => {
+        const exRows = await tx
+          .select({ position: clientWorkoutExercises.position })
+          .from(clientWorkoutExercises)
+          .where(eq(clientWorkoutExercises.workoutId, workoutId))
+          .orderBy(asc(clientWorkoutExercises.position));
+        if (!exRows.some((r) => r.position === pos)) return 'not_found_pos' as const;
+
+        const setRows = await tx
+          .select({ setIndex: clientWorkoutSets.setIndex })
+          .from(clientWorkoutSets)
+          .where(
+            and(
+              eq(clientWorkoutSets.workoutId, workoutId),
+              eq(clientWorkoutSets.exercisePosition, pos),
+            ),
+          )
+          .orderBy(asc(clientWorkoutSets.setIndex));
+        if (!setRows.some((r) => r.setIndex === idx)) return 'not_found_set' as const;
+
+        // Удаляем целевой подход.
+        await tx
+          .delete(clientWorkoutSets)
+          .where(
+            and(
+              eq(clientWorkoutSets.workoutId, workoutId),
+              eq(clientWorkoutSets.exercisePosition, pos),
+              eq(clientWorkoutSets.setIndex, idx),
+            ),
+          );
+
+        const remaining = setRows.filter((r) => r.setIndex !== idx).map((r) => r.setIndex);
+        if (remaining.length === 0) {
+          // Последний подход удалён → убираем всё упражнение и перенумеровываем.
+          await rewriteExercises(
+            tx,
+            workoutId,
+            exRows.filter((r) => r.position !== pos).map((r) => r.position),
+          );
+          return 'ok' as const;
+        }
+
+        // Переиндексируем оставшиеся подходы 0..n-1 (в порядке возрастания старого индекса).
+        // Двухфазно, чтобы не ловить конфликт первичного ключа (workoutId, pos, setIndex):
+        // сначала сдвигаем в отрицательную зону, потом в 0..n-1.
+        for (let i = 0; i < remaining.length; i++) {
+          await tx
+            .update(clientWorkoutSets)
+            .set({ setIndex: -1 - i })
+            .where(
+              and(
+                eq(clientWorkoutSets.workoutId, workoutId),
+                eq(clientWorkoutSets.exercisePosition, pos),
+                eq(clientWorkoutSets.setIndex, remaining[i]!),
+              ),
+            );
+        }
+        for (let i = 0; i < remaining.length; i++) {
+          await tx
+            .update(clientWorkoutSets)
+            .set({ setIndex: i })
+            .where(
+              and(
+                eq(clientWorkoutSets.workoutId, workoutId),
+                eq(clientWorkoutSets.exercisePosition, pos),
+                eq(clientWorkoutSets.setIndex, -1 - i),
+              ),
+            );
+        }
+        return 'ok' as const;
+      });
+
+      if (result !== 'ok') return result;
+      return getFull(trainerId, clientId, workoutId);
+    },
+
     // Переставляет упражнения согласно order (массив старых position в новом порядке).
     // null = тренировки нет в паре; 'bad_order' = order не перестановка существующих позиций.
     async reorderExercises(

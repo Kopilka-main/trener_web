@@ -55,6 +55,8 @@ function fakeRepo(over: Partial<ClientWorkoutsRepo> = {}): ClientWorkoutsRepo {
     addExercise: vi.fn(() => Promise.resolve(row())),
     removeExercise: vi.fn(() => Promise.resolve(row())),
     reorderExercises: vi.fn(() => Promise.resolve(row())),
+    addSet: vi.fn(() => Promise.resolve(row())),
+    deleteSet: vi.fn(() => Promise.resolve(row())),
     ...over,
   };
 }
@@ -511,5 +513,72 @@ describe('client-workouts.service', () => {
     await expect(svc.reorderExercises('A', 'c1', 'missing', [0])).rejects.toMatchObject({
       status: 404,
     });
+  });
+
+  // --- addSet ---
+
+  it('addSet: пробрасывает плановые поля в repo и возвращает маппинг тренировки', async () => {
+    const addSet = vi.fn(() => Promise.resolve(row()));
+    const svc = makeClientWorkoutsService(fakeRepo({ addSet }), deps);
+    const res = await svc.addSet('A', 'c1', 'w1', 0, { plannedReps: 10, plannedWeightKg: 50 });
+    expect(addSet).toHaveBeenCalledWith('A', 'c1', 'w1', 0, {
+      plannedReps: 10,
+      plannedWeightKg: 50,
+      plannedTimeSec: null,
+      plannedRestSec: null,
+    });
+    expect(res.id).toBe('w1');
+  });
+
+  it('addSet: тренировка не найдена (repo → null) → 404', async () => {
+    const svc = makeClientWorkoutsService(
+      fakeRepo({ addSet: vi.fn(() => Promise.resolve(null)) }),
+      deps,
+    );
+    await expect(svc.addSet('A', 'c1', 'missing', 0, {})).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('addSet: not_found_pos → 404 "Упражнение не найдено"', async () => {
+    const svc = makeClientWorkoutsService(
+      fakeRepo({ addSet: vi.fn(() => Promise.resolve('not_found_pos' as const)) }),
+      deps,
+    );
+    await expect(svc.addSet('A', 'c1', 'w1', 9, {})).rejects.toMatchObject({ status: 404 });
+  });
+
+  // --- deleteSet ---
+
+  it('deleteSet: прокидывает pos/idx и возвращает маппинг тренировки', async () => {
+    const deleteSet = vi.fn(() => Promise.resolve(row()));
+    const svc = makeClientWorkoutsService(fakeRepo({ deleteSet }), deps);
+    const res = await svc.deleteSet('A', 'c1', 'w1', 0, 1);
+    expect(deleteSet).toHaveBeenCalledWith('A', 'c1', 'w1', 0, 1);
+    expect(res.id).toBeDefined();
+  });
+
+  it('deleteSet: тренировка не найдена (repo → null) → 404', async () => {
+    const svc = makeClientWorkoutsService(
+      fakeRepo({ deleteSet: vi.fn(() => Promise.resolve(null)) }),
+      deps,
+    );
+    await expect(svc.deleteSet('A', 'c1', 'missing', 0, 0)).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it('deleteSet: not_found_pos → 404 "Упражнение не найдено"', async () => {
+    const svc = makeClientWorkoutsService(
+      fakeRepo({ deleteSet: vi.fn(() => Promise.resolve('not_found_pos' as const)) }),
+      deps,
+    );
+    await expect(svc.deleteSet('A', 'c1', 'w1', 9, 0)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('deleteSet: not_found_set → 404 "Подход не найден"', async () => {
+    const svc = makeClientWorkoutsService(
+      fakeRepo({ deleteSet: vi.fn(() => Promise.resolve('not_found_set' as const)) }),
+      deps,
+    );
+    await expect(svc.deleteSet('A', 'c1', 'w1', 0, 5)).rejects.toMatchObject({ status: 404 });
   });
 });

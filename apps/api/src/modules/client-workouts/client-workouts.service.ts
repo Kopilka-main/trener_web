@@ -13,6 +13,7 @@ import type {
   UpdateSetRequest,
   CompleteWorkoutRequest,
   AddWorkoutExerciseRequest,
+  AddWorkoutSetRequest,
   WorkoutResponse,
 } from '@trener/shared';
 import { AppError, notFound } from '../../errors.js';
@@ -326,6 +327,41 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
       if (res === null) throw notFound('Тренировка не найдена');
       if (res === 'bad_order')
         throw new AppError(400, 'BAD_ORDER', 'order должен быть перестановкой позиций упражнений');
+      return toResponse(res);
+    },
+
+    // Добавляет один подход В КОНЕЦ упражнения на позиции pos (следующий set_index).
+    async addSet(
+      trainerId: string,
+      clientId: string,
+      workoutId: string,
+      pos: number,
+      input: AddWorkoutSetRequest,
+    ): Promise<WorkoutResponse> {
+      const res = await repo.addSet(trainerId, clientId, workoutId, pos, {
+        plannedReps: input.plannedReps ?? null,
+        plannedWeightKg: input.plannedWeightKg ?? null,
+        plannedTimeSec: input.plannedTimeSec ?? null,
+        plannedRestSec: input.plannedRestSec ?? null,
+      });
+      if (res === null) throw notFound('Тренировка не найдена');
+      if (res === 'not_found_pos') throw notFound('Упражнение не найдено');
+      return toResponse(res);
+    },
+
+    // Удаляет подход (pos, idx). Удаление последнего подхода упражнения удаляет само
+    // упражнение (repo перенумеровывает оставшиеся).
+    async deleteSet(
+      trainerId: string,
+      clientId: string,
+      workoutId: string,
+      pos: number,
+      idx: number,
+    ): Promise<WorkoutResponse> {
+      const res = await repo.deleteSet(trainerId, clientId, workoutId, pos, idx);
+      if (res === null) throw notFound('Тренировка не найдена');
+      if (res === 'not_found_pos') throw notFound('Упражнение не найдено');
+      if (res === 'not_found_set') throw notFound('Подход не найден');
       return toResponse(res);
     },
   };
