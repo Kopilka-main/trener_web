@@ -128,7 +128,7 @@ class IncomeForm extends ConsumerStatefulWidget {
 
 class _IncomeFormState extends ConsumerState<IncomeForm> {
   _IncomeKind _kind = _IncomeKind.package;
-  final TextEditingController _lessons = TextEditingController(text: '20');
+  final TextEditingController _lessons = TextEditingController(text: '10');
   final TextEditingController _price = TextEditingController(); // ₽ за тренировку / период / сумма
   final TextEditingController _total = TextEditingController(); // сумма пакета (двусторонний пересчёт с _price)
   // Что тренер вводил последним для пакета: 'price' (цена за тренировку) или 'total' (сумма пакета).
@@ -139,6 +139,9 @@ class _IncomeFormState extends ConsumerState<IncomeForm> {
   DateTime _starts = DateTime.now();
   DateTime? _ends;
   bool _busy = false;
+  // Текст ошибки валидации/сохранения. Показывается баннером внутри шторки —
+  // снэкбар из bottom sheet рисуется в Scaffold'е страницы ПОЗАДИ шторки и не виден.
+  String? _err;
   final List<_InstallmentRow> _plan = <_InstallmentRow>[];
 
   // Выбор клиента в режиме «Финансы» (clientId == null).
@@ -179,11 +182,6 @@ class _IncomeFormState extends ConsumerState<IncomeForm> {
 
   /// Валидные платежи (сумма > 0).
   List<_InstallmentRow> get _planFilled => _plan.where((_InstallmentRow r) => _rowAmount(r) > 0).toList();
-
-  /// Рассрочка готова к сохранению: указана полная сумма, есть платежи и график
-  /// покрывает всю сумму (с точностью до копейки).
-  bool get _installmentComplete =>
-      _totalNum > 0 && _planFilled.isNotEmpty && (_planTotal - _totalNum).abs() < 0.01;
 
   void _addPlanRow() {
     final DateTime base = _plan.isNotEmpty ? _plan.last.date : DateTime.now();
@@ -256,47 +254,51 @@ class _IncomeFormState extends ConsumerState<IncomeForm> {
     setState(() {
       _pickedClientId = picked.id;
       _pickedName = picked.fullName;
+      _err = null;
     });
   }
+
+  /// Показать ошибку баннером внутри шторки (снэкбар отсюда не виден).
+  void _fail(String message) => setState(() => _err = message);
 
   Future<void> _save() async {
     final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
     final NavigatorState nav = Navigator.of(context);
+    _err = null;
     final String? effClientId = _effClientId;
     // Пакет/рассрочка/абонемент требуют клиента.
     if (_isPkgKind && effClientId == null) {
-      m.showSnackBar(const SnackBar(content: Text('Выберите клиента')));
+      _fail('Выберите клиента');
       return;
     }
     if (_isInstallment) {
       if (_totalNum <= 0) {
-        m.showSnackBar(const SnackBar(content: Text('Укажите полную сумму рассрочки')));
+        _fail('Укажите полную сумму рассрочки');
         return;
       }
       if (_planFilled.isEmpty) {
-        m.showSnackBar(const SnackBar(content: Text('Добавьте хотя бы один платёж с суммой')));
+        _fail('Добавьте хотя бы один платёж с суммой');
         return;
       }
       if ((_planTotal - _totalNum).abs() >= 0.01) {
         final num rem = _totalNum - _planTotal;
-        m.showSnackBar(SnackBar(
-            content: Text(rem > 0
-                ? 'Распределите всю сумму: осталось ${_money(rem)}'
-                : 'Платежи превышают сумму на ${_money(-rem)}')));
+        _fail(rem > 0
+            ? 'Распределите всю сумму: осталось ${_money(rem)}'
+            : 'Платежи превышают сумму на ${_money(-rem)}');
         return;
       }
     } else if (_isPackage) {
       // Пакет может быть бесплатным (0 ₽) — важно лишь количество тренировок.
       if (_lessonsNum <= 0) {
-        m.showSnackBar(const SnackBar(content: Text('Укажите количество тренировок')));
+        _fail('Укажите количество тренировок');
         return;
       }
     } else if (_priceNum <= 0) {
-      m.showSnackBar(const SnackBar(content: Text('Укажите сумму')));
+      _fail('Укажите сумму');
       return;
     }
     if (_isSubscription && _ends == null) {
-      m.showSnackBar(const SnackBar(content: Text('Укажите дату окончания абонемента')));
+      _fail('Укажите дату окончания абонемента');
       return;
     }
     setState(() => _busy = true);
@@ -344,15 +346,22 @@ class _IncomeFormState extends ConsumerState<IncomeForm> {
       m.showSnackBar(const SnackBar(content: Text('Доход добавлен')));
     } catch (_) {
       if (!mounted) return;
-      setState(() => _busy = false);
-      m.showSnackBar(const SnackBar(content: Text('Не удалось сохранить')));
+      setState(() {
+        _busy = false;
+        _err = 'Не удалось сохранить';
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
-    return Padding(
+    // Тап вне поля — скрыть клавиатуру (opaque ловит пустые области, поля свой тап
+    // получают сами).
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Padding(
       padding: EdgeInsets.fromLTRB(20, 4, 20, 16 + MediaQuery.of(context).viewInsets.bottom),
       child: SingleChildScrollView(
         child: Column(
@@ -376,7 +385,10 @@ class _IncomeFormState extends ConsumerState<IncomeForm> {
                   .map((_IncomeKind k) => _IncomeChip(
                         label: _incomeLabels[k]!,
                         active: _kind == k,
-                        onTap: () => setState(() => _kind = k),
+                        onTap: () => setState(() {
+                          _kind = k;
+                          _err = null;
+                        }),
                       ))
                   .toList(),
             ),
@@ -553,9 +565,13 @@ class _IncomeFormState extends ConsumerState<IncomeForm> {
                 label: const Text('Добавить платёж'),
               ),
             ],
+            if (_err != null) ...<Widget>[
+              const SizedBox(height: 16),
+              _errorBanner(c, _err!),
+            ],
             const SizedBox(height: 16),
             FilledButton(
-              onPressed: (_busy || (_isInstallment && !_installmentComplete)) ? null : _save,
+              onPressed: _busy ? null : _save,
               style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
               child: _busy
                   ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
@@ -569,6 +585,29 @@ class _IncomeFormState extends ConsumerState<IncomeForm> {
             ),
           ],
         ),
+      ),
+      ),
+    );
+  }
+
+  /// Баннер ошибки внутри шторки: янтарная иконка severity + нейтральный текст.
+  Widget _errorBanner(AppColors c, String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: c.amber.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.amber.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.error_outline, size: 18, color: c.amber),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(message, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.ink)),
+          ),
+        ],
       ),
     );
   }

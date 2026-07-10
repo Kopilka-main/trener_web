@@ -25,6 +25,8 @@ class _ExpenseFormState extends ConsumerState<ExpenseForm> {
   String? _gymId;
   DateTime _date = DateTime.now();
   bool _busy = false;
+  // Ошибка валидации/сохранения — баннером внутри шторки (снэкбар отсюда прячется за ней).
+  String? _err;
 
   @override
   void dispose() {
@@ -50,10 +52,13 @@ class _ExpenseFormState extends ConsumerState<ExpenseForm> {
     final NavigatorState nav = Navigator.of(context);
     final num? amount = num.tryParse(_amount.text.trim().replaceAll(',', '.'));
     if (amount == null || amount <= 0) {
-      m.showSnackBar(const SnackBar(content: Text('Укажите сумму')));
+      setState(() => _err = 'Укажите сумму');
       return;
     }
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _err = null;
+    });
     final List<String> tags = _parseTags();
     try {
       await ref.read(trainerAccountingApiProvider).createExpense(<String, dynamic>{
@@ -70,8 +75,10 @@ class _ExpenseFormState extends ConsumerState<ExpenseForm> {
       m.showSnackBar(const SnackBar(content: Text('Расход добавлен')));
     } catch (_) {
       if (!mounted) return;
-      setState(() => _busy = false);
-      m.showSnackBar(const SnackBar(content: Text('Не удалось сохранить')));
+      setState(() {
+        _busy = false;
+        _err = 'Не удалось сохранить';
+      });
     }
   }
 
@@ -111,6 +118,7 @@ class _ExpenseFormState extends ConsumerState<ExpenseForm> {
               controller: _amount,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+              onChanged: _err == null ? null : (_) => setState(() => _err = null),
               decoration: _dec(c, 'Сумма, ₽'),
             ),
             const SizedBox(height: 12),
@@ -133,6 +141,10 @@ class _ExpenseFormState extends ConsumerState<ExpenseForm> {
                 ],
               ),
             ],
+            if (_err != null) ...<Widget>[
+              const SizedBox(height: 16),
+              _errorBanner(c, _err!),
+            ],
             const SizedBox(height: 16),
             FilledButton(
               onPressed: _busy ? null : _save,
@@ -143,6 +155,28 @@ class _ExpenseFormState extends ConsumerState<ExpenseForm> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Баннер ошибки внутри шторки: янтарная иконка severity + нейтральный текст.
+  Widget _errorBanner(AppColors c, String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: c.amber.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.amber.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.error_outline, size: 18, color: c.amber),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(message, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.ink)),
+          ),
+        ],
       ),
     );
   }
