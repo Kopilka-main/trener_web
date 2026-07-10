@@ -5,6 +5,7 @@ import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 
 import '../api/active_workout_state.dart';
 import '../api/trainer_assign.dart';
@@ -38,13 +39,35 @@ Map<int, String> _exerciseLabels(List<WorkoutExercise> exs) {
   return out;
 }
 
-String _plannedText(WorkoutSet s) {
-  final List<String> p = <String>[
-    if (s.plannedReps != null) '${s.plannedReps}',
-    if (s.plannedWeightKg != null) '× ${s.plannedWeightKg} кг',
-    if (s.plannedTimeSec != null) '${s.plannedTimeSec} с',
-  ];
-  return p.isEmpty ? '—' : p.join(' ');
+/// Группа подходов одного упражнения: соседние (по возрастанию position)
+/// `WorkoutExercise` с одинаковым `exerciseId` склеены в один блок — их подходы
+/// идут подряд и нумеруются сквозно (без «Название 1/2/3»).
+class _ExGroup {
+  _ExGroup(this.exerciseId, this.title, this.positions, this.sets);
+  final String exerciseId;
+  final String title;
+  final List<int> positions;
+  final List<({int pos, WorkoutSet set})> sets;
+  int get doneCount => sets.where((({int pos, WorkoutSet set}) e) => e.set.done).length;
+}
+
+/// Склеивает соседние (по position) упражнения с одинаковым exerciseId в один блок.
+List<_ExGroup> _groupExercises(List<WorkoutExercise> exs) {
+  final List<WorkoutExercise> sorted = <WorkoutExercise>[...exs]
+    ..sort((WorkoutExercise a, WorkoutExercise b) => a.position - b.position);
+  final List<_ExGroup> out = <_ExGroup>[];
+  for (final WorkoutExercise e in sorted) {
+    final _ExGroup? last = out.isEmpty ? null : out.last;
+    final Iterable<({int pos, WorkoutSet set})> sets =
+        e.sets.map((WorkoutSet s) => (pos: e.position, set: s));
+    if (last != null && last.exerciseId == e.exerciseId) {
+      last.positions.add(e.position);
+      last.sets.addAll(sets);
+    } else {
+      out.add(_ExGroup(e.exerciseId, e.name, <int>[e.position], sets.toList()));
+    }
+  }
+  return out;
 }
 
 /// Экран проведения тренировки клиента тренером. Загружает полную тренировку,
@@ -97,8 +120,8 @@ class _ConductorState extends ConsumerState<_Conductor> {
   late Workout _w = widget.workout;
   bool _busy = false;
   String? _editing; // ключ "pos-idx" редактируемого подхода
-  bool _doneExpanded = false;
-  bool _demoExpanded = true; // демонстрация следующего подхода (фото/видео)
+  // Раскрытые блоки упражнений (по exerciseId) — по умолчанию пусто = все свёрнуты.
+  final Set<String> _expandedGroups = <String>{};
   ({String key, int left})? _rest;
   Timer? _restTimer;
   final AudioPlayer _player = AudioPlayer();
@@ -317,23 +340,17 @@ class _ConductorState extends ConsumerState<_Conductor> {
     if (next) _startRest(ex, s);
   }
 
-  /// Дубль упражнения по удержанию: копия с теми же плановыми подходами встаёт
-  /// сразу ПОД оригиналом. Средняя тактильная отдача — понятно, что сработало.
-  Future<void> _duplicateExercise(WorkoutExercise ex) async {
-    HapticFeedback.mediumImpact();
-    await _run(() async {
-      final Workout added = await _api.duplicateExercise(_clientId, _w.id, ex);
-      // Копия добавлена в конец (макс. позиция) — переставляем сразу после оригинала.
-      final List<int> positions =
-          added.exercises.map((WorkoutExercise e) => e.position).toList()..sort();
-      if (positions.isEmpty) return added;
-      final int newPos = positions.last;
-      final List<int> rest = positions.where((int p) => p != newPos).toList();
-      final int idx = rest.indexOf(ex.position);
-      if (idx < 0) return added; // оригинал не найден — оставляем копию в конце
-      final List<int> order = <int>[...rest]..insert(idx + 1, newPos);
-      return _api.reorderExercises(_clientId, _w.id, order);
-    });
+  /// «+1» на свайпе: молча добавляет копию подхода (те же плановые параметры).
+  Future<void> _addSetCopy(int pos, WorkoutSet s) async {
+    HapticFeedback.lightImpact();
+    await _run(() => _api.addSet(_clientId, _w.id, pos, s));
+  }
+
+  /// Удалить подход со свайпа — с подтверждением. Последний подход упражнения
+  /// удаляет и само упражнение (обрабатывается бэкендом).
+  Future<void> _confirmDeleteSet(int pos, WorkoutSet s) async {
+    if (!await confirmDelete(context, title: 'Удалить подход?')) return;
+    await _run(() => _api.deleteSet(_clientId, _w.id, pos, s.setIndex));
   }
 
   /// Начать тренировку → active, и зарегистрировать её как «идущую» для FAB.
@@ -564,159 +581,49 @@ class _ConductorState extends ConsumerState<_Conductor> {
 
   // ─────────── Активная ───────────
   Widget _buildActive(BuildContext context) {
-    final AppColors c = context.colors;
-    final Map<int, String> labels = _exerciseLabels(_w.exercises);
-    final List<WorkoutSet> allSets =
-        _w.exercises.expand((WorkoutExercise e) => e.sets).toList();
-    final int doneCount = allSets.where((WorkoutSet s) => s.done).length;
-    final int totalCount = allSets.length;
-    bool isDoneEx(WorkoutExercise e) => e.sets.isNotEmpty && e.sets.every((WorkoutSet s) => s.done);
-    final List<WorkoutExercise> completed = _w.exercises.where(isDoneEx).toList()
+    // Все упражнения одним списком (выполненные подходы остаются внутри своих
+    // упражнений — отдельного раздела «Завершено» нет).
+    final List<WorkoutExercise> allEx = <WorkoutExercise>[..._w.exercises]
       ..sort((a, b) => a.position - b.position);
-    final List<WorkoutExercise> pending = (_w.exercises.where((WorkoutExercise e) => !isDoneEx(e)).toList())
-      ..sort((a, b) => a.position - b.position);
-
-    // Демонстрация следующего подхода: медиа первого незавершённого упражнения.
-    final WorkoutExercise? nextEx = pending.isEmpty ? null : pending.first;
-    final TExercise? nextData = nextEx == null
-        ? null
-        : (ref.watch(trainerCatalogProvider).valueOrNull ?? const <TExercise>[])
-            .where((TExercise e) => e.id == nextEx.exerciseId)
-            .firstOrNull;
+    final List<_ExGroup> groups = _groupExercises(allEx);
+    // Мини-превью упражнения (как при выборе) — по exerciseId из каталога.
+    final List<TExercise> catalog =
+        ref.watch(trainerCatalogProvider).valueOrNull ?? const <TExercise>[];
     final String base = ref.read(baseUrlProvider);
-    final String? nextImg =
-        nextData == null ? null : catalogMediaUrl(base, nextData.imageUrl ?? nextData.thumbUrl);
-    final String? nextVid = nextData == null ? null : catalogMediaUrl(base, nextData.videoUrl);
-    final bool nextHasMedia =
-        (nextImg != null && nextImg.isNotEmpty) || (nextVid != null && nextVid.isNotEmpty);
-    final WorkoutSet? nextSet = nextEx?.sets.where((WorkoutSet s) => !s.done).firstOrNull;
-    final String nextPlan = nextSet != null ? _plannedText(nextSet) : '';
+    String? thumbFor(String exerciseId) {
+      final TExercise? e = catalog.where((TExercise x) => x.id == exerciseId).firstOrNull;
+      return e == null ? null : catalogMediaUrl(base, e.thumbUrl ?? e.imageUrl);
+    }
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
       children: <Widget>[
-        // Демонстрация следующего подхода: имя + план + фото/видео (как в вебе).
-        if (nextEx != null && nextHasMedia) ...<Widget>[
-          Container(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            // Отдых идёт → обычный фон; отдых закончен (готов к подходу) → акцент.
-            decoration: BoxDecoration(
-                color: _rest == null ? c.accent : c.card, borderRadius: BorderRadius.circular(16)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => setState(() => _demoExpanded = !_demoExpanded),
-                  child: Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text('СЛЕДУЮЩЕЕ УПРАЖНЕНИЕ',
-                                style: AppFonts.mono(
-                                    size: 10,
-                                    color: _rest == null
-                                        ? c.accentOn.withValues(alpha: 0.7)
-                                        : c.inkMutedXl,
-                                    weight: FontWeight.w700)),
-                            const SizedBox(height: 2),
-                            Text(
-                              <String>[
-                                labels[nextEx.position] ?? nextEx.name,
-                                if (nextPlan.isNotEmpty && nextPlan != '—') nextPlan,
-                              ].join(' · '),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: _rest == null ? c.accentOn : c.ink),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Icon(_demoExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                          color: _rest == null ? c.accentOn : c.inkMuted),
-                    ],
-                  ),
-                ),
-                if (_demoExpanded) ...<Widget>[
-                  const SizedBox(height: 10),
-                  CatalogMediaView(
-                    imageUrl: nextImg,
-                    videoUrl: nextVid,
-                    height: 200,
-                    showToggle: true,
-                    title: '',
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
-        GestureDetector(
-          onTap: () => setState(() => _doneExpanded = !_doneExpanded),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12)),
-            child: Row(
-              children: <Widget>[
-                Text('ЗАВЕРШЕНО · ${completed.length}',
-                    style: AppFonts.mono(size: 13, color: c.inkMuted)),
-                const Spacer(),
-                Text('$doneCount / $totalCount',
-                    style: AppFonts.mono(size: 13, color: c.ink)),
-                const SizedBox(width: 4),
-                Text('подходов',
-                    style: AppFonts.mono(size: 10, color: c.inkMutedXl, weight: FontWeight.w500)),
-                const SizedBox(width: 6),
-                Icon(_doneExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                    size: 18, color: c.inkMuted),
-              ],
-            ),
-          ),
-        ),
-        if (_doneExpanded)
-          ...completed.map((WorkoutExercise ex) => Opacity(
-                opacity: 0.8,
-                child: _ExerciseCard(
-                  title: labels[ex.position] ?? ex.name,
-                  child: Column(children: ex.sets.map((WorkoutSet s) => _activeSetRow(ex, s)).toList()),
-                ),
-              )),
-        const SizedBox(height: 4),
-        // Незавершённые: карточки с drag-handle для перестановки (как в плане).
+        // Все упражнения одним списком с drag-handle для перестановки целыми
+        // блоками. Слева в свёрнутой шапке — мини-превью упражнения (как при выборе).
         ReorderableListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           buildDefaultDragHandles: false,
-          itemCount: pending.length,
+          itemCount: groups.length,
           onReorderItem: (int oldI, int newI) {
-            final List<int> pend = pending.map((WorkoutExercise e) => e.position).toList();
-            final int moved = pend.removeAt(oldI);
-            pend.insert(newI, moved);
-            final List<int> order = <int>[
-              ...completed.map((WorkoutExercise e) => e.position),
-              ...pend,
-            ];
+            final List<_ExGroup> gs = <_ExGroup>[...groups];
+            final _ExGroup moved = gs.removeAt(oldI);
+            gs.insert(newI, moved);
+            final List<int> order = <int>[for (final _ExGroup g in gs) ...g.positions];
             _run(() => _api.reorderExercises(_clientId, _w.id, order));
           },
           itemBuilder: (BuildContext ctx, int i) {
-            final WorkoutExercise ex = pending[i];
-            final bool editingThis =
-                ex.sets.any((WorkoutSet s) => _editing == '${ex.position}-${s.setIndex}');
-            return _ActiveExerciseCard(
-              key: ValueKey<int>(ex.position),
+            final _ExGroup g = groups[i];
+            return _ExerciseBlock(
+              key: ValueKey<String>('grp-${g.positions.join('-')}'),
               listIndex: i,
-              title: labels[ex.position] ?? ex.name,
-              onDelete: editingThis
-                  ? () => _run(() => _api.removeExercise(_clientId, _w.id, ex.position))
-                  : null,
-              onDuplicate: _busy ? null : () => _duplicateExercise(ex),
-              child: Column(children: ex.sets.map((WorkoutSet s) => _activeSetRow(ex, s)).toList()),
+              group: g,
+              thumbUrl: thumbFor(g.exerciseId),
+              expanded: _expandedGroups.contains(g.exerciseId),
+              onToggle: () => setState(() {
+                if (!_expandedGroups.remove(g.exerciseId)) _expandedGroups.add(g.exerciseId);
+              }),
+              buildSetRow: _swipeSetRow,
             );
           },
         ),
@@ -734,114 +641,151 @@ class _ConductorState extends ConsumerState<_Conductor> {
     );
   }
 
-  Widget _activeSetRow(WorkoutExercise ex, WorkoutSet s) {
+  /// Строка подхода: № · метрики · ✓(тап = выполнено). Свайп влево открывает
+  /// [+1] [Изм.] [Удал.]. В режиме редактирования (`_editing`) отдаёт полноширинный
+  /// `_SetEditor` без свайпа.
+  Widget _swipeSetRow(int pos, WorkoutSet s, int displayNo) {
     final AppColors c = context.colors;
-    final String key = '${ex.position}-${s.setIndex}';
+    final WorkoutExercise ex = _w.exercises.firstWhere((WorkoutExercise e) => e.position == pos);
+    final String key = '$pos-${s.setIndex}';
     if (_editing == key) {
       return _SetEditor(
         set: s,
         onCancel: () => setState(() => _editing = null),
-        onSave: (Map<String, dynamic> body) async {
-          body['done'] = true;
-          await _run(() => _api.updateSet(_clientId, _w.id, ex.position, s.setIndex, body));
-          // Отдых мог измениться в редакторе — берём свежий подход из обновлённой
-          // тренировки, чтобы таймер запустился с новым значением.
-          final WorkoutExercise? freshEx =
-              _w.exercises.where((WorkoutExercise e) => e.position == ex.position).firstOrNull;
-          final WorkoutSet? freshSet =
-              freshEx?.sets.where((WorkoutSet x) => x.setIndex == s.setIndex).firstOrNull;
-          if (freshEx != null && freshSet != null) _startRest(freshEx, freshSet);
-        },
+        // Галочка в режиме редактирования — только сохранить изменённые значения
+        // подхода (повторы/вес/время/отдых), НЕ отмечать выполнение. Выполнение
+        // отмечается отдельной ✓ в строке подхода.
+        onSave: (Map<String, dynamic> body) =>
+            _run(() => _api.updateSet(_clientId, _w.id, pos, s.setIndex, body)),
       );
     }
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
+    return Slidable(
+      key: ValueKey<String>('set-$pos-${s.setIndex}'),
+      endActionPane: ActionPane(
+        motion: const DrawerMotion(),
+        extentRatio: 0.6,
         children: <Widget>[
-          Expanded(
-            child: _SetMetrics(set: s, showActual: s.hasFact || s.done),
+          SlidableAction(
+            onPressed: (_) => _addSetCopy(pos, s),
+            backgroundColor: c.accent,
+            foregroundColor: c.accentOn,
+            icon: Icons.add,
+            label: '+1',
           ),
-          _CircleBtn(
+          SlidableAction(
+            onPressed: (_) => setState(() => _editing = key),
+            backgroundColor: c.cardElevated,
+            foregroundColor: c.ink,
             icon: Icons.edit,
-            onTap: () => setState(() => _editing = key),
-            bg: c.cardElevated,
-            fg: c.inkMuted,
+            label: 'Изм.',
           ),
-          const SizedBox(width: 8),
-          _CircleBtn(
-            icon: Icons.check,
-            onTap: () => _toggleDone(ex, s),
-            bg: s.done ? c.accent : c.cardElevated,
-            fg: s.done ? c.accentOn : c.inkMuted,
+          SlidableAction(
+            onPressed: (_) => _confirmDeleteSet(pos, s),
+            backgroundColor: c.danger,
+            foregroundColor: Colors.white,
+            icon: Icons.delete_outline,
+            label: 'Удал.',
           ),
         ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          decoration: BoxDecoration(color: c.cardElevated, borderRadius: BorderRadius.circular(14)),
+          child: Row(
+            children: <Widget>[
+              SizedBox(
+                width: 24,
+                child: Text('$displayNo',
+                    style: AppFonts.mono(size: 14, color: c.inkMutedXl, weight: FontWeight.w700)),
+              ),
+              Expanded(child: _SetMetrics(set: s, showActual: s.hasFact || s.done)),
+              _CircleBtn(
+                icon: Icons.check,
+                onTap: () => _toggleDone(ex, s),
+                bg: s.done ? c.accent : c.chip,
+                fg: s.done ? c.accentOn : c.inkMuted,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
-// ─── Карточка упражнения активной тренировки ───
-/// Раскладка: [drag-handle] → название → подходы (метрики + кнопки управления).
-class _ActiveExerciseCard extends StatelessWidget {
-  const _ActiveExerciseCard({
+// ─── Блок упражнения (группа подходов) активной тренировки ───
+/// Свёрнутая шапка: [drag] Название · «N подходов · X/N выполнено» · [▸/▾].
+/// Тап по шапке/стрелке разворачивает список подходов (`buildSetRow` на каждый).
+class _ExerciseBlock extends StatelessWidget {
+  const _ExerciseBlock({
     super.key,
-    required this.title,
-    required this.listIndex,
-    required this.child,
-    this.onDelete,
-    this.onDuplicate,
+    required this.group,
+    required this.expanded,
+    required this.buildSetRow,
+    this.thumbUrl,
+    this.listIndex,
+    this.onToggle,
   });
-  final String title;
-  final int listIndex;
-  final Widget child;
-  final VoidCallback? onDelete;
-  // Удержание карточки — дублировать упражнение (копия встаёт ниже).
-  final VoidCallback? onDuplicate;
+  final _ExGroup group;
+  final bool expanded;
+  final Widget Function(int pos, WorkoutSet set, int displayNo) buildSetRow;
+  // Мини-превью упражнения (как при выборе) — слева в свёрнутой шапке. null → плейсхолдер.
+  final String? thumbUrl;
+  final int? listIndex;
+  final VoidCallback? onToggle;
 
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
-    return GestureDetector(
-      onLongPress: onDuplicate,
-      child: Container(
+    final int total = group.sets.length;
+    return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(10, 10, 14, 10),
+      padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
       decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              ReorderableDragStartListener(
-                index: listIndex,
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: Icon(Icons.drag_indicator, size: 20, color: c.inkMutedXl),
-                ),
-              ),
-              Expanded(
-                child: Text(title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
-              ),
-              // Корзина на уровне названия — видна при редактировании упражнения.
-              if (onDelete != null)
-                GestureDetector(
-                  onTap: () async {
-                    if (await confirmDelete(context, title: 'Удалить упражнение?')) onDelete!();
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 6),
-                    child: Icon(Icons.delete_outline, size: 18, color: c.danger),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onToggle,
+            child: Row(
+              children: <Widget>[
+                if (listIndex != null)
+                  ReorderableDragStartListener(
+                    index: listIndex!,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Icon(Icons.drag_indicator, size: 20, color: c.inkMutedXl),
+                    ),
+                  ),
+                CatalogThumb(url: thumbUrl, size: 46, radius: 10),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(group.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
+                      Text('$total подходов · ${group.doneCount}/$total выполнено',
+                          style: AppFonts.mono(size: 11, color: c.inkMutedXl, weight: FontWeight.w500)),
+                    ],
                   ),
                 ),
-            ],
+                Icon(expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                    color: c.inkMuted),
+              ],
+            ),
           ),
-          const SizedBox(height: 4),
-          Padding(padding: const EdgeInsets.only(left: 26), child: child),
+          if (expanded) ...<Widget>[
+            const SizedBox(height: 6),
+            for (int i = 0; i < group.sets.length; i++)
+              buildSetRow(group.sets[i].pos, group.sets[i].set, i + 1),
+          ],
         ],
-      ),
       ),
     );
   }
@@ -862,14 +806,14 @@ class _SetMetrics extends StatelessWidget {
     final num? rest = set.plannedRestSec;
 
     Widget metric(IconData icon, num? v) => Padding(
-          padding: const EdgeInsets.only(right: 14),
+          padding: const EdgeInsets.only(right: 16),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Icon(icon, size: 15, color: c.inkMutedXl),
-              const SizedBox(width: 4),
+              Icon(icon, size: 18, color: c.inkMutedXl),
+              const SizedBox(width: 5),
               Text('${(v ?? 0).toInt()}',
-                  style: AppFonts.mono(size: 15, color: c.inkMuted, weight: FontWeight.w600)),
+                  style: AppFonts.mono(size: 17, color: c.inkMuted, weight: FontWeight.w600)),
             ],
           ),
         );
@@ -1035,34 +979,6 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-// ─── Карточка завершённого упражнения (активная тренировка) ───
-class _ExerciseCard extends StatelessWidget {
-  const _ExerciseCard({required this.title, required this.child});
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppColors c = context.colors;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
-          const SizedBox(height: 2),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
 class _CircleBtn extends StatelessWidget {
   const _CircleBtn({required this.icon, required this.onTap, required this.bg, required this.fg});
   final IconData icon;
@@ -1164,27 +1080,150 @@ class _SetEditorState extends State<_SetEditor> {
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
         children: <Widget>[
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              _NumField(label: 'Повторы', ctrl: _reps),
-              const SizedBox(width: 8),
-              _NumField(label: 'Вес, кг', ctrl: _weight),
-              const SizedBox(width: 8),
-              _NumField(label: 'Время, с', ctrl: _time),
-              const SizedBox(width: 8),
-              _NumField(label: 'Отдых, с', ctrl: _rest),
+              _StepperField(label: 'Повторы', ctrl: _reps),
+              const SizedBox(width: 10),
+              _StepperField(label: 'Вес, кг', ctrl: _weight),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              _StepperField(label: 'Время, с', ctrl: _time, step: 5),
+              const SizedBox(width: 10),
+              _StepperField(label: 'Отдых, с', ctrl: _rest, step: 5),
+            ],
+          ),
+          const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: <Widget>[
               _CircleBtn(icon: Icons.check, onTap: _save, bg: c.accent, fg: c.accentOn),
               const SizedBox(width: 8),
               _CircleBtn(icon: Icons.close, onTap: widget.onCancel, bg: c.cardElevated, fg: c.inkMuted),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Крупное числовое поле со ступенчатыми кнопками [−]/[+]: тап — один шаг,
+/// удержание — автоповтор (быстрый набор значения). Для режима редактирования
+/// подхода активной тренировки.
+class _StepperField extends StatefulWidget {
+  const _StepperField({required this.label, required this.ctrl, this.step = 1});
+  final String label;
+  final TextEditingController ctrl;
+  final num step;
+  @override
+  State<_StepperField> createState() => _StepperFieldState();
+}
+
+class _StepperFieldState extends State<_StepperField> {
+  Timer? _holdDelay; // пауза перед автоповтором
+  Timer? _repeat; // сам автоповтор
+
+  num _current() => num.tryParse(widget.ctrl.text.trim().replaceAll(',', '.')) ?? 0;
+  String _fmt(num v) => v == v.roundToDouble() ? v.toInt().toString() : v.toString();
+
+  void _bump(int dir) {
+    num next = _current() + dir * widget.step;
+    if (next < 0) next = 0;
+    final String text = _fmt(next);
+    widget.ctrl.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    setState(() {});
+  }
+
+  void _startHold(int dir) {
+    HapticFeedback.selectionClick();
+    _bump(dir); // мгновенный отклик на нажатие
+    _holdDelay = Timer(const Duration(milliseconds: 350), () {
+      _repeat = Timer.periodic(const Duration(milliseconds: 70), (_) => _bump(dir));
+    });
+  }
+
+  void _stopHold() {
+    _holdDelay?.cancel();
+    _repeat?.cancel();
+    _holdDelay = null;
+    _repeat = null;
+  }
+
+  @override
+  void dispose() {
+    _stopHold();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    Widget btn(IconData icon, int dir) => Listener(
+          onPointerDown: (_) => _startHold(dir),
+          onPointerUp: (_) => _stopHold(),
+          onPointerCancel: (_) => _stopHold(),
+          child: Container(
+            width: 40,
+            height: 54,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: c.chip,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: c.line),
+            ),
+            child: Icon(icon, size: 22, color: c.ink),
+          ),
+        );
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(widget.label.toUpperCase(),
+              style: AppFonts.mono(size: 10, color: c.inkMuted, weight: FontWeight.w500)),
+          const SizedBox(height: 6),
+          Row(
+            children: <Widget>[
+              btn(Icons.remove, -1),
+              const SizedBox(width: 6),
+              Expanded(
+                child: SizedBox(
+                  height: 54,
+                  child: SelectAllTextField(
+                    controller: widget.ctrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: <TextInputFormatter>[
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                    ],
+                    textAlign: TextAlign.center,
+                    style: AppFonts.mono(size: 20, color: c.ink, weight: FontWeight.w700),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      filled: true,
+                      fillColor: c.chip,
+                      contentPadding: EdgeInsets.zero,
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.line)),
+                      enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.line)),
+                      focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.accent)),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              btn(Icons.add, 1),
             ],
           ),
         ],
