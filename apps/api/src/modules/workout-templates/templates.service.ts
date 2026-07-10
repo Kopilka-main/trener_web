@@ -17,12 +17,16 @@ export type TemplatesDeps = { newId: () => string };
 const unknownExercise = () =>
   new AppError(400, 'UNKNOWN_EXERCISE', 'Упражнение недоступно тренеру');
 
+const clientNotLinked = () => new AppError(400, 'CLIENT_NOT_LINKED', 'Клиент не связан с тренером');
+
 function toResponse(r: TemplateRow): TemplateResponse {
   return {
     id: r.id,
     name: r.name,
     categoryTag: r.categoryTag,
     shortDescription: r.shortDescription,
+    clientId: r.clientId,
+    clientName: r.clientName,
     exercises: r.exercises.map((e) => ({
       position: e.position,
       exerciseId: e.exerciseId,
@@ -63,9 +67,16 @@ export function makeTemplatesService(repo: TemplatesRepo, deps: TemplatesDeps) {
     },
 
     async create(trainerId: string, input: CreateTemplateRequest): Promise<TemplateResponse> {
+      // clientId задан → персональный шаблон: клиент обязан быть связан с тренером,
+      // иначе 400 (не заводим шаблон под чужого клиента). Пустая строка ≡ общий шаблон.
+      const clientId = input.clientId && input.clientId.length > 0 ? input.clientId : null;
+      if (clientId !== null && !(await repo.isClientLinked(trainerId, clientId))) {
+        throw clientNotLinked();
+      }
       const row = await repo.create(trainerId, {
         id: deps.newId(),
         trainerId,
+        clientId,
         name: input.name,
         categoryTag: input.categoryTag ?? null,
         shortDescription: input.shortDescription ?? null,
@@ -81,7 +92,8 @@ export function makeTemplatesService(repo: TemplatesRepo, deps: TemplatesDeps) {
       templateId: string,
       patch: UpdateTemplateRequest,
     ): Promise<TemplateResponse> {
-      // exactOptionalPropertyTypes: задаём только определённые поля.
+      // exactOptionalPropertyTypes: задаём только определённые поля. clientId НЕ переносим:
+      // scope шаблона (общий/персональный) неизменен — patch.clientId сознательно игнорируем.
       const repoPatch: UpdateTemplateInput = {};
       if (patch.name !== undefined) repoPatch.name = patch.name;
       if (patch.categoryTag !== undefined) repoPatch.categoryTag = patch.categoryTag ?? null;

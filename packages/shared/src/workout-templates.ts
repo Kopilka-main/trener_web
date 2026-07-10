@@ -19,11 +19,15 @@ export const createTemplateRequestSchema = z.object({
   name,
   categoryTag,
   shortDescription: z.string().trim().max(2000).nullish(),
+  // Задан → персональный шаблон этого клиента; отсутствует → общий шаблон «Базы знаний».
+  // Связь клиента с тренером проверяется в сервисе (иначе 400 CLIENT_NOT_LINKED).
+  clientId: z.string().optional(),
   exercises: z.array(templateExerciseSchema).min(1),
 });
 export type CreateTemplateRequest = z.infer<typeof createTemplateRequestSchema>;
 
-// partial: при наличии exercises список заменяется целиком.
+// partial: при наличии exercises список заменяется целиком. clientId (scope шаблона)
+// неизменен: сервис его при обновлении игнорирует — перенос между клиентами запрещён.
 export const updateTemplateRequestSchema = createTemplateRequestSchema.partial();
 export type UpdateTemplateRequest = z.infer<typeof updateTemplateRequestSchema>;
 
@@ -32,6 +36,10 @@ export const templateResponseSchema = z.object({
   name: z.string(),
   categoryTag: z.string().nullable(),
   shortDescription: z.string().nullable(),
+  // clientId: null = общий шаблон; задан = персональный. clientName — «для: Имя»
+  // (собранное имя клиента), null у общих.
+  clientId: z.string().nullable(),
+  clientName: z.string().nullable(),
   exercises: z.array(
     z.object({
       position: z.number(),

@@ -15,6 +15,8 @@ const mockFetch = vi.mocked(apiFetch);
 
 const sample: TemplateResponse = {
   id: 'tpl1',
+  clientId: null,
+  clientName: null,
   name: 'Ноги A',
   categoryTag: 'силовая',
   shortDescription: null,

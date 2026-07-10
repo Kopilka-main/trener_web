@@ -1,6 +1,18 @@
 import { and, asc, eq, inArray, isNull, or } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
-import { exercises, workoutTemplates, workoutTemplateExercises } from '../../db/schema.js';
+import {
+  clients,
+  exercises,
+  trainerClients,
+  workoutTemplates,
+  workoutTemplateExercises,
+} from '../../db/schema.js';
+
+// firstName + lastName клиента (trim). null, если клиента нет (общий шаблон / LEFT JOIN мимо).
+function buildClientName(firstName: string | null, lastName: string | null): string | null {
+  const full = `${firstName ?? ''} ${lastName ?? ''}`.trim();
+  return full.length > 0 ? full : null;
+}
 
 // Позиция упражнения в шаблоне с резолвленным именем упражнения.
 export type TemplateExerciseRow = {
@@ -20,6 +32,9 @@ export type TemplateRow = {
   name: string;
   categoryTag: string | null;
   shortDescription: string | null;
+  // null = общий шаблон; задан = персональный шаблон клиента (clientName — подпись «для: Имя»).
+  clientId: string | null;
+  clientName: string | null;
   createdAt: Date;
   exercises: TemplateExerciseRow[];
 };
@@ -37,6 +52,9 @@ export type TemplateExerciseInput = {
 export type CreateTemplateInput = {
   id: string;
   trainerId: string;
+  // Задан → персональный шаблон клиента. Связь клиента с тренером сервис проверяет
+  // ДО вызова create (repo.isClientLinked); здесь только запись значения.
+  clientId?: string | null;
   name: string;
   categoryTag?: string | null;
   shortDescription?: string | null;
@@ -51,7 +69,54 @@ export type UpdateTemplateInput = {
   exercises?: TemplateExerciseInput[];
 };
 
+// Колонки «шапки» шаблона + имя клиента через LEFT JOIN clients (общий → null-имя).
+const headCols = {
+  id: workoutTemplates.id,
+  trainerId: workoutTemplates.trainerId,
+  name: workoutTemplates.name,
+  categoryTag: workoutTemplates.categoryTag,
+  shortDescription: workoutTemplates.shortDescription,
+  clientId: workoutTemplates.clientId,
+  clientFirstName: clients.firstName,
+  clientLastName: clients.lastName,
+  createdAt: workoutTemplates.createdAt,
+};
+
+// Строка headCols → шапка TemplateRow (без exercises): собирает clientName из имени клиента.
+function toHead(h: {
+  id: string;
+  trainerId: string;
+  name: string;
+  categoryTag: string | null;
+  shortDescription: string | null;
+  clientId: string | null;
+  clientFirstName: string | null;
+  clientLastName: string | null;
+  createdAt: Date;
+}): Omit<TemplateRow, 'exercises'> {
+  return {
+    id: h.id,
+    trainerId: h.trainerId,
+    name: h.name,
+    categoryTag: h.categoryTag,
+    shortDescription: h.shortDescription,
+    clientId: h.clientId,
+    clientName: buildClientName(h.clientFirstName, h.clientLastName),
+    createdAt: h.createdAt,
+  };
+}
+
 export function makeTemplatesRepo(db: Db) {
+  // Связан ли клиент с тренером (запись в trainer_clients). Скоуп персонального шаблона:
+  // сервис зовёт ДО create, чтобы не завести шаблон под чужого клиента.
+  async function isClientLinked(trainerId: string, clientId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ clientId: trainerClients.clientId })
+      .from(trainerClients)
+      .where(and(eq(trainerClients.trainerId, trainerId), eq(trainerClients.clientId, clientId)));
+    return !!row;
+  }
+
   // Все exerciseId видимы тренеру (личные его ИЛИ глобальные). Пустой список → true.
   async function areExercisesVisible(trainerId: string, exerciseIds: string[]): Promise<boolean> {
     const unique = [...new Set(exerciseIds)];
@@ -89,19 +154,13 @@ export function makeTemplatesRepo(db: Db) {
 
   async function getForTrainer(trainerId: string, templateId: string): Promise<TemplateRow | null> {
     const [head] = await db
-      .select({
-        id: workoutTemplates.id,
-        trainerId: workoutTemplates.trainerId,
-        name: workoutTemplates.name,
-        categoryTag: workoutTemplates.categoryTag,
-        shortDescription: workoutTemplates.shortDescription,
-        createdAt: workoutTemplates.createdAt,
-      })
+      .select(headCols)
       .from(workoutTemplates)
+      .leftJoin(clients, eq(clients.id, workoutTemplates.clientId))
       .where(and(eq(workoutTemplates.id, templateId), eq(workoutTemplates.trainerId, trainerId)));
     if (!head) return null;
     const exRows = await loadExercises(templateId);
-    return { ...head, exercises: exRows };
+    return { ...toHead(head), exercises: exRows };
   }
 
   // Вставка позиций 0..n из входного массива по порядку (внутри транзакции tx).
@@ -127,9 +186,11 @@ export function makeTemplatesRepo(db: Db) {
 
   return {
     areExercisesVisible,
+    isClientLinked,
     getForTrainer,
 
     // null = одно из упражнений невидимо тренеру (сигнал service → UNKNOWN_EXERCISE).
+    // clientId (персональный шаблон) уже проверен сервисом через isClientLinked.
     async create(trainerId: string, input: CreateTemplateInput): Promise<TemplateRow | null> {
       const visible = await areExercisesVisible(
         trainerId,
@@ -141,6 +202,7 @@ export function makeTemplatesRepo(db: Db) {
         await tx.insert(workoutTemplates).values({
           id: input.id,
           trainerId,
+          clientId: input.clientId ?? null,
           name: input.name,
           categoryTag: input.categoryTag ?? null,
           shortDescription: input.shortDescription ?? null,
@@ -152,21 +214,15 @@ export function makeTemplatesRepo(db: Db) {
 
     async listByTrainer(trainerId: string): Promise<TemplateRow[]> {
       const heads = await db
-        .select({
-          id: workoutTemplates.id,
-          trainerId: workoutTemplates.trainerId,
-          name: workoutTemplates.name,
-          categoryTag: workoutTemplates.categoryTag,
-          shortDescription: workoutTemplates.shortDescription,
-          createdAt: workoutTemplates.createdAt,
-        })
+        .select(headCols)
         .from(workoutTemplates)
+        .leftJoin(clients, eq(clients.id, workoutTemplates.clientId))
         .where(eq(workoutTemplates.trainerId, trainerId))
         .orderBy(asc(workoutTemplates.name));
       const result: TemplateRow[] = [];
       for (const head of heads) {
         const exRows = await loadExercises(head.id);
-        result.push({ ...head, exercises: exRows });
+        result.push({ ...toHead(head), exercises: exRows });
       }
       return result;
     },

@@ -9,6 +9,8 @@ function row(over: Partial<TemplateRow> = {}): TemplateRow {
     name: 'День ног',
     categoryTag: 'legs',
     shortDescription: null,
+    clientId: null,
+    clientName: null,
     createdAt: new Date(0),
     exercises: [
       {
@@ -29,6 +31,7 @@ function row(over: Partial<TemplateRow> = {}): TemplateRow {
 function fakeRepo(over: Partial<TemplatesRepo> = {}): TemplatesRepo {
   return {
     areExercisesVisible: vi.fn(() => Promise.resolve(true)),
+    isClientLinked: vi.fn(() => Promise.resolve(true)),
     getForTrainer: vi.fn(() => Promise.resolve(null)),
     create: vi.fn(() => Promise.resolve(row())),
     listByTrainer: vi.fn(() => Promise.resolve([])),
@@ -79,6 +82,74 @@ describe('templates.service', () => {
     });
     expect(res.shortDescription).toBeNull();
     expect(create).toHaveBeenCalledWith('A', expect.objectContaining({ shortDescription: null }));
+  });
+
+  it('create персонального: clientId связан → сохранён с clientId, ответ несёт clientId/clientName', async () => {
+    const isClientLinked = vi.fn(() => Promise.resolve(true));
+    const create = vi.fn(() =>
+      Promise.resolve(row({ clientId: 'cl1', clientName: 'Иван Петров' })),
+    );
+    const svc = makeTemplatesService(fakeRepo({ isClientLinked, create }), {
+      newId: () => 'newid',
+    });
+    const res = await svc.create('A', {
+      name: 'Персональный',
+      clientId: 'cl1',
+      exercises: [{ exerciseId: 'g1', sets: 3, restSec: 90 }],
+    });
+    expect(isClientLinked).toHaveBeenCalledWith('A', 'cl1');
+    expect(create).toHaveBeenCalledWith('A', expect.objectContaining({ clientId: 'cl1' }));
+    expect(res.clientId).toBe('cl1');
+    expect(res.clientName).toBe('Иван Петров');
+  });
+
+  it('create с чужим clientId (isClientLinked → false) → 400 CLIENT_NOT_LINKED, repo.create не зовётся', async () => {
+    const create = vi.fn(() => Promise.resolve(row()));
+    const svc = makeTemplatesService(
+      fakeRepo({ isClientLinked: vi.fn(() => Promise.resolve(false)), create }),
+      { newId: () => 'newid' },
+    );
+    await expect(
+      svc.create('A', {
+        name: 'Чужой',
+        clientId: 'foreign',
+        exercises: [{ exerciseId: 'g1', sets: 3, restSec: 90 }],
+      }),
+    ).rejects.toMatchObject({ status: 400, code: 'CLIENT_NOT_LINKED' });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('create общего (без clientId): clientId=null в repo, isClientLinked не зовётся', async () => {
+    const isClientLinked = vi.fn(() => Promise.resolve(true));
+    const create = vi.fn(() => Promise.resolve(row()));
+    const svc = makeTemplatesService(fakeRepo({ isClientLinked, create }), {
+      newId: () => 'newid',
+    });
+    const res = await svc.create('A', {
+      name: 'Общий',
+      exercises: [{ exerciseId: 'g1', sets: 3, restSec: 90 }],
+    });
+    expect(isClientLinked).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledWith('A', expect.objectContaining({ clientId: null }));
+    expect(res.clientId).toBeNull();
+    expect(res.clientName).toBeNull();
+  });
+
+  it('list возвращает clientId/clientName: персональный и общий', async () => {
+    const svc = makeTemplatesService(
+      fakeRepo({
+        listByTrainer: vi.fn(() =>
+          Promise.resolve([
+            row({ id: 'p1', clientId: 'cl1', clientName: 'Иван Петров' }),
+            row({ id: 'g1', clientId: null, clientName: null }),
+          ]),
+        ),
+      }),
+      { newId: () => 'x' },
+    );
+    const res = await svc.list('A');
+    expect(res[0]).toMatchObject({ id: 'p1', clientId: 'cl1', clientName: 'Иван Петров' });
+    expect(res[1]).toMatchObject({ id: 'g1', clientId: null, clientName: null });
   });
 
   it('create с невидимым упражнением (repo.create → null) → 400 UNKNOWN_EXERCISE', async () => {

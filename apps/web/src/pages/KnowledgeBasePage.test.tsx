@@ -34,6 +34,8 @@ const exercises: ExerciseResponse[] = [
 const templates: TemplateResponse[] = [
   {
     id: 'tpl1',
+    clientId: null,
+    clientName: null,
     name: 'Программа ног',
     categoryTag: 'силовая',
     shortDescription: null,

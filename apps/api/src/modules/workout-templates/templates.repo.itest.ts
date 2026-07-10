@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { createDb } from '../../db/client.js';
-import { trainers, exercises } from '../../db/schema.js';
+import { trainers, exercises, clients, trainerClients } from '../../db/schema.js';
 import { makeTemplatesRepo } from './templates.repo.js';
 
 const url = process.env.DATABASE_URL;
@@ -14,11 +14,16 @@ describe.skipIf(!url)('templates.repo (integration)', () => {
     await db.execute(sql`DELETE FROM workout_templates`);
     await db.execute(sql`DELETE FROM client_workouts`);
     await db.execute(sql`DELETE FROM exercises`);
+    await db.execute(sql`DELETE FROM trainer_clients`);
+    await db.execute(sql`DELETE FROM clients`);
     await db.execute(sql`DELETE FROM trainers`);
     await db.insert(trainers).values([
       { id: 'A', email: 'a@b.co', passwordHash: 'h', firstName: 'A', lastName: 'A' },
       { id: 'B', email: 'b@b.co', passwordHash: 'h', firstName: 'B', lastName: 'B' },
     ]);
+    // Клиент cl1 связан с тренером A (персональные шаблоны A могут ссылаться на него).
+    await db.insert(clients).values({ id: 'cl1', firstName: 'Иван', lastName: 'Петров' });
+    await db.insert(trainerClients).values({ trainerId: 'A', clientId: 'cl1' });
     await db.insert(exercises).values([
       // глобальная
       { id: 'g1', trainerId: null, name: 'Жим лёжа', category: 'Грудь', restSec: 90 },
@@ -108,6 +113,43 @@ describe.skipIf(!url)('templates.repo (integration)', () => {
       sql`SELECT count(*)::int AS c FROM workout_template_exercises`,
     );
     expect(cnt[0]?.c).toBe(0);
+  });
+
+  it('персональный шаблон: create пишет clientId, get/list резолвят clientName через JOIN', async () => {
+    const personal = await repo.create('A', {
+      id: 'p1',
+      trainerId: 'A',
+      clientId: 'cl1',
+      name: 'Персональный',
+      exercises: [{ exerciseId: 'g1', sets: 3, restSec: 90 }],
+    });
+    expect(personal?.clientId).toBe('cl1');
+    expect(personal?.clientName).toBe('Иван Петров');
+
+    // Общий шаблон (без clientId) → clientId/clientName null.
+    const general = await repo.create('A', {
+      id: 'g0',
+      trainerId: 'A',
+      name: 'Общий',
+      exercises: [{ exerciseId: 'g1', sets: 3, restSec: 90 }],
+    });
+    expect(general?.clientId).toBeNull();
+    expect(general?.clientName).toBeNull();
+
+    const got = await repo.getForTrainer('A', 'p1');
+    expect(got?.clientId).toBe('cl1');
+    expect(got?.clientName).toBe('Иван Петров');
+
+    const list = await repo.listByTrainer('A');
+    const byId = new Map(list.map((t) => [t.id, t]));
+    expect(byId.get('p1')?.clientName).toBe('Иван Петров');
+    expect(byId.get('g0')?.clientId).toBeNull();
+  });
+
+  it('isClientLinked: true для связанного, false для чужого/несуществующего', async () => {
+    expect(await repo.isClientLinked('A', 'cl1')).toBe(true);
+    expect(await repo.isClientLinked('B', 'cl1')).toBe(false);
+    expect(await repo.isClientLinked('A', 'nope')).toBe(false);
   });
 
   it('isolation: B не видит/не правит/не удаляет шаблон A', async () => {

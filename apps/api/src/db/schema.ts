@@ -240,6 +240,10 @@ export const workoutTemplates = pgTable('workout_templates', {
   trainerId: text('trainer_id')
     .notNull()
     .references(() => trainers.id, { onDelete: 'cascade' }),
+  // NULL = общий шаблон «Базы знаний» (виден в каталоге тренера); задан = персональный
+  // шаблон конкретного клиента. Связь клиента с тренером валидируется в сервисе через
+  // trainer_clients; FK каскадит удаление персональных шаблонов при удалении клиента.
+  clientId: text('client_id').references(() => clients.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   categoryTag: text('category_tag'),
   shortDescription: text('short_description'),

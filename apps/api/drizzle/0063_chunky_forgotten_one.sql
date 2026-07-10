@@ -1,0 +1,2 @@
+ALTER TABLE "workout_templates" ADD COLUMN "client_id" text;--> statement-breakpoint
+ALTER TABLE "workout_templates" ADD CONSTRAINT "workout_templates_client_id_clients_id_fk" FOREIGN KEY ("client_id") REFERENCES "public"."clients"("id") ON DELETE cascade ON UPDATE no action;
