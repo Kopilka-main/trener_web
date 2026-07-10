@@ -21,6 +21,7 @@ class TrainerProfile {
     required this.title,
     required this.bio,
     required this.birthDate,
+    required this.birthYear,
     required this.contacts,
     required this.avatarFileId,
     required this.pendingDeletionAt,
@@ -34,6 +35,7 @@ class TrainerProfile {
         title: j['title'] as String?,
         bio: j['bio'] as String?,
         birthDate: j['birthDate'] as String?,
+        birthYear: (j['birthYear'] as num?)?.toInt(),
         contacts: ((j['contacts'] as List<dynamic>?) ?? <dynamic>[])
             .cast<Map<String, dynamic>>()
             .map(TrainerContact.fromJson)
@@ -49,6 +51,8 @@ class TrainerProfile {
   final String? title;
   final String? bio;
   final String? birthDate;
+  // Год рождения (хранится отдельно от birthDate), либо null.
+  final int? birthYear;
   final List<TrainerContact> contacts;
   final String? avatarFileId;
   // ISO-момент окончательного удаления аккаунта (окно отмены), либо null.

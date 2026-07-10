@@ -35,6 +35,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
   late final TextEditingController _last;
   late final TextEditingController _bio;
   String? _birthIso; // дата рождения (день+месяц, год-заглушка), ISO YYYY-MM-DD
+  late final TextEditingController _year; // год рождения (опционально), хранится отдельно
   late final List<_EditContact> _contacts;
   late String? _avatarFileId = widget.account.avatarFileId;
   bool _busy = false;
@@ -49,6 +50,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     _last = TextEditingController(text: a.lastName);
     _bio = TextEditingController(text: a.bio ?? '');
     _birthIso = a.birthDate;
+    _year = TextEditingController(text: a.birthYear?.toString() ?? '');
     _contacts = a.contacts
         .map((ClientContact c) => _EditContact(type: c.type, value: TextEditingController(text: c.value)))
         .toList();
@@ -59,6 +61,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     _first.dispose();
     _last.dispose();
     _bio.dispose();
+    _year.dispose();
     for (final _EditContact c in _contacts) {
       c.value.dispose();
       c.focus.dispose();
@@ -143,11 +146,20 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
         .where((_EditContact c) => c.value.text.trim().isNotEmpty)
         .map((_EditContact c) => <String, String>{'type': c.type, 'value': c.value.text.trim()})
         .toList();
+    // Год рождения — опционально. Пусто → null. Мусор/вне 1900..текущий год → null.
+    final String yearText = _year.text.trim();
+    int? birthYear;
+    if (yearText.isNotEmpty) {
+      final int? y = int.tryParse(yearText);
+      final int nowYear = DateTime.now().year;
+      if (y != null && y >= 1900 && y <= nowYear) birthYear = y;
+    }
     final Map<String, dynamic> body = <String, dynamic>{
       'firstName': first,
       'lastName': last,
       'bio': _bio.text.trim().isEmpty ? null : _bio.text.trim(),
       'birthDate': _birthIso,
+      'birthYear': birthYear,
       'contacts': contacts,
     };
     try {
@@ -240,34 +252,85 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
               ],
             ),
             const SizedBox(height: 14),
-            _Label('Дата рождения'),
-            const SizedBox(height: 6),
-            GestureDetector(
-              onTap: () async {
-                final ({int day, int month})? cur = dayMonthFromIso(_birthIso);
-                final ({int day, int month})? r =
-                    await pickDayMonth(context, day: cur?.day, month: cur?.month);
-                if (r != null) setState(() => _birthIso = dayMonthToIso(r.day, r.month));
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
-                decoration: BoxDecoration(
-                  color: c.chip,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: c.line),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                // Дата рождения (день+месяц) — логику не трогаем.
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      _Label('Дата рождения'),
+                      const SizedBox(height: 6),
+                      GestureDetector(
+                        onTap: () async {
+                          final ({int day, int month})? cur = dayMonthFromIso(_birthIso);
+                          final ({int day, int month})? r =
+                              await pickDayMonth(context, day: cur?.day, month: cur?.month);
+                          if (r != null) setState(() => _birthIso = dayMonthToIso(r.day, r.month));
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+                          decoration: BoxDecoration(
+                            color: c.chip,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: c.line),
+                          ),
+                          child: Row(
+                            children: <Widget>[
+                              Icon(Icons.cake_outlined, size: 18, color: c.inkMuted),
+                              const SizedBox(width: 10),
+                              Text(
+                                formatDayMonth(_birthIso).isEmpty ? 'ДД.ММ' : formatDayMonth(_birthIso),
+                                style: TextStyle(
+                                    fontSize: 15, color: _birthIso != null ? c.ink : c.inkMuted),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Row(
-                  children: <Widget>[
-                    Icon(Icons.cake_outlined, size: 18, color: c.inkMuted),
-                    const SizedBox(width: 10),
-                    Text(
-                      formatDayMonth(_birthIso).isEmpty ? 'ДД.ММ' : formatDayMonth(_birthIso),
-                      style: TextStyle(
-                          fontSize: 15, color: _birthIso != null ? c.ink : c.inkMuted),
-                    ),
-                  ],
+                const SizedBox(width: 12),
+                // Год рождения — опциональное отдельное поле (число, до 4 цифр).
+                SizedBox(
+                  width: 116,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      _Label('Год рождения'),
+                      const SizedBox(height: 6),
+                      SelectAllTextField(
+                        controller: _year,
+                        keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.done,
+                        maxLength: 4,
+                        inputFormatters: <TextInputFormatter>[
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        style: TextStyle(fontSize: 15, color: c.ink),
+                        decoration: InputDecoration(
+                          counterText: '',
+                          isDense: true,
+                          hintText: 'ГГГГ',
+                          hintStyle: TextStyle(color: c.inkMuted),
+                          filled: true,
+                          fillColor: c.chip,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.line)),
+                          enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.line)),
+                          focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: c.accent, width: 1.6)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ),
             const SizedBox(height: 14),
             _Label('Контакты'),

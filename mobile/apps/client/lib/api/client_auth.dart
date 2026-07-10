@@ -20,6 +20,7 @@ class ClientAccount {
     required this.email,
     required this.avatarFileId,
     required this.birthDate,
+    required this.birthYear,
     required this.bio,
     required this.contacts,
     required this.pendingDeletionAt,
@@ -33,6 +34,7 @@ class ClientAccount {
         email: (j['email'] as String?) ?? '',
         avatarFileId: j['avatarFileId'] as String?,
         birthDate: j['birthDate'] as String?,
+        birthYear: (j['birthYear'] as num?)?.toInt(),
         bio: j['bio'] as String?,
         contacts: ((j['contacts'] as List<dynamic>?) ?? <dynamic>[])
             .cast<Map<String, dynamic>>()
@@ -48,6 +50,8 @@ class ClientAccount {
   final String email;
   final String? avatarFileId;
   final String? birthDate;
+  // Год рождения (хранится отдельно от birthDate: день+месяц), либо null.
+  final int? birthYear;
   final String? bio;
   final List<ClientContact> contacts;
   // ISO-момент окончательного удаления аккаунта (окно отмены), либо null.

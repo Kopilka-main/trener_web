@@ -1,5 +1,6 @@
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -47,6 +48,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
   late final TextEditingController _title;
   late final TextEditingController _bio;
   String? _birthIso; // день рождения (день+месяц, год-заглушка), ISO YYYY-MM-DD
+  late final TextEditingController _birthYear; // год рождения (опционально, хранится отдельно)
   late final List<_EditContact> _contacts;
   late String? _avatarFileId = widget.profile.avatarFileId;
   bool _busy = false;
@@ -62,6 +64,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     _title = TextEditingController(text: p.title ?? '');
     _bio = TextEditingController(text: p.bio ?? '');
     _birthIso = p.birthDate;
+    _birthYear = TextEditingController(text: p.birthYear?.toString() ?? '');
     _contacts = p.contacts
         .map((TrainerContact c) => _EditContact(type: c.type, value: TextEditingController(text: c.value)))
         .toList();
@@ -73,6 +76,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     _last.dispose();
     _title.dispose();
     _bio.dispose();
+    _birthYear.dispose();
     for (final _EditContact c in _contacts) {
       c.value.dispose();
     }
@@ -95,12 +99,17 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
         .where((_EditContact c) => c.value.text.trim().isNotEmpty)
         .map((_EditContact c) => <String, String>{'type': c.type, 'value': c.value.text.trim()})
         .toList();
+    // Год рождения: пусто → null; иначе валидный год 1900..текущий, невалид игнорируем.
+    final int? parsedYear = int.tryParse(_birthYear.text.trim());
+    final int? birthYear =
+        (parsedYear != null && parsedYear >= 1900 && parsedYear <= DateTime.now().year) ? parsedYear : null;
     final Map<String, dynamic> body = <String, dynamic>{
       'firstName': first,
       'lastName': last,
       'title': _title.text.trim().isEmpty ? null : _title.text.trim(),
       'bio': _bio.text.trim().isEmpty ? null : _bio.text.trim(),
       'birthDate': _birthIso,
+      'birthYear': birthYear,
       'contacts': contacts,
     };
     try {
@@ -254,6 +263,22 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
                     ),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          _Label('Год рождения'),
+          SelectAllTextField(
+            controller: _birthYear,
+            keyboardType: TextInputType.number,
+            inputFormatters: <TextInputFormatter>[
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(4),
+            ],
+            decoration: InputDecoration(
+              hintText: 'Например, 1990 (необязательно)',
+              filled: true,
+              fillColor: c.card,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
             ),
           ),
           const SizedBox(height: 14),
