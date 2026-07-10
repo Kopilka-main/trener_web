@@ -17,7 +17,9 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "ru.fitbond.trener_trainer"
-    compileSdk = flutter.compileSdkVersion
+    // file_picker (через flutter_plugin_android_lifecycle) требует compileSdk 36 —
+    // поднимаем явно, targetSdk/minSdk оставляем на дефолтах Flutter.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
