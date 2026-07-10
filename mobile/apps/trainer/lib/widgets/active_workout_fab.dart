@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../api/active_workout_state.dart';
 import '../api/trainer_clients.dart';
+import '../api/trainer_workouts.dart';
 import '../router.dart';
 
 /// Оверлей поверх всего приложения: если идёт (незавершённая) тренировка и мы не
@@ -99,7 +100,12 @@ class _ActiveWorkoutFabState extends ConsumerState<ActiveWorkoutFab> {
         behavior: HitTestBehavior.opaque,
         onPanUpdate: (DragUpdateDetails d) =>
             setState(() => _pos = Offset(left + d.delta.dx, top + d.delta.dy)),
-        onTap: () => ref.read(routerProvider).push('/active/${aw.clientId}/${aw.workoutId}'),
+        onTap: () {
+          // Сбрасываем кэш тренировки, чтобы экран проведения открылся со СВЕЖИМ
+          // статусом (active), а не устаревшим черновиком (draft) из кэша.
+          ref.invalidate(trainerWorkoutProvider((clientId: aw.clientId, wid: aw.workoutId)));
+          ref.read(routerProvider).push('/active/${aw.clientId}/${aw.workoutId}');
+        },
         child: Material(
           color: Colors.transparent,
           child: Container(
