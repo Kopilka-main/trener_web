@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:core/core.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../api/trainer_support.dart';
 
@@ -117,6 +119,96 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen> {
     }
   }
 
+  /// Нижнее меню выбора вложения: «Фото» (галерея) или «Файл».
+  Future<void> _pickAttachment() async {
+    if (_sending) return;
+    final AppColors c = context.colors;
+    final String? choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: c.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext ctx) {
+        return SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const SizedBox(height: 8),
+              ListTile(
+                leading: Icon(Icons.image_outlined, color: c.ink),
+                title: Text('Фото', style: TextStyle(color: c.ink)),
+                onTap: () => Navigator.of(ctx).pop('image'),
+              ),
+              ListTile(
+                leading: Icon(Icons.insert_drive_file_outlined, color: c.ink),
+                title: Text('Файл', style: TextStyle(color: c.ink)),
+                onTap: () => Navigator.of(ctx).pop('file'),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+    if (choice == 'image') {
+      await _sendImage();
+    } else if (choice == 'file') {
+      await _sendFile();
+    }
+  }
+
+  /// Выбрать картинку из галереи и отправить как вложение.
+  Future<void> _sendImage() async {
+    if (_sending) return;
+    final XFile? picked = await ImagePicker()
+        .pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 85);
+    if (picked == null) return;
+    await _uploadAttachment(
+      filePath: picked.path,
+      fileName: picked.name,
+      kind: 'image',
+    );
+  }
+
+  /// Выбрать произвольный файл и отправить как вложение.
+  Future<void> _sendFile() async {
+    if (_sending) return;
+    final FilePickerResult? res = await FilePicker.platform.pickFiles();
+    final PlatformFile? f = res?.files.isNotEmpty ?? false ? res!.files.first : null;
+    if (f == null || f.path == null) return;
+    await _uploadAttachment(filePath: f.path!, fileName: f.name, kind: 'file');
+  }
+
+  /// Общая отправка вложения: caption берём из непустого поля ввода и очищаем.
+  Future<void> _uploadAttachment({
+    required String filePath,
+    required String fileName,
+    required String kind,
+  }) async {
+    if (_sending) return;
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    final String caption = _text.text.trim();
+    setState(() => _sending = true);
+    try {
+      await ref.read(trainerSupportApiProvider).sendAttachment(
+            filePath: filePath,
+            fileName: fileName,
+            kind: kind,
+            caption: caption.isEmpty ? null : caption,
+          );
+      if (!mounted) return;
+      if (caption.isNotEmpty) _text.clear();
+      await _reload(scrollToEnd: true);
+    } catch (_) {
+      if (!mounted) return;
+      m.showSnackBar(const SnackBar(content: Text('Не удалось отправить, попробуйте позже')));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
   /// Композер обращения: поле ввода с кнопкой-отправкой ВНУТРИ, закреплён снизу —
   /// при открытии клавиатуры Scaffold поджимает тело и композер остаётся над ней.
   Widget _composer(AppColors c, bool canSend) {
@@ -131,10 +223,27 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen> {
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
           child: Container(
             decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(24)),
-            padding: const EdgeInsets.fromLTRB(16, 2, 6, 2),
+            padding: const EdgeInsets.fromLTRB(4, 2, 6, 2),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Material(
+                    color: Colors.transparent,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: _sending ? null : _pickAttachment,
+                      child: SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: Icon(Icons.attach_file, size: 22, color: c.inkMuted),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 2),
                 Expanded(
                   child: TextField(
                     controller: _text,
@@ -245,8 +354,12 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen> {
         ),
       ];
     }
+    final String base =
+        ref.read(baseUrlProvider).replaceAll(RegExp(r'/$'), '');
+    final String? token = ref.watch(sessionProvider).token;
     return <Widget>[
-      for (final SupportMessage msg in _messages) _MessageBubble(msg),
+      for (final SupportMessage msg in _messages)
+        _MessageBubble(msg, base: base, token: token),
     ];
   }
 }
@@ -254,8 +367,10 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen> {
 /// Пузырь одного сообщения переписки: обращение тренера (`in`) — справа с
 /// акцентным фоном; ответ поддержки (`out`) — слева на карточке, с подписью.
 class _MessageBubble extends StatelessWidget {
-  const _MessageBubble(this.message);
+  const _MessageBubble(this.message, {required this.base, required this.token});
   final SupportMessage message;
+  final String base;
+  final String? token;
 
   @override
   Widget build(BuildContext context) {
@@ -264,6 +379,10 @@ class _MessageBubble extends StatelessWidget {
     final Color textColor = mine ? c.accentOn : c.ink;
     final Color timeColor =
         mine ? c.accentOn.withValues(alpha: 0.7) : c.inkMutedXl;
+    final bool hasText = message.text.trim().isNotEmpty;
+    final String? fileUrl = (message.attachmentFileId?.isNotEmpty ?? false)
+        ? '$base/api/files/${message.attachmentFileId}'
+        : null;
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -292,10 +411,58 @@ class _MessageBubble extends StatelessWidget {
               ),
               const SizedBox(height: 3),
             ],
-            Text(
-              message.text,
-              style: TextStyle(fontSize: 15, height: 1.35, color: textColor),
-            ),
+            if (message.hasImage && fileUrl != null) ...<Widget>[
+              GestureDetector(
+                onTap: () => PhotoViewerScreen.show(
+                  context,
+                  url: fileUrl,
+                  token: token,
+                  title: 'Вложение',
+                  onDelete: null,
+                ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 220),
+                  child: SizedBox(
+                    height: 160,
+                    width: 220,
+                    child: AuthedImage(url: fileUrl, token: token, radius: 12),
+                  ),
+                ),
+              ),
+              if (hasText) const SizedBox(height: 8),
+            ] else if (message.hasFile) ...<Widget>[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: mine ? c.accentOn.withValues(alpha: 0.15) : c.chip,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(Icons.insert_drive_file_outlined,
+                        size: 18, color: mine ? c.accentOn : c.inkMuted),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        (message.attachmentName?.isNotEmpty ?? false)
+                            ? message.attachmentName!
+                            : 'Файл',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13.5, color: textColor),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (hasText) const SizedBox(height: 8),
+            ],
+            if (hasText)
+              Text(
+                message.text,
+                style: TextStyle(fontSize: 15, height: 1.35, color: textColor),
+              ),
             const SizedBox(height: 4),
             Text(
               _stamp(message.createdAt),

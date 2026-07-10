@@ -15,6 +15,7 @@ import 'api/trainer_home.dart';
 import 'router.dart';
 import 'widgets/active_workout_fab.dart';
 import 'widgets/birthday_gate.dart';
+import 'widgets/dev_report_fab.dart';
 import 'widgets/nav_fab.dart';
 import 'widgets/onboarding_gate.dart';
 
@@ -185,10 +186,16 @@ class _TrainerAppState extends ConsumerState<TrainerApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
+      // Оверлеи-кнопки: GlobalNavFab (слева) и ActiveWorkoutFab (справа снизу) —
+      // над всем. DevReportFab «Сообщить о проблеме» (слева снизу) вешаем ВНУТРИ
+      // OnboardingGate на реальные экраны, чтобы он не перекрывал онбординг/окно
+      // «спасибо» (где режим разработчика как раз включается).
       builder: (BuildContext context, Widget? child) => GlobalNavFab(
         child: ActiveWorkoutFab(
           child: BirthdayGate(
-            child: OnboardingGate(child: child ?? const SizedBox.shrink()),
+            child: OnboardingGate(
+              child: DevReportFab(child: child ?? const SizedBox.shrink()),
+            ),
           ),
         ),
       ),

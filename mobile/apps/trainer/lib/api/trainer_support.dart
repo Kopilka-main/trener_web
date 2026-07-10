@@ -10,6 +10,9 @@ class SupportMessage {
     required this.direction,
     required this.text,
     required this.createdAt,
+    this.attachmentFileId,
+    this.attachmentKind,
+    this.attachmentName,
   });
 
   final String id;
@@ -17,17 +20,36 @@ class SupportMessage {
   final String text;
   final DateTime createdAt;
 
+  /// Опциональное вложение сообщения (картинка или файл).
+  final String? attachmentFileId;
+  final String? attachmentKind; // 'image' | 'file'
+  final String? attachmentName;
+
   /// Наше собственное сообщение (обращение тренера).
   bool get isMine => direction == 'in';
 
-  factory SupportMessage.fromJson(Map<String, dynamic> j) => SupportMessage(
-        id: j['id'] as String? ?? '',
-        direction: j['direction'] as String? ?? 'in',
-        text: j['text'] as String? ?? '',
-        createdAt:
-            DateTime.tryParse(j['createdAt'] as String? ?? '')?.toLocal() ??
-                DateTime.now(),
-      );
+  /// К сообщению приложена картинка (показываем миниатюрой).
+  bool get hasImage =>
+      attachmentKind == 'image' && (attachmentFileId?.isNotEmpty ?? false);
+
+  /// К сообщению приложен файл (показываем чипом с именем).
+  bool get hasFile =>
+      attachmentKind == 'file' && (attachmentFileId?.isNotEmpty ?? false);
+
+  factory SupportMessage.fromJson(Map<String, dynamic> j) {
+    final Map<String, dynamic>? att = j['attachment'] as Map<String, dynamic>?;
+    return SupportMessage(
+      id: j['id'] as String? ?? '',
+      direction: j['direction'] as String? ?? 'in',
+      text: j['text'] as String? ?? '',
+      createdAt:
+          DateTime.tryParse(j['createdAt'] as String? ?? '')?.toLocal() ??
+              DateTime.now(),
+      attachmentFileId: att?['fileId'] as String?,
+      attachmentKind: att?['kind'] as String?,
+      attachmentName: att?['name'] as String?,
+    );
+  }
 }
 
 /// Отправка обращения в поддержку и загрузка переписки из настроек приложения.
@@ -43,6 +65,26 @@ class TrainerSupportApi {
   /// Отправить обращение. При ошибке пробрасывает исключение наверх.
   Future<void> send(String text) async {
     await _api.postJson('/api/support', <String, dynamic>{'text': text});
+  }
+
+  /// Отправить вложение (картинку или файл) с опциональной подписью.
+  /// [kind] — 'image' | 'file'. При ошибке пробрасывает исключение наверх.
+  Future<void> sendAttachment({
+    required String filePath,
+    required String fileName,
+    required String kind,
+    String? caption,
+  }) async {
+    await _api.postForm(
+      '/api/support/attachment',
+      <String, String>{
+        'kind': kind,
+        if (caption != null && caption.isNotEmpty) 'caption': caption,
+      },
+      fileField: 'file',
+      filePath: filePath,
+      fileName: fileName,
+    );
   }
 
   /// Загрузить переписку с поддержкой (сообщения по возрастанию времени).

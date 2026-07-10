@@ -2,6 +2,7 @@ import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/dev_mode_flag.dart';
 import '../api/onboarding_flag.dart';
 import '../screens/onboarding_screen.dart';
 
@@ -21,6 +22,7 @@ class OnboardingGate extends ConsumerWidget {
     if (authed && pending) {
       return OnboardingScreen(
         onDone: () => ref.read(onboardingPendingProvider.notifier).complete(),
+        onParticipate: () => ref.read(devModeEnabledProvider.notifier).enable(),
       );
     }
     return child;

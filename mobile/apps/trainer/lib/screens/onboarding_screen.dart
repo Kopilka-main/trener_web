@@ -10,7 +10,8 @@ class _OnboardingSlide {
 }
 
 /// Сиквенс шагов «как пользоваться» — от установки приложения клиенту до работы
-/// в календаре. Порядок важен: нумерация «ШАГ N ИЗ 6» отражает реальный флоу.
+/// в календаре и отслеживания прогресса. Порядок важен: нумерация «ШАГ N ИЗ …»
+/// отражает реальный флоу (счётчик берётся из длины списка).
 const List<_OnboardingSlide> _slides = <_OnboardingSlide>[
   _OnboardingSlide(
     icon: Icons.smartphone,
@@ -42,14 +43,32 @@ const List<_OnboardingSlide> _slides = <_OnboardingSlide>[
     title: 'Работайте в календаре',
     body: 'Назначайте и согласовывайте тренировки в календаре.',
   ),
+  _OnboardingSlide(
+    icon: Icons.insights,
+    title: 'Смотрите статистику',
+    body: 'В карточке клиента — прогресс по каждому упражнению: веса, повторы, объём.',
+  ),
+  _OnboardingSlide(
+    icon: Icons.straighten,
+    title: 'Ведите замеры',
+    body: 'Фиксируйте замеры тела клиента и отслеживайте динамику прогресса.',
+  ),
+  _OnboardingSlide(
+    icon: Icons.photo_library_outlined,
+    title: 'Фото прогресса',
+    body: 'Добавляйте фото прогресса клиента и сравнивайте результат до и после.',
+  ),
 ];
 
 /// Полноэкранная приветственная карусель для НОВОГО тренера. Показывается один
-/// раз сразу после регистрации: 6 свайп-слайдов «как пользоваться». [onDone]
-/// вызывается по «Пропустить» и по «Начать» на последнем слайде.
+/// раз сразу после регистрации: свайп-слайды «как пользоваться» и финальная
+/// приз-страница с приглашением в разработку. [onDone] вызывается по
+/// «Пропустить» и по кнопке «Понятно» в окне-подтверждении участия.
+/// [onParticipate] вызывается, когда тренер протянул свайп «Принять участие».
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key, required this.onDone});
+  const OnboardingScreen({super.key, required this.onDone, required this.onParticipate});
   final VoidCallback onDone;
+  final VoidCallback onParticipate;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -58,6 +77,11 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _controller = PageController();
   int _index = 0;
+  bool _confirmed = false; // свайп протянут → показываем окно-«спасибо»
+
+  // Индекс приз-страницы = сразу после обычных слайдов; всего страниц +1.
+  int get _prizeIndex => _slides.length;
+  int get _pageCount => _slides.length + 1;
 
   @override
   void dispose() {
@@ -66,20 +90,27 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _next() {
-    if (_index >= _slides.length - 1) {
-      widget.onDone();
-      return;
-    }
+    // Листаем к следующей странице (последний обычный слайд ведёт на приз-стр.).
     _controller.nextPage(
       duration: const Duration(milliseconds: 280),
       curve: Curves.easeOut,
     );
   }
 
+  // Свайп «Принять участие» протянут до конца: включаем dev-режим и показываем
+  // полноэкранное окно-подтверждение.
+  void _participate() {
+    widget.onParticipate();
+    setState(() => _confirmed = true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
-    final bool isLast = _index == _slides.length - 1;
+    // Окно-подтверждение участия занимает весь экран; «Понятно» → onDone.
+    if (_confirmed) return _ThanksView(onDone: widget.onDone);
+
+    final bool onPrize = _index == _prizeIndex;
     return Scaffold(
       backgroundColor: c.bg,
       body: SafeArea(
@@ -88,31 +119,44 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Expanded(
               child: PageView.builder(
                 controller: _controller,
-                itemCount: _slides.length,
+                itemCount: _pageCount,
                 onPageChanged: (int i) => setState(() => _index = i),
-                itemBuilder: (BuildContext context, int i) =>
-                    _SlideView(slide: _slides[i], step: i + 1, total: _slides.length),
+                itemBuilder: (BuildContext context, int i) => i == _prizeIndex
+                    ? const _PrizeView()
+                    : _SlideView(slide: _slides[i], step: i + 1, total: _slides.length),
               ),
             ),
-            // Низ экрана — one-handed: индикатор и кнопки под большим пальцем.
-            _Dots(count: _slides.length, active: _index),
+            // Низ экрана — one-handed: индикатор и элементы управления под пальцем.
+            _Dots(count: _pageCount, active: _index),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-              child: Row(
-                children: <Widget>[
-                  TextButton(
-                    onPressed: widget.onDone,
-                    style: TextButton.styleFrom(foregroundColor: c.inkMuted),
-                    child: const Text('Пропустить'),
-                  ),
-                  const Spacer(),
-                  FilledButton(
-                    onPressed: _next,
-                    style: FilledButton.styleFrom(minimumSize: const Size(128, 50)),
-                    child: Text(isLast ? 'Начать' : 'Далее'),
-                  ),
-                ],
-              ),
+              child: onPrize
+                  ? Column(
+                      children: <Widget>[
+                        _SwipeToConfirm(label: 'Принять участие', onConfirmed: _participate),
+                        const SizedBox(height: 6),
+                        TextButton(
+                          onPressed: widget.onDone,
+                          style: TextButton.styleFrom(foregroundColor: c.inkMuted),
+                          child: const Text('Пропустить'),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: <Widget>[
+                        TextButton(
+                          onPressed: widget.onDone,
+                          style: TextButton.styleFrom(foregroundColor: c.inkMuted),
+                          child: const Text('Пропустить'),
+                        ),
+                        const Spacer(),
+                        FilledButton(
+                          onPressed: _next,
+                          style: FilledButton.styleFrom(minimumSize: const Size(128, 50)),
+                          child: const Text('Далее'),
+                        ),
+                      ],
+                    ),
             ),
           ],
         ),
@@ -164,6 +208,200 @@ class _SlideView extends StatelessWidget {
             style: TextStyle(fontSize: 15, color: c.inkMuted, height: 1.4),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Финальная приз-страница: приглашение участвовать в разработке. Кнопки
+/// «Далее»/«Начать» тут нет — вместо неё внизу свайп-подтверждение.
+class _PrizeView extends StatelessWidget {
+  const _PrizeView();
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          Container(
+            width: 96,
+            height: 96,
+            decoration: BoxDecoration(
+              color: c.accent.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.card_giftcard, size: 44, color: c.accent),
+          ),
+          const SizedBox(height: 28),
+          Text(
+            'Примите участие в разработке',
+            textAlign: TextAlign.center,
+            style: AppFonts.display(size: 26, color: c.ink),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Сообщайте о проблемах и предлагайте функции — и получите бесплатный доступ навсегда.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 15, color: c.inkMuted, height: 1.4),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Свайп-подтверждение: ползунок тянут вправо; при протягивании ~85% ширины
+/// срабатывает [onConfirmed]. Отпускание раньше порога — ползунок едет назад.
+class _SwipeToConfirm extends StatefulWidget {
+  const _SwipeToConfirm({required this.label, required this.onConfirmed});
+  final String label;
+  final VoidCallback onConfirmed;
+
+  @override
+  State<_SwipeToConfirm> createState() => _SwipeToConfirmState();
+}
+
+class _SwipeToConfirmState extends State<_SwipeToConfirm> {
+  static const double _h = 56; // высота дорожки
+  static const double _thumb = 48; // диаметр ползунка
+  static const double _inset = 4; // отступ ползунка от краёв дорожки
+  static const double _threshold = 0.85; // доля хода для срабатывания
+
+  double _dx = 0; // смещение ползунка
+  bool _fired = false;
+
+  void _fire() {
+    if (_fired) return;
+    _fired = true;
+    widget.onConfirmed();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double maxDx = (constraints.maxWidth - _thumb - _inset * 2).clamp(0, double.infinity);
+        final double clamped = _dx.clamp(0, maxDx);
+        final double progress = maxDx <= 0 ? 0 : clamped / maxDx;
+        return Container(
+          height: _h,
+          alignment: Alignment.centerLeft,
+          decoration: BoxDecoration(
+            color: c.accent.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(_h / 2),
+            border: Border.all(color: c.accent.withValues(alpha: 0.40)),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: <Widget>[
+              // Подпись тускнеет по мере протягивания ползунка.
+              Opacity(
+                opacity: (1 - progress).clamp(0.0, 1.0),
+                child: Text(
+                  widget.label,
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.accent),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(_inset),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Transform.translate(
+                    offset: Offset(clamped, 0),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onHorizontalDragUpdate: (DragUpdateDetails d) {
+                        if (_fired) return;
+                        setState(() => _dx = (_dx + d.delta.dx).clamp(0, maxDx));
+                        if (_dx >= maxDx - 0.5) _fire();
+                      },
+                      onHorizontalDragEnd: (DragEndDetails _) {
+                        if (_fired) return;
+                        if (_dx >= maxDx * _threshold) {
+                          setState(() => _dx = maxDx);
+                          _fire();
+                        } else {
+                          setState(() => _dx = 0);
+                        }
+                      },
+                      child: Container(
+                        width: _thumb,
+                        height: _thumb,
+                        decoration: BoxDecoration(color: c.accent, shape: BoxShape.circle),
+                        child: Icon(Icons.arrow_forward, size: 22, color: c.accentOn),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Полноэкранное окно-подтверждение участия. Появляется после свайпа: иконка,
+/// «спасибо» и подсказка про кнопку «Сообщить о проблеме». «Понятно» → [onDone].
+class _ThanksView extends StatelessWidget {
+  const _ThanksView({required this.onDone});
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Scaffold(
+      backgroundColor: c.bg,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(32, 24, 32, 20),
+          child: Column(
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    Container(
+                      width: 96,
+                      height: 96,
+                      decoration: BoxDecoration(
+                        color: c.accent.withValues(alpha: 0.14),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.workspace_premium, size: 44, color: c.accent),
+                    ),
+                    const SizedBox(height: 28),
+                    Text(
+                      'Спасибо! Вы — участник разработки',
+                      textAlign: TextAlign.center,
+                      style: AppFonts.display(size: 24, color: c.ink),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'На экране появилась кнопка «Сообщить о проблеме». Нажмите её, если нашли '
+                      'проблему или хотите предложить функцию — так вы помогаете развивать приложение.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 15, color: c.inkMuted, height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: onDone,
+                  style: FilledButton.styleFrom(minimumSize: const Size(0, 52)),
+                  child: const Text('Понятно'),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
