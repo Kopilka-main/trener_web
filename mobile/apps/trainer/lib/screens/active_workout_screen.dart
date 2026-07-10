@@ -11,6 +11,7 @@ import '../api/trainer_assign.dart';
 import '../api/trainer_calendar.dart';
 import '../api/trainer_client_card.dart';
 import '../api/trainer_client_stats.dart';
+import '../api/trainer_clients.dart';
 import '../api/trainer_home.dart';
 import '../api/trainer_workouts.dart';
 import 'template_edit_screen.dart' show ExerciseSelect;
@@ -44,15 +45,6 @@ String _plannedText(WorkoutSet s) {
     if (s.plannedTimeSec != null) '${s.plannedTimeSec} с',
   ];
   return p.isEmpty ? '—' : p.join(' ');
-}
-
-String _formatDuration(int totalSec) {
-  final int sec = totalSec % 60;
-  final int m = totalSec ~/ 60;
-  final int h = m ~/ 60;
-  final int mm = m % 60;
-  String two(int n) => n.toString().padLeft(2, '0');
-  return h > 0 ? '$h:${two(mm)}:${two(sec)}' : '$m:${two(sec)}';
 }
 
 /// Экран проведения тренировки клиента тренером. Загружает полную тренировку,
@@ -107,7 +99,6 @@ class _ConductorState extends ConsumerState<_Conductor> {
   String? _editing; // ключ "pos-idx" редактируемого подхода
   bool _doneExpanded = false;
   bool _demoExpanded = true; // демонстрация следующего подхода (фото/видео)
-  Timer? _ticker;
   ({String key, int left})? _rest;
   Timer? _restTimer;
   final AudioPlayer _player = AudioPlayer();
@@ -124,9 +115,6 @@ class _ConductorState extends ConsumerState<_Conductor> {
   @override
   void initState() {
     super.initState();
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_w.status == WorkoutStatus.active) setState(() {});
-    });
     // Пока открыт экран проведения — скрываем плавающий FAB; если тренировка
     // уже active — регистрируем её как «идущую» (на случай прямого входа/возврата).
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -140,7 +128,6 @@ class _ConductorState extends ConsumerState<_Conductor> {
 
   @override
   void dispose() {
-    _ticker?.cancel();
     _restTimer?.cancel();
     _player.dispose();
     // Экран закрыт — снова разрешаем плавающий FAB (если тренировка ещё идёт).
@@ -232,11 +219,6 @@ class _ConductorState extends ConsumerState<_Conductor> {
         setState(() => _rest = (key: _rest!.key, left: left));
       }
     });
-  }
-
-  void _skipRest() {
-    _restTimer?.cancel();
-    setState(() => _rest = null);
   }
 
   Future<void> _addExercise() async {
@@ -356,6 +338,9 @@ class _ConductorState extends ConsumerState<_Conductor> {
 
   /// Начать тренировку → active, и зарегистрировать её как «идущую» для FAB.
   Future<void> _start() async {
+    // Для ПРИВЯЗАННОГО клиента тренировку можно начать только при наличии
+    // согласованного (подтверждённого) незавершённого занятия.
+    if (!await _canStart()) return;
     await _run(() => _api.start(_clientId, _w.id));
     if (!mounted || _w.status != WorkoutStatus.active) return;
     ref.read(activeWorkoutProvider.notifier).set(_clientId, _w.id, _w.name);
@@ -365,6 +350,40 @@ class _ConductorState extends ConsumerState<_Conductor> {
     ref.invalidate(trainerHomeProvider);
     ref.invalidate(clientWorkoutsCardProvider(_clientId));
     ref.invalidate(clientWorkoutsRawProvider(_clientId));
+  }
+
+  /// Можно ли начать тренировку. Привязанному клиенту нужен согласованный
+  /// (подтверждённый) незавершённый занятие; иначе показываем окно и не стартуем.
+  /// Для непривязанного клиента (нет аккаунта) проверки нет.
+  Future<bool> _canStart() async {
+    try {
+      final Client client = await ref.read(trainerClientProvider(_clientId).future);
+      if (!client.isConnected) return true; // непривязанный — согласовывать некому
+      final List<Session> sessions = await ref.read(trainerSessionsProvider.future);
+      final bool hasConfirmed = sessions.any((Session s) =>
+          s.clientId == _clientId &&
+          s.status == SessionStatus.planned &&
+          s.confirmation == ClientConfirmation.confirmed);
+      if (hasConfirmed) return true;
+      if (mounted) await _showNoConfirmedDialog();
+      return false;
+    } catch (_) {
+      return true; // не удалось проверить — не блокируем старт
+    }
+  }
+
+  Future<void> _showNoConfirmedDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: const Text('Нет согласованных тренировок'),
+        content: const Text(
+            'Запланируйте и согласуйте занятие с клиентом в календаре — тогда тренировку можно будет начать.'),
+        actions: <Widget>[
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Понятно')),
+        ],
+      ),
+    );
   }
 
   Future<void> _complete() async {
@@ -576,42 +595,6 @@ class _ConductorState extends ConsumerState<_Conductor> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
       children: <Widget>[
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(color: c.accent, borderRadius: BorderRadius.circular(18)),
-          child: Row(
-            children: <Widget>[
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text('ПРОШЛО',
-                      style: AppFonts.mono(size: 10, color: c.accentOn.withValues(alpha: 0.7))),
-                  Text(_formatDuration(_elapsed),
-                      style: TextStyle(
-                          fontSize: 24, fontWeight: FontWeight.bold, color: c.accentOn)),
-                ],
-              ),
-              const Spacer(),
-              if (_rest != null)
-                _RestPill(left: _rest!.left, onSkip: _skipRest, color: c.accentOn)
-              // «Готово» — отметить текущий (следующий невыполненный) подход выполненным.
-              else if (nextSet != null)
-                GestureDetector(
-                  onTap: _busy ? null : () => _toggleDone(nextEx!, nextSet),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
-                    decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(20)),
-                    child: Text('Готово',
-                        style: TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600, color: c.accentOn)),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
         // Демонстрация следующего подхода: имя + план + фото/видео (как в вебе).
         if (nextEx != null && nextHasMedia) ...<Widget>[
           Container(
@@ -1121,35 +1104,6 @@ class _AddExerciseButton extends StatelessWidget {
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.inkMuted)),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ─── Таймер отдыха (пилюля) ───
-class _RestPill extends StatelessWidget {
-  const _RestPill({required this.left, required this.onSkip, required this.color});
-  final int left;
-  final VoidCallback onSkip;
-  final Color color;
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Text('$left', style: AppFonts.mono(size: 14, color: color)),
-          const SizedBox(width: 6),
-          Text('Отдых', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color)),
-          const SizedBox(width: 4),
-          GestureDetector(
-            onTap: onSkip,
-            child: Icon(Icons.close, size: 18, color: color),
-          ),
-        ],
       ),
     );
   }
