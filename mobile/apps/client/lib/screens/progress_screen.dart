@@ -1277,11 +1277,51 @@ class _PhotosTabState extends ConsumerState<_PhotosTab> {
     }
   }
 
+  Future<void> _pickMulti() async {
+    if (_uploading) return;
+    final List<XFile> picked =
+        await ImagePicker().pickMultiImage(limit: 3, maxWidth: 1600, imageQuality: 85);
+    if (picked.isEmpty) return;
+    final List<XFile> files = picked.take(3).toList();
+    const List<String> angles = <String>['front', 'side', 'back'];
+    setState(() {
+      _uploading = true;
+      _error = null;
+    });
+    try {
+      for (int i = 0; i < files.length; i++) {
+        final XFile x = files[i];
+        await ref.read(clientPhotosApiProvider).upload(
+            date: _iso(_date), angle: angles[i], filePath: x.path, fileName: x.name);
+      }
+      if (!mounted) return;
+      ref.invalidate(clientPhotosProvider);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Фото добавлены')));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'Не удалось загрузить фото.');
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
   Future<void> _delete(ProgressPhoto p) async {
     try {
       await ref.read(clientPhotosApiProvider).delete(p.id);
       ref.invalidate(clientPhotosProvider);
     } catch (_) {}
+  }
+
+  Future<void> _openViewer(ProgressPhoto p, String? token) async {
+    final bool? deleted = await PhotoViewerScreen.show(
+      context,
+      url: ref.read(clientPhotosApiProvider).photoUrl(p.fileId),
+      token: token,
+      title: kAngleLabels[p.angle] ?? p.angle,
+      subtitle: '${_fullDate(p.date)} · ${p.createdByClient ? 'Вы' : 'Тренер'}',
+      onDelete: () => ref.read(clientPhotosApiProvider).delete(p.id),
+    );
+    if (deleted == true && mounted) ref.invalidate(clientPhotosProvider);
   }
 
   @override
@@ -1338,12 +1378,18 @@ class _PhotosTabState extends ConsumerState<_PhotosTab> {
                     : 'Выбрать фото · ${kAngleLabels[_angle]}',
                 onTap: _uploading ? null : _pick,
               ),
+              const SizedBox(height: 8),
+              _DashedButton(
+                icon: Icons.burst_mode_outlined,
+                label: 'Загрузить до 3 фото · спереди · сбоку · сзади',
+                onTap: _uploading ? null : _pickMulti,
+              ),
             ],
           ),
         ),
         if (_error != null) ...<Widget>[
           const SizedBox(height: 12),
-          Text(_error!, style: TextStyle(fontSize: 13, color: c.danger)),
+          Text(_error!, style: TextStyle(fontSize: 13, color: c.inkMuted)),
         ],
         const SizedBox(height: 16),
         ...ps.when(
@@ -1378,6 +1424,7 @@ class _PhotosTabState extends ConsumerState<_PhotosTab> {
                         angle: kAngleLabels[p.angle] ?? p.angle,
                         author: p.createdByClient ? 'Вы' : 'Тренер',
                         onDelete: () => _delete(p),
+                        onTap: () => _openViewer(p, token),
                       ),
                   ],
                 ),
@@ -1393,19 +1440,29 @@ class _PhotosTabState extends ConsumerState<_PhotosTab> {
 
 class _PhotoTile extends StatelessWidget {
   const _PhotoTile(
-      {required this.url, required this.token, required this.angle, required this.author, required this.onDelete});
+      {required this.url,
+      required this.token,
+      required this.angle,
+      required this.author,
+      required this.onDelete,
+      required this.onTap});
   final String url;
   final String? token;
   final String angle;
   final String author; // кто добавил: «Вы» / «Тренер»
   final VoidCallback onDelete;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
-        AuthedImage(url: url, token: token, radius: 12),
+        GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: AuthedImage(url: url, token: token, radius: 12),
+        ),
         Positioned(
           left: 6,
           top: 6,

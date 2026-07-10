@@ -1902,6 +1902,43 @@ class _PhotosTabState extends ConsumerState<_PhotosTab> {
     }
   }
 
+  /// Мультизагрузка: до 3 фото одним выбором, ракурс по индексу
+  /// (0→спереди, 1→сбоку, 2→сзади), дата — выбранная `_date`.
+  Future<void> _pickMany() async {
+    if (_uploading) return;
+    // Захватываем messenger до async-гэпа (pickMultiImage) — иначе линт на context.
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    final List<XFile> picked =
+        await ImagePicker().pickMultiImage(limit: 3, maxWidth: 1600, imageQuality: 85);
+    if (picked.isEmpty) return;
+    final List<XFile> ps = picked.take(3).toList();
+    const List<String> angles = <String>['front', 'side', 'back'];
+    setState(() {
+      _uploading = true;
+      _error = null;
+    });
+    try {
+      for (int i = 0; i < ps.length; i++) {
+        final XFile x = ps[i];
+        await ref.read(trainerClientCardApiProvider).uploadPhoto(
+              widget.clientId,
+              date: _isoDate(_date),
+              angle: angles[i],
+              filePath: x.path,
+              fileName: x.name,
+            );
+      }
+      if (!mounted) return;
+      ref.invalidate(clientPhotosCardProvider(widget.clientId));
+      m.showSnackBar(SnackBar(content: Text('Фото добавлены (${ps.length} шт.)')));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'Не удалось загрузить фото.');
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
@@ -1945,12 +1982,18 @@ class _PhotosTabState extends ConsumerState<_PhotosTab> {
                     : 'Выбрать фото · ${_kAngleLabels[_angle]}',
                 onTap: _uploading ? null : _pick,
               ),
+              const SizedBox(height: 8),
+              _DashedPickButton(
+                icon: Icons.burst_mode_outlined,
+                label: _uploading ? 'Загрузка…' : 'Загрузить до 3 фото · спереди · сбоку · сзади',
+                onTap: _uploading ? null : _pickMany,
+              ),
             ],
           ),
         ),
         if (_error != null) ...<Widget>[
           const SizedBox(height: 12),
-          Text(_error!, style: TextStyle(fontSize: 13, color: c.danger)),
+          Text(_error!, style: TextStyle(fontSize: 13, color: c.inkMuted)),
         ],
         const SizedBox(height: 16),
         ...photos.when(
@@ -1983,7 +2026,8 @@ class _PhotosTabState extends ConsumerState<_PhotosTab> {
             return <Widget>[
               for (int gi = 0; gi < keys.length; gi++) ...<Widget>[
                 if (gi > 0) const SizedBox(height: 16),
-                _PhotoDateSection(photos: groups[keys[gi]]!, token: token, base: base),
+                _PhotoDateSection(
+                    photos: groups[keys[gi]]!, token: token, base: base, clientId: widget.clientId),
               ],
             ];
           },
@@ -1996,16 +2040,18 @@ class _PhotosTabState extends ConsumerState<_PhotosTab> {
 /// Блок фото одной даты: заголовок-дата + подпись автора, ниже — сетка миниатюр
 /// углов этой даты (зеркало клиентской группировки по дате). Если фото одной
 /// даты добавлены разными авторами — автор показывается у каждой миниатюры.
-class _PhotoDateSection extends StatelessWidget {
-  const _PhotoDateSection({required this.photos, required this.token, required this.base});
+class _PhotoDateSection extends ConsumerWidget {
+  const _PhotoDateSection(
+      {required this.photos, required this.token, required this.base, required this.clientId});
   final List<TClientPhoto> photos;
   final String? token;
   final String base;
+  final String clientId;
 
   static String _author(bool byClient) => byClient ? 'Клиент' : 'Тренер';
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final AppColors c = context.colors;
     final DateTime? date = photos.first.date;
     final bool mixed = photos.map((TClientPhoto p) => p.createdByClient).toSet().length > 1;
@@ -2033,7 +2079,22 @@ class _PhotoDateSection extends StatelessWidget {
           itemBuilder: (BuildContext ctx, int i) {
             final TClientPhoto p = photos[i];
             final String angle = _kAngleLabels[p.angle] ?? p.angle;
-            return Stack(
+            return GestureDetector(
+              onTap: () async {
+                final bool? deleted = await PhotoViewerScreen.show(
+                  context,
+                  url: '$base/api/files/${p.fileId}',
+                  token: token,
+                  title: angle,
+                  subtitle:
+                      '${date == null ? 'Без даты' : _fullDate(date)} · ${_author(p.createdByClient)}',
+                  onDelete: () => ref.read(trainerClientCardApiProvider).deletePhoto(clientId, p.id),
+                );
+                if (deleted == true) {
+                  ref.invalidate(clientPhotosCardProvider(clientId));
+                }
+              },
+              child: Stack(
               fit: StackFit.expand,
               children: <Widget>[
                 AuthedImage(url: '$base/api/files/${p.fileId}', token: token, radius: 12),
@@ -2051,6 +2112,7 @@ class _PhotoDateSection extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
             );
           },
         ),

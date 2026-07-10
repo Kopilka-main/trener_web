@@ -235,6 +235,11 @@ class TrainerClientCardApi {
     );
   }
 
+  /// Удалить фото прогресса клиента.
+  Future<void> deletePhoto(String clientId, String photoId) async {
+    await _api.deleteJson('/api/clients/$clientId/progress-photos/$photoId');
+  }
+
   /// Добавить пакет/абонемент клиенту.
   ///
   /// Если [installments] непустой — создаётся пакет в рассрочку
