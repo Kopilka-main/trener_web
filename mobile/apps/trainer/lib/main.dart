@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -27,6 +28,11 @@ void main() {
     // Тему грузим ДО первого кадра — иначе перескок light→dark на старте.
     // (Шрифты забандлены в ассеты core → грузятся синхронно, прогрев не нужен.)
     final ThemeMode themeMode = await loadThemeMode();
+    // Только книжная (портретная) ориентация — приложение не поворачивается.
+    await SystemChrome.setPreferredOrientations(<DeviceOrientation>[
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
     runApp(
       ProviderScope(
         observers: <ProviderObserver>[_userScope],
