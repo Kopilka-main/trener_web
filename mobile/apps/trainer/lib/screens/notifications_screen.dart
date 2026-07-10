@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -113,6 +115,29 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   /// Снимок «увиденного» НА МОМЕНТ входа (до markSeen) — по нему рисуем кружки.
   Set<String>? _seenSnapshot;
 
+  Timer? _poll;
+
+  @override
+  void initState() {
+    super.initState();
+    // Регулярный автоопрос, пока экран открыт: новые/изменившиеся уведомления
+    // (напр. клиент согласовал занятие) появляются в моменте. Алерты выводятся
+    // из этих трёх FutureProvider-ов (см. trainerAlertsProvider), поэтому
+    // инвалидируем их все; trainerNotifProvider (seen/dismissed) НЕ трогаем.
+    _poll = Timer.periodic(const Duration(seconds: 12), (_) {
+      if (!mounted) return;
+      ref.invalidate(trainerSessionsProvider);
+      ref.invalidate(trainerClientsProvider);
+      ref.invalidate(trainerBalancesProvider);
+    });
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
   /// Собирает все события (второстепенные) из сессий/клиентов.
   List<_Event> _buildEvents(List<Session> all, List<Client> clients, DateTime now) {
     final List<_Event> events = <_Event>[];
@@ -173,6 +198,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             ),
             Expanded(
               child: sessions.when(
+                // При автоопросе показываем текущие данные, а не спиннер —
+                // крутилка только при первичной загрузке (когда данных ещё нет).
+                skipLoadingOnRefresh: true,
+                skipLoadingOnReload: true,
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (Object e, _) => Center(
                   child: FilledButton(

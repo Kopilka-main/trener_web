@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,6 +27,8 @@ class CalendarScreen extends ConsumerStatefulWidget {
 }
 
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
+  Timer? _poll;
+
   @override
   void initState() {
     super.initState();
@@ -33,6 +37,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) ref.invalidate(trainerSessionsProvider);
     });
+    // Регулярный автоопрос, пока экран открыт: изменения (напр. клиент согласовал
+    // занятие) появляются в моменте, без перезахода в приложение.
+    _poll = Timer.periodic(const Duration(seconds: 12), (_) {
+      if (mounted) ref.invalidate(trainerSessionsProvider);
+    });
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
   }
 
   @override
@@ -61,6 +76,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               ),
             Expanded(
               child: sessions.when(
+                // При автоопросе показываем текущие данные, а не спиннер —
+                // крутилка только при первичной загрузке (когда данных ещё нет).
+                skipLoadingOnRefresh: true,
+                skipLoadingOnReload: true,
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (Object e, _) => _Retry(onRetry: () => ref.invalidate(trainerSessionsProvider)),
                 data: (List<Session> raw) {

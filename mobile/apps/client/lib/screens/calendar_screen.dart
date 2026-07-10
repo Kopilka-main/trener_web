@@ -22,9 +22,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   @override
   void initState() {
     super.initState();
-    // Поллинг занятий и подтверждений — как в вебе (8с, вебсокетов нет).
-    _poll = Timer.periodic(const Duration(seconds: 8), (_) {
-      ref.invalidate(clientSessionsProvider);
+    // Поллинг занятий и подтверждений — как в вебе (12с, вебсокетов нет).
+    _poll = Timer.periodic(const Duration(seconds: 12), (_) {
+      if (mounted) ref.invalidate(clientSessionsProvider);
     });
   }
 
@@ -54,6 +54,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               child: !linked
                   ? _NotLinked()
                   : sessions.when(
+                      // При периодическом поллинге показываем текущие данные,
+                      // а не спиннер/пустой календарь (только первичная загрузка).
+                      skipLoadingOnRefresh: true,
+                      skipLoadingOnReload: true,
                       // Загрузка — пустой календарь без спиннера (как в вебе).
                       loading: () => _calendar(context, const <Session>[]),
                       error: (Object e, _) => const _LoadError(),

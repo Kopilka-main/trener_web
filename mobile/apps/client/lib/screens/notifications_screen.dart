@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -221,6 +223,7 @@ class NotificationsScreen extends ConsumerStatefulWidget {
 }
 
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
+  Timer? _poll;
   bool _hadUnread = false;
 
   /// Снимок «увиденного» на момент входа — по нему рисуем кружок, чтобы markSeen
@@ -234,10 +237,21 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   void initState() {
     super.initState();
     _seenAtOpen = <String>{...ref.read(clientNotifSeenProvider)};
+    // Регулярный автоопрос источников ленты, пока экран открыт (вебсокетов нет).
+    _poll = Timer.periodic(const Duration(seconds: 12), (_) {
+      if (!mounted) return;
+      ref.invalidate(clientSessionsProvider);
+      ref.invalidate(clientWorkoutsProvider);
+      ref.invalidate(clientPackagesProvider);
+      ref.invalidate(clientMeasurementTasksProvider);
+      ref.invalidate(clientUnreadProvider);
+      ref.invalidate(clientChatProvider);
+    });
   }
 
   @override
   void dispose() {
+    _poll?.cancel();
     // Уход со страницы = «увидел новые сообщения» → отмечаем чат прочитанным.
     if (_hadUnread) ref.read(clientChatApiProvider).markRead();
     super.dispose();
@@ -295,7 +309,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       });
     }
 
-    final bool loading = sessions.isLoading && workouts.isLoading;
+    // Спиннер — только при первичной загрузке (нет ещё данных). При поллинге
+    // провайдеры уходят в isLoading, сохраняя прошлое значение, — показываем его,
+    // а не спиннер (аналог skipLoadingOnRefresh у AsyncValue.when).
+    final bool loading = sessions.isLoading &&
+        workouts.isLoading &&
+        !sessions.hasValue &&
+        !workouts.hasValue;
 
     return Scaffold(
       body: SafeArea(
