@@ -534,9 +534,9 @@ class _ConductorState extends ConsumerState<_Conductor> {
                   ],
                 )
               : FilledButton(
-                  onPressed: (_busy || exs.isEmpty) ? null : _start,
+                  onPressed: _busy ? null : _start,
                   style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
-                  child: Text(exs.isEmpty ? 'Добавьте упражнение' : 'Начать тренировку'),
+                  child: const Text('Начать тренировку'),
                 ),
         ),
       ],
