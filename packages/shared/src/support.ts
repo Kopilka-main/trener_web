@@ -20,6 +20,12 @@ export const supportThreadMessageSchema = z.object({
   direction: z.enum(['in', 'out']),
   text: z.string(),
   createdAt: z.string(),
+  // Вложение обращения (картинка/файл), если было. null/undefined — текстовое сообщение.
+  // fileId раздаётся защищённой раздачей GET /api/files/:id; kind различает превью
+  // (image) от скачивания (file); name — оригинальное имя для отображения/скачивания.
+  attachment: z
+    .object({ fileId: z.string(), kind: z.enum(['image', 'file']), name: z.string() })
+    .nullish(),
 });
 export type SupportThreadMessage = z.infer<typeof supportThreadMessageSchema>;
 

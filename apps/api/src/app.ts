@@ -272,6 +272,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     db: deps.db,
     clock,
     mailer,
+    storage,
     resolveScope: (id) => clientAuthSvc.resolveScope(id),
     onAgentReply: (owner, text) => {
       const payload = { title: 'Поддержка FitBond', body: text, url: '/support' };

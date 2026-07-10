@@ -528,6 +528,7 @@ export const measurements = pgTable(
       .references(() => clients.id, { onDelete: 'cascade' }),
     date: text('date').notNull(), // YYYY-MM-DD
     weightKg: doublePrecision('weight_kg'),
+    skeletalMuscleKg: doublePrecision('skeletal_muscle_kg'),
     bodyFatPct: doublePrecision('body_fat_pct'),
     bicepsCm: doublePrecision('biceps_cm'),
     chestCm: doublePrecision('chest_cm'),
@@ -709,6 +710,13 @@ export const supportMessages = pgTable(
     email: text('email'),
     name: text('name'),
     text: text('text').notNull(),
+    // Вложение обращения (только направление 'in', от пользователя): ссылка на files.id,
+    // вид (image/file) и оригинальное имя. NULL — текстовое обращение без вложения.
+    attachmentFileId: text('attachment_file_id').references(() => files.id, {
+      onDelete: 'set null',
+    }),
+    attachmentKind: text('attachment_kind').$type<'image' | 'file'>(),
+    attachmentName: text('attachment_name'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

@@ -3,7 +3,8 @@
 //  - исходящее (createTopic/sendToTopic/sendToGeneral) — обращение/ответ уходит в тему
 //    (forum topic) пользователя либо в общий чат (фолбэк, когда темы недоступны);
 //  - входящее (getUpdates) — long-poll забирает ответы саппорта из тем обратно в приложение.
-import { fetch, type Dispatcher } from 'undici';
+import { fetch, FormData, type Dispatcher } from 'undici';
+import { Blob } from 'node:buffer';
 import { socksDispatcher } from 'fetch-socks';
 
 // Ответ саппорта из темы Telegram (результат long-poll getUpdates).
@@ -27,6 +28,24 @@ export interface TelegramClient {
   sendToTopic(topicId: number, text: string): Promise<void>;
   // Пост в общий чат (без message_thread_id) — фолбэк, когда тему создать не удалось.
   sendToGeneral(text: string): Promise<void>;
+  // Вложение-картинка в тему topicId (sendPhoto, multipart). КИДАЕТ при ошибке — как
+  // sendToTopic (сервис откатится на sendPhotoToGeneral).
+  sendPhotoToTopic(
+    topicId: number,
+    file: Buffer,
+    filename: string,
+    caption?: string,
+  ): Promise<void>;
+  // Вложение-документ (любой файл) в тему topicId (sendDocument, multipart). КИДАЕТ при ошибке.
+  sendDocumentToTopic(
+    topicId: number,
+    file: Buffer,
+    filename: string,
+    caption?: string,
+  ): Promise<void>;
+  // Фолбэки без темы (общий чат) — когда тему завести/использовать не удалось.
+  sendPhotoToGeneral(file: Buffer, filename: string, caption?: string): Promise<void>;
+  sendDocumentToGeneral(file: Buffer, filename: string, caption?: string): Promise<void>;
   getUpdates(offset: number | undefined): Promise<TelegramReply[]>;
 }
 
@@ -99,6 +118,34 @@ export function makeTelegramClient(
     return json;
   }
 
+  // Multipart-вызов для вложений (sendPhoto/sendDocument): content-type НЕ ставим —
+  // FormData сам проставит boundary. fileField — 'photo' или 'document'. КИДАЕТ при ошибке.
+  async function callForm(
+    method: string,
+    fileField: 'photo' | 'document',
+    file: Buffer,
+    filename: string,
+    opts2: { topicId?: number; caption?: string },
+  ): Promise<void> {
+    const form = new FormData();
+    form.append('chat_id', chatId);
+    if (opts2.topicId !== undefined) form.append('message_thread_id', String(opts2.topicId));
+    if (opts2.caption) form.append('caption', opts2.caption.slice(0, 1024));
+    // Buffer → Uint8Array для Blob (undici Blob принимает BlobPart).
+    form.append(fileField, new Blob([new Uint8Array(file)]), filename);
+    const res = await fetch(`${base}/bot${botToken}/${method}`, {
+      method: 'POST',
+      body: form,
+      ...(dispatcher ? { dispatcher } : {}),
+    });
+    const json = (await res.json().catch(() => ({ ok: false }))) as TgResponse<unknown>;
+    if (!res.ok || !json.ok) {
+      throw new Error(
+        `telegram ${method} ${res.status}: ${(json.description ?? '').slice(0, 200)}`,
+      );
+    }
+  }
+
   return {
     // Создать тему (forum topic). undefined, если создать не удалось (нет прав / чат не
     // форум) — сбой логируем, submit не роняем (сервис откатится на общий чат).
@@ -131,6 +178,33 @@ export function makeTelegramClient(
         chat_id: chatId,
         text,
         disable_web_page_preview: true,
+      });
+    },
+
+    // Картинка в тему (sendPhoto). КИДАЕТ при ошибке — сервис откатится на general.
+    async sendPhotoToTopic(topicId, file, filename, caption): Promise<void> {
+      await callForm('sendPhoto', 'photo', file, filename, {
+        topicId,
+        ...(caption ? { caption } : {}),
+      });
+    },
+
+    // Документ (любой файл) в тему (sendDocument). КИДАЕТ при ошибке.
+    async sendDocumentToTopic(topicId, file, filename, caption): Promise<void> {
+      await callForm('sendDocument', 'document', file, filename, {
+        topicId,
+        ...(caption ? { caption } : {}),
+      });
+    },
+
+    // Фолбэки без темы (общий чат).
+    async sendPhotoToGeneral(file, filename, caption): Promise<void> {
+      await callForm('sendPhoto', 'photo', file, filename, { ...(caption ? { caption } : {}) });
+    },
+
+    async sendDocumentToGeneral(file, filename, caption): Promise<void> {
+      await callForm('sendDocument', 'document', file, filename, {
+        ...(caption ? { caption } : {}),
       });
     },
 

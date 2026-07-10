@@ -3,9 +3,11 @@ import type { Db } from '../../db/client.js';
 import type { Clock } from '../../core/app-deps.js';
 import type { ClientLink } from '@trener/shared';
 import type { Mailer } from '../../auth/mailer.js';
+import type { Storage } from '../../files/storage.js';
 import { makeSupportRepo, type SupportOwner } from './support.repo.js';
 import { makeSupportService } from './support.service.js';
 import { makeTelegramClient } from './telegram.js';
+import { makeFilesRepo } from '../files/files.repo.js';
 import { startSupportPoller } from './support.poller.js';
 import { supportTrainerRoutes, supportClientRoutes } from './support.routes.js';
 
@@ -20,6 +22,8 @@ export function registerSupportModule(
     db: Db;
     clock: Clock;
     mailer: Mailer;
+    // Файловое хранилище (диск) для вложений обращений — как в progress-photos.
+    storage: Storage;
     resolveScope: (id: string) => Promise<ClientLink>;
     // Email администратора (env SUPPORT_EMAIL). Пусто → обращения только в БД, без письма.
     supportEmail?: string;
@@ -32,6 +36,7 @@ export function registerSupportModule(
   },
 ): void {
   const repo = makeSupportRepo(deps.db);
+  const filesRepo = makeFilesRepo(deps.db);
   const client = deps.telegram
     ? makeTelegramClient(deps.telegram.botToken, deps.telegram.chatId, {
         ...(deps.telegram.apiBase ? { apiBase: deps.telegram.apiBase } : {}),
@@ -44,6 +49,11 @@ export function registerSupportModule(
     now: deps.clock.now,
     ...(deps.supportEmail ? { supportEmail: deps.supportEmail } : {}),
     ...(client ? { telegram: client } : {}),
+    store: {
+      save: deps.storage.save.bind(deps.storage),
+      remove: deps.storage.remove.bind(deps.storage),
+      createFile: (input) => filesRepo.create(input),
+    },
   });
 
   supportTrainerRoutes(app, svc, (id) => repo.findTrainerContact(id));

@@ -4,6 +4,8 @@ import { supportMessages, trainers, clientAccounts } from '../../db/schema.js';
 
 export type SupportSource = 'trainer' | 'client';
 export type SupportDirection = 'in' | 'out';
+// Вид вложения обращения: image — картинка (превью), file — произвольный файл (скачивание).
+export type SupportAttachmentKind = 'image' | 'file';
 
 // Владелец переписки (для роутинга ответа и пуша). source различает контур.
 export type SupportOwner = {
@@ -25,6 +27,11 @@ export type SupportMessageRow = {
   email: string | null;
   name: string | null;
   text: string;
+  // Вложение обращения (только direction 'in'). NULL/отсутствует — текстовое сообщение.
+  // attachmentFileId — ссылка на files.id (раздаётся GET /api/files/:id).
+  attachmentFileId?: string | null;
+  attachmentKind?: SupportAttachmentKind | null;
+  attachmentName?: string | null;
   createdAt: Date;
 };
 

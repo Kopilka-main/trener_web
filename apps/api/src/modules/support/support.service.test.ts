@@ -22,13 +22,48 @@ function fakeMailer(send: (email: Email) => Promise<void> = () => Promise.resolv
 }
 
 // Мок Telegram-клиента доставки: createTopic по умолчанию не создаёт тему (undefined),
-// оба sendTo* успешны. Тесты подменяют нужное поведение через over.
-type FakeTelegram = Pick<TelegramClient, 'createTopic' | 'sendToTopic' | 'sendToGeneral'>;
+// все sendTo* успешны. Тесты подменяют нужное поведение через over.
+type FakeTelegram = Pick<
+  TelegramClient,
+  | 'createTopic'
+  | 'sendToTopic'
+  | 'sendToGeneral'
+  | 'sendPhotoToTopic'
+  | 'sendDocumentToTopic'
+  | 'sendPhotoToGeneral'
+  | 'sendDocumentToGeneral'
+>;
 function fakeTelegram(over: Partial<FakeTelegram> = {}): FakeTelegram {
   return {
     createTopic: vi.fn(() => Promise.resolve<number | undefined>(undefined)),
     sendToTopic: vi.fn(() => Promise.resolve()),
     sendToGeneral: vi.fn(() => Promise.resolve()),
+    sendPhotoToTopic: vi.fn(() => Promise.resolve()),
+    sendDocumentToTopic: vi.fn(() => Promise.resolve()),
+    sendPhotoToGeneral: vi.fn(() => Promise.resolve()),
+    sendDocumentToGeneral: vi.fn(() => Promise.resolve()),
+    ...over,
+  };
+}
+
+// Мок хранилища вложений: save возвращает фиктивный storagePath/size, createFile/remove — no-op.
+function fakeStore(over: Partial<SupportServiceDeps['store'] & object> = {}) {
+  return {
+    save: vi.fn(() => Promise.resolve({ storagePath: 'tr/_/f.jpg', sizeBytes: 3 })),
+    remove: vi.fn(() => Promise.resolve()),
+    createFile: vi.fn(() =>
+      Promise.resolve({
+        id: 'file1',
+        trainerId: 'A',
+        clientId: null,
+        accountId: null,
+        mime: 'image/jpeg',
+        sizeBytes: 3,
+        storagePath: 'tr/_/f.jpg',
+        originalName: 'photo.jpg',
+        createdAt: new Date(0),
+      }),
+    ),
     ...over,
   };
 }
@@ -321,8 +356,8 @@ describe('support.service', () => {
     const thread = await svc.threadForTrainer('T');
 
     expect(thread).toEqual([
-      { id: 'a', direction: 'in', text: 'вопрос', createdAt: new Date(1) },
-      { id: 'b', direction: 'out', text: 'ответ', createdAt: new Date(2) },
+      { id: 'a', direction: 'in', text: 'вопрос', attachment: null, createdAt: new Date(1) },
+      { id: 'b', direction: 'out', text: 'ответ', attachment: null, createdAt: new Date(2) },
     ]);
   });
 
@@ -335,6 +370,158 @@ describe('support.service', () => {
     const thread = await svc.threadForClient('C');
 
     expect(listForClient).toHaveBeenCalledWith('C');
-    expect(thread).toEqual([{ id: 'z', direction: 'in', text: 'привет', createdAt: new Date(0) }]);
+    expect(thread).toEqual([
+      { id: 'z', direction: 'in', text: 'привет', attachment: null, createdAt: new Date(0) },
+    ]);
+  });
+
+  it('threadForTrainer маппит attachment-поля строки в объект attachment', async () => {
+    const rows = [
+      row({
+        id: 'p',
+        direction: 'in',
+        text: '',
+        attachmentFileId: 'f1',
+        attachmentKind: 'image',
+        attachmentName: 'photo.jpg',
+      }),
+    ];
+    const svc = makeSupportService(
+      fakeRepo({ listForTrainer: vi.fn(() => Promise.resolve(rows)) }),
+      fakeMailer(),
+      baseDeps,
+    );
+
+    const thread = await svc.threadForTrainer('T');
+
+    expect(thread[0]!.attachment).toEqual({ fileId: 'f1', kind: 'image', name: 'photo.jpg' });
+  });
+
+  it('submitAttachment(image): текущая тема есть → sendPhotoToTopic, файл сохранён, запись с attachment', async () => {
+    const insert = vi.fn((_row: SupportMessageRow) => Promise.resolve());
+    const store = fakeStore();
+    const tg = fakeTelegram();
+    const findCurrentTopicForOwner = vi.fn(() => Promise.resolve<number | null>(7));
+    const svc = makeSupportService(fakeRepo({ insert, findCurrentTopicForOwner }), fakeMailer(), {
+      ...baseDeps,
+      telegram: tg,
+      store,
+    });
+
+    await svc.submitAttachment({
+      source: 'trainer',
+      trainerId: 'A',
+      email: 'a@b.c',
+      name: 'Иван',
+      kind: 'image',
+      file: Buffer.from('img'),
+      mime: 'image/jpeg',
+      filename: 'photo.jpg',
+      caption: 'Смотрите',
+    });
+
+    // Файл сохранён на диск и в files.
+    expect(store.save).toHaveBeenCalledTimes(1);
+    expect(store.createFile).toHaveBeenCalledTimes(1);
+    // Картинка ушла в существующую тему; документные/general-методы не тронуты.
+    expect(tg.sendPhotoToTopic).toHaveBeenCalledTimes(1);
+    expect(tg.sendPhotoToTopic).toHaveBeenCalledWith(
+      7,
+      expect.any(Buffer),
+      'photo.jpg',
+      expect.stringContaining('Смотрите'),
+    );
+    expect(tg.createTopic).not.toHaveBeenCalled();
+    expect(tg.sendDocumentToTopic).not.toHaveBeenCalled();
+    expect(tg.sendPhotoToGeneral).not.toHaveBeenCalled();
+    // Запись обращения с attachment-полями.
+    const saved = insert.mock.calls[0]![0];
+    expect(saved).toMatchObject({
+      direction: 'in',
+      trainerId: 'A',
+      telegramTopicId: 7,
+      text: 'Смотрите',
+      attachmentFileId: 'sup1',
+      attachmentKind: 'image',
+      attachmentName: 'photo.jpg',
+    });
+  });
+
+  it('submitAttachment(file): нет темы → createTopic + sendDocumentToTopic', async () => {
+    const insert = vi.fn((_row: SupportMessageRow) => Promise.resolve());
+    const store = fakeStore();
+    const tg = fakeTelegram({ createTopic: vi.fn(() => Promise.resolve<number | undefined>(42)) });
+    const svc = makeSupportService(fakeRepo({ insert }), fakeMailer(), {
+      ...baseDeps,
+      telegram: tg,
+      store,
+    });
+
+    await svc.submitAttachment({
+      source: 'trainer',
+      trainerId: 'A',
+      kind: 'file',
+      file: Buffer.from('pdf'),
+      mime: 'application/pdf',
+      filename: 'doc.pdf',
+    });
+
+    expect(tg.createTopic).toHaveBeenCalledTimes(1);
+    expect(tg.sendDocumentToTopic).toHaveBeenCalledWith(
+      42,
+      expect.any(Buffer),
+      'doc.pdf',
+      expect.any(String),
+    );
+    expect(tg.sendPhotoToTopic).not.toHaveBeenCalled();
+    const saved = insert.mock.calls[0]![0];
+    expect(saved.telegramTopicId).toBe(42);
+    expect(saved.attachmentKind).toBe('file');
+    expect(saved.text).toBe('');
+  });
+
+  it('submitAttachment: сбой темы (sendPhotoToTopic throws) → фолбэк sendPhotoToGeneral, topicId null', async () => {
+    const insert = vi.fn((_row: SupportMessageRow) => Promise.resolve());
+    const store = fakeStore();
+    const tg = fakeTelegram({
+      createTopic: vi.fn(() => Promise.resolve<number | undefined>(undefined)),
+      sendPhotoToTopic: vi.fn(() => Promise.reject(new Error('topic gone'))),
+    });
+    const findCurrentTopicForOwner = vi.fn(() => Promise.resolve<number | null>(5));
+    const svc = makeSupportService(fakeRepo({ insert, findCurrentTopicForOwner }), fakeMailer(), {
+      ...baseDeps,
+      telegram: tg,
+      store,
+    });
+
+    await svc.submitAttachment({
+      source: 'trainer',
+      trainerId: 'A',
+      kind: 'image',
+      file: Buffer.from('img'),
+      mime: 'image/jpeg',
+      filename: 'p.jpg',
+    });
+
+    expect(tg.sendPhotoToTopic).toHaveBeenCalledTimes(1);
+    expect(tg.createTopic).toHaveBeenCalledTimes(1);
+    expect(tg.sendPhotoToGeneral).toHaveBeenCalledTimes(1);
+    const saved = insert.mock.calls[0]![0];
+    expect(saved.telegramTopicId).toBeNull();
+    expect(saved.attachmentFileId).toBe('sup1');
+  });
+
+  it('submitAttachment без store сконфигурированного бросает', async () => {
+    const svc = makeSupportService(fakeRepo(), fakeMailer(), baseDeps);
+    await expect(
+      svc.submitAttachment({
+        source: 'trainer',
+        trainerId: 'A',
+        kind: 'image',
+        file: Buffer.from('x'),
+        mime: 'image/jpeg',
+        filename: 'p.jpg',
+      }),
+    ).rejects.toThrow();
   });
 });
