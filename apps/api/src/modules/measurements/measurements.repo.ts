@@ -19,12 +19,14 @@ export type MeasurementRow = {
   thighCm: number | null;
   calfCm: number | null;
   note: string | null;
+  createdByClient: boolean;
   createdAt: Date;
 };
 
 export type CreateMeasurementInput = {
   id: string;
   date: string;
+  createdByClient: boolean;
   weightKg?: number | null;
   bodyFatPct?: number | null;
   bicepsCm?: number | null;
@@ -72,6 +74,7 @@ const columns = {
   thighCm: measurements.thighCm,
   calfCm: measurements.calfCm,
   note: measurements.note,
+  createdByClient: measurements.createdByClient,
   createdAt: measurements.createdAt,
 };
 
@@ -110,6 +113,7 @@ export function makeMeasurementsRepo(db: Db) {
           thighCm: input.thighCm ?? null,
           calfCm: input.calfCm ?? null,
           note: input.note ?? null,
+          createdByClient: input.createdByClient,
         })
         .returning(columns);
       // returning по PK всегда возвращает строку.

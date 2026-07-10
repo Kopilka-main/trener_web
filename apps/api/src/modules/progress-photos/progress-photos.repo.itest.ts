@@ -35,6 +35,7 @@ describe.skipIf(!url)('progress-photos.repo (integration)', () => {
       angle: 'front',
       fileId: 'fA',
       note: 'до',
+      createdByClient: false,
       ...over,
     };
   }

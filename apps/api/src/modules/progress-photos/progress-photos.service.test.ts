@@ -12,6 +12,7 @@ function photoRow(over: Partial<PhotoRow> = {}): PhotoRow {
     date: '2026-06-01',
     angle: 'front',
     note: null,
+    createdByClient: false,
     createdAt: new Date(0),
     file: {
       id: 'f1',
@@ -106,8 +107,27 @@ describe('progress-photos.service', () => {
       expect.objectContaining({ id: 'newid', mime: 'image/jpeg', storagePath: 'A/c1/newid.jpg' }),
     );
     expect(photoCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ trainerId: 'A', clientId: 'c1', fileId: 'newid', angle: 'front' }),
+      expect.objectContaining({
+        trainerId: 'A',
+        clientId: 'c1',
+        fileId: 'newid',
+        angle: 'front',
+        createdByClient: false,
+      }),
     );
+  });
+
+  it('upload: createdByClient=true в клиентском контуре (deps)', async () => {
+    const photoCreate = vi.fn(() => Promise.resolve(photoRow({ createdByClient: true })));
+    const svc = makeProgressPhotosService(
+      fakeRepo({ create: photoCreate }),
+      fakeFilesRepo(),
+      fakeStorage(),
+      { ...deps, createdByClient: true },
+    );
+    const res = await svc.upload('A', 'c1', uploadInput());
+    expect(res.createdByClient).toBe(true);
+    expect(photoCreate).toHaveBeenCalledWith(expect.objectContaining({ createdByClient: true }));
   });
 
   it('upload: png → ext png; webp → ext webp', async () => {

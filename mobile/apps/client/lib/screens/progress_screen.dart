@@ -931,8 +931,20 @@ class _MeasurementCard extends StatelessWidget {
           Row(
             children: <Widget>[
               Expanded(
-                child: Text(_fullDate(m.date),
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: <Widget>[
+                    Flexible(
+                      child: Text(_fullDate(m.date),
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(m.createdByClient ? 'Вы' : 'Тренер',
+                        style: AppFonts.mono(size: 9, color: c.inkMutedXl, weight: FontWeight.w600)),
+                  ],
+                ),
               ),
               GestureDetector(
                 onTap: onEdit,
@@ -1364,6 +1376,7 @@ class _PhotosTabState extends ConsumerState<_PhotosTab> {
                         url: api.photoUrl(p.fileId),
                         token: token,
                         angle: kAngleLabels[p.angle] ?? p.angle,
+                        author: p.createdByClient ? 'Вы' : 'Тренер',
                         onDelete: () => _delete(p),
                       ),
                   ],
@@ -1380,10 +1393,11 @@ class _PhotosTabState extends ConsumerState<_PhotosTab> {
 
 class _PhotoTile extends StatelessWidget {
   const _PhotoTile(
-      {required this.url, required this.token, required this.angle, required this.onDelete});
+      {required this.url, required this.token, required this.angle, required this.author, required this.onDelete});
   final String url;
   final String? token;
   final String angle;
+  final String author; // кто добавил: «Вы» / «Тренер»
   final VoidCallback onDelete;
 
   @override
@@ -1395,12 +1409,25 @@ class _PhotoTile extends StatelessWidget {
         Positioned(
           left: 6,
           top: 6,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.55), borderRadius: BorderRadius.circular(4)),
-            child: Text(angle,
-                style: AppFonts.mono(size: 9, color: Colors.white, weight: FontWeight.w700)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.55), borderRadius: BorderRadius.circular(4)),
+                child: Text(angle,
+                    style: AppFonts.mono(size: 9, color: Colors.white, weight: FontWeight.w700)),
+              ),
+              const SizedBox(height: 3),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.55), borderRadius: BorderRadius.circular(4)),
+                child: Text(author,
+                    style: AppFonts.mono(size: 9, color: Colors.white.withValues(alpha: 0.85), weight: FontWeight.w500)),
+              ),
+            ],
           ),
         ),
         Positioned(

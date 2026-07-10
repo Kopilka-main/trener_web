@@ -20,6 +20,7 @@ function row(over: Partial<MeasurementRow> = {}): MeasurementRow {
     thighCm: null,
     calfCm: null,
     note: null,
+    createdByClient: false,
     createdAt: new Date(0),
     ...over,
   };
@@ -57,7 +58,35 @@ describe('measurements.service', () => {
     const create = vi.fn(() => Promise.resolve(row()));
     const svc = makeMeasurementsService(fakeRepo({ create }), deps);
     await svc.create('A', 'c1', { date: '2026-06-01' });
-    expect(create).toHaveBeenCalledWith('A', 'c1', { id: 'newid', date: '2026-06-01' });
+    expect(create).toHaveBeenCalledWith('A', 'c1', {
+      id: 'newid',
+      date: '2026-06-01',
+      createdByClient: false,
+    });
+  });
+
+  it('create проставляет createdByClient=false по умолчанию (тренерский контур)', async () => {
+    const create = vi.fn(() => Promise.resolve(row()));
+    const svc = makeMeasurementsService(fakeRepo({ create }), deps);
+    const res = await svc.create('A', 'c1', { date: '2026-06-01' });
+    expect(res.createdByClient).toBe(false);
+    expect(create).toHaveBeenCalledWith(
+      'A',
+      'c1',
+      expect.objectContaining({ createdByClient: false }),
+    );
+  });
+
+  it('create проставляет createdByClient=true в клиентском контуре (deps)', async () => {
+    const create = vi.fn(() => Promise.resolve(row({ createdByClient: true })));
+    const svc = makeMeasurementsService(fakeRepo({ create }), { ...deps, createdByClient: true });
+    const res = await svc.create('A', 'c1', { date: '2026-06-01' });
+    expect(res.createdByClient).toBe(true);
+    expect(create).toHaveBeenCalledWith(
+      'A',
+      'c1',
+      expect.objectContaining({ createdByClient: true }),
+    );
   });
 
   it('list резолвит ответы', async () => {

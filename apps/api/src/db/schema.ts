@@ -539,6 +539,7 @@ export const measurements = pgTable(
     thighCm: doublePrecision('thigh_cm'),
     calfCm: doublePrecision('calf_cm'),
     note: text('note'),
+    createdByClient: boolean('created_by_client').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('idx_measurements_trainer_client_date').on(t.trainerId, t.clientId, t.date)],
@@ -604,6 +605,7 @@ export const progressPhotos = pgTable(
       .notNull()
       .references(() => files.id, { onDelete: 'cascade' }),
     note: text('note'),
+    createdByClient: boolean('created_by_client').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

@@ -12,12 +12,13 @@ const Map<String, int> kAngleOrder = <String, int>{'front': 0, 'side': 1, 'back'
 
 /// Фото прогресса клиента.
 class ProgressPhoto {
-  ProgressPhoto({required this.id, required this.date, required this.angle, required this.fileId, required this.note});
+  ProgressPhoto({required this.id, required this.date, required this.angle, required this.fileId, required this.note, required this.createdByClient});
   final String id;
   final DateTime? date;
   final String angle;
   final String fileId;
   final String? note;
+  final bool createdByClient; // true = добавил клиент (вы), false = тренер
 
   factory ProgressPhoto.fromJson(Map<String, dynamic> j) {
     final Map<String, dynamic> f = (j['file'] as Map<String, dynamic>?) ?? <String, dynamic>{};
@@ -27,6 +28,7 @@ class ProgressPhoto {
       angle: j['angle'] as String? ?? 'front',
       fileId: f['id'] as String? ?? '',
       note: j['note'] as String?,
+      createdByClient: (j['createdByClient'] as bool?) ?? false,
     );
   }
 }

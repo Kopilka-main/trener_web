@@ -39,6 +39,7 @@ class TPackage {
     required this.status,
     required this.isInstallment,
     required this.installments,
+    required this.createdAt,
   });
   final String id;
   final String? workoutType;
@@ -48,6 +49,8 @@ class TPackage {
   final String status;
   final bool isInstallment;
   final List<TInstallment> installments;
+  // Когда пакет добавлен — для «сворачивания» остатка в новый пакет (X/Y).
+  final DateTime? createdAt;
   int get remaining => lessonsPaid - lessonsUsed;
   bool get isActive => status == 'active';
 
@@ -81,7 +84,44 @@ class TPackage {
             .cast<Map<String, dynamic>>()
             .map(TInstallment.fromJson)
             .toList(),
+        createdAt: _dt(j['createdAt'] as String?),
       );
+}
+
+/// Прогресс по пакетам «X/Y» с переносом остатка в новый пакет.
+/// Y = сумма активных пакетов − проведённые ДО добавления НОВЕЙШЕГО пакета;
+/// X = проведённые ПОСЛЕ (обрезается до Y). При добавлении пакета остаток
+/// «сворачивается» (2/10 + 20 → 0/28); при удалении — пересчёт возвращает прежнее.
+/// Возвращает null, если активных пакетов нет.
+({int done, int total})? packageProgress(List<TPackage> pkgs, List<TWorkout> workouts) {
+  final List<TPackage> active = pkgs.where((TPackage p) => p.isActive).toList()
+    ..sort((TPackage a, TPackage b) =>
+        (a.createdAt ?? DateTime(0)).compareTo(b.createdAt ?? DateTime(0)));
+  if (active.isEmpty) return null;
+  final DateTime newestAt = active.last.createdAt ?? DateTime(0);
+  final int totalPaid = active.fold<int>(0, (int a, TPackage p) => a + p.lessonsPaid);
+  // Проведённые тренировки тренером (без клиентских и без учёта времени = 0).
+  final List<TWorkout> completed = workouts
+      .where((TWorkout w) =>
+          w.status == 'completed' && !w.createdByClient && w.completedAt != null)
+      .toList();
+  final int beforeRaw = completed.where((TWorkout w) => w.completedAt!.isBefore(newestAt)).length;
+  final int after = completed.length - beforeRaw;
+  // «Списать» до добавления нового пакета можно не больше, чем вмещали ПРЕЖНИЕ
+  // активные пакеты (totalPaid − новейший). Иначе тренировки уже завершённого и
+  // ставшего неактивным пакета ошибочно уменьшили бы счётчик нового.
+  final int priorCap = totalPaid - active.last.lessonsPaid;
+  final int before = beforeRaw > priorCap ? priorCap : beforeRaw;
+  final int total = totalPaid - before;
+  if (total <= 0) return (done: 0, total: 0);
+  final int done = after.clamp(0, total);
+  return (done: done, total: total);
+}
+
+/// Строка прогресса пакета: «X/Y», а при исчерпании (X≥Y) — «0».
+String packageProgressLabel(({int done, int total})? p) {
+  if (p == null || p.total <= 0) return '0';
+  return p.done >= p.total ? '0' : '${p.done}/${p.total}';
 }
 
 /// Тренировка клиента (срез для карточки).
@@ -106,12 +146,14 @@ class TWorkout {
 
 /// Замер клиента.
 class TMeasurement {
-  TMeasurement({required this.date, required this.weightKg, required this.bodyFatPct, required this.metrics, required this.note});
+  TMeasurement({required this.date, required this.weightKg, required this.bodyFatPct, required this.metrics, required this.note, required this.createdByClient});
   final DateTime? date;
   final num? weightKg;
   final num? bodyFatPct;
   final Map<String, num> metrics; // обхваты, см
   final String? note;
+  // Кто добавил замер: true — клиент, false — тренер.
+  final bool createdByClient;
 
   factory TMeasurement.fromJson(Map<String, dynamic> j) {
     final Map<String, num> m = <String, num>{};
@@ -130,6 +172,7 @@ class TMeasurement {
       bodyFatPct: j['bodyFatPct'] as num?,
       metrics: m,
       note: j['note'] as String?,
+      createdByClient: (j['createdByClient'] as bool?) ?? false,
     );
   }
 }
@@ -259,11 +302,13 @@ const Map<String, int> kClientPhotoAngleOrder = <String, int>{'front': 0, 'side'
 
 /// Фото прогресса клиента (просмотр тренером).
 class TClientPhoto {
-  TClientPhoto({required this.id, required this.date, required this.angle, required this.fileId});
+  TClientPhoto({required this.id, required this.date, required this.angle, required this.fileId, required this.createdByClient});
   final String id;
   final DateTime? date;
   final String angle;
   final String fileId;
+  // Кто добавил фото: true — клиент, false — тренер.
+  final bool createdByClient;
   factory TClientPhoto.fromJson(Map<String, dynamic> j) {
     final Map<String, dynamic> f = (j['file'] as Map<String, dynamic>?) ?? <String, dynamic>{};
     return TClientPhoto(
@@ -271,6 +316,7 @@ class TClientPhoto {
       date: _dt(j['date'] as String?),
       angle: j['angle'] as String? ?? 'front',
       fileId: f['id'] as String? ?? '',
+      createdByClient: (j['createdByClient'] as bool?) ?? false,
     );
   }
 }

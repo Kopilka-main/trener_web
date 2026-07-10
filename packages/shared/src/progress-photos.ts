@@ -18,6 +18,7 @@ export const photoResponseSchema = z.object({
   date: z.string(),
   angle: angleSchema,
   note: z.string().nullable(),
+  createdByClient: z.boolean(),
   file: fileResponseSchema,
   createdAt: z.string(),
 });

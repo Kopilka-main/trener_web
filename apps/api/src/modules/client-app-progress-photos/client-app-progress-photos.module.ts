@@ -31,6 +31,8 @@ export function registerClientAppProgressPhotosModule(
   const filesRepo = makeFilesRepo(deps.db);
   const svc = makeProgressPhotosService(repo, filesRepo, deps.storage, {
     newId: deps.clock.newId,
+    // Автор — клиент (клиентский контур).
+    createdByClient: true,
   });
   clientAppProgressPhotosRoutes(
     app,

@@ -25,11 +25,12 @@ const List<MetricDef> kMetrics = <MetricDef>[
 
 /// Замер тела клиента.
 class Measurement {
-  Measurement({required this.id, required this.date, required this.values, required this.note});
+  Measurement({required this.id, required this.date, required this.values, required this.note, required this.createdByClient});
   final String id;
   final DateTime? date;
   final Map<String, num> values; // ключ метрики → значение
   final String? note;
+  final bool createdByClient; // true = добавил клиент (вы), false = тренер
 
   num? value(String key) => values[key];
 
@@ -44,6 +45,7 @@ class Measurement {
       date: DateTime.tryParse(j['date'] as String? ?? ''),
       values: v,
       note: j['note'] as String?,
+      createdByClient: (j['createdByClient'] as bool?) ?? false,
     );
   }
 }

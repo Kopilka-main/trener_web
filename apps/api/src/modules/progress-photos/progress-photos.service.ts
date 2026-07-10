@@ -4,7 +4,8 @@ import type { Storage } from '../../files/storage.js';
 import type { Angle, PhotoResponse } from '@trener/shared';
 import { AppError, notFound } from '../../errors.js';
 
-export type ProgressPhotosDeps = { newId: () => string };
+// createdByClient — автор фото: true в клиентском контуре, false в тренерском (по умолчанию).
+export type ProgressPhotosDeps = { newId: () => string; createdByClient?: boolean };
 
 // Расширение файла выводим ИЗ MIME по whitelist (НЕ из имени файла клиента).
 const MIME_EXT: Record<string, string> = {
@@ -29,6 +30,7 @@ function toResponse(r: PhotoRow): PhotoResponse {
     date: r.date,
     angle: r.angle,
     note: r.note,
+    createdByClient: r.createdByClient,
     file: {
       id: r.file.id,
       mime: r.file.mime,
@@ -78,6 +80,7 @@ export function makeProgressPhotosService(
           angle: input.angle,
           fileId,
           note: input.note,
+          createdByClient: deps.createdByClient ?? false,
         });
         return toResponse(row);
       } catch (err) {

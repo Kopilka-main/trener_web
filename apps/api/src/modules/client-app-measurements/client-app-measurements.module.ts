@@ -33,6 +33,8 @@ export function registerClientAppMeasurementsModule(
   });
   const svc = makeMeasurementsService(makeMeasurementsRepo(deps.db), {
     newId: deps.clock.newId,
+    // Автор — клиент (клиентский контур).
+    createdByClient: true,
     // Замер внесён клиентом → закрываем открытые задачи на замеры.
     onMeasurementCreated: (trainerId, clientId) => tasksSvc.resolveOpen(trainerId, clientId),
   });

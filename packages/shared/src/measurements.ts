@@ -47,6 +47,7 @@ export const measurementResponseSchema = z.object({
   thighCm: z.number().nullable(),
   calfCm: z.number().nullable(),
   note: z.string().nullable(),
+  createdByClient: z.boolean(),
   createdAt: z.string(),
 });
 export type MeasurementResponse = z.infer<typeof measurementResponseSchema>;

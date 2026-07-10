@@ -19,6 +19,7 @@ describe.skipIf(!url)('measurements.repo (integration)', () => {
     waistCm: 85,
     hipsCm: 95,
     note: 'утро',
+    createdByClient: false,
   };
 
   beforeEach(async () => {
@@ -58,7 +59,11 @@ describe.skipIf(!url)('measurements.repo (integration)', () => {
   });
 
   it('create с опущенными метриками сохраняет null', async () => {
-    const m = await repo.create('A', 'c1', { id: 'm2', date: '2026-06-02' });
+    const m = await repo.create('A', 'c1', {
+      id: 'm2',
+      date: '2026-06-02',
+      createdByClient: false,
+    });
     expect(m.weightKg).toBeNull();
     expect(m.bodyFatPct).toBeNull();
     expect(m.chestCm).toBeNull();

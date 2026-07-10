@@ -1,0 +1,2 @@
+ALTER TABLE "measurements" ADD COLUMN "created_by_client" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "progress_photos" ADD COLUMN "created_by_client" boolean DEFAULT false NOT NULL;

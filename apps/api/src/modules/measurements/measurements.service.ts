@@ -13,6 +13,8 @@ import { notFound } from '../../errors.js';
 
 export type MeasurementsDeps = {
   newId: () => string;
+  // Автор замера: true — добавил клиент (клиентский контур), false — тренер. По умолчанию false.
+  createdByClient?: boolean;
   // Вызывается после успешного создания замера — закрыть открытые задачи на замеры пары.
   onMeasurementCreated?: (trainerId: string, clientId: string) => void | Promise<void>;
 };
@@ -34,6 +36,7 @@ function toResponse(r: MeasurementRow): MeasurementResponse {
     thighCm: r.thighCm,
     calfCm: r.calfCm,
     note: r.note,
+    createdByClient: r.createdByClient,
     createdAt: r.createdAt.toISOString(),
   };
 }
@@ -49,6 +52,7 @@ export function makeMeasurementsService(repo: MeasurementsRepo, deps: Measuremen
       const data: CreateMeasurementInput = {
         id: deps.newId(),
         date: input.date,
+        createdByClient: deps.createdByClient ?? false,
       };
       if (input.weightKg !== undefined) data.weightKg = input.weightKg ?? null;
       if (input.bodyFatPct !== undefined) data.bodyFatPct = input.bodyFatPct ?? null;

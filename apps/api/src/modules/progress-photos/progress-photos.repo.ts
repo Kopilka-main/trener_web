@@ -11,6 +11,7 @@ export type PhotoRow = {
   date: string;
   angle: Angle;
   note: string | null;
+  createdByClient: boolean;
   createdAt: Date;
   file: {
     id: string;
@@ -29,6 +30,7 @@ export type CreatePhotoInput = {
   angle: Angle;
   fileId: string;
   note: string | null;
+  createdByClient: boolean;
 };
 
 const columns = {
@@ -38,6 +40,7 @@ const columns = {
   date: progressPhotos.date,
   angle: progressPhotos.angle,
   note: progressPhotos.note,
+  createdByClient: progressPhotos.createdByClient,
   createdAt: progressPhotos.createdAt,
   fileId: files.id,
   fileMime: files.mime,
@@ -53,6 +56,7 @@ type JoinedRow = {
   date: string;
   angle: Angle;
   note: string | null;
+  createdByClient: boolean;
   createdAt: Date;
   fileId: string;
   fileMime: string;
@@ -69,6 +73,7 @@ function toRow(r: JoinedRow): PhotoRow {
     date: r.date,
     angle: r.angle,
     note: r.note,
+    createdByClient: r.createdByClient,
     createdAt: r.createdAt,
     file: {
       id: r.fileId,
@@ -100,6 +105,7 @@ export function makeProgressPhotosRepo(db: Db) {
         angle: input.angle,
         fileId: input.fileId,
         note: input.note,
+        createdByClient: input.createdByClient,
       });
       // Перечитываем через join, чтобы вернуть file-метаданные единообразно.
       const row = await this.getForTrainer(input.trainerId, input.clientId, input.id);

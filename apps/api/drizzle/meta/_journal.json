@@ -421,6 +421,13 @@
       "when": 1783675157254,
       "tag": "0059_short_vin_gonzales",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1783678593002,
+      "tag": "0060_cultured_shinko_yamashiro",
+      "breakpoints": true
     }
   ]
 }

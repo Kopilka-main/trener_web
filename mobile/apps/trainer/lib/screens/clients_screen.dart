@@ -463,20 +463,13 @@ class ClientDetailScreen extends ConsumerWidget {
         ? '${ref.read(baseUrlProvider).replaceAll(RegExp(r'/$'), '')}/api/files/${c.avatarFileId}'
         : null;
 
-    // Бейджи: paidBalance / calBalance / achievements (формулы — зеркало web).
+    // Бейджи: paidBalance / achievements (формулы — зеркало web).
     final List<TPackage> pkgs = ref.watch(clientPackagesProvider(c.id)).valueOrNull ?? <TPackage>[];
     final List<TWorkout> workouts = ref.watch(clientWorkoutsCardProvider(c.id)).valueOrNull ?? <TWorkout>[];
     final ClientStatsData? stats = ref.watch(clientStatsProvider(c.id)).valueOrNull;
-    final List<Session> sessions = (ref.watch(trainerSessionsProvider).valueOrNull ?? <Session>[])
-        .where((Session s) => s.clientId == c.id)
-        .toList();
 
-    final int paidLessons = pkgs.where((TPackage p) => p.isActive).fold(0, (int a, TPackage p) => a + p.lessonsPaid);
-    final int completedWorkouts =
-        workouts.where((TWorkout w) => w.status == 'completed' && !w.createdByClient).length;
-    final int paidBalance = paidLessons - completedWorkouts;
-    final int plannedSessions = sessions.where((Session s) => s.status == SessionStatus.planned).length;
-    final int calBalance = paidBalance - plannedSessions;
+    // «X/Y» (проведено/всего) с переносом остатка в новый пакет; «0» — исчерпан.
+    final String pkgLabel = packageProgressLabel(packageProgress(pkgs, workouts));
     final int achievements = stats?.records.length ?? 0;
     final bool connected = c.isConnected;
 
@@ -505,9 +498,6 @@ class ClientDetailScreen extends ConsumerWidget {
         icon: Icons.calendar_today_outlined,
         label: 'Календарь',
         sub: 'занятия клиента',
-        badge: (plannedSessions > 0 || sessions.isNotEmpty)
-            ? _Badge.calendar(planned: plannedSessions, calBalance: calBalance)
-            : null,
         onTap: () => Navigator.of(context).push<void>(MaterialPageRoute<void>(
           builder: (_) => CalendarScreen(clientId: c.id, clientName: c.fullName),
         )),
@@ -537,7 +527,7 @@ class ClientDetailScreen extends ConsumerWidget {
         icon: Icons.account_balance_wallet_outlined,
         label: 'Оплата',
         sub: 'пакеты и расходы',
-        badge: _Badge.balance(paidBalance),
+        badge: _Badge(text: pkgLabel, danger: false),
         onTap: () => Navigator.of(context).push<void>(
           MaterialPageRoute<void>(builder: (_) => ClientPaymentsScreen(client: c)),
         ),
@@ -686,12 +676,6 @@ class _Badge {
   final String text;
   final bool danger;
   final bool trend;
-
-  factory _Badge.balance(int v) =>
-      _Badge(text: v > 0 ? '+$v' : '$v', danger: v < 0);
-
-  factory _Badge.calendar({required int planned, required int calBalance}) =>
-      _Badge(text: '$planned / ${calBalance > 0 ? '+$calBalance' : '$calBalance'}', danger: calBalance < 0);
 
   factory _Badge.achievements(int v) => _Badge(text: '$v', danger: false, trend: true);
 }
@@ -1712,8 +1696,9 @@ class ClientPaymentsScreen extends ConsumerWidget {
     final List<TPackage> pkgs = ref.watch(clientPackagesProvider(client.id)).valueOrNull ?? <TPackage>[];
     final List<TWorkout> workouts = ref.watch(clientWorkoutsCardProvider(client.id)).valueOrNull ?? <TWorkout>[];
     final int done = workouts.where((TWorkout w) => w.status == 'completed').length;
-    final int paid = pkgs.where((TPackage p) => p.isActive).fold(0, (int a, TPackage p) => a + p.lessonsPaid);
-    final int remaining = paid - done;
+    // «X/Y» с переносом остатка в новый пакет; «0» — пакет исчерпан.
+    final ({int done, int total})? prog = packageProgress(pkgs, workouts);
+    final String pkgLabel = packageProgressLabel(prog);
 
     return Scaffold(
       appBar: AppBar(title: Text('Оплата · ${client.fullName}')),
@@ -1742,17 +1727,16 @@ class ClientPaymentsScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text('БАЛАНС', style: AppFonts.mono(size: 10, color: c.inkMutedXl, weight: FontWeight.w700)),
+                      Text('В ПАКЕТЕ', style: AppFonts.mono(size: 10, color: c.inkMutedXl, weight: FontWeight.w700)),
                       const SizedBox(height: 4),
-                      Text(remaining > 0 ? '+$remaining' : '$remaining',
-                          style: AppFonts.display(
-                              size: 28, color: remaining < 0 ? c.danger : c.accent, letterSpacing: -1)),
+                      Text(pkgLabel,
+                          style: AppFonts.display(size: 28, color: c.accent, letterSpacing: -1)),
                       Text(
-                          remaining > 0
-                              ? 'оплачено сверх'
-                              : remaining < 0
-                                  ? 'в долг'
-                                  : 'ровно по оплате',
+                          prog == null
+                              ? 'нет активного пакета'
+                              : prog.done >= prog.total
+                                  ? 'пакет исчерпан'
+                                  : 'проведено / всего',
                           style: TextStyle(fontSize: 11, color: c.inkMuted)),
                     ],
                   ),
@@ -1988,37 +1972,86 @@ class _PhotosTabState extends ConsumerState<_PhotosTab> {
                 ),
               ];
             }
+            // Группировка по дате в блоки (зеркало клиентского `_PhotosTab`):
+            // заголовок-дата, под ним миниатюры углов этой даты. Список уже
+            // отсортирован в провайдере (новые даты сверху, внутри — по ракурсу).
+            final Map<String, List<TClientPhoto>> groups = <String, List<TClientPhoto>>{};
+            for (final TClientPhoto p in list) {
+              groups.putIfAbsent(p.date == null ? '' : _isoDate(p.date!), () => <TClientPhoto>[]).add(p);
+            }
+            final List<String> keys = groups.keys.toList()..sort((String a, String b) => b.compareTo(a));
             return <Widget>[
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3, mainAxisSpacing: 8, crossAxisSpacing: 8, childAspectRatio: 0.7),
-                itemCount: list.length,
-                itemBuilder: (BuildContext ctx, int i) {
-                  final TClientPhoto p = list[i];
-                  return Stack(
-                    fit: StackFit.expand,
-                    children: <Widget>[
-                      AuthedImage(url: '$base/api/files/${p.fileId}', token: token, radius: 12),
-                      Positioned(
-                        left: 0, right: 0, bottom: 0,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                          decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.45),
-                              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12))),
-                          child: Text(_kAngleLabels[p.angle] ?? p.angle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600)),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
+              for (int gi = 0; gi < keys.length; gi++) ...<Widget>[
+                if (gi > 0) const SizedBox(height: 16),
+                _PhotoDateSection(photos: groups[keys[gi]]!, token: token, base: base),
+              ],
             ];
+          },
+        ),
+      ],
+    );
+  }
+}
+
+/// Блок фото одной даты: заголовок-дата + подпись автора, ниже — сетка миниатюр
+/// углов этой даты (зеркало клиентской группировки по дате). Если фото одной
+/// даты добавлены разными авторами — автор показывается у каждой миниатюры.
+class _PhotoDateSection extends StatelessWidget {
+  const _PhotoDateSection({required this.photos, required this.token, required this.base});
+  final List<TClientPhoto> photos;
+  final String? token;
+  final String base;
+
+  static String _author(bool byClient) => byClient ? 'Клиент' : 'Тренер';
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    final DateTime? date = photos.first.date;
+    final bool mixed = photos.map((TClientPhoto p) => p.createdByClient).toSet().length > 1;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Text(date == null ? 'Без даты' : _fullDate(date),
+                style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w600)),
+            if (!mixed) ...<Widget>[
+              const SizedBox(width: 8),
+              Text('· ${_author(photos.first.createdByClient)}',
+                  style: TextStyle(fontSize: 12, color: c.inkMutedXl)),
+            ],
+          ],
+        ),
+        const SizedBox(height: 8),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3, mainAxisSpacing: 8, crossAxisSpacing: 8, childAspectRatio: 0.7),
+          itemCount: photos.length,
+          itemBuilder: (BuildContext ctx, int i) {
+            final TClientPhoto p = photos[i];
+            final String angle = _kAngleLabels[p.angle] ?? p.angle;
+            return Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                AuthedImage(url: '$base/api/files/${p.fileId}', token: token, radius: 12),
+                Positioned(
+                  left: 0, right: 0, bottom: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12))),
+                    child: Text(mixed ? '$angle · ${_author(p.createdByClient)}' : angle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ],
+            );
           },
         ),
       ],
@@ -2504,9 +2537,9 @@ class _PackagesBlock extends ConsumerWidget {
                                   style: AppFonts.display(size: 22, color: c.accent)),
                               Text('оплачено', style: AppFonts.mono(size: 9, color: c.inkMutedXl, weight: FontWeight.w700)),
                             ] else ...<Widget>[
-                              Text('${p.remaining}',
-                                  style: AppFonts.display(size: 22, color: p.remaining > 0 ? c.accent : c.danger)),
-                              Text('осталось', style: AppFonts.mono(size: 9, color: c.inkMutedXl, weight: FontWeight.w700)),
+                              Text('${p.lessonsPaid}',
+                                  style: AppFonts.display(size: 22, color: c.accent)),
+                              Text('занятий', style: AppFonts.mono(size: 9, color: c.inkMutedXl, weight: FontWeight.w700)),
                             ],
                           ],
                         ),
@@ -2545,7 +2578,7 @@ class _PackagesBlock extends ConsumerWidget {
   }
 }
 
-/// Шит «содержимое пакета»: оплачено / проведено / остаток / срок сгорания / статус.
+/// Шит «содержимое пакета»: занятий в пакете / срок сгорания / статус.
 void _showPackageSheet(BuildContext context, TPackage p) {
   showModalBottomSheet<void>(
     context: context,
@@ -2562,10 +2595,7 @@ void _showPackageSheet(BuildContext context, TPackage p) {
             Text(p.workoutType?.isNotEmpty == true ? p.workoutType! : 'Пакет тренировок',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
             const SizedBox(height: 14),
-            _pkgRow(c, 'Оплачено занятий', '${p.lessonsPaid}'),
-            _pkgRow(c, 'Проведено', '${p.lessonsUsed}'),
-            _pkgRow(c, 'Осталось', '${p.remaining}',
-                valueColor: p.remaining > 0 ? c.accent : c.danger),
+            _pkgRow(c, 'Занятий в пакете', '${p.lessonsPaid}'),
             if (p.endsAt != null)
               _pkgRow(c, 'Сгорает', _date(DateTime.tryParse(p.endsAt!)?.toLocal()),
                   icon: Icons.local_fire_department, iconColor: c.coral),
@@ -2760,7 +2790,14 @@ class _MeasurementsBlock extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text(_date(last.date), style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+              Row(
+                children: <Widget>[
+                  Text(_date(last.date), style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+                  const SizedBox(width: 8),
+                  Text('· ${last.createdByClient ? 'Клиент' : 'Тренер'}',
+                      style: TextStyle(fontSize: 12, color: c.inkMutedXl)),
+                ],
+              ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
