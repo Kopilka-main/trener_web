@@ -50,6 +50,7 @@ class AuthField extends StatefulWidget {
     this.textInputAction,
     this.onChanged,
     this.onSubmitted,
+    this.textCapitalization = TextCapitalization.none,
   });
 
   final TextEditingController controller;
@@ -61,6 +62,7 @@ class AuthField extends StatefulWidget {
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
+  final TextCapitalization textCapitalization;
 
   @override
   State<AuthField> createState() => _AuthFieldState();
@@ -89,6 +91,7 @@ class _AuthFieldState extends State<AuthField> {
           obscureText: widget.obscure && _hidden,
           keyboardType: widget.keyboardType,
           autocorrect: false,
+          textCapitalization: widget.textCapitalization,
           autofillHints: widget.autofillHints,
           textInputAction: widget.textInputAction,
           onChanged: widget.onChanged,

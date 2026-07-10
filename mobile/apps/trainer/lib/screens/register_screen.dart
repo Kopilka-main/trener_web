@@ -42,10 +42,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   Future<void> _submit() async {
+    // Имя/фамилия — с заглавной буквы автоматически.
+    String cap(String s) {
+      final String t = s.trim();
+      return t.isEmpty ? t : t[0].toUpperCase() + t.substring(1);
+    }
+
     final String email = _email.text.trim();
     final String password = _password.text;
-    final String first = _first.text.trim();
-    final String last = _last.text.trim();
+    final String first = cap(_first.text);
+    final String last = cap(_last.text);
     final String? invalid = _validate(first, last, email, password);
     if (invalid != null) {
       setState(() => _error = invalid);
@@ -115,6 +121,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   label: 'Имя',
                   autofillHints: const <String>[AutofillHints.givenName],
                   textInputAction: TextInputAction.next,
+                  textCapitalization: TextCapitalization.words,
                 ),
                 const SizedBox(height: 16),
                 AuthField(
@@ -122,6 +129,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   label: 'Фамилия',
                   autofillHints: const <String>[AutofillHints.familyName],
                   textInputAction: TextInputAction.next,
+                  textCapitalization: TextCapitalization.words,
                 ),
                 const SizedBox(height: 16),
                 AuthField(

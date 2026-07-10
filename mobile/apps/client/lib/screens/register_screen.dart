@@ -60,12 +60,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       _serverError = null;
       _emailTaken = false;
     });
+    // Имя/фамилия — с заглавной буквы автоматически.
+    String cap(String s) {
+      final String t = s.trim();
+      return t.isEmpty ? t : t[0].toUpperCase() + t.substring(1);
+    }
     try {
       await ref.read(clientApiProvider).register(
             _email.text.trim(),
             _password.text,
-            _first.text.trim(),
-            _last.text.trim(),
+            cap(_first.text),
+            cap(_last.text),
           );
       // Новый аккаунт: один раз после регистрации показать онбординг с QR/ID
       // для тренера (гейт снимет флаг по «Готово»). Логин этот флаг не ставит.
@@ -131,6 +136,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   label: 'Имя',
                   autofillHints: const <String>[AutofillHints.givenName],
                   textInputAction: TextInputAction.next,
+                  textCapitalization: TextCapitalization.words,
                   error: _showErrors ? _firstError : null,
                   onChanged: (_) {
                     if (_showErrors) setState(() {});
@@ -142,6 +148,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   label: 'Фамилия',
                   autofillHints: const <String>[AutofillHints.familyName],
                   textInputAction: TextInputAction.next,
+                  textCapitalization: TextCapitalization.words,
                   error: _showErrors ? _lastError : null,
                   onChanged: (_) {
                     if (_showErrors) setState(() {});
