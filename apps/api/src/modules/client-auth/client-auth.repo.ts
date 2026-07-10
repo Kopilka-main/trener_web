@@ -94,6 +94,7 @@ export function makeClientAuthRepo(db: Db) {
         firstName?: string;
         lastName?: string;
         birthDate?: string | null;
+        birthYear?: number | null;
         contacts?: { type: string; value: string }[];
         bio?: string | null;
         sessionReminderEnabled?: boolean;

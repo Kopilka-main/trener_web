@@ -121,11 +121,13 @@ describe.skipIf(!url)('client-auth.repo (integration)', () => {
     const updated = await repo.updateAccount('ca-upd', {
       firstName: 'Новое',
       birthDate: '1990-05-20',
+      birthYear: 1990,
       contacts: [{ type: 'Телефон', value: '+7900' }],
       bio: 'Цель — присед 100',
     });
     expect(updated?.firstName).toBe('Новое');
     expect(updated?.birthDate).toBe('1990-05-20');
+    expect(updated?.birthYear).toBe(1990);
     expect(updated?.contacts).toEqual([{ type: 'Телефон', value: '+7900' }]);
     expect(updated?.bio).toBe('Цель — присед 100');
   });

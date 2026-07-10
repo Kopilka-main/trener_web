@@ -35,6 +35,9 @@ export const trainers = pgTable(
     title: text('title'),
     bio: text('bio'),
     birthDate: text('birth_date'),
+    // Год рождения тренера (integer). NULL = не указан. Хранится отдельно от birthDate,
+    // который держит только день+месяц (год-заглушка) для поздравлений.
+    birthYear: integer('birth_year'),
     contacts: jsonb('contacts').$type<{ type: string; value: string }[]>().notNull().default([]),
     // Аватар тренера: ссылка на files. NULL = нет фото, удаление файла → set null.
     // FK-колбэк ленивый (files объявлена ниже). AnyPgColumn разрывает циклическую инференцию.
@@ -103,6 +106,9 @@ export const clientAccounts = pgTable(
     firstName: text('first_name').notNull(),
     lastName: text('last_name').notNull(),
     birthDate: text('birth_date'),
+    // Год рождения клиента (integer). NULL = не указан. Хранится отдельно от birthDate,
+    // который держит только день+месяц (год-заглушка) для поздравлений.
+    birthYear: integer('birth_year'),
     contacts: jsonb('contacts').$type<{ type: string; value: string }[]>().notNull().default([]),
     bio: text('bio'),
     avatarFileId: text('avatar_file_id').references((): AnyPgColumn => files.id, {

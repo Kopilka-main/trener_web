@@ -30,6 +30,7 @@ export const trainerResponseSchema = z.object({
   title: z.string().nullable(),
   bio: z.string().nullable(),
   birthDate: z.string().nullable(),
+  birthYear: z.number().nullable(),
   contacts: z.array(contactSchema),
   avatarFileId: z.string().nullable(),
   // ISO-момент окончательного удаления аккаунта (окно отмены), либо null.
@@ -57,6 +58,7 @@ export const updateTrainerRequestSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .nullish(),
+  birthYear: z.number().int().min(1900).max(2100).nullish(),
   contacts: z.array(contactSchema).max(20).optional(),
 });
 export type UpdateTrainerRequest = z.infer<typeof updateTrainerRequestSchema>;

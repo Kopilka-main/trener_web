@@ -41,6 +41,7 @@ function toAccountResponse(a: {
   lastName: string;
   avatarFileId: string | null;
   birthDate: string | null;
+  birthYear?: number | null;
   contacts: { type: string; value: string }[];
   bio: string | null;
   sessionReminderEnabled?: boolean;
@@ -52,6 +53,7 @@ function toAccountResponse(a: {
     lastName: a.lastName,
     avatarFileId: a.avatarFileId,
     birthDate: a.birthDate,
+    birthYear: a.birthYear ?? null,
     contacts: a.contacts ?? [],
     bio: a.bio,
     // Дефолт true, если поле не пришло из старой строки (миграция ставит default true).
@@ -208,6 +210,7 @@ export function makeClientAuthService(
         firstName?: string;
         lastName?: string;
         birthDate?: string | null;
+        birthYear?: number | null;
         contacts?: { type: string; value: string }[];
         bio?: string | null;
         sessionReminderEnabled?: boolean;
@@ -215,6 +218,7 @@ export function makeClientAuthService(
       if (input.firstName !== undefined) patch.firstName = input.firstName;
       if (input.lastName !== undefined) patch.lastName = input.lastName;
       if (input.birthDate !== undefined) patch.birthDate = input.birthDate ?? null;
+      if (input.birthYear !== undefined) patch.birthYear = input.birthYear ?? null;
       if (input.contacts !== undefined) patch.contacts = input.contacts;
       if (input.bio !== undefined) patch.bio = input.bio ?? null;
       if (input.sessionReminderEnabled !== undefined) {

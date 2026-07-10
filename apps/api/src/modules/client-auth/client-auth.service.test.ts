@@ -172,6 +172,26 @@ describe('client-auth.service', () => {
     expect(res.bio).toBe('цель');
   });
 
+  it('updateMe пробрасывает birthYear в patch и возвращает его', async () => {
+    const updateAccount = vi.fn((id: string, patch: Record<string, unknown>) =>
+      Promise.resolve({
+        id,
+        email: 'a@b.co',
+        firstName: 'И',
+        lastName: 'К',
+        avatarFileId: null,
+        birthDate: null,
+        contacts: [],
+        bio: null,
+        ...patch,
+      }),
+    );
+    const svc = svcWith(fakeRepo({ updateAccount }));
+    const res = await svc.updateMe('ca1', { birthYear: 1990 });
+    expect(updateAccount).toHaveBeenCalledWith('ca1', { birthYear: 1990 });
+    expect(res.birthYear).toBe(1990);
+  });
+
   it('updateMe пробрасывает sessionReminderEnabled в patch', async () => {
     const updateAccount = vi.fn((id: string, patch: Record<string, unknown>) =>
       Promise.resolve({

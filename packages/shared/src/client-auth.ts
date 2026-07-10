@@ -28,6 +28,7 @@ export const updateClientAccountRequestSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/u, 'Дата в формате ГГГГ-ММ-ДД')
     .nullish(),
+  birthYear: z.number().int().min(1900).max(2100).nullish(),
   contacts: z.array(contactSchema).max(20).optional(),
   bio: z.string().trim().max(2000).nullish(),
   // Настройка: слать ли пуш «за час до тренировки». Опционально — отсутствие не меняет.
@@ -42,6 +43,7 @@ export const clientAccountResponseSchema = z.object({
   lastName: z.string(),
   avatarFileId: z.string().nullable(),
   birthDate: z.string().nullable(),
+  birthYear: z.number().nullable(),
   contacts: z.array(contactSchema),
   bio: z.string().nullable(),
   // Настройка пуш-напоминания «за час до тренировки» (по умолчанию true).
