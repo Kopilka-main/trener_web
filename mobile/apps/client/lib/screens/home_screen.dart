@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,11 +38,34 @@ String _formatRuDate(String iso) {
 
 String _pad2(int n) => n.toString().padLeft(2, '0');
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  Timer? _poll;
+
+  @override
+  void initState() {
+    super.initState();
+    // Пока открыта главная — регулярно освежаем данные, чтобы «Согласуйте
+    // тренировку» и бейджи появлялись без перезахода и без ожидания пуша.
+    _poll = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) ref.invalidate(clientHomeProvider);
+    });
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final AsyncValue<HomeData> home = ref.watch(clientHomeProvider);
     final AppColors c = context.colors;
     return Scaffold(
@@ -214,8 +239,8 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-                // Сетка плиток 2×3 — тянется на всю оставшуюся высоту (как flex-1
-                // grid-rows-3 в вебе): три равных ряда, плитки заполняют экран.
+                // Сетка плиток в две колонки — тянется на всю оставшуюся высоту
+                // (как flex-1 grid в вебе): равные ряды, плитки заполняют экран.
                 SliverFillRemaining(
                   hasScrollBody: false,
                   child: Padding(
@@ -256,14 +281,6 @@ class HomeScreen extends ConsumerWidget {
                       onTap: () => context.push('/progress'),
                     ),
                     _Tile(
-                      title: 'База знаний',
-                      sub: 'упражнения с тренировок',
-                      value: _pad2(d.knowledgeCount),
-                      metric: 'упражнений',
-                      icon: Icons.menu_book_outlined,
-                      onTap: () => context.push('/knowledge'),
-                    ),
-                    _Tile(
                       title: 'Уведомления',
                       sub: d.attention > 0 ? 'требуют внимания' : 'нет открытых задач',
                       value: d.attention > 0 ? _pad2(d.attention) : null,
@@ -288,24 +305,31 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-/// Сетка 2×3 из ровно 6 плиток, тянущаяся на всю высоту: три равных ряда
-/// (каждый — Expanded), по две равные плитки в ряду. Зеркало web `grid-rows-3 flex-1`.
+/// Сетка плиток в две колонки, тянущаяся на всю высоту: равные ряды (каждый —
+/// Expanded), по две плитки в ряду; нечётная последняя плитка — в левой колонке.
 class _TileGrid extends StatelessWidget {
   const _TileGrid({required this.tiles});
   final List<Widget> tiles;
 
   @override
   Widget build(BuildContext context) {
+    // Число рядов зависит от количества плиток (по две в ряд). Нечётная
+    // последняя плитка занимает левую колонку, правая остаётся пустой.
+    final int rows = (tiles.length + 1) ~/ 2;
     return Column(
       children: <Widget>[
-        for (int r = 0; r < 3; r++) ...<Widget>[
+        for (int r = 0; r < rows; r++) ...<Widget>[
           if (r > 0) const SizedBox(height: 8),
           Expanded(
             child: Row(
               children: <Widget>[
                 Expanded(child: tiles[r * 2]),
                 const SizedBox(width: 8),
-                Expanded(child: tiles[r * 2 + 1]),
+                Expanded(
+                  child: r * 2 + 1 < tiles.length
+                      ? tiles[r * 2 + 1]
+                      : const SizedBox.shrink(),
+                ),
               ],
             ),
           ),
