@@ -1174,15 +1174,15 @@ class _StepperFieldState extends State<_StepperField> {
           onPointerUp: (_) => _stopHold(),
           onPointerCancel: (_) => _stopHold(),
           child: Container(
-            width: 40,
-            height: 54,
+            width: 44,
+            height: 56,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: c.chip,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: c.line),
             ),
-            child: Icon(icon, size: 22, color: c.ink),
+            child: Icon(icon, size: 24, color: c.ink),
           ),
         );
     return Expanded(
@@ -1197,28 +1197,26 @@ class _StepperFieldState extends State<_StepperField> {
               btn(Icons.remove, -1),
               const SizedBox(width: 6),
               Expanded(
-                child: SizedBox(
-                  height: 54,
-                  child: SelectAllTextField(
-                    controller: widget.ctrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: <TextInputFormatter>[
-                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-                    ],
-                    textAlign: TextAlign.center,
-                    style: AppFonts.mono(size: 20, color: c.ink, weight: FontWeight.w700),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      filled: true,
-                      fillColor: c.chip,
-                      contentPadding: EdgeInsets.zero,
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.line)),
-                      enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.line)),
-                      focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.accent)),
-                    ),
+                child: SelectAllTextField(
+                  controller: widget.ctrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: <TextInputFormatter>[
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                  ],
+                  textAlign: TextAlign.center,
+                  style: AppFonts.mono(size: 20, color: c.ink, weight: FontWeight.w700),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: c.chip,
+                    // Вертикальный паддинг подобран под высоту кнопок-степперов
+                    // [−]/[+] (56), чтобы поле было того же размера, а не ниже.
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.line)),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.line)),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.accent)),
                   ),
                 ),
               ),
