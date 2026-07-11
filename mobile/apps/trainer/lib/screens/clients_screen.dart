@@ -2,6 +2,7 @@ import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -16,6 +17,7 @@ import '../api/trainer_clients.dart';
 import '../api/trainer_medical.dart';
 import '../api/trainer_workouts.dart';
 import '../widgets/income_form.dart';
+import 'accounting_screen.dart';
 import 'active_workout_screen.dart';
 import 'calendar_screen.dart';
 import 'client_edit_screen.dart';
@@ -961,11 +963,55 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
     ref.invalidate(clientWorkoutsCardProvider(_cid));
   }
 
+  /// Живую тренировку можно провести только по согласованному (подтверждённому
+  /// клиентом) занятию. Непривязанному клиенту согласовывать не с кем — разрешаем.
+  /// Иначе показываем окно и возвращаем false (тренировку не создаём/не открываем).
+  Future<bool> _canConductNow() async {
+    if (!widget.client.isConnected) return true;
+    try {
+      final List<Session> sessions = await ref.read(trainerSessionsProvider.future);
+      final bool hasConfirmed = sessions.any((Session s) =>
+          s.clientId == _cid &&
+          s.status == SessionStatus.planned &&
+          s.confirmation == ClientConfirmation.confirmed);
+      if (hasConfirmed) return true;
+    } catch (_) {
+      return true; // не удалось проверить — не блокируем
+    }
+    if (mounted) await _showNoConfirmedDialog();
+    return false;
+  }
+
+  Future<void> _showNoConfirmedDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: const Text('Нет согласованных тренировок'),
+        content: const Text(
+            'Запланируйте и согласуйте занятие с клиентом в календаре — тогда тренировку можно будет провести.'),
+        actions: <Widget>[
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Понятно')),
+        ],
+      ),
+    );
+  }
+
+  /// Открыть «ближайшую» тренировку. Ещё не начатую (черновик) — только по
+  /// согласованному занятию (проверка ДО входа). Идущую (active) — без проверки.
+  Future<void> _openCurrent(TWorkout w) async {
+    if (w.status == 'draft' && !await _canConductNow()) return;
+    await _openConduct(w.id);
+  }
+
   /// Создать черновик и открыть редактор. [exercises] — план (пустой/из шаблона).
   /// [excluded] — историческая запись (постфактум, без влияния на баланс/календарь).
   Future<void> _createAndOpen(String name, List<Map<String, dynamic>> exercises,
       {bool excluded = false}) async {
     if (_busy) return;
+    // Проверяем согласование ДО создания черновика — чтобы не заходить в тренировку
+    // впустую. Историческую запись (excluded, постфактум) согласовывать не нужно.
+    if (!excluded && !await _canConductNow()) return;
+    if (!mounted) return;
     setState(() => _busy = true);
     final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
     try {
@@ -1268,13 +1314,12 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
               if (current.isNotEmpty)
                 _CurrentWorkoutCard(
                   w: current.first,
-                  onTap: () => _openConduct(current.first.id),
+                  onTap: () => _openCurrent(current.first),
                   onCancel: () => _cancelWorkout(current.first),
                 )
               else
                 _EmptyCurrent(
                   busy: _busy,
-                  onCreate: () => _createAndOpen('Новая тренировка', <Map<String, dynamic>>[]),
                   onTemplate: _pickTemplate,
                   onCreateTemplate: _createTemplate,
                 ),
@@ -1574,12 +1619,10 @@ class _CurrentWorkoutCard extends StatelessWidget {
 class _EmptyCurrent extends StatelessWidget {
   const _EmptyCurrent({
     required this.busy,
-    required this.onCreate,
     required this.onTemplate,
     required this.onCreateTemplate,
   });
   final bool busy;
-  final VoidCallback onCreate;
   final VoidCallback onTemplate;
   final VoidCallback onCreateTemplate;
   @override
@@ -1593,18 +1636,6 @@ class _EmptyCurrent extends StatelessWidget {
       ),
       child: Column(
         children: <Widget>[
-          GestureDetector(
-            onTap: busy ? null : onCreate,
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(color: c.card, shape: BoxShape.circle, border: Border.all(color: c.line)),
-              child: busy
-                  ? const Padding(padding: EdgeInsets.all(14), child: CircularProgressIndicator(strokeWidth: 2))
-                  : Icon(Icons.add, size: 24, color: c.ink),
-            ),
-          ),
-          const SizedBox(height: 10),
           Text('Тренировка не запланирована', style: TextStyle(fontSize: 14, color: c.inkMuted)),
           const SizedBox(height: 12),
           SizedBox(
@@ -2571,7 +2602,27 @@ class _PackagesBlock extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            ...active.map((TPackage p) => GestureDetector(
+            ...active.map((TPackage p) => Slidable(
+                  key: ValueKey<String>('pkg-${p.id}'),
+                  endActionPane: ActionPane(
+                    motion: const DrawerMotion(),
+                    extentRatio: 0.28,
+                    children: <Widget>[
+                      SlidableAction(
+                        onPressed: (_) async {
+                          if (!await confirmDelete(context, title: 'Удалить пакет?')) return;
+                          await ref.read(trainerClientCardApiProvider).deletePackage(clientId, p.id);
+                          ref.invalidate(clientPackagesProvider(clientId));
+                          ref.invalidate(trainerIncomesProvider);
+                        },
+                        backgroundColor: c.danger,
+                        foregroundColor: Colors.white,
+                        icon: Icons.delete_outline,
+                        label: 'Удал.',
+                      ),
+                    ],
+                  ),
+                  child: GestureDetector(
                   onTap: () => p.isInstallment
                       ? _showInstallmentSheet(context, ref, clientId, p)
                       : _showPackageSheet(context, p),
@@ -2646,26 +2697,68 @@ class _PackagesBlock extends ConsumerWidget {
                       ],
                     ),
                   ),
+                  ),
                 )),
             if (payments.isNotEmpty) ...<Widget>[
               const SizedBox(height: 4),
               Text('ИСТОРИЯ ПЛАТЕЖЕЙ',
                   style: AppFonts.mono(size: 10, color: c.inkMutedXl, weight: FontWeight.w700)),
               const SizedBox(height: 6),
-              ...payments.take(8).map((Income e) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 5),
-                    child: Row(
+              // Свайп влево на платеже → [Изм.] (та же форма, что в Бухгалтерии)
+              // и [Удал.] (пакет-доход сносит пакет, обычный — запись дохода).
+              ...payments.take(8).map((Income e) => Slidable(
+                    key: ValueKey<String>('pay-${e.id}'),
+                    endActionPane: ActionPane(
+                      motion: const DrawerMotion(),
+                      extentRatio: 0.42,
                       children: <Widget>[
-                        Text(_date(e.date), style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(e.title ?? e.category,
-                              maxLines: 1, overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 13, color: c.ink)),
+                        SlidableAction(
+                          onPressed: (_) async {
+                            if (await showIncomeEditSheet(context, e)) {
+                              ref.invalidate(trainerIncomesProvider);
+                              ref.invalidate(clientPackagesProvider(clientId));
+                            }
+                          },
+                          backgroundColor: c.cardElevated,
+                          foregroundColor: c.ink,
+                          icon: Icons.edit_outlined,
+                          label: 'Изм.',
                         ),
-                        Text('+${e.amount.round()} ₽',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.accent)),
+                        SlidableAction(
+                          onPressed: (_) async {
+                            if (!await confirmDelete(context, title: 'Удалить операцию?')) return;
+                            if (e.isPackage && e.clientId != null) {
+                              await ref
+                                  .read(trainerClientCardApiProvider)
+                                  .deletePackage(e.clientId!, e.id.replaceFirst('pkg:', ''));
+                            } else {
+                              await ref.read(trainerAccountingApiProvider).deleteIncome(e.id);
+                            }
+                            ref.invalidate(trainerIncomesProvider);
+                            ref.invalidate(clientPackagesProvider(clientId));
+                          },
+                          backgroundColor: c.danger,
+                          foregroundColor: Colors.white,
+                          icon: Icons.delete_outline,
+                          label: 'Удал.',
+                        ),
                       ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 5),
+                      child: Row(
+                        children: <Widget>[
+                          Text(_date(e.date), style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(e.title ?? e.category,
+                                maxLines: 1, overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 13, color: c.ink)),
+                          ),
+                          Text('+${e.amount.round()} ₽',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.accent)),
+                        ],
+                      ),
                     ),
                   )),
             ],
