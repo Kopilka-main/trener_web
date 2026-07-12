@@ -2,6 +2,7 @@ import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/dev_mode_flag.dart';
 import 'support_chat_screen.dart';
 
 /// Пара «вопрос — ответ» для раздела частых вопросов.
@@ -64,6 +65,8 @@ class HelpScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final bool devOn = ref.watch(devModeEnabledProvider);
+    final bool financeHidden = ref.watch(financeHiddenProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Помощь с приложением')),
       body: ListView(
@@ -74,6 +77,67 @@ class HelpScreen extends ConsumerWidget {
           for (final _QA qa in _faq) _FaqTile(qa),
           const SizedBox(height: 20),
           const _SupportEntry(),
+          const SizedBox(height: 20),
+          const _SectionHeader(icon: Icons.tune, title: 'Дополнительно'),
+          const SizedBox(height: 10),
+          _ToggleCard(
+            icon: Icons.bug_report_outlined,
+            title: 'Режим разработчика',
+            subtitle: 'Кнопка «Сообщить о проблеме» на экранах — помогайте тестировать и предлагать функции.',
+            value: devOn,
+            onChanged: (bool v) => ref.read(devModeEnabledProvider.notifier).set(v),
+          ),
+          const SizedBox(height: 8),
+          _ToggleCard(
+            icon: Icons.visibility_off_outlined,
+            title: 'Скрыть финансы на главной',
+            subtitle: 'Размывает суммы на плитке «Финансы» — удобно показывать приложение, не раскрывая доход.',
+            value: financeHidden,
+            onChanged: (bool v) => ref.read(financeHiddenProvider.notifier).setHidden(v),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Карточка-тумблер настройки: иконка-акцент, название, пояснение и Switch.
+class _ToggleCard extends StatelessWidget {
+  const _ToggleCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Container(
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12)),
+      padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
+      child: Row(
+        children: <Widget>[
+          Icon(icon, size: 24, color: c.accent),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.ink)),
+                const SizedBox(height: 2),
+                Text(subtitle, style: TextStyle(fontSize: 12.5, height: 1.35, color: c.inkMuted)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Switch(value: value, onChanged: onChanged),
         ],
       ),
     );

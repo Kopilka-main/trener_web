@@ -2,9 +2,9 @@ import 'package:core/core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Локальное файловое хранилище флага «режим разработчика тренера».
-/// Включается один раз, когда тренер соглашается участвовать в разработке
-/// (свайп-подтверждение на приз-странице онбординга), и дальше не снимается —
-/// на экране появляется плавающая кнопка «Сообщить о проблеме».
+/// Включается по согласию участвовать в разработке (свайп на приз-странице
+/// онбординга) и переключается вручную в «Помощь с приложением». Когда включён —
+/// на экранах появляется плавающая кнопка «Сообщить о проблеме».
 class _DevModeFlagStore {
   _DevModeFlagStore._();
   static const String _key = 'trainer_dev_mode_enabled';
@@ -37,11 +37,14 @@ class DevModeNotifier extends Notifier<bool> {
     if (await _DevModeFlagStore.read()) state = true;
   }
 
-  /// Включить режим разработчика — сохраняется локально (необратимо).
-  void enable() {
-    state = true;
-    _DevModeFlagStore.write(true);
+  /// Установить режим разработчика (вкл/выкл) — сохраняется локально.
+  void set(bool value) {
+    state = value;
+    _DevModeFlagStore.write(value);
   }
+
+  /// Включить режим разработчика (из онбординга — приз-страница).
+  void enable() => set(true);
 }
 
 final NotifierProvider<DevModeNotifier, bool> devModeEnabledProvider =
