@@ -198,12 +198,19 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
   }
 
   /// Подпереключатель scope шаблонов: «Общие» (clientId == null) / «Персональные».
+  /// Две равные кнопки нормального размера (сегмент-переключатель).
   Widget _buildScopeSwitcher(AppColors c) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
         child: Row(
           children: <Widget>[
-            _Chip(label: 'Общие', active: !_personal, onTap: () => setState(() => _personal = false)),
-            _Chip(label: 'Персональные', active: _personal, onTap: () => setState(() => _personal = true)),
+            Expanded(
+              child: _ScopeBtn(label: 'Общие', active: !_personal, onTap: () => setState(() => _personal = false)),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _ScopeBtn(
+                  label: 'Персональные', active: _personal, onTap: () => setState(() => _personal = true)),
+            ),
           ],
         ),
       );
@@ -228,8 +235,12 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
           if (!_personal && _group.isNotEmpty && t.categoryTag != _group) return false;
           return true;
         }).toList();
-        final List<WorkoutTemplate> list =
-            rankBySearch(filtered, _query, (WorkoutTemplate t) => t.name);
+        // В персональных ищем и по названию тренировки, и по имени клиента.
+        final List<WorkoutTemplate> list = rankBySearch(
+          filtered,
+          _query,
+          (WorkoutTemplate t) => _personal ? '${t.name} ${t.clientName ?? ''}' : t.name,
+        );
         if (all.isEmpty) return _emptyTemplates(c);
         return Column(
           children: <Widget>[
@@ -485,6 +496,31 @@ class _Seg extends StatelessWidget {
               style: TextStyle(
                   fontSize: 14, fontWeight: FontWeight.w700, color: active ? c.accentOn : c.inkMuted)),
         ),
+      ),
+    );
+  }
+}
+
+/// Кнопка сегмент-переключателя «Общие / Персональные»: равная по ширине
+/// (в Expanded), нормальной высоты — не тонкий чип.
+class _ScopeBtn extends StatelessWidget {
+  const _ScopeBtn({required this.label, required this.active, required this.onTap});
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(color: active ? c.accent : c.chip, borderRadius: BorderRadius.circular(12)),
+        child: Text(label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: active ? c.accentOn : c.inkMuted)),
       ),
     );
   }
