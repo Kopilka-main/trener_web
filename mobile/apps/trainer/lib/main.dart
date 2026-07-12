@@ -16,7 +16,7 @@ import 'router.dart';
 import 'widgets/active_workout_fab.dart';
 import 'widgets/birthday_gate.dart';
 import 'widgets/dev_report_fab.dart';
-import 'widgets/nav_fab.dart';
+import 'widgets/nav_bar.dart';
 import 'widgets/onboarding_gate.dart';
 
 /// Наблюдатель data-провайдеров: при смене пользователя сбрасываем их кэш,
@@ -112,6 +112,10 @@ class _TrainerAppState extends ConsumerState<TrainerApp> {
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSub;
   ScreenAnalytics? _analytics;
+  // Системный «назад» не закрывает приложение: обычный pop (с учётом PopScope
+  // экранов), а на корне стека — уход на главную вместо выхода.
+  late final BackButtonDispatcher _backDispatcher =
+      _NoCloseBackDispatcher(ref.read(routerProvider));
 
   @override
   void initState() {
@@ -186,20 +190,44 @@ class _TrainerAppState extends ConsumerState<TrainerApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      // Оверлеи-кнопки: GlobalNavFab (слева) и ActiveWorkoutFab (справа снизу) —
-      // над всем. DevReportFab «Сообщить о проблеме» (слева снизу) вешаем ВНУТРИ
-      // OnboardingGate на реальные экраны, чтобы он не перекрывал онбординг/окно
-      // «спасибо» (где режим разработчика как раз включается).
-      builder: (BuildContext context, Widget? child) => GlobalNavFab(
-        child: ActiveWorkoutFab(
-          child: BirthdayGate(
-            child: OnboardingGate(
+      // Нижнее меню навигации (GlobalNavBar) — часть layout снизу, стоит ВНУТРИ
+      // гейтов (онбординг его перекрывает) и снаружи DevReportFab (его кнопка —
+      // над контентом, но выше панели). ActiveWorkoutFab (badge «идёт
+      // тренировка») — оверлей поверх всего.
+      builder: (BuildContext context, Widget? child) => ActiveWorkoutFab(
+        child: BirthdayGate(
+          child: OnboardingGate(
+            child: GlobalNavBar(
               child: DevReportFab(child: child ?? const SizedBox.shrink()),
             ),
           ),
         ),
       ),
-      routerConfig: router,
+      // routerConfig разложен на части, чтобы подставить свой BackButtonDispatcher
+      // (см. _backDispatcher): системный «назад» не закрывает приложение.
+      routeInformationProvider: router.routeInformationProvider,
+      routeInformationParser: router.routeInformationParser,
+      routerDelegate: router.routerDelegate,
+      backButtonDispatcher: _backDispatcher,
     );
+  }
+}
+
+/// Диспетчер системной кнопки/жеста «назад», который НИКОГДА не закрывает
+/// приложение. Обычная обработка (pop с учётом [PopScope] экранов) идёт через
+/// super; если popать нечего (корень стека) — уводим на главную (если не на ней)
+/// и сообщаем системе, что «назад» обработан, поэтому выхода не происходит.
+class _NoCloseBackDispatcher extends RootBackButtonDispatcher {
+  _NoCloseBackDispatcher(this._router);
+  final GoRouter _router;
+
+  @override
+  Future<bool> didPopRoute() async {
+    final bool handled = await super.didPopRoute();
+    if (handled) return true;
+    if (_router.routerDelegate.currentConfiguration.uri.path != '/home') {
+      _router.go('/home');
+    }
+    return true;
   }
 }

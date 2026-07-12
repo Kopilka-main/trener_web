@@ -78,6 +78,10 @@ class ClientApp extends ConsumerStatefulWidget {
 
 class _ClientAppState extends ConsumerState<ClientApp> {
   ScreenAnalytics? _analytics;
+  // Системный «назад» не закрывает приложение: обычный pop (с учётом PopScope
+  // экранов), а на корне стека — уход на главную вместо выхода.
+  late final BackButtonDispatcher _backDispatcher =
+      _NoCloseBackDispatcher(ref.read(routerProvider));
 
   @override
   void initState() {
@@ -128,7 +132,31 @@ class _ClientAppState extends ConsumerState<ClientApp> {
       builder: (BuildContext context, Widget? child) => BirthdayGate(
         child: OnboardingGate(child: child ?? const SizedBox.shrink()),
       ),
-      routerConfig: router,
+      // routerConfig разложен на части, чтобы подставить свой BackButtonDispatcher
+      // (см. _backDispatcher): системный «назад» не закрывает приложение.
+      routeInformationProvider: router.routeInformationProvider,
+      routeInformationParser: router.routeInformationParser,
+      routerDelegate: router.routerDelegate,
+      backButtonDispatcher: _backDispatcher,
     );
+  }
+}
+
+/// Диспетчер системной кнопки/жеста «назад», который НИКОГДА не закрывает
+/// приложение. Обычная обработка (pop с учётом [PopScope] экранов) идёт через
+/// super; если popать нечего (корень стека) — уводим на главную (если не на ней)
+/// и сообщаем системе, что «назад» обработан, поэтому выхода не происходит.
+class _NoCloseBackDispatcher extends RootBackButtonDispatcher {
+  _NoCloseBackDispatcher(this._router);
+  final GoRouter _router;
+
+  @override
+  Future<bool> didPopRoute() async {
+    final bool handled = await super.didPopRoute();
+    if (handled) return true;
+    if (_router.routerDelegate.currentConfiguration.uri.path != '/home') {
+      _router.go('/home');
+    }
+    return true;
   }
 }
