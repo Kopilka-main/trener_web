@@ -469,7 +469,7 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
   Widget _catChips(AppColors c, List<String> cats) {
     if (cats.isEmpty) return const SizedBox(height: 4);
     return SizedBox(
-      height: 38,
+      height: 48,
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -715,7 +715,7 @@ class _Chip extends StatelessWidget {
         onTap: onTap,
         child: Container(
           alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           decoration: BoxDecoration(color: active ? c.accent : c.chip, borderRadius: BorderRadius.circular(20)),
           child: Text(label,
               style: AppFonts.mono(size: 12, color: active ? c.accentOn : c.inkMuted, weight: FontWeight.w600)),

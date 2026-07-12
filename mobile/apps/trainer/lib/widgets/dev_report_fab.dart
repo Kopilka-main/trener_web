@@ -20,7 +20,7 @@ class DevReportFab extends ConsumerStatefulWidget {
 }
 
 class _DevReportFabState extends ConsumerState<DevReportFab> {
-  static const double _w = 210;
+  static const double _w = 48;
   static const double _h = 48;
   Offset? _pos; // null → позиция по умолчанию (слева снизу)
   bool _onSupport = false; // пока открыт экран поддержки — кнопку прячем
@@ -71,10 +71,10 @@ class _DevReportFabState extends ConsumerState<DevReportFab> {
           child: Container(
             width: _w,
             height: _h,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            alignment: Alignment.center,
             decoration: BoxDecoration(
               color: c.card,
-              borderRadius: BorderRadius.circular(_h / 2),
+              shape: BoxShape.circle,
               border: Border.all(color: c.line),
               boxShadow: <BoxShadow>[
                 BoxShadow(
@@ -83,19 +83,7 @@ class _DevReportFabState extends ConsumerState<DevReportFab> {
                     offset: const Offset(0, 4)),
               ],
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                Icon(Icons.bug_report_outlined, size: 20, color: c.accent),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text('Сообщить о проблеме',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.ink)),
-                ),
-              ],
-            ),
+            child: Icon(Icons.bug_report_outlined, size: 22, color: c.accent),
           ),
         ),
       ),
