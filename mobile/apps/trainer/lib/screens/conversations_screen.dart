@@ -57,6 +57,8 @@ class ConversationsScreen extends ConsumerWidget {
                   ],
                 )
               : ListView.separated(
+                  // Нижний отступ под плавающее меню (резерв уже в MediaQuery).
+                  padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
                   itemCount: list.length,
                   separatorBuilder: (_, _) => const Divider(height: 1, indent: 72),
                   itemBuilder: (BuildContext ctx, int i) =>

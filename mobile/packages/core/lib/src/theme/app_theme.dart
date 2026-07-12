@@ -201,5 +201,19 @@ ThemeData buildAppTheme(AppColors c) {
       side: BorderSide(color: c.line),
       labelStyle: TextStyle(color: c.inkMuted, fontWeight: FontWeight.w600),
     ),
+    // Снек-бары (например «Тренировка завершена») — в стиле приложения:
+    // плавающая тёмная плашка со скруглением и акцентным action, а не белая.
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: c.cardElevated,
+      contentTextStyle: TextStyle(fontFamily: kFontSans, color: c.ink, fontWeight: FontWeight.w500),
+      actionTextColor: c.accent,
+      behavior: SnackBarBehavior.floating,
+      elevation: 0,
+      insetPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: c.line),
+      ),
+    ),
   );
 }

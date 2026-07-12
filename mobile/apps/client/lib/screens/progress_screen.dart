@@ -1003,6 +1003,7 @@ class _MeasurementCard extends StatelessWidget {
 
 const List<MetricDef> _bodyComposition = <MetricDef>[
   MetricDef('weightKg', 'Вес', 'кг'),
+  MetricDef('skeletalMuscleKg', 'Скел. мышцы', 'кг'),
   MetricDef('bodyFatPct', '% жира', '%'),
 ];
 const List<MetricDef> _girths = <MetricDef>[
@@ -1012,7 +1013,6 @@ const List<MetricDef> _girths = <MetricDef>[
   MetricDef('waistCm', 'Талия', 'см'),
   MetricDef('bellyCm', 'Живот', 'см'),
   MetricDef('glutesCm', 'Ягодицы', 'см'),
-  MetricDef('hipsCm', 'Бёдра', 'см'),
   MetricDef('thighCm', 'Бедро', 'см'),
   MetricDef('calfCm', 'Голень', 'см'),
 ];

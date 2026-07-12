@@ -68,12 +68,15 @@ class CatalogMediaView extends StatefulWidget {
     this.videoUrl,
     this.height = 200,
     this.showToggle = false,
+    this.videoFirst = false,
     this.title = 'ДЕМОНСТРАЦИЯ',
   });
   final String? imageUrl;
   final String? videoUrl;
   final double height;
   final bool showToggle;
+  // В режиме showToggle стартовать сразу с видео (если оно есть), а не с фото.
+  final bool videoFirst;
   // Подпись над медиа в режиме showToggle. Пусто → подписи нет (только переключатель).
   final String title;
 
@@ -94,8 +97,9 @@ class _CatalogMediaViewState extends State<CatalogMediaView> {
   void initState() {
     super.initState();
     if (widget.showToggle) {
-      // Дефолт = фото, если оно есть; иначе сразу видео (зеркало веба).
-      _videoMode = !_hasImage && _hasVideo;
+      // videoFirst → сразу видео (если есть). Иначе дефолт = фото, если оно
+      // есть; при отсутствии фото — сразу видео (зеркало веба).
+      _videoMode = widget.videoFirst ? _hasVideo : (!_hasImage && _hasVideo);
       if (_videoMode && _hasVideo) _initVideo(widget.videoUrl!);
     } else if (_hasVideo) {
       // Старое поведение: авто-видео при наличии.

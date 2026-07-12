@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'api/trainer_clients.dart';
-import 'widgets/nav_fab.dart';
+import 'widgets/nav_bar.dart';
 import 'screens/accounting_screen.dart';
 import 'screens/active_workout_screen.dart';
 import 'screens/calendar_screen.dart';

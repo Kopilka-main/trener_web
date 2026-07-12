@@ -146,9 +146,10 @@ class TWorkout {
 
 /// Замер клиента.
 class TMeasurement {
-  TMeasurement({required this.date, required this.weightKg, required this.bodyFatPct, required this.metrics, required this.note, required this.createdByClient});
+  TMeasurement({required this.date, required this.weightKg, required this.skeletalMuscleKg, required this.bodyFatPct, required this.metrics, required this.note, required this.createdByClient});
   final DateTime? date;
   final num? weightKg;
+  final num? skeletalMuscleKg;
   final num? bodyFatPct;
   final Map<String, num> metrics; // обхваты, см
   final String? note;
@@ -160,7 +161,7 @@ class TMeasurement {
     const Map<String, String> fields = <String, String>{
       'bicepsCm': 'Бицепс', 'chestCm': 'Грудь', 'underbustCm': 'Под грудью',
       'waistCm': 'Талия', 'bellyCm': 'Живот', 'glutesCm': 'Ягодицы',
-      'hipsCm': 'Бёдра', 'thighCm': 'Бедро', 'calfCm': 'Голень',
+      'thighCm': 'Бедро', 'calfCm': 'Голень',
     };
     for (final MapEntry<String, String> e in fields.entries) {
       final num? v = j[e.key] as num?;
@@ -169,6 +170,7 @@ class TMeasurement {
     return TMeasurement(
       date: _dt(j['date'] as String?),
       weightKg: j['weightKg'] as num?,
+      skeletalMuscleKg: j['skeletalMuscleKg'] as num?,
       bodyFatPct: j['bodyFatPct'] as num?,
       metrics: m,
       note: j['note'] as String?,

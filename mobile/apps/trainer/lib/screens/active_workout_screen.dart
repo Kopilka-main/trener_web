@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../api/active_workout_state.dart';
 import '../api/trainer_assign.dart';
@@ -306,6 +307,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
                 videoUrl: catalogMediaUrl(base, ex.videoUrl),
                 height: 200,
                 showToggle: true,
+                videoFirst: true,
               ),
               if (ex.equipment?.isNotEmpty == true) ...<Widget>[
                 const SizedBox(height: 12),
@@ -623,6 +625,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
               onToggle: () => setState(() {
                 if (!_expandedGroups.remove(g.exerciseId)) _expandedGroups.add(g.exerciseId);
               }),
+              onInfo: () => _showExerciseInfo(g.exerciseId),
               buildSetRow: _swipeSetRow,
             );
           },
@@ -727,6 +730,7 @@ class _ExerciseBlock extends StatelessWidget {
     this.thumbUrl,
     this.listIndex,
     this.onToggle,
+    this.onInfo,
   });
   final _ExGroup group;
   final bool expanded;
@@ -735,6 +739,8 @@ class _ExerciseBlock extends StatelessWidget {
   final String? thumbUrl;
   final int? listIndex;
   final VoidCallback? onToggle;
+  // Тап по «i» — шит с описанием техники + фото/видео (видео по умолчанию).
+  final VoidCallback? onInfo;
 
   @override
   Widget build(BuildContext context) {
@@ -775,6 +781,15 @@ class _ExerciseBlock extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (onInfo != null)
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onInfo,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Icon(Icons.info_outline, size: 20, color: c.inkMuted),
+                    ),
+                  ),
                 Icon(expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
                     color: c.inkMuted),
               ],
@@ -792,6 +807,16 @@ class _ExerciseBlock extends StatelessWidget {
 }
 
 /// Метрики подхода иконками как в базе знаний: повторы/вес/время/отдых.
+// SVG-иконки метрик подхода (Material Symbols): вес / повторения / время / отдых.
+const String _svgWeight =
+    '<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px"><path d="M240-200h480l-57-400H297l-57 400Zm240-480q17 0 28.5-11.5T520-720q0-17-11.5-28.5T480-760q-17 0-28.5 11.5T440-720q0 17 11.5 28.5T480-680Zm113 0h70q30 0 52 20t27 49l57 400q5 36-18.5 63.5T720-120H240q-37 0-60.5-27.5T161-211l57-400q5-29 27-49t52-20h70q-3-10-5-19.5t-2-20.5q0-50 35-85t85-35q50 0 85 35t35 85q0 11-2 20.5t-5 19.5ZM240-200h480-480Z"/></svg>';
+const String _svgReps =
+    '<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px"><path d="M339.5-108.5q-65.5-28.5-114-77t-77-114Q120-365 120-440h80q0 117 81.5 198.5T480-160q117 0 198.5-81.5T760-440q0-117-81.5-198.5T480-720h-6l62 62-56 58-160-160 160-160 56 58-62 62h6q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-440q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-80q-75 0-140.5-28.5Z"/></svg>';
+const String _svgTime =
+    '<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px"><path d="M360-840v-80h240v80H360Zm80 440h80v-240h-80v240Zm-99.5 291.5Q275-137 226-186t-77.5-114.5Q120-366 120-440t28.5-139.5Q177-645 226-694t114.5-77.5Q406-800 480-800q62 0 119 20t107 58l56-56 56 56-56 56q38 50 58 107t20 119q0 74-28.5 139.5T734-186q-49 49-114.5 77.5T480-80q-74 0-139.5-28.5ZM678-242q82-82 82-198t-82-198q-82-82-198-82t-198 82q-82 82-82 198t82 198q82 82 198 82t198-82ZM480-440Z"/></svg>';
+const String _svgRest =
+    '<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px"><path d="M380-334h200v-60H468l112-126v-54H380v60h114L380-386v52Zm-40.5 225.5q-65.5-28.5-114-77t-77-114Q120-365 120-440t28.5-140.5q28.5-65.5 77-114t114-77Q405-800 480-800t140.5 28.5q65.5 28.5 114 77t77 114Q840-515 840-440t-28.5 140.5q-28.5 65.5-77 114t-114 77Q555-80 480-80t-140.5-28.5ZM224-866l56 56-170 170-56-56 170-170Zm512 0 170 170-56 56-170-170 56-56ZM480-160q117 0 198.5-81.5T760-440q0-117-81.5-198.5T480-720q-117 0-198.5 81.5T200-440q0 117 81.5 198.5T480-160Z"/></svg>';
+
 class _SetMetrics extends StatelessWidget {
   const _SetMetrics({required this.set, this.showActual = false});
   final WorkoutSet set;
@@ -805,12 +830,17 @@ class _SetMetrics extends StatelessWidget {
     final num? time = showActual ? (set.actualTimeSec ?? set.plannedTimeSec) : set.plannedTimeSec;
     final num? rest = set.plannedRestSec;
 
-    Widget metric(IconData icon, num? v) => Padding(
+    Widget metric(String svg, num? v) => Padding(
           padding: const EdgeInsets.only(right: 16),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Icon(icon, size: 18, color: c.inkMutedXl),
+              SvgPicture.string(
+                svg,
+                width: 18,
+                height: 18,
+                colorFilter: ColorFilter.mode(c.inkMutedXl, BlendMode.srcIn),
+              ),
               const SizedBox(width: 5),
               Text('${(v ?? 0).toInt()}',
                   style: AppFonts.mono(size: 17, color: c.inkMuted, weight: FontWeight.w600)),
@@ -820,10 +850,10 @@ class _SetMetrics extends StatelessWidget {
 
     return Row(
       children: <Widget>[
-        metric(Icons.repeat, reps),
-        metric(Icons.fitness_center, weight),
-        metric(Icons.timer_outlined, time),
-        metric(Icons.bedtime_outlined, rest),
+        metric(_svgReps, reps),
+        metric(_svgWeight, weight),
+        metric(_svgTime, time),
+        metric(_svgRest, rest),
       ],
     );
   }

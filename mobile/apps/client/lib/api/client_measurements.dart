@@ -11,6 +11,7 @@ class MetricDef {
 
 const List<MetricDef> kMetrics = <MetricDef>[
   MetricDef('weightKg', 'Вес', 'кг'),
+  MetricDef('skeletalMuscleKg', 'Скел. мышцы', 'кг'),
   MetricDef('bodyFatPct', '% жира', '%'),
   MetricDef('bicepsCm', 'Бицепс', 'см'),
   MetricDef('chestCm', 'Грудь', 'см'),
@@ -18,7 +19,6 @@ const List<MetricDef> kMetrics = <MetricDef>[
   MetricDef('waistCm', 'Талия', 'см'),
   MetricDef('bellyCm', 'Живот', 'см'),
   MetricDef('glutesCm', 'Ягодицы', 'см'),
-  MetricDef('hipsCm', 'Бёдра', 'см'),
   MetricDef('thighCm', 'Бедро', 'см'),
   MetricDef('calfCm', 'Голень', 'см'),
 ];
