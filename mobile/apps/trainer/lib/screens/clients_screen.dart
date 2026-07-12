@@ -2744,8 +2744,11 @@ class _PackagesBlock extends ConsumerWidget {
                         ),
                       ],
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 5),
+                    // Высота строки — чтобы при свайпе кнопки [Изм.]/[Удал.]
+                    // (иконка + подпись) помещались по высоте и не обрезались.
+                    child: Container(
+                      height: 54,
+                      alignment: Alignment.centerLeft,
                       child: Row(
                         children: <Widget>[
                           Text(_date(e.date), style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),

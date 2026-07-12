@@ -2,6 +2,7 @@ import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 
 import '../api/trainer_accounting.dart';
 import '../api/trainer_client_card.dart';
@@ -45,6 +46,7 @@ class _Op {
     required this.isIncome,
     required this.tags,
     this.onTap,
+    this.onDelete,
   });
   final DateTime? date;
   final String primary;
@@ -54,6 +56,7 @@ class _Op {
   final bool isIncome;
   final List<String> tags;
   final VoidCallback? onTap;
+  final VoidCallback? onDelete;
 }
 
 class AccountingScreen extends ConsumerStatefulWidget {
@@ -281,6 +284,7 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
           isIncome: true,
           tags: e.tags,
           onTap: () => _editIncome(e),
+          onDelete: () => _deleteIncome(e),
         ));
       }
     }
@@ -295,6 +299,7 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
           isIncome: false,
           tags: e.tags,
           onTap: () => _editExpense(e),
+          onDelete: () => _deleteExpense(e),
         ));
       }
     }
@@ -327,7 +332,8 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
                         sign: o.isIncome ? '+' : '−',
                         color: o.isIncome ? c.accent : c.inkMuted,
                         tags: o.tags,
-                        onTap: o.onTap);
+                        onTap: o.onTap,
+                        onDelete: o.onDelete);
                   },
                 ),
         ),
@@ -476,8 +482,12 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
   }
 
   Widget _entryRow(AppColors c, String primary, String kicker, String meta, num amount,
-      {required String sign, required Color color, List<String> tags = const <String>[], VoidCallback? onTap}) {
-    return GestureDetector(
+      {required String sign,
+      required Color color,
+      List<String> tags = const <String>[],
+      VoidCallback? onTap,
+      VoidCallback? onDelete}) {
+    final Widget row = GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
@@ -520,18 +530,37 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
             ),
           ),
           Text('$sign${_money(amount)}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: color)),
-          if (onTap != null)
-            GestureDetector(
-              onTap: onTap,
-              behavior: HitTestBehavior.opaque,
-              child: Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Icon(Icons.edit_outlined, size: 18, color: c.inkMutedXl),
-              ),
-            ),
         ],
       ),
       ),
+    );
+    // Свайп влево открывает [Изм.] [Удал.] (как у подходов тренировки).
+    if (onTap == null && onDelete == null) return row;
+    return Slidable(
+      key: ValueKey<String>('op-$primary-$meta-$amount'),
+      endActionPane: ActionPane(
+        motion: const DrawerMotion(),
+        extentRatio: 0.42,
+        children: <Widget>[
+          if (onTap != null)
+            SlidableAction(
+              onPressed: (_) => onTap(),
+              backgroundColor: c.cardElevated,
+              foregroundColor: c.ink,
+              icon: Icons.edit_outlined,
+              label: 'Изм.',
+            ),
+          if (onDelete != null)
+            SlidableAction(
+              onPressed: (_) => onDelete(),
+              backgroundColor: c.danger,
+              foregroundColor: Colors.white,
+              icon: Icons.delete_outline,
+              label: 'Удал.',
+            ),
+        ],
+      ),
+      child: row,
     );
   }
 
@@ -615,6 +644,37 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
     if (changed == true) ref.invalidate(trainerExpensesProvider);
   }
 
+  // Свайп-удаление дохода: пакет-доход сносит сам пакет, обычный — запись дохода.
+  Future<void> _deleteIncome(Income e) async {
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    if (!await confirmDelete(context, title: 'Удалить операцию?')) return;
+    try {
+      if (e.isPackage && e.clientId != null) {
+        await ref
+            .read(trainerClientCardApiProvider)
+            .deletePackage(e.clientId!, e.id.replaceFirst('pkg:', ''));
+        ref.invalidate(clientPackagesProvider(e.clientId!));
+      } else {
+        await ref.read(trainerAccountingApiProvider).deleteIncome(e.id);
+      }
+      ref.invalidate(trainerIncomesProvider);
+    } catch (_) {
+      if (mounted) m.showSnackBar(const SnackBar(content: Text('Не удалось удалить')));
+    }
+  }
+
+  // Свайп-удаление расхода.
+  Future<void> _deleteExpense(Expense e) async {
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    if (!await confirmDelete(context, title: 'Удалить операцию?')) return;
+    try {
+      await ref.read(trainerAccountingApiProvider).deleteExpense(e.id);
+      ref.invalidate(trainerExpensesProvider);
+    } catch (_) {
+      if (mounted) m.showSnackBar(const SnackBar(content: Text('Не удалось удалить')));
+    }
+  }
+
   // Гарантируем, что текущая категория записи есть в списке чипов (для старых
   // значений вроде «Фарма», убранных из выбора для новых записей).
   List<String> _withCategory(List<String> base, String cat) =>
@@ -655,7 +715,7 @@ class _Chip extends StatelessWidget {
         onTap: onTap,
         child: Container(
           alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(color: active ? c.accent : c.chip, borderRadius: BorderRadius.circular(20)),
           child: Text(label,
               style: AppFonts.mono(size: 12, color: active ? c.accentOn : c.inkMuted, weight: FontWeight.w600)),
@@ -708,6 +768,35 @@ class _Pill extends StatelessWidget {
 /// Категории источников. «Фарма» убрана из доходов.
 const List<String> _kIncomeCats = <String>['Тренировка', 'Консультация', 'Прочее'];
 const List<String> _kExpenseCats = <String>['Аренда', 'Инвентарь', 'Обучение', 'Прочее'];
+
+/// Открыть шит редактирования дохода той же формой, что и в «Бухгалтерии».
+/// Публичная обёртка над приватной `_AddEntrySheet` — переиспользуется из
+/// «Оплаты» клиента. Возвращает true, если доход изменён/удалён.
+Future<bool> showIncomeEditSheet(BuildContext context, Income e) async {
+  final bool? changed = await showModalBottomSheet<bool>(
+    context: context,
+    backgroundColor: context.colors.bg,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (_) => _AddEntrySheet(
+      isIncome: true,
+      categories:
+          _kIncomeCats.contains(e.category) ? _kIncomeCats : <String>[e.category, ..._kIncomeCats],
+      edit: _EntryEdit(
+        id: e.id,
+        category: e.category,
+        amount: e.amount,
+        date: e.date,
+        note: e.note,
+        tags: e.tags,
+        clientId: e.clientId,
+        isPackage: e.isPackage,
+        packageId: e.isPackage ? e.id.replaceFirst('pkg:', '') : null,
+      ),
+    ),
+  );
+  return changed == true;
+}
 
 /// Данные редактируемой записи для префилла формы.
 class _EntryEdit {
