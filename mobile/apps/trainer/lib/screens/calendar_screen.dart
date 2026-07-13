@@ -8,6 +8,7 @@ import '../api/trainer_calendar.dart';
 import '../api/trainer_clients.dart';
 import '../api/trainer_home.dart';
 import '../api/trainer_workouts.dart';
+import '../widgets/nav_bar.dart';
 import 'active_workout_screen.dart';
 import 'clients_screen.dart' show ClientDetailScreen;
 import 'session_form.dart';
@@ -28,6 +29,9 @@ class CalendarScreen extends ConsumerStatefulWidget {
 
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   Timer? _poll;
+  // Контроллер контекстной кнопки «+» нижнего меню — захватываем заранее, чтобы
+  // снять регистрацию ПОСЛЕ кадра (менять провайдер прямо в dispose нельзя).
+  late final _navFabCtrl = ref.read(navFabProvider.notifier);
 
   @override
   void initState() {
@@ -35,7 +39,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     // При открытии тянем свежие занятия — чтобы статус подтверждения клиента был
     // актуальным, даже если пуш не обновил кэш.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) ref.invalidate(trainerSessionsProvider);
+      if (!mounted) return;
+      ref.invalidate(trainerSessionsProvider);
+      // FAB «создать занятие» переносим в нижнее меню — только для ВКЛАДКИ
+      // календаря (clientId == null). В режиме «внутри клиента» FAB остаётся на экране.
+      if (widget.clientId != null) return;
+      _navFabCtrl.state = (
+        loc: '/calendar',
+        icon: Icons.add,
+        onTap: () => showSessionForm(context, ref, defaultClientId: widget.clientId),
+      );
     });
     // Регулярный автоопрос, пока экран открыт: изменения (напр. клиент согласовал
     // занятие) появляются в моменте, без перезахода в приложение.
@@ -47,6 +60,15 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   @override
   void dispose() {
     _poll?.cancel();
+    // Снимаем кнопку из меню только если её регистрировала ВКЛАДКА (clientId ==
+    // null); в scoped-режиме провайдер не трогали. Откладываем на кадр; guard по
+    // loc не даёт затереть регистрацию уже открытого следующего экрана.
+    if (widget.clientId == null) {
+      final ctrl = _navFabCtrl;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (ctrl.state?.loc == '/calendar') ctrl.state = null;
+      });
+    }
     super.dispose();
   }
 
@@ -60,10 +82,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
     return Scaffold(
       appBar: scoped ? AppBar(title: Text('Календарь · ${clientName ?? ''}')) : null,
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => showSessionForm(context, ref, defaultClientId: clientId),
-        child: const Icon(Icons.add),
-      ),
+      // FAB оставляем только в режиме «внутри клиента» (scoped). Во вкладке
+      // календаря кнопка «+» живёт в нижнем меню (регистрируется в initState).
+      floatingActionButton: scoped
+          ? FloatingActionButton(
+              onPressed: () => showSessionForm(context, ref, defaultClientId: clientId),
+              child: const Icon(Icons.add),
+            )
+          : null,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -83,15 +109,19 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (Object e, _) => _Retry(onRetry: () => ref.invalidate(trainerSessionsProvider)),
                 data: (List<Session> raw) {
-                  // Онлайн-занятия видны только в КЛИЕНТСКОМ календаре (scoped —
-                  // все занятия этого клиента, включая онлайн). В ОБЩЕМ календаре
-                  // тренера (с главной) онлайн скрыты — только очные занятия.
+                  // ОБЩИЙ календарь тренера (с главной): онлайн скрыты — только очные.
+                  // КЛИЕНТСКИЙ (scoped): показываем ВСЕ занятия тренера — занятия
+                  // этого клиента (включая онлайн) обычными цветами, а чужие
+                  // (очные) серыми (dimmed). Чужие онлайн не показываем — как и в общем.
                   final List<Session> all = raw
-                      .where((Session s) => scoped ? s.clientId == clientId : !s.isOnline)
+                      .where((Session s) =>
+                          scoped ? (s.clientId == clientId || !s.isOnline) : !s.isOnline)
                       .toList();
                   final Map<String, Session> byId = <String, Session>{for (final Session s in all) s.id: s};
                   return SessionsCalendar(
-                    sessions: all.map((Session s) => s.toCal()).toList(),
+                    sessions: all
+                        .map((Session s) => s.toCal(dimmed: scoped && s.clientId != clientId))
+                        .toList(),
                     defaultView: CalendarView.week,
                     onSessionTap: (CalSession cs) {
                       final Session? s = byId[cs.id];

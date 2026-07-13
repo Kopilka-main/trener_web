@@ -10,6 +10,7 @@ import '../api/trainer_clients.dart';
 import '../api/trainer_gyms.dart';
 import '../widgets/expense_form.dart';
 import '../widgets/income_form.dart';
+import '../widgets/nav_bar.dart';
 
 // ─── Утилиты ───
 const List<String> _ruMonthsShort = <String>[
@@ -76,6 +77,27 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
   // Фильтры списков.
   String _catFilter = '';
   String _tagFilter = '';
+  // Контроллер контекстной кнопки «+» нижнего меню (захватываем заранее).
+  late final _navFabCtrl = ref.read(navFabProvider.notifier);
+
+  @override
+  void initState() {
+    super.initState();
+    // FAB «добавить операцию» переносим в нижнее меню (кнопка «+» в плашке).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _navFabCtrl.state = (loc: '/accounting', icon: Icons.add, onTap: _onAdd);
+    });
+  }
+
+  @override
+  void dispose() {
+    final ctrl = _navFabCtrl;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (ctrl.state?.loc == '/accounting') ctrl.state = null;
+    });
+    super.dispose();
+  }
 
   DateTime get _from {
     switch (_mode) {
@@ -144,10 +166,6 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
     return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        onPressed: _onAdd,
-        child: const Icon(Icons.add),
-      ),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

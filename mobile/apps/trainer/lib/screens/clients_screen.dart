@@ -17,6 +17,7 @@ import '../api/trainer_clients.dart';
 import '../api/trainer_medical.dart';
 import '../api/trainer_workouts.dart';
 import '../widgets/income_form.dart';
+import '../widgets/nav_bar.dart';
 import 'accounting_screen.dart';
 import 'active_workout_screen.dart';
 import 'calendar_screen.dart';
@@ -101,6 +102,34 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
   bool _sortBySession = false; // false → алфавит, true → по ближайшему занятию
   bool _activeOnly = false; // показывать только клиентов с оплаченными тренировками
   _Format _format = _Format.all;
+  // Контроллер контекстной кнопки «+» нижнего меню (захватываем заранее — снятие
+  // откладываем на кадр, менять провайдер прямо в dispose нельзя).
+  late final _navFabCtrl = ref.read(navFabProvider.notifier);
+
+  @override
+  void initState() {
+    super.initState();
+    // FAB «добавить клиента» переносим в нижнее меню (кнопка «+» в плашке).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _navFabCtrl.state = (
+        loc: '/clients',
+        icon: Icons.person_add_alt,
+        onTap: () => Navigator.of(context).push<bool>(
+          MaterialPageRoute<bool>(builder: (_) => const ClientEditScreen()),
+        ),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    final ctrl = _navFabCtrl;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (ctrl.state?.loc == '/clients') ctrl.state = null;
+    });
+    super.dispose();
+  }
 
   bool _matchesQuery(Client c) {
     if (_query.isEmpty) return true;
@@ -129,12 +158,6 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
         _nextSessionByClient(ref.watch(trainerSessionsProvider).valueOrNull ?? <Session>[]);
 
     return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.of(context).push<bool>(
-          MaterialPageRoute<bool>(builder: (_) => const ClientEditScreen()),
-        ),
-        child: const Icon(Icons.person_add_alt),
-      ),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

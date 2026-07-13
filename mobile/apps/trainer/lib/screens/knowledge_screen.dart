@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/trainer_assign.dart';
 import '../api/trainer_catalog.dart';
+import '../widgets/nav_bar.dart';
 import 'exercise_edit_screen.dart';
 import 'template_edit_screen.dart';
 
@@ -23,28 +24,44 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
   String _group = '';
   String _subgroup = ''; // второй уровень (только вкладка «Упражнения»)
   final TextEditingController _searchCtrl = TextEditingController();
+  // Контроллер контекстной кнопки «+» нижнего меню (захватываем заранее).
+  late final _navFabCtrl = ref.read(navFabProvider.notifier);
+
+  @override
+  void initState() {
+    super.initState();
+    // FAB «создать» переносим в нижнее меню. Действие читает активную вкладку
+    // (_templatesTab) в момент нажатия — что именно создавать.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _navFabCtrl.state = (loc: '/knowledge', icon: Icons.add, onTap: _onAddKnowledge);
+    });
+  }
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    final ctrl = _navFabCtrl;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (ctrl.state?.loc == '/knowledge') ctrl.state = null;
+    });
     super.dispose();
+  }
+
+  /// Создать сущность активной вкладки: шаблон тренировки или упражнение.
+  Future<void> _onAddKnowledge() async {
+    final bool? saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => _templatesTab ? const TemplateEditScreen() : const ExerciseEditScreen(),
+      ),
+    );
+    if (saved == true && mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
     return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final bool? saved = await Navigator.of(context).push<bool>(
-            MaterialPageRoute<bool>(
-              builder: (_) => _templatesTab ? const TemplateEditScreen() : const ExerciseEditScreen(),
-            ),
-          );
-          if (saved == true) setState(() {});
-        },
-        child: const Icon(Icons.add),
-      ),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
