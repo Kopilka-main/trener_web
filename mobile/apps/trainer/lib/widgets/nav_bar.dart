@@ -141,7 +141,8 @@ class _GlobalNavBarState extends ConsumerState<GlobalNavBar> {
     return Center(
       child: Container(
         decoration: BoxDecoration(
-          color: c.card,
+          // Полупрозрачный фон (30% прозрачности) — контент под панелью просвечивает.
+          color: c.card.withValues(alpha: 0.7),
           borderRadius: BorderRadius.circular(30),
           border: Border.all(color: c.line),
           boxShadow: <BoxShadow>[
