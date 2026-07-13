@@ -1402,6 +1402,8 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
         clientId: _cid,
         busy: _busy,
         onRepeat: () => _repeatWorkout(w),
+        onEdit: () => _openConduct(w.id),
+        onDelete: () => _cancelWorkout(w),
       ));
     }
     return out;
@@ -1416,11 +1418,15 @@ class _HistoryCard extends ConsumerStatefulWidget {
     required this.workout,
     required this.clientId,
     required this.onRepeat,
+    required this.onEdit,
+    required this.onDelete,
     required this.busy,
   });
   final TWorkout workout;
   final String clientId;
   final VoidCallback onRepeat;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
   final bool busy;
   @override
   ConsumerState<_HistoryCard> createState() => _HistoryCardState();
@@ -1469,14 +1475,46 @@ class _HistoryCardState extends ConsumerState<_HistoryCard> {
     final AppColors c = context.colors;
     final TWorkout w = widget.workout;
     final bool skipped = w.status == 'skipped';
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 9, 10, 9),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Slidable(
+        key: ValueKey<String>('hist-${w.id}'),
+        // Свайп влево → повторить / изменить / удалить (как у строк подходов).
+        endActionPane: ActionPane(
+          motion: const DrawerMotion(),
+          extentRatio: 0.62,
+          children: <Widget>[
+            SlidableAction(
+              onPressed: (_) => _confirmRepeat(),
+              backgroundColor: c.accent,
+              foregroundColor: c.accentOn,
+              icon: Icons.replay,
+              label: 'Повторить',
+            ),
+            SlidableAction(
+              onPressed: (_) => widget.onEdit(),
+              backgroundColor: c.cardElevated,
+              foregroundColor: c.ink,
+              icon: Icons.edit_outlined,
+              label: 'Изм.',
+            ),
+            SlidableAction(
+              onPressed: (_) => widget.onDelete(),
+              backgroundColor: c.danger,
+              foregroundColor: Colors.white,
+              icon: Icons.delete_outline,
+              label: 'Удал.',
+            ),
+          ],
+        ),
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 9, 10, 9),
             child: Row(
               children: <Widget>[
                 Icon(skipped ? Icons.do_not_disturb_on_outlined : Icons.fitness_center,
@@ -1531,6 +1569,8 @@ class _HistoryCardState extends ConsumerState<_HistoryCard> {
           ),
           if (_expanded) _composition(c),
         ],
+      ),
+        ),
       ),
     );
   }
