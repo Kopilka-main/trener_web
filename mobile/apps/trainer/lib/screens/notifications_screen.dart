@@ -409,7 +409,8 @@ class _ImportantCard extends StatelessWidget {
   }
 }
 
-/// Второстепенная карточка — для событий (обычный вид: card, accent-иконка).
+/// Карточка события: тот же выразительный вид с зелёной (accent) подсветкой —
+/// тонированный фон + акцентная полоса и иконка (как у важных, но всегда зелёный).
 class _EventCard extends StatelessWidget {
   const _EventCard({required this.event, required this.unseen, required this.onTap});
   final _Event event;
@@ -419,33 +420,60 @@ class _EventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
+    final Color accent = c.accent;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
-        child: Row(
-          children: <Widget>[
-            Icon(_eventIcon(event.kind), size: 18, color: c.accent),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(event.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
-                  Text(event.message, style: TextStyle(fontSize: 13, color: c.inkMuted)),
-                ],
-              ),
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Container(width: 4, color: accent),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    child: Row(
+                      children: <Widget>[
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: accent.withValues(alpha: 0.18),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(_eventIcon(event.kind), size: 18, color: accent),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(event.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink)),
+                              Text(event.message, style: TextStyle(fontSize: 13, color: c.inkMuted)),
+                            ],
+                          ),
+                        ),
+                        if (unseen) ...<Widget>[
+                          const SizedBox(width: 10),
+                          const _UnseenDot(),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-            if (unseen) ...<Widget>[
-              const SizedBox(width: 10),
-              const _UnseenDot(),
-            ],
-          ],
+          ),
         ),
       ),
     );
