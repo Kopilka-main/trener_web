@@ -84,16 +84,25 @@ class _NotifGroup {
   final List<_Notif> items;
 }
 
-/// Группирует уведомления по дню; ГРУППЫ — по убыванию даты (новые/будущие
-/// сверху), внутри группы — исходный порядок сбора.
+/// Группирует уведомления по дню; ГРУППЫ — «свежие/актуальные сверху»: сегодня и
+/// будущее раньше прошлого; среди будущего — ближайшее выше; среди прошлого —
+/// недавнее выше. Внутри группы — исходный порядок сбора.
 List<_NotifGroup> _groupByDate(List<_Notif> items) {
   final Map<String, _NotifGroup> byKey = <String, _NotifGroup>{};
   for (final _Notif n in items) {
     final String key = _dateKey(n.date);
     (byKey[key] ??= _NotifGroup(n.date, <_Notif>[])).items.add(n);
   }
+  final DateTime today = _dateOnly(DateTime.now());
   final List<_NotifGroup> groups = byKey.values.toList()
-    ..sort((_NotifGroup a, _NotifGroup b) => b.date.compareTo(a.date));
+    ..sort((_NotifGroup a, _NotifGroup b) {
+      final int da = a.date.difference(today).inDays;
+      final int db = b.date.difference(today).inDays;
+      final bool aUpcoming = da >= 0; // сегодня/будущее
+      final bool bUpcoming = db >= 0;
+      if (aUpcoming != bUpcoming) return aUpcoming ? -1 : 1; // будущее/сегодня выше прошлого
+      return aUpcoming ? da.compareTo(db) : db.compareTo(da); // будущее: ближе выше; прошлое: недавнее выше
+    });
   return groups;
 }
 
