@@ -1480,15 +1480,13 @@ class _HistoryCardState extends ConsumerState<_HistoryCard> {
   bool _expanded = false;
 
   String _setSummary(WorkoutSet s, {required bool actual}) {
-    final num? reps = actual ? (s.actualReps ?? s.plannedReps) : s.plannedReps;
-    final num? weight = actual ? (s.actualWeightKg ?? s.plannedWeightKg) : s.plannedWeightKg;
-    final num? time = actual ? (s.actualTimeSec ?? s.plannedTimeSec) : s.plannedTimeSec;
-    final List<String> p = <String>[
-      if (reps != null) '${reps.toInt()}',
-      if (weight != null && weight != 0) '× ${weight % 1 == 0 ? weight.toInt() : weight} кг',
-      if (time != null && time != 0) '${time.toInt()} с',
-    ];
-    return p.isEmpty ? '—' : p.join(' ');
+    final num reps = (actual ? (s.actualReps ?? s.plannedReps) : s.plannedReps) ?? 0;
+    final num weight = (actual ? (s.actualWeightKg ?? s.plannedWeightKg) : s.plannedWeightKg) ?? 0;
+    final num time = (actual ? (s.actualTimeSec ?? s.plannedTimeSec) : s.plannedTimeSec) ?? 0;
+    final num rest = s.plannedRestSec ?? 0;
+    String n(num v) => v % 1 == 0 ? v.toInt().toString() : v.toString();
+    // Основные параметры подхода: повторы/вес/время/отдых (как в строке подхода).
+    return '${n(reps)}/${n(weight)}/${n(time)}/${n(rest)}';
   }
 
   /// Длительность проведённой тренировки: «45 мин» / «1 ч 5 мин» (или «40 с»).

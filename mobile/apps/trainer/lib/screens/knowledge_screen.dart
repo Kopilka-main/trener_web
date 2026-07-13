@@ -418,16 +418,12 @@ class _TemplateCardState extends State<_TemplateCard> {
 
   String _numStr(num v) => v % 1 == 0 ? v.toInt().toString() : v.toString();
 
-  /// Краткая сводка позиции шаблона: «N× повт × вес кг · время с».
+  /// Основные параметры позиции: повторы/вес/время/отдых («10/10/0/90»),
+  /// с префиксом «N× » при нескольких подходах.
   String _exSummary(TemplateExercise e) {
-    final List<String> p = <String>[
-      if (e.reps != null && e.reps != 0) '${e.reps!.toInt()}',
-      if (e.weightKg != null && e.weightKg != 0) '× ${_numStr(e.weightKg!)} кг',
-      if (e.timeSec != null && e.timeSec != 0) '${e.timeSec!.toInt()} с',
-    ];
-    final String head = e.sets > 1 ? '${e.sets}× ' : '';
-    if (p.isEmpty) return e.sets > 1 ? '${e.sets} подх.' : '—';
-    return '$head${p.join(' ')}';
+    final String params =
+        '${_numStr(e.reps ?? 0)}/${_numStr(e.weightKg ?? 0)}/${_numStr(e.timeSec ?? 0)}/${_numStr(e.restSec ?? 0)}';
+    return e.sets > 1 ? '${e.sets}× $params' : params;
   }
 
   @override
