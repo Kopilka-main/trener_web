@@ -6,6 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/trainer_assign.dart';
 import '../api/trainer_catalog.dart';
 
+/// Результат «создать тренировку у клиента»: имя + план подходов для черновика,
+/// который клиентский экран поставит наверх (в дополнение к сохранённому шаблону).
+typedef StagedWorkout = ({String name, List<Map<String, dynamic>> plan});
+
 /// Одна позиция упражнения в шаблоне (один «подход» = одна карточка).
 class _Pos {
   _Pos({
@@ -38,13 +42,24 @@ class _Pos {
 /// Создание/правка шаблона тренировки. Зеркало веб TemplateEditPage:
 /// шаг 1 — выбор упражнений (счётчик подходов), шаг 2 — детали + порядок + сохранить.
 class TemplateEditScreen extends ConsumerStatefulWidget {
-  const TemplateEditScreen({super.key, this.template, this.clientId, this.clientName});
+  const TemplateEditScreen({
+    super.key,
+    this.template,
+    this.clientId,
+    this.clientName,
+    this.stageDraftForClient = false,
+  });
   final WorkoutTemplate? template;
 
   /// При создании НОВОГО шаблона: задан → персональный для клиента [clientName].
   /// Правка существующего шаблона scope не меняет (эти поля не передаются).
   final String? clientId;
   final String? clientName;
+
+  /// true (кнопка «Создать тренировку» у клиента): после сохранения шаблона
+  /// вернуть [StagedWorkout] — клиентский экран назначит по нему черновик и
+  /// поставит его наверх («ближайшая»).
+  final bool stageDraftForClient;
 
   @override
   ConsumerState<TemplateEditScreen> createState() => _TemplateEditScreenState();
@@ -139,13 +154,35 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
       }
       ref.invalidate(trainerTemplatesProvider);
       if (!mounted) return;
-      nav.pop(true);
+      // Клиентский «Создать тренировку»: помимо шаблона возвращаем план, чтобы
+      // экран клиента поставил по нему черновик наверх. Иначе — обычный true.
+      if (!_isEdit && widget.stageDraftForClient) {
+        nav.pop<StagedWorkout>((name: name, plan: _draftPlan()));
+      } else {
+        nav.pop(true);
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() => _busy = false);
       m.showSnackBar(const SnackBar(content: Text('Не удалось сохранить шаблон')));
     }
   }
+
+  /// План черновика из позиций редактора: каждая позиция = один подход (как при
+  /// «Выбрать из базы»). Пустые поля опускаем.
+  List<Map<String, dynamic>> _draftPlan() => _positions
+      .map((_Pos p) => <String, dynamic>{
+            'exerciseId': p.exerciseId,
+            'sets': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'plannedReps': ?p.reps,
+                'plannedWeightKg': ?p.weightKg,
+                'plannedTimeSec': ?p.timeSec,
+                'plannedRestSec': p.restSec ?? 90,
+              },
+            ],
+          })
+      .toList();
 
   Future<void> _delete() async {
     final bool? ok = await showDialog<bool>(
@@ -287,7 +324,9 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        // Нижний отступ учитывает резерв под плавающее меню (в MediaQuery.padding)
+        // + запас, чтобы последнее упражнение не пряталось за плашкой.
+        padding: EdgeInsets.fromLTRB(16, 8, 16, 24 + MediaQuery.of(context).padding.bottom),
         children: <Widget>[
           if (isPersonal) ...<Widget>[
             _PersonalBanner(clientName: personalFor),

@@ -166,21 +166,6 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Text('Клиенты', style: AppFonts.display(size: 24, color: c.ink)),
             ),
-            // Поиск.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: TextField(
-                onChanged: (String v) => setState(() => _query = v.trim().toLowerCase()),
-                decoration: InputDecoration(
-                  hintText: 'Поиск по имени, тегу',
-                  prefixIcon: const Icon(Icons.search, size: 20),
-                  isDense: true,
-                  filled: true,
-                  fillColor: c.card,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                ),
-              ),
-            ),
             // Сортировка + фильтр формата.
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -225,6 +210,21 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                   const Spacer(),
                   _FormatSeg(value: _format, onChanged: (_Format f) => setState(() => _format = f)),
                 ],
+              ),
+            ),
+            // Поиск.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: TextField(
+                onChanged: (String v) => setState(() => _query = v.trim().toLowerCase()),
+                decoration: InputDecoration(
+                  hintText: 'Поиск по имени, тегу',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  isDense: true,
+                  filled: true,
+                  fillColor: c.card,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                ),
               ),
             ),
             Expanded(
@@ -596,7 +596,7 @@ class ClientDetailScreen extends ConsumerWidget {
         },
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           children: <Widget>[
             // Шапка: аватар 64 + имя 26 + чип «Архив».
             Row(
@@ -980,6 +980,10 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
   String get _cid => widget.client.id;
 
   Future<void> _openConduct(String wid) async {
+    // Сбрасываем кэш тренировки, чтобы экран открылся со СВЕЖИМ статусом (active
+    // после старта), а не устаревшим черновиком из кэша — иначе «Продолжить»
+    // показывал экран-редактор черновика вместо проведения.
+    ref.invalidate(trainerWorkoutProvider((clientId: _cid, wid: wid)));
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(builder: (_) => ActiveWorkoutScreen(clientId: _cid, workoutId: wid)),
     );
@@ -1070,13 +1074,48 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
 
   /// Создать ПЕРСОНАЛЬНЫЙ шаблон тренировки для этого клиента (база знаний,
   /// scope = клиент). Сразу назначать не нужно — шаблон появится в базе.
+  /// «Создать тренировку» у клиента: собрать в редакторе → сохранить персональный
+  /// шаблон в базу И поставить по нему черновик наверх («ближайшая»). Черновик
+  /// держится до проведения или создания новой тренировки.
   Future<void> _createTemplate() async {
-    await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (_) => TemplateEditScreen(clientId: _cid, clientName: widget.client.fullName),
+    final StagedWorkout? staged = await Navigator.of(context).push<StagedWorkout>(
+      MaterialPageRoute<StagedWorkout>(
+        builder: (_) => TemplateEditScreen(
+          clientId: _cid,
+          clientName: widget.client.fullName,
+          stageDraftForClient: true,
+        ),
       ),
     );
     ref.invalidate(trainerTemplatesProvider);
+    if (staged == null || !mounted) return;
+    await _stageDraft(staged.name, staged.plan);
+  }
+
+  /// Поставить свежесозданную тренировку наверх: назначаем клиенту черновик по
+  /// плану (без гейта согласования — провести можно будет по тапу). Прежние
+  /// неподтверждённые черновики тренера убираем, чтобы наверху была одна — новая.
+  Future<void> _stageDraft(String name, List<Map<String, dynamic>> plan) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    try {
+      final String newId =
+          await ref.read(trainerAssignApiProvider).assignReturningId(_cid, name, plan);
+      final List<TWorkout> existing =
+          ref.read(clientWorkoutsCardProvider(_cid)).valueOrNull ?? <TWorkout>[];
+      for (final TWorkout w in existing) {
+        if (w.id != newId && w.status == 'draft' && !w.createdByClient) {
+          await ref.read(trainerWorkoutsApiProvider).delete(_cid, w.id);
+        }
+      }
+      ref.invalidate(clientWorkoutsCardProvider(_cid));
+    } catch (_) {
+      m.showSnackBar(const SnackBar(
+          content: Text('Шаблон сохранён, но не удалось поставить тренировку наверх')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _pickTemplate({bool excluded = false}) async {
@@ -1314,11 +1353,16 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
           ),
         ),
         data: (List<TWorkout> all) {
-          // Ближайшая — только тренерская (не createdByClient), активная раньше черновика.
-          final List<TWorkout> current = all
+          // Ближайшая — только тренерская (не createdByClient). Идущая (active) в
+          // приоритете, иначе самый свежий черновик (порядок из API — desc
+          // createdAt). Разбиваем без sort — Dart List.sort нестабилен.
+          final List<TWorkout> currentPool = all
               .where((TWorkout w) => (w.status == 'active' || w.status == 'draft') && !w.createdByClient)
-              .toList()
-            ..sort((TWorkout a, TWorkout b) => a.status == 'active' ? -1 : 1);
+              .toList();
+          final List<TWorkout> current = <TWorkout>[
+            ...currentPool.where((TWorkout w) => w.status == 'active'),
+            ...currentPool.where((TWorkout w) => w.status == 'draft'),
+          ];
           final List<TWorkout> history = all.where((TWorkout w) => w.status == 'completed' || w.status == 'skipped').toList()
             ..sort((TWorkout a, TWorkout b) => (b.completedAt ?? DateTime(0)).compareTo(a.completedAt ?? DateTime(0)));
 
@@ -1448,11 +1492,11 @@ class _HistoryCardState extends ConsumerState<_HistoryCard> {
   }
 
   String _exerciseSummary(WorkoutExercise ex) {
-    final WorkoutSet? first = ex.sets.isNotEmpty ? ex.sets.first : null;
-    if (first == null) return '';
-    final String head = ex.sets.length > 1 ? '${ex.sets.length}× ' : '';
-    final bool done = ex.sets.any((WorkoutSet s) => s.done);
-    return '$head${_setSummary(first, actual: done)}';
+    // Только ВЫПОЛНЕННЫЕ подходы (пропущенные в историю не показываем).
+    final List<WorkoutSet> done = ex.sets.where((WorkoutSet s) => s.done).toList();
+    if (done.isEmpty) return '';
+    final String head = done.length > 1 ? '${done.length}× ' : '';
+    return '$head${_setSummary(done.first, actual: true)}';
   }
 
   Future<void> _confirmRepeat() async {
@@ -1590,11 +1634,14 @@ class _HistoryCardState extends ConsumerState<_HistoryCard> {
         error: (Object e, _) =>
             Text('Не удалось загрузить состав', style: TextStyle(fontSize: 12, color: c.inkMuted)),
         data: (Workout wd) {
-          if (wd.exercises.isEmpty) {
-            return Text('Упражнений нет', style: TextStyle(fontSize: 12, color: c.inkMuted));
-          }
-          final List<WorkoutExercise> exs = <WorkoutExercise>[...wd.exercises]
+          // Только упражнения с ≥1 ВЫПОЛНЕННЫМ подходом (пропущенные не показываем).
+          final List<WorkoutExercise> exs = wd.exercises
+              .where((WorkoutExercise ex) => ex.sets.any((WorkoutSet s) => s.done))
+              .toList()
             ..sort((a, b) => a.position - b.position);
+          if (exs.isEmpty) {
+            return Text('Нет выполненных упражнений', style: TextStyle(fontSize: 12, color: c.inkMuted));
+          }
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
@@ -1726,22 +1773,47 @@ class _EmptyCurrent extends StatelessWidget {
 }
 
 /// Шит выбора шаблона тренировки.
-class _TemplatePickerSheet extends ConsumerWidget {
+class _TemplatePickerSheet extends ConsumerStatefulWidget {
   const _TemplatePickerSheet({required this.clientId, this.onCreateNew});
   // Клиент, для которого выбираем: показываем общие + его персональные шаблоны.
   final String clientId;
   // Вызывается из пустого состояния (шаблонов нет) — создать тренировку с нуля.
   final VoidCallback? onCreateNew;
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_TemplatePickerSheet> createState() => _TemplatePickerSheetState();
+}
+
+class _TemplatePickerSheetState extends ConsumerState<_TemplatePickerSheet> {
+  final TextEditingController _query = TextEditingController();
+  String _cat = ''; // выбранная категория (пусто = все)
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final AppColors c = context.colors;
     // Общие (clientId == null) + персональные этого клиента.
     final List<WorkoutTemplate> templates =
         (ref.watch(trainerTemplatesProvider).valueOrNull ?? <WorkoutTemplate>[])
-            .where((WorkoutTemplate t) => t.clientId == null || t.clientId == clientId)
+            .where((WorkoutTemplate t) => t.clientId == null || t.clientId == widget.clientId)
             .toList();
+    // Категории из доступных шаблонов (как в базе знаний).
+    final List<String> tags = <String>{
+      for (final WorkoutTemplate t in templates)
+        if (t.categoryTag?.isNotEmpty == true) t.categoryTag!,
+    }.toList()
+      ..sort();
+    // Фильтр по категории, затем ранжирование по поиску (по названию).
+    final List<WorkoutTemplate> byCat =
+        _cat.isEmpty ? templates : templates.where((WorkoutTemplate t) => t.categoryTag == _cat).toList();
+    final List<WorkoutTemplate> list = rankBySearch(byCat, _query.text, (WorkoutTemplate t) => t.name);
+
     return SizedBox(
-      height: MediaQuery.of(context).size.height * 0.7,
+      height: MediaQuery.of(context).size.height * 0.8,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -1760,11 +1832,10 @@ class _TemplatePickerSheet extends ConsumerWidget {
                       Text('Шаблонов нет. Создайте их в базе знаний.',
                           textAlign: TextAlign.center, style: TextStyle(color: c.inkMuted)),
                       const SizedBox(height: 20),
-                      // Шаблонов нет — предлагаем создать новую тренировку с нуля (как «+»).
                       FilledButton.icon(
                         onPressed: () {
                           Navigator.of(context).pop();
-                          onCreateNew?.call();
+                          widget.onCreateNew?.call();
                         },
                         icon: const Icon(Icons.add, size: 18),
                         label: const Text('Создать новую тренировку'),
@@ -1775,44 +1846,123 @@ class _TemplatePickerSheet extends ConsumerWidget {
                 ),
               ),
             )
-          else
+          else ...<Widget>[
+            // Поиск по названию.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: TextField(
+                controller: _query,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  hintText: 'Поиск',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  suffixIcon: _query.text.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () => setState(() => _query.clear()),
+                        ),
+                  filled: true,
+                  fillColor: c.card,
+                  isDense: true,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+              ),
+            ),
+            // Категории (чипы) — как в базе знаний.
+            if (tags.isNotEmpty)
+              SizedBox(
+                height: 40,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  children: <Widget>[
+                    _catChip(c, 'Все', _cat.isEmpty, () => setState(() => _cat = '')),
+                    ...tags.map((String g) => _catChip(c, g, _cat == g, () => setState(() => _cat = g))),
+                  ],
+                ),
+              ),
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                itemCount: templates.length,
-                itemBuilder: (BuildContext ctx, int i) {
-                  final WorkoutTemplate t = templates[i];
-                  return GestureDetector(
-                    onTap: () => Navigator.pop(ctx, t),
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
-                      child: Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+              child: list.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text('Ничего не нашлось.', style: TextStyle(color: c.inkMuted)),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      itemCount: list.length,
+                      itemBuilder: (BuildContext ctx, int i) {
+                        final WorkoutTemplate t = list[i];
+                        return GestureDetector(
+                          onTap: () => Navigator.pop(ctx, t),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+                            child: Row(
                               children: <Widget>[
-                                Text(t.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
-                                Text('${t.exercises.length} упр.${t.categoryTag != null ? ' · ${t.categoryTag}' : ''}',
-                                    style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+                                Container(
+                                  width: 38,
+                                  height: 38,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(color: c.chip, shape: BoxShape.circle),
+                                  child: Text('${t.exercises.length}',
+                                      style: AppFonts.mono(size: 15, color: c.ink, weight: FontWeight.w700)),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      Text(t.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                                      Text(
+                                        <String>[
+                                          if (t.categoryTag?.isNotEmpty == true) t.categoryTag!,
+                                          '${t.exercises.length} упр.',
+                                        ].join(' · '),
+                                        style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(Icons.chevron_right, size: 18, color: c.inkMutedXl),
                               ],
                             ),
                           ),
-                          Icon(Icons.chevron_right, size: 18, color: c.inkMutedXl),
-                        ],
-                      ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
+          ],
         ],
       ),
     );
   }
+
+  Widget _catChip(AppColors c, String label, bool active, VoidCallback onTap) => Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: active ? c.accent : c.card,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: active ? c.accent : c.line),
+            ),
+            child: Text(label,
+                style: TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600, color: active ? c.accentOn : c.inkMuted)),
+          ),
+        ),
+      );
 }
 
 /// Раздел «Оплата»: карточка баланса (проведено | оплачено−проведено) + пакеты
