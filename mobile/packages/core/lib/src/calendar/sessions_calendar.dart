@@ -249,15 +249,18 @@ class _MonthView extends StatelessWidget {
     final List<DateTime> cells = calMonthGrid(anchor);
     final DateTime now = DateTime.now();
 
-    // Счётчики по дате: pending / confirmed / declined.
+    // Счётчики по дате: несогласовано (ожидает/отклонена) / согласовано / проведено.
     final Map<String, (int, int, int)> counts = <String, (int, int, int)>{};
     for (final CalSession s in sessions) {
-      final (int p, int cf, int d) = counts[s.date] ?? (0, 0, 0);
-      counts[s.date] = switch (s.confirmation) {
-        CalConfirmation.confirmed => (p, cf + 1, d),
-        CalConfirmation.declined => (p, cf, d + 1),
-        CalConfirmation.pending => (p + 1, cf, d),
-      };
+      if (s.dimmed || s.status == CalStatus.cancelled) continue;
+      final (int u, int cf, int done) = counts[s.date] ?? (0, 0, 0);
+      if (s.status == CalStatus.completed) {
+        counts[s.date] = (u, cf, done + 1);
+      } else if (s.confirmation == CalConfirmation.confirmed) {
+        counts[s.date] = (u, cf + 1, done);
+      } else {
+        counts[s.date] = (u + 1, cf, done);
+      }
     }
 
     return Padding(
@@ -323,9 +326,9 @@ class _MonthView extends StatelessWidget {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: <Widget>[
-                                      if (cc.$1 > 0) Text('${cc.$1} ', style: AppFonts.mono(size: 10, color: c.inkMutedXl)),
-                                      if (cc.$2 > 0) Text('${cc.$2} ', style: AppFonts.mono(size: 10, color: c.accent)),
-                                      if (cc.$3 > 0) Text('${cc.$3}', style: AppFonts.mono(size: 10, color: c.danger)),
+                                      if (cc.$1 > 0) Text('${cc.$1} ', style: AppFonts.mono(size: 10, color: kCalUnconfirmed)),
+                                      if (cc.$2 > 0) Text('${cc.$2} ', style: AppFonts.mono(size: 10, color: kCalConfirmed)),
+                                      if (cc.$3 > 0) Text('${cc.$3}', style: AppFonts.mono(size: 10, color: kCalCompleted)),
                                     ],
                                   )
                                 else
@@ -358,8 +361,9 @@ class _MonthLegend extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
-    int confirmed = 0, completed = 0, cancelled = 0, declined = 0, pending = 0;
+    int confirmed = 0, completed = 0, cancelled = 0, unconfirmed = 0;
     for (final CalSession s in sessions) {
+      if (s.dimmed) continue; // чужие занятия в легенду не считаем
       final DateTime d = calParseIso(s.date);
       if (d.month != anchor.month || d.year != anchor.year) continue;
       if (s.status == CalStatus.cancelled) {
@@ -368,17 +372,15 @@ class _MonthLegend extends StatelessWidget {
         completed++;
       } else if (s.confirmation == CalConfirmation.confirmed) {
         confirmed++;
-      } else if (s.confirmation == CalConfirmation.declined) {
-        declined++;
       } else {
-        pending++;
+        // ожидает ответа или отклонена — «несогласовано» (красный).
+        unconfirmed++;
       }
     }
     final List<Widget> items = <Widget>[
-      if (confirmed > 0) _item(c, const Color(0xFFCAFF3A), 'согласовано', confirmed),
-      if (completed > 0) _item(c, const Color(0xFF46D4F0), 'проведено', completed),
-      if (pending > 0) _item(c, const Color(0xFFFFAB2E), 'ожидает', pending),
-      if (declined > 0) _item(c, const Color(0xFFFF5A5A), 'отклонено', declined),
+      if (unconfirmed > 0) _item(c, kCalUnconfirmed, 'несогласовано', unconfirmed),
+      if (confirmed > 0) _item(c, kCalConfirmed, 'согласовано', confirmed),
+      if (completed > 0) _item(c, kCalCompleted, 'проведено', completed),
       if (cancelled > 0) _item(c, c.cardElevated, 'отменено', cancelled),
     ];
     if (items.isEmpty) return const SizedBox.shrink();
@@ -701,13 +703,25 @@ class _WeekCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
-    final CalTileColors tc = calTileColors(session, c.cardElevated, c.inkMuted);
+    final CalTileColors tc = calTileColors(
+      session,
+      c.cardElevated,
+      c.inkMuted,
+      dark: c.brightness == Brightness.dark,
+    );
     return GestureDetector(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 4),
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-        decoration: BoxDecoration(color: tc.bg, borderRadius: BorderRadius.circular(8)),
+        decoration: BoxDecoration(
+          color: tc.bg,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: tc.accent.withValues(alpha: tc.faded ? 0.25 : 0.4),
+            width: 0.8,
+          ),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -892,7 +906,12 @@ class _DayViewState extends State<_DayView> {
                         final double height = ((s.durationMin / 60) * _dayHourH - 2).clamp(18, gridH);
                         final ({int col, int cols}) lay = layout[s.id] ?? (col: 0, cols: 1);
                         final double wPct = 1 / lay.cols;
-                        final CalTileColors tc = calTileColors(s, c.cardElevated, c.inkMuted);
+                        final CalTileColors tc = calTileColors(
+                          s,
+                          c.cardElevated,
+                          c.inkMuted,
+                          dark: c.brightness == Brightness.dark,
+                        );
                         return Positioned(
                           top: top,
                           left: lay.col * wPct * areaW + 6,
@@ -902,8 +921,15 @@ class _DayViewState extends State<_DayView> {
                             onTap: () => widget.onTap(s),
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                              decoration:
-                                  BoxDecoration(color: tc.bg, borderRadius: BorderRadius.circular(10)),
+                              decoration: BoxDecoration(
+                                color: tc.bg,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: tc.accent
+                                      .withValues(alpha: tc.faded ? 0.25 : 0.4),
+                                  width: 0.8,
+                                ),
+                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: <Widget>[

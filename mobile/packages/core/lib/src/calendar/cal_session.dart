@@ -19,6 +19,7 @@ class CalSession {
     required this.label,
     required this.status,
     required this.confirmation,
+    this.dimmed = false,
   });
 
   final String id;
@@ -30,37 +31,68 @@ class CalSession {
   final String label; // title ?? имя ?? 'Занятие'
   final CalStatus status;
   final CalConfirmation confirmation;
+  // Чужое занятие (не сфокусированного клиента) в скоуп-календаре — рисуем серым.
+  final bool dimmed;
 
   int get startMin => calTimeToMin(startTime);
   String get endTime => calEndTime(startTime, durationMin);
 }
 
-// ─── Цвета блока занятия (кислотные, фиксированные в обеих темах — как в вебе) ───
+// ─── Цвета блока занятия (мягкие «айфоновские» тона, зависят от темы) ───
 class CalTileColors {
-  const CalTileColors(this.bg, this.fg, {this.strike = false, this.faded = false});
-  final Color bg;
-  final Color fg;
+  const CalTileColors(this.bg, this.fg, this.accent,
+      {this.strike = false, this.faded = false});
+  final Color bg; // мягкая tint-подложка плитки
+  final Color fg; // читаемый цветной текст поверх подложки
+  final Color accent; // насыщенный статус-цвет (рамка, акценты)
   final bool strike;
   final bool faded;
 }
 
-/// Цвет блока по статусу (зеркало tileClasses):
-/// cancelled→серый перечёркнутый, completed→голубой (проведённое — терминальное,
-/// перебивает подтверждение), confirmed→лайм, declined→красный, pending→оранжевый.
-CalTileColors calTileColors(CalSession s, Color cancelledBg, Color cancelledFg) {
+/// Палитра статусов календаря (общий источник для плиток и легенды):
+/// красный — несогласованная (ожидает/отклонена), жёлтый — согласованная но не
+/// проведённая, зелёный — проведённая.
+const Color kCalUnconfirmed = Color(0xFFFF5A5A); // красный
+const Color kCalConfirmed = Color(0xFFFFD60A); // жёлтый
+const Color kCalCompleted = Color(0xFF34C759); // зелёный
+
+/// Мягкие тона плитки по статусу (как в iOS-календаре): tint-подложка +
+/// читаемый цветной текст + насыщенная рамка. Смысл статусов сохранён
+/// (красный/жёлтый/зелёный). [surface] — фон, поверх которого подмешивается
+/// tint; [mutedFg] — серый для отменённых/чужих; [dark] — тёмная ли тема.
+/// cancelled→серый перечёркнутый; completed→зелёный (терминальное, перебивает
+/// подтверждение); confirmed→жёлтый; ожидает/отклонена→красный.
+CalTileColors calTileColors(
+  CalSession s,
+  Color surface,
+  Color mutedFg, {
+  required bool dark,
+}) {
+  if (s.dimmed) {
+    // Чужое занятие (не этого клиента) — приглушённо-серое, поверх статуса.
+    return CalTileColors(surface, mutedFg, mutedFg, faded: true);
+  }
   if (s.status == CalStatus.cancelled) {
-    return CalTileColors(cancelledBg, cancelledFg, strike: true, faded: true);
+    return CalTileColors(surface, mutedFg, mutedFg, strike: true, faded: true);
   }
+  late final Color hue;
+  late final Color fg;
   if (s.status == CalStatus.completed) {
-    return const CalTileColors(Color(0xFF46D4F0), Color(0xFF06222B));
+    hue = kCalCompleted;
+    fg = dark ? const Color(0xFF6FE08C) : const Color(0xFF1B7A3D);
+  } else if (s.confirmation == CalConfirmation.confirmed) {
+    hue = kCalConfirmed;
+    fg = dark ? const Color(0xFFFFDE5C) : const Color(0xFF8A6A00);
+  } else {
+    // Несогласованная (ожидает ответа или отклонена) — красный.
+    hue = kCalUnconfirmed;
+    fg = dark ? const Color(0xFFFF9490) : const Color(0xFFB3261E);
   }
-  if (s.confirmation == CalConfirmation.confirmed) {
-    return const CalTileColors(Color(0xFFCAFF3A), Color(0xFF0B0C10));
-  }
-  if (s.confirmation == CalConfirmation.declined) {
-    return const CalTileColors(Color(0xFFFF5A5A), Color(0xFF1A0606));
-  }
-  return const CalTileColors(Color(0xFFFFAB2E), Color(0xFF1A1200));
+  // Подмешиваем насыщенный цвет к фону: получается мягкий пастельный tint,
+  // непрозрачный (перекрывает линии сетки в дневном виде).
+  final Color bg =
+      Color.alphaBlend(hue.withValues(alpha: dark ? 0.24 : 0.18), surface);
+  return CalTileColors(bg, fg, hue);
 }
 
 // ─── Утилиты дат (локальная зона), зеркало apps/web-client/src/lib/calendar.ts ───
