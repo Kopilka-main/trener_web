@@ -616,14 +616,18 @@ class _ConductorState extends ConsumerState<_Conductor> {
           },
           itemBuilder: (BuildContext ctx, int i) {
             final _ExGroup g = groups[i];
+            // Ключ раскрытия — по КОНКРЕТНОМУ блоку (его позициям), а не по
+            // exerciseId: иначе несоседние одноимённые упражнения (один exerciseId)
+            // раскрывались бы все разом.
+            final String gk = g.positions.join('-');
             return _ExerciseBlock(
-              key: ValueKey<String>('grp-${g.positions.join('-')}'),
+              key: ValueKey<String>('grp-$gk'),
               listIndex: i,
               group: g,
               thumbUrl: thumbFor(g.exerciseId),
-              expanded: _expandedGroups.contains(g.exerciseId),
+              expanded: _expandedGroups.contains(gk),
               onToggle: () => setState(() {
-                if (!_expandedGroups.remove(g.exerciseId)) _expandedGroups.add(g.exerciseId);
+                if (!_expandedGroups.remove(gk)) _expandedGroups.add(gk);
               }),
               onInfo: () => _showExerciseInfo(g.exerciseId),
               buildSetRow: _swipeSetRow,
@@ -647,6 +651,33 @@ class _ConductorState extends ConsumerState<_Conductor> {
   /// Строка подхода: № · метрики · ✓(тап = выполнено). Свайп влево открывает
   /// [+1] [Изм.] [Удал.]. В режиме редактирования (`_editing`) отдаёт полноширинный
   /// `_SetEditor` без свайпа.
+  /// Быстрое редактирование ОДНОГО показателя подхода тапом по нему: шторка с
+  /// крупным полем и [−]/[+]. Повторы/вес/время сохраняются как факт (actual),
+  /// отдых — как план (plannedRestSec), как и в полном редакторе подхода.
+  Future<void> _editMetric(int pos, WorkoutSet s, _MetricKind kind) async {
+    final (String, num?, num) spec = switch (kind) {
+      _MetricKind.reps => ('Повторы', s.actualReps ?? s.plannedReps, 1),
+      _MetricKind.weight => ('Вес, кг', s.actualWeightKg ?? s.plannedWeightKg, 1),
+      _MetricKind.time => ('Время, с', s.actualTimeSec ?? s.plannedTimeSec, 5),
+      _MetricKind.rest => ('Отдых, с', s.plannedRestSec, 5),
+    };
+    final num? result = await showModalBottomSheet<num?>(
+      context: context,
+      backgroundColor: context.colors.bg,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _MetricQuickEdit(title: spec.$1, initial: spec.$2, step: spec.$3),
+    );
+    if (result == null || !mounted) return;
+    final Map<String, dynamic> body = switch (kind) {
+      _MetricKind.reps => <String, dynamic>{'actualReps': result},
+      _MetricKind.weight => <String, dynamic>{'actualWeightKg': result},
+      _MetricKind.time => <String, dynamic>{'actualTimeSec': result},
+      _MetricKind.rest => <String, dynamic>{'plannedRestSec': result},
+    };
+    await _run(() => _api.updateSet(_clientId, _w.id, pos, s.setIndex, body));
+  }
+
   Widget _swipeSetRow(int pos, WorkoutSet s, int displayNo) {
     final AppColors c = context.colors;
     final WorkoutExercise ex = _w.exercises.firstWhere((WorkoutExercise e) => e.position == pos);
@@ -703,7 +734,13 @@ class _ConductorState extends ConsumerState<_Conductor> {
                 child: Text('$displayNo',
                     style: AppFonts.mono(size: 14, color: c.inkMutedXl, weight: FontWeight.w700)),
               ),
-              Expanded(child: _SetMetrics(set: s, showActual: s.hasFact || s.done)),
+              Expanded(
+                child: _SetMetrics(
+                  set: s,
+                  showActual: s.hasFact || s.done,
+                  onEdit: (_MetricKind kind) => _editMetric(pos, s, kind),
+                ),
+              ),
               _CircleBtn(
                 icon: Icons.check,
                 onTap: () => _toggleDone(ex, s),
@@ -817,10 +854,15 @@ const String _svgTime =
 const String _svgRest =
     '<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px"><path d="M380-334h200v-60H468l112-126v-54H380v60h114L380-386v52Zm-40.5 225.5q-65.5-28.5-114-77t-77-114Q120-365 120-440t28.5-140.5q28.5-65.5 77-114t114-77Q405-800 480-800t140.5 28.5q65.5 28.5 114 77t77 114Q840-515 840-440t-28.5 140.5q-28.5 65.5-77 114t-114 77Q555-80 480-80t-140.5-28.5ZM224-866l56 56-170 170-56-56 170-170Zm512 0 170 170-56 56-170-170 56-56ZM480-160q117 0 198.5-81.5T760-440q0-117-81.5-198.5T480-720q-117 0-198.5 81.5T200-440q0 117 81.5 198.5T480-160Z"/></svg>';
 
+/// Показатель подхода для быстрого редактирования тапом.
+enum _MetricKind { reps, weight, time, rest }
+
 class _SetMetrics extends StatelessWidget {
-  const _SetMetrics({required this.set, this.showActual = false});
+  const _SetMetrics({required this.set, this.showActual = false, this.onEdit});
   final WorkoutSet set;
   final bool showActual;
+  // Тап по показателю → быстрое редактирование именно этой цифры (null → без тапа).
+  final void Function(_MetricKind kind)? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -830,30 +872,34 @@ class _SetMetrics extends StatelessWidget {
     final num? time = showActual ? (set.actualTimeSec ?? set.plannedTimeSec) : set.plannedTimeSec;
     final num? rest = set.plannedRestSec;
 
-    Widget metric(String svg, num? v) => Padding(
-          padding: const EdgeInsets.only(right: 16),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              SvgPicture.string(
-                svg,
-                width: 18,
-                height: 18,
-                colorFilter: ColorFilter.mode(c.inkMutedXl, BlendMode.srcIn),
-              ),
-              const SizedBox(width: 5),
-              Text('${(v ?? 0).toInt()}',
-                  style: AppFonts.mono(size: 17, color: c.inkMuted, weight: FontWeight.w600)),
-            ],
+    Widget metric(String svg, num? v, _MetricKind kind) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onEdit == null ? null : () => onEdit!(kind),
+          child: Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                SvgPicture.string(
+                  svg,
+                  width: 18,
+                  height: 18,
+                  colorFilter: ColorFilter.mode(c.inkMutedXl, BlendMode.srcIn),
+                ),
+                const SizedBox(width: 5),
+                Text('${(v ?? 0).toInt()}',
+                    style: AppFonts.mono(size: 17, color: c.inkMuted, weight: FontWeight.w600)),
+              ],
+            ),
           ),
         );
 
     return Row(
       children: <Widget>[
-        metric(_svgReps, reps),
-        metric(_svgWeight, weight),
-        metric(_svgTime, time),
-        metric(_svgRest, rest),
+        metric(_svgReps, reps, _MetricKind.reps),
+        metric(_svgWeight, weight, _MetricKind.weight),
+        metric(_svgTime, time, _MetricKind.time),
+        metric(_svgRest, rest, _MetricKind.rest),
       ],
     );
   }
@@ -1145,14 +1191,73 @@ class _SetEditorState extends State<_SetEditor> {
   }
 }
 
+/// Шторка быстрого редактирования одного показателя подхода: крупное поле со
+/// степпером [−]/[+] и «Сохранить». Возвращает новое значение (null — закрытие
+/// без сохранения). Поле автофокусируется — можно сразу набрать число.
+class _MetricQuickEdit extends StatefulWidget {
+  const _MetricQuickEdit({required this.title, required this.initial, required this.step});
+  final String title;
+  final num? initial;
+  final num step;
+  @override
+  State<_MetricQuickEdit> createState() => _MetricQuickEditState();
+}
+
+class _MetricQuickEditState extends State<_MetricQuickEdit> {
+  late final TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    final num? v = widget.initial;
+    final String text = (v != null && v > 0)
+        ? (v == v.roundToDouble() ? v.toInt().toString() : v.toString())
+        : '';
+    _ctrl = TextEditingController(text: text);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final num v = num.tryParse(_ctrl.text.trim().replaceAll(',', '.')) ?? 0;
+    Navigator.of(context).pop<num?>(v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 4, 20, 16 + MediaQuery.of(context).viewInsets.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Row(children: <Widget>[
+            _StepperField(label: widget.title, ctrl: _ctrl, step: widget.step, autofocus: true),
+          ]),
+          const SizedBox(height: 14),
+          FilledButton(
+            onPressed: _save,
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Крупное числовое поле со ступенчатыми кнопками [−]/[+]: тап — один шаг,
 /// удержание — автоповтор (быстрый набор значения). Для режима редактирования
 /// подхода активной тренировки.
 class _StepperField extends StatefulWidget {
-  const _StepperField({required this.label, required this.ctrl, this.step = 1});
+  const _StepperField({required this.label, required this.ctrl, this.step = 1, this.autofocus = false});
   final String label;
   final TextEditingController ctrl;
   final num step;
+  final bool autofocus;
   @override
   State<_StepperField> createState() => _StepperFieldState();
 }
@@ -1229,6 +1334,7 @@ class _StepperFieldState extends State<_StepperField> {
               Expanded(
                 child: SelectAllTextField(
                   controller: widget.ctrl,
+                  autofocus: widget.autofocus,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   inputFormatters: <TextInputFormatter>[
                     FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
