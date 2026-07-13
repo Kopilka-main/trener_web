@@ -1,6 +1,7 @@
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 
 import '../api/trainer_assign.dart';
 import '../api/trainer_catalog.dart';
@@ -56,6 +57,47 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
       ),
     );
     if (saved == true && mounted) setState(() {});
+  }
+
+  /// Открыть шаблон в редакторе (тап по строке).
+  Future<void> _openTemplate(WorkoutTemplate t) async {
+    final bool? saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(builder: (_) => TemplateEditScreen(template: t)),
+    );
+    if (saved == true && mounted) setState(() {});
+  }
+
+  /// Дубль шаблона: копия с тем же составом и scope (общий/персональный).
+  Future<void> _duplicateTemplate(WorkoutTemplate t) async {
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(trainerCatalogApiProvider).createTemplate(
+        <String, dynamic>{
+          'name': '${t.name} (копия)',
+          'categoryTag': t.categoryTag,
+          'shortDescription': t.shortDescription,
+          'exercises': t.exercises.map((TemplateExercise e) => e.toPayload()).toList(),
+        },
+        clientId: t.clientId,
+      );
+      ref.invalidate(trainerTemplatesProvider);
+    } catch (_) {
+      m.showSnackBar(const SnackBar(content: Text('Не удалось создать дубль')));
+    }
+  }
+
+  /// Удалить шаблон (с подтверждением).
+  Future<void> _deleteTemplate(WorkoutTemplate t) async {
+    final bool ok = await confirmDelete(context,
+        title: 'Удалить тренировку?', message: '«${t.name}» будет удалена.');
+    if (!ok || !mounted) return;
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(trainerCatalogApiProvider).deleteTemplate(t.id);
+      ref.invalidate(trainerTemplatesProvider);
+    } catch (_) {
+      m.showSnackBar(const SnackBar(content: Text('Не удалось удалить')));
+    }
   }
 
   @override
@@ -274,55 +316,12 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
                       itemCount: list.length,
                       itemBuilder: (BuildContext ctx, int i) {
                         final WorkoutTemplate t = list[i];
-                        return GestureDetector(
-                          onTap: () async {
-                            final bool? saved = await Navigator.of(context).push<bool>(
-                              MaterialPageRoute<bool>(builder: (_) => TemplateEditScreen(template: t)),
-                            );
-                            if (saved == true) setState(() {});
-                          },
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
-                            child: Row(
-                              children: <Widget>[
-                                Container(
-                                  width: 38,
-                                  height: 38,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(color: c.chip, shape: BoxShape.circle),
-                                  child: Text('${t.exercises.length}',
-                                      style: AppFonts.mono(size: 15, color: c.ink, weight: FontWeight.w700)),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: <Widget>[
-                                      Text(t.name,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
-                                      Text(
-                                        <String>[
-                                          if (t.categoryTag?.isNotEmpty == true) t.categoryTag!,
-                                          '${t.exercises.length} упр.',
-                                        ].join(' · '),
-                                        style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500),
-                                      ),
-                                      if (t.isPersonal && t.clientName?.isNotEmpty == true)
-                                        Text('для: ${t.clientName}',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
-                                    ],
-                                  ),
-                                ),
-                                Icon(Icons.chevron_right, size: 18, color: c.inkMutedXl),
-                              ],
-                            ),
-                          ),
+                        return _TemplateCard(
+                          key: ValueKey<String>(t.id),
+                          template: t,
+                          onOpen: () => _openTemplate(t),
+                          onDuplicate: () => _duplicateTemplate(t),
+                          onDelete: () => _deleteTemplate(t),
                         );
                       },
                     ),
@@ -393,6 +392,193 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
           ],
         ),
       );
+}
+
+/// Строка шаблона тренировки в базе знаний: свайп влево — [Дубль][Ред.][Удал.];
+/// тап по стрелке (вниз) — раскрыть краткий состав; тап по остальному — открыть.
+class _TemplateCard extends StatefulWidget {
+  const _TemplateCard({
+    super.key,
+    required this.template,
+    required this.onOpen,
+    required this.onDuplicate,
+    required this.onDelete,
+  });
+  final WorkoutTemplate template;
+  final VoidCallback onOpen;
+  final VoidCallback onDuplicate;
+  final VoidCallback onDelete;
+
+  @override
+  State<_TemplateCard> createState() => _TemplateCardState();
+}
+
+class _TemplateCardState extends State<_TemplateCard> {
+  bool _expanded = false;
+
+  String _numStr(num v) => v % 1 == 0 ? v.toInt().toString() : v.toString();
+
+  /// Краткая сводка позиции шаблона: «N× повт × вес кг · время с».
+  String _exSummary(TemplateExercise e) {
+    final List<String> p = <String>[
+      if (e.reps != null && e.reps != 0) '${e.reps!.toInt()}',
+      if (e.weightKg != null && e.weightKg != 0) '× ${_numStr(e.weightKg!)} кг',
+      if (e.timeSec != null && e.timeSec != 0) '${e.timeSec!.toInt()} с',
+    ];
+    final String head = e.sets > 1 ? '${e.sets}× ' : '';
+    if (p.isEmpty) return e.sets > 1 ? '${e.sets} подх.' : '—';
+    return '$head${p.join(' ')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    final WorkoutTemplate t = widget.template;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Slidable(
+        key: ValueKey<String>('tpl-${t.id}'),
+        // Свайп влево → дубль / редактировать / удалить (как в истории у клиента).
+        endActionPane: ActionPane(
+          motion: const DrawerMotion(),
+          extentRatio: 0.62,
+          children: <Widget>[
+            SlidableAction(
+              onPressed: (_) => widget.onDuplicate(),
+              backgroundColor: c.accent,
+              foregroundColor: c.accentOn,
+              icon: Icons.copy_outlined,
+              label: 'Дубль',
+            ),
+            SlidableAction(
+              onPressed: (_) => widget.onOpen(),
+              backgroundColor: c.cardElevated,
+              foregroundColor: c.ink,
+              icon: Icons.edit_outlined,
+              label: 'Ред.',
+            ),
+            SlidableAction(
+              onPressed: (_) => widget.onDelete(),
+              backgroundColor: c.danger,
+              foregroundColor: Colors.white,
+              icon: Icons.delete_outline,
+              label: 'Удал.',
+            ),
+          ],
+        ),
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  // Тап по основной области — открыть шаблон.
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: widget.onOpen,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+                        child: Row(
+                          children: <Widget>[
+                            Container(
+                              width: 38,
+                              height: 38,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(color: c.chip, shape: BoxShape.circle),
+                              child: Text('${t.exercises.length}',
+                                  style: AppFonts.mono(size: 15, color: c.ink, weight: FontWeight.w700)),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Text(t.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                                  Text(
+                                    <String>[
+                                      if (t.categoryTag?.isNotEmpty == true) t.categoryTag!,
+                                      '${t.exercises.length} упр.',
+                                    ].join(' · '),
+                                    style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500),
+                                  ),
+                                  if (t.isPersonal && t.clientName?.isNotEmpty == true)
+                                    Text('для: ${t.clientName}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Тап по стрелке (вниз) — раскрыть/свернуть краткий состав.
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => setState(() => _expanded = !_expanded),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 12, 14, 12),
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(color: c.cardElevated, shape: BoxShape.circle),
+                        child: Icon(
+                            _expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                            size: 18, color: c.inkMuted),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (_expanded) _composition(c),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Краткий состав шаблона (упражнение · сводка) — как в истории у клиента.
+  Widget _composition(AppColors c) {
+    final WorkoutTemplate t = widget.template;
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line))),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+      child: t.exercises.isEmpty
+          ? Text('Нет упражнений', style: TextStyle(fontSize: 12, color: c.inkMuted))
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                for (final TemplateExercise e in t.exercises)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(e.exerciseName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: c.ink)),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(_exSummary(e),
+                            style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
 }
 
 /// Неяркая пунктирная кнопка добавления: пунктирная рамка + «+» и текст
