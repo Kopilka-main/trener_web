@@ -120,11 +120,16 @@ class _Conductor extends ConsumerStatefulWidget {
 class _ConductorState extends ConsumerState<_Conductor> {
   late Workout _w = widget.workout;
   bool _busy = false;
-  String? _editing; // ключ "pos-idx" редактируемого подхода
   // Раскрытые блоки упражнений (по exerciseId) — по умолчанию пусто = все свёрнуты.
   final Set<String> _expandedGroups = <String>{};
+  // Инлайн-редактирование одной метрики прямо в строке подхода (без шторки):
+  // какой показатель какого подхода правим + общее поле (один за раз).
+  ({int pos, int setIndex, _MetricKind kind})? _editingMetric;
+  final TextEditingController _metricCtrl = TextEditingController();
   ({String key, int left})? _rest;
   Timer? _restTimer;
+  // Тикер общего времени тренировки (обновляет таймер «идёт тренировка» в шапке).
+  Timer? _elapsedTimer;
   final AudioPlayer _player = AudioPlayer();
   // Дата исторической записи (excludedFromBalance) — по умолчанию сегодня.
   DateTime _historyDate = DateTime.now();
@@ -139,6 +144,10 @@ class _ConductorState extends ConsumerState<_Conductor> {
   @override
   void initState() {
     super.initState();
+    // Раз в секунду обновляем таймер общего времени тренировки (пока active).
+    _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _w.status == WorkoutStatus.active) setState(() {});
+    });
     // Пока открыт экран проведения — скрываем плавающий FAB; если тренировка
     // уже active — регистрируем её как «идущую» (на случай прямого входа/возврата).
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -153,11 +162,13 @@ class _ConductorState extends ConsumerState<_Conductor> {
   @override
   void dispose() {
     _restTimer?.cancel();
+    _elapsedTimer?.cancel();
     _player.dispose();
     // Экран закрыт — снова разрешаем плавающий FAB (если тренировка ещё идёт).
     // Сброс откладываем на следующий кадр: менять провайдер в dispose нельзя,
     // иначе флаг застревает true и FAB не появляется.
     WidgetsBinding.instance.addPostFrameCallback((_) => _onScreenCtrl.state = false);
+    _metricCtrl.dispose();
     super.dispose();
   }
 
@@ -193,7 +204,6 @@ class _ConductorState extends ConsumerState<_Conductor> {
       setState(() {
         _w = updated;
         _busy = false;
-        _editing = null;
       });
       // Пока работаем с идущей тренировкой — держим указатель «идёт тренировка»
       // актуальным (для FAB «Вернуться» после выхода назад), а не только при
@@ -477,10 +487,40 @@ class _ConductorState extends ConsumerState<_Conductor> {
     }
   }
 
+  /// Длительность «M:SS» (или «H:MM:SS» от часа).
+  String _fmtDuration(int totalSec) {
+    final int s = totalSec % 60;
+    final int m = (totalSec ~/ 60) % 60;
+    final int h = totalSec ~/ 3600;
+    String two(int n) => n.toString().padLeft(2, '0');
+    return h > 0 ? '$h:${two(m)}:${two(s)}' : '$m:${two(s)}';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final AppColors c = context.colors;
     return Scaffold(
-      appBar: AppBar(title: Text(_w.name)),
+      appBar: AppBar(
+        title: Text(_w.name),
+        // Таймер общего времени тренировки — виден, пока тренировка идёт.
+        actions: <Widget>[
+          if (_w.status == WorkoutStatus.active)
+            Padding(
+              padding: const EdgeInsets.only(right: 14),
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(Icons.timer_outlined, size: 18, color: c.accent),
+                    const SizedBox(width: 5),
+                    Text(_fmtDuration(_elapsed),
+                        style: AppFonts.mono(size: 16, color: c.ink, weight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
       body: _w.status == WorkoutStatus.draft ? _buildDraft(context) : _buildActive(context),
     );
   }
@@ -588,6 +628,16 @@ class _ConductorState extends ConsumerState<_Conductor> {
     final List<WorkoutExercise> allEx = <WorkoutExercise>[..._w.exercises]
       ..sort((a, b) => a.position - b.position);
     final List<_ExGroup> groups = _groupExercises(allEx);
+    // Стабильный ключ раскрытия: exerciseId + порядковый номер блока среди
+    // одноимённых. Не зависит от позиций (бэкенд перенумеровывает их при +1 или
+    // удалении подхода), поэтому раскрытые блоки не схлопываются после правок.
+    final Map<String, int> groupOcc = <String, int>{};
+    final List<String> groupKeys = <String>[];
+    for (final _ExGroup g in groups) {
+      final int o = groupOcc[g.exerciseId] ?? 0;
+      groupOcc[g.exerciseId] = o + 1;
+      groupKeys.add('${g.exerciseId}#$o');
+    }
     // Мини-превью упражнения (как при выборе) — по exerciseId из каталога.
     final List<TExercise> catalog =
         ref.watch(trainerCatalogProvider).valueOrNull ?? const <TExercise>[];
@@ -616,10 +666,10 @@ class _ConductorState extends ConsumerState<_Conductor> {
           },
           itemBuilder: (BuildContext ctx, int i) {
             final _ExGroup g = groups[i];
-            // Ключ раскрытия — по КОНКРЕТНОМУ блоку (его позициям), а не по
-            // exerciseId: иначе несоседние одноимённые упражнения (один exerciseId)
-            // раскрывались бы все разом.
-            final String gk = g.positions.join('-');
+            // Стабильный ключ блока (exerciseId + порядковый номер среди
+            // одноимённых): несоседние одноимённые блоки независимы, но раскрытие
+            // переживает перенумерацию позиций при +1/удалении подхода.
+            final String gk = groupKeys[i];
             return _ExerciseBlock(
               key: ValueKey<String>('grp-$gk'),
               listIndex: i,
@@ -648,56 +698,62 @@ class _ConductorState extends ConsumerState<_Conductor> {
     );
   }
 
-  /// Строка подхода: № · метрики · ✓(тап = выполнено). Свайп влево открывает
-  /// [+1] [Изм.] [Удал.]. В режиме редактирования (`_editing`) отдаёт полноширинный
-  /// `_SetEditor` без свайпа.
-  /// Быстрое редактирование ОДНОГО показателя подхода тапом по нему: шторка с
-  /// крупным полем и [−]/[+]. Повторы/вес/время сохраняются как факт (actual),
-  /// отдых — как план (plannedRestSec), как и в полном редакторе подхода.
-  Future<void> _editMetric(int pos, WorkoutSet s, _MetricKind kind) async {
-    final (String, num?, num) spec = switch (kind) {
-      _MetricKind.reps => ('Повторы', s.actualReps ?? s.plannedReps, 1),
-      _MetricKind.weight => ('Вес, кг', s.actualWeightKg ?? s.plannedWeightKg, 1),
-      _MetricKind.time => ('Время, с', s.actualTimeSec ?? s.plannedTimeSec, 5),
-      _MetricKind.rest => ('Отдых, с', s.plannedRestSec, 5),
+  // ─── Инлайн-редактирование одного показателя подхода (тап по цифре) ───
+  // Значение становится редактируемым полем прямо в строке (без отдельной
+  // шторки). Повторы/вес/время сохраняются как факт (actual), отдых — как план
+  // (plannedRestSec). Сохранение — по «готово» на клавиатуре или тапу вне поля.
+  String _fmtMetric(num? v) => (v != null && v > 0)
+      ? (v == v.roundToDouble() ? v.toInt().toString() : v.toString())
+      : '';
+
+  void _startEditMetric(int pos, WorkoutSet s, _MetricKind kind) {
+    final ({int pos, int setIndex, _MetricKind kind})? prev = _editingMetric;
+    if (prev != null) {
+      if (prev.pos == pos && prev.setIndex == s.setIndex && prev.kind == kind) return;
+      _saveMetricValue(prev); // сохранить прежнюю (текст ещё старый — читается синхронно)
+    }
+    final num? v = switch (kind) {
+      _MetricKind.reps => s.actualReps ?? s.plannedReps,
+      _MetricKind.weight => s.actualWeightKg ?? s.plannedWeightKg,
+      _MetricKind.time => s.actualTimeSec ?? s.plannedTimeSec,
+      _MetricKind.rest => s.plannedRestSec,
     };
-    final num? result = await showModalBottomSheet<num?>(
-      context: context,
-      backgroundColor: context.colors.bg,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => _MetricQuickEdit(title: spec.$1, initial: spec.$2, step: spec.$3),
-    );
-    if (result == null || !mounted) return;
-    final Map<String, dynamic> body = switch (kind) {
-      _MetricKind.reps => <String, dynamic>{'actualReps': result},
-      _MetricKind.weight => <String, dynamic>{'actualWeightKg': result},
-      _MetricKind.time => <String, dynamic>{'actualTimeSec': result},
-      _MetricKind.rest => <String, dynamic>{'plannedRestSec': result},
+    _metricCtrl.text = _fmtMetric(v);
+    _metricCtrl.selection =
+        TextSelection(baseOffset: 0, extentOffset: _metricCtrl.text.length);
+    setState(() => _editingMetric = (pos: pos, setIndex: s.setIndex, kind: kind));
+  }
+
+  /// Сохранить значение показателя [rec] из текущего текста поля (не трогает
+  /// _editingMetric — используется и при переключении на другую метрику).
+  Future<void> _saveMetricValue(({int pos, int setIndex, _MetricKind kind}) rec) async {
+    final num value = num.tryParse(_metricCtrl.text.trim().replaceAll(',', '.')) ?? 0;
+    final Map<String, dynamic> body = switch (rec.kind) {
+      _MetricKind.reps => <String, dynamic>{'actualReps': value},
+      _MetricKind.weight => <String, dynamic>{'actualWeightKg': value},
+      _MetricKind.time => <String, dynamic>{'actualTimeSec': value},
+      _MetricKind.rest => <String, dynamic>{'plannedRestSec': value},
     };
-    await _run(() => _api.updateSet(_clientId, _w.id, pos, s.setIndex, body));
+    await _run(() => _api.updateSet(_clientId, _w.id, rec.pos, rec.setIndex, body));
+  }
+
+  /// Завершить инлайн-редактирование: убрать поле (клавиатура закроется вместе с
+  /// ним) и сохранить значение.
+  void _commitEditMetric() {
+    final ({int pos, int setIndex, _MetricKind kind})? rec = _editingMetric;
+    if (rec == null) return;
+    setState(() => _editingMetric = null);
+    _saveMetricValue(rec);
   }
 
   Widget _swipeSetRow(int pos, WorkoutSet s, int displayNo) {
     final AppColors c = context.colors;
     final WorkoutExercise ex = _w.exercises.firstWhere((WorkoutExercise e) => e.position == pos);
-    final String key = '$pos-${s.setIndex}';
-    if (_editing == key) {
-      return _SetEditor(
-        set: s,
-        onCancel: () => setState(() => _editing = null),
-        // Галочка в режиме редактирования — только сохранить изменённые значения
-        // подхода (повторы/вес/время/отдых), НЕ отмечать выполнение. Выполнение
-        // отмечается отдельной ✓ в строке подхода.
-        onSave: (Map<String, dynamic> body) =>
-            _run(() => _api.updateSet(_clientId, _w.id, pos, s.setIndex, body)),
-      );
-    }
     return Slidable(
       key: ValueKey<String>('set-$pos-${s.setIndex}'),
       endActionPane: ActionPane(
         motion: const DrawerMotion(),
-        extentRatio: 0.6,
+        extentRatio: 0.45,
         children: <Widget>[
           SlidableAction(
             onPressed: (_) => _addSetCopy(pos, s),
@@ -705,13 +761,6 @@ class _ConductorState extends ConsumerState<_Conductor> {
             foregroundColor: c.accentOn,
             icon: Icons.add,
             label: '+1',
-          ),
-          SlidableAction(
-            onPressed: (_) => setState(() => _editing = key),
-            backgroundColor: c.cardElevated,
-            foregroundColor: c.ink,
-            icon: Icons.edit,
-            label: 'Изм.',
           ),
           SlidableAction(
             onPressed: (_) => _confirmDeleteSet(pos, s),
@@ -738,7 +787,14 @@ class _ConductorState extends ConsumerState<_Conductor> {
                 child: _SetMetrics(
                   set: s,
                   showActual: s.hasFact || s.done,
-                  onEdit: (_MetricKind kind) => _editMetric(pos, s, kind),
+                  onEdit: (_MetricKind kind) => _startEditMetric(pos, s, kind),
+                  editingKind: (_editingMetric != null &&
+                          _editingMetric!.pos == pos &&
+                          _editingMetric!.setIndex == s.setIndex)
+                      ? _editingMetric!.kind
+                      : null,
+                  editCtrl: _metricCtrl,
+                  onSubmitEdit: _commitEditMetric,
                 ),
               ),
               _CircleBtn(
@@ -858,11 +914,23 @@ const String _svgRest =
 enum _MetricKind { reps, weight, time, rest }
 
 class _SetMetrics extends StatelessWidget {
-  const _SetMetrics({required this.set, this.showActual = false, this.onEdit});
+  const _SetMetrics({
+    required this.set,
+    this.showActual = false,
+    this.onEdit,
+    this.editingKind,
+    this.editCtrl,
+    this.onSubmitEdit,
+  });
   final WorkoutSet set;
   final bool showActual;
-  // Тап по показателю → быстрое редактирование именно этой цифры (null → без тапа).
+  // Тап по показателю → инлайн-редактирование именно этой цифры (null → без тапа).
   final void Function(_MetricKind kind)? onEdit;
+  // Инлайн-редактирование: если [editingKind] == kind, показатель рисуется полем
+  // ввода [editCtrl]; [onSubmitEdit] — сохранить (готово/тап вне поля).
+  final _MetricKind? editingKind;
+  final TextEditingController? editCtrl;
+  final VoidCallback? onSubmitEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -872,27 +940,57 @@ class _SetMetrics extends StatelessWidget {
     final num? time = showActual ? (set.actualTimeSec ?? set.plannedTimeSec) : set.plannedTimeSec;
     final num? rest = set.plannedRestSec;
 
-    Widget metric(String svg, num? v, _MetricKind kind) => GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onEdit == null ? null : () => onEdit!(kind),
-          child: Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                SvgPicture.string(
-                  svg,
-                  width: 18,
-                  height: 18,
-                  colorFilter: ColorFilter.mode(c.inkMutedXl, BlendMode.srcIn),
-                ),
-                const SizedBox(width: 5),
+    Widget metric(String svg, num? v, _MetricKind kind) {
+      final bool editing = editingKind == kind;
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: (onEdit == null || editing) ? null : () => onEdit!(kind),
+        child: Padding(
+          padding: const EdgeInsets.only(right: 16),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              SvgPicture.string(
+                svg,
+                width: 18,
+                height: 18,
+                colorFilter: ColorFilter.mode(
+                    editing ? c.accent : c.inkMutedXl, BlendMode.srcIn),
+              ),
+              const SizedBox(width: 5),
+              if (editing)
+                SizedBox(
+                  width: 42,
+                  child: TextField(
+                    controller: editCtrl,
+                    autofocus: true,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: <TextInputFormatter>[
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                    ],
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => onSubmitEdit?.call(),
+                    onTapOutside: (_) => onSubmitEdit?.call(),
+                    cursorColor: c.accent,
+                    style: AppFonts.mono(size: 17, color: c.ink, weight: FontWeight.w700),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding: const EdgeInsets.only(bottom: 3),
+                      hintText: '0',
+                      border: UnderlineInputBorder(borderSide: BorderSide(color: c.accent)),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: c.accent)),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: c.accent)),
+                    ),
+                  ),
+                )
+              else
                 Text('${(v ?? 0).toInt()}',
                     style: AppFonts.mono(size: 17, color: c.inkMuted, weight: FontWeight.w600)),
-              ],
-            ),
+            ],
           ),
-        );
+        ),
+      );
+    }
 
     return Row(
       children: <Widget>[
@@ -1096,271 +1194,6 @@ class _AddExerciseButton extends StatelessWidget {
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.inkMuted)),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ─── Редактор подхода-факта (активная тренировка) ───
-class _SetEditor extends StatefulWidget {
-  const _SetEditor({
-    required this.set,
-    required this.onCancel,
-    required this.onSave,
-  });
-  final WorkoutSet set;
-  final VoidCallback onCancel;
-  final void Function(Map<String, dynamic>) onSave;
-
-  @override
-  State<_SetEditor> createState() => _SetEditorState();
-}
-
-class _SetEditorState extends State<_SetEditor> {
-  late final TextEditingController _reps;
-  late final TextEditingController _weight;
-  late final TextEditingController _time;
-  late final TextEditingController _rest;
-
-  @override
-  void initState() {
-    super.initState();
-    final WorkoutSet s = widget.set;
-    _reps = TextEditingController(text: (s.actualReps ?? s.plannedReps)?.toString() ?? '');
-    _weight = TextEditingController(text: (s.actualWeightKg ?? s.plannedWeightKg)?.toString() ?? '');
-    _time = TextEditingController(text: (s.actualTimeSec ?? s.plannedTimeSec)?.toString() ?? '');
-    _rest = TextEditingController(text: s.plannedRestSec?.toString() ?? '');
-  }
-
-  @override
-  void dispose() {
-    _reps.dispose();
-    _weight.dispose();
-    _time.dispose();
-    _rest.dispose();
-    super.dispose();
-  }
-
-  num? _num(String s) => num.tryParse(s.trim().replaceAll(',', '.'));
-
-  void _save() {
-    widget.onSave(<String, dynamic>{
-      'actualReps': _num(_reps.text),
-      'actualWeightKg': _num(_weight.text),
-      'actualTimeSec': _num(_time.text),
-      'plannedRestSec': _num(_rest.text),
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final AppColors c = context.colors;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Column(
-        children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              _StepperField(label: 'Повторы', ctrl: _reps),
-              const SizedBox(width: 10),
-              _StepperField(label: 'Вес, кг', ctrl: _weight),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              _StepperField(label: 'Время, с', ctrl: _time, step: 5),
-              const SizedBox(width: 10),
-              _StepperField(label: 'Отдых, с', ctrl: _rest, step: 5),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: <Widget>[
-              _CircleBtn(icon: Icons.check, onTap: _save, bg: c.accent, fg: c.accentOn),
-              const SizedBox(width: 8),
-              _CircleBtn(icon: Icons.close, onTap: widget.onCancel, bg: c.cardElevated, fg: c.inkMuted),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Шторка быстрого редактирования одного показателя подхода: крупное поле со
-/// степпером [−]/[+] и «Сохранить». Возвращает новое значение (null — закрытие
-/// без сохранения). Поле автофокусируется — можно сразу набрать число.
-class _MetricQuickEdit extends StatefulWidget {
-  const _MetricQuickEdit({required this.title, required this.initial, required this.step});
-  final String title;
-  final num? initial;
-  final num step;
-  @override
-  State<_MetricQuickEdit> createState() => _MetricQuickEditState();
-}
-
-class _MetricQuickEditState extends State<_MetricQuickEdit> {
-  late final TextEditingController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    final num? v = widget.initial;
-    final String text = (v != null && v > 0)
-        ? (v == v.roundToDouble() ? v.toInt().toString() : v.toString())
-        : '';
-    _ctrl = TextEditingController(text: text);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  void _save() {
-    final num v = num.tryParse(_ctrl.text.trim().replaceAll(',', '.')) ?? 0;
-    Navigator.of(context).pop<num?>(v);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 4, 20, 16 + MediaQuery.of(context).viewInsets.bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Row(children: <Widget>[
-            _StepperField(label: widget.title, ctrl: _ctrl, step: widget.step, autofocus: true),
-          ]),
-          const SizedBox(height: 14),
-          FilledButton(
-            onPressed: _save,
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-            child: const Text('Сохранить'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Крупное числовое поле со ступенчатыми кнопками [−]/[+]: тап — один шаг,
-/// удержание — автоповтор (быстрый набор значения). Для режима редактирования
-/// подхода активной тренировки.
-class _StepperField extends StatefulWidget {
-  const _StepperField({required this.label, required this.ctrl, this.step = 1, this.autofocus = false});
-  final String label;
-  final TextEditingController ctrl;
-  final num step;
-  final bool autofocus;
-  @override
-  State<_StepperField> createState() => _StepperFieldState();
-}
-
-class _StepperFieldState extends State<_StepperField> {
-  Timer? _holdDelay; // пауза перед автоповтором
-  Timer? _repeat; // сам автоповтор
-
-  num _current() => num.tryParse(widget.ctrl.text.trim().replaceAll(',', '.')) ?? 0;
-  String _fmt(num v) => v == v.roundToDouble() ? v.toInt().toString() : v.toString();
-
-  void _bump(int dir) {
-    num next = _current() + dir * widget.step;
-    if (next < 0) next = 0;
-    final String text = _fmt(next);
-    widget.ctrl.value = TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
-    );
-    setState(() {});
-  }
-
-  void _startHold(int dir) {
-    HapticFeedback.selectionClick();
-    _bump(dir); // мгновенный отклик на нажатие
-    _holdDelay = Timer(const Duration(milliseconds: 350), () {
-      _repeat = Timer.periodic(const Duration(milliseconds: 70), (_) => _bump(dir));
-    });
-  }
-
-  void _stopHold() {
-    _holdDelay?.cancel();
-    _repeat?.cancel();
-    _holdDelay = null;
-    _repeat = null;
-  }
-
-  @override
-  void dispose() {
-    _stopHold();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final AppColors c = context.colors;
-    Widget btn(IconData icon, int dir) => Listener(
-          onPointerDown: (_) => _startHold(dir),
-          onPointerUp: (_) => _stopHold(),
-          onPointerCancel: (_) => _stopHold(),
-          child: Container(
-            width: 44,
-            height: 56,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: c.chip,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: c.line),
-            ),
-            child: Icon(icon, size: 24, color: c.ink),
-          ),
-        );
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(widget.label.toUpperCase(),
-              style: AppFonts.mono(size: 10, color: c.inkMuted, weight: FontWeight.w500)),
-          const SizedBox(height: 6),
-          Row(
-            children: <Widget>[
-              btn(Icons.remove, -1),
-              const SizedBox(width: 6),
-              Expanded(
-                child: SelectAllTextField(
-                  controller: widget.ctrl,
-                  autofocus: widget.autofocus,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: <TextInputFormatter>[
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-                  ],
-                  textAlign: TextAlign.center,
-                  style: AppFonts.mono(size: 20, color: c.ink, weight: FontWeight.w700),
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: c.chip,
-                    // Вертикальный паддинг подобран под высоту кнопок-степперов
-                    // [−]/[+] (56), чтобы поле было того же размера, а не ниже.
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.line)),
-                    enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.line)),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.accent)),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              btn(Icons.add, 1),
-            ],
-          ),
-        ],
       ),
     );
   }
