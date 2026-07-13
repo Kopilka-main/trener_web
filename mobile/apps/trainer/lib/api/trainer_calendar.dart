@@ -90,13 +90,14 @@ class Session {
   DateTime get end => start.add(Duration(minutes: durationMin));
 
   /// Проекция в общую модель календаря: подпись = имя клиента (как в вебе тренера).
-  CalSession toCal() => CalSession(
+  CalSession toCal({bool dimmed = false}) => CalSession(
         id: id,
         date: date,
         startTime: startTime,
         durationMin: durationMin,
         isOnline: isOnline,
         location: location,
+        dimmed: dimmed,
         label: clientName.isNotEmpty
             ? clientName
             : (title?.trim().isNotEmpty == true ? title! : 'Занятие'),

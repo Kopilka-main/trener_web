@@ -38,61 +38,48 @@ class CalSession {
   String get endTime => calEndTime(startTime, durationMin);
 }
 
-// ─── Цвета блока занятия (мягкие «айфоновские» тона, зависят от темы) ───
+// ─── Цвета блока занятия (сплошной статус-цвет + белый текст) ───
 class CalTileColors {
   const CalTileColors(this.bg, this.fg, this.accent,
       {this.strike = false, this.faded = false});
-  final Color bg; // мягкая tint-подложка плитки
-  final Color fg; // читаемый цветной текст поверх подложки
-  final Color accent; // насыщенный статус-цвет (рамка, акценты)
+  final Color bg; // сплошная заливка плитки (статус-цвет)
+  final Color fg; // текст поверх заливки (белый)
+  final Color accent; // статус-цвет (рамка/акценты) — совпадает с bg
   final bool strike;
   final bool faded;
 }
 
 /// Палитра статусов календаря (общий источник для плиток и легенды):
-/// красный — несогласованная (ожидает/отклонена), жёлтый — согласованная но не
-/// проведённая, зелёный — проведённая.
-const Color kCalUnconfirmed = Color(0xFFFF5A5A); // красный
-const Color kCalConfirmed = Color(0xFFFFD60A); // жёлтый
-const Color kCalCompleted = Color(0xFF34C759); // зелёный
+/// на согласовании (ожидает/отклонена) — коралловый; согласовано — синий;
+/// проведено — салатовый; неактивные/чужие/отменённые — серый. Текст — белый.
+const Color kCalUnconfirmed = Color(0xFFF26B6B); // коралловый-красный
+const Color kCalConfirmed = Color(0xFF1E7BF0); // синий
+const Color kCalCompleted = Color(0xFF7DD957); // салатовый
+const Color kCalInactive = Color(0xFF4A4A4C); // серый (неактивные/чужие/отменённые)
 
-/// Мягкие тона плитки по статусу (как в iOS-календаре): tint-подложка +
-/// читаемый цветной текст + насыщенная рамка. Смысл статусов сохранён
-/// (красный/жёлтый/зелёный). [surface] — фон, поверх которого подмешивается
-/// tint; [mutedFg] — серый для отменённых/чужих; [dark] — тёмная ли тема.
-/// cancelled→серый перечёркнутый; completed→зелёный (терминальное, перебивает
-/// подтверждение); confirmed→жёлтый; ожидает/отклонена→красный.
+/// Сплошной цвет плитки по статусу + БЕЛЫЙ текст. Параметры [surface]/[mutedFg]/
+/// [dark] сохранены для совместимости вызовов, но палитра фиксированная.
+/// cancelled→серый перечёркнутый; dimmed(чужое)→серый; completed→салатовый
+/// (терминальное, перебивает подтверждение); confirmed→синий; ожидает/отклонена→коралловый.
 CalTileColors calTileColors(
   CalSession s,
   Color surface,
   Color mutedFg, {
   required bool dark,
 }) {
+  const Color white = Color(0xFFFFFFFF);
   if (s.dimmed) {
-    // Чужое занятие (не этого клиента) — приглушённо-серое, поверх статуса.
-    return CalTileColors(surface, mutedFg, mutedFg, faded: true);
+    return const CalTileColors(kCalInactive, white, kCalInactive, faded: true);
   }
   if (s.status == CalStatus.cancelled) {
-    return CalTileColors(surface, mutedFg, mutedFg, strike: true, faded: true);
+    return const CalTileColors(kCalInactive, white, kCalInactive, strike: true, faded: true);
   }
-  late final Color hue;
-  late final Color fg;
-  if (s.status == CalStatus.completed) {
-    hue = kCalCompleted;
-    fg = dark ? const Color(0xFF6FE08C) : const Color(0xFF1B7A3D);
-  } else if (s.confirmation == CalConfirmation.confirmed) {
-    hue = kCalConfirmed;
-    fg = dark ? const Color(0xFFFFDE5C) : const Color(0xFF8A6A00);
-  } else {
-    // Несогласованная (ожидает ответа или отклонена) — красный.
-    hue = kCalUnconfirmed;
-    fg = dark ? const Color(0xFFFF9490) : const Color(0xFFB3261E);
-  }
-  // Подмешиваем насыщенный цвет к фону: получается мягкий пастельный tint,
-  // непрозрачный (перекрывает линии сетки в дневном виде).
-  final Color bg =
-      Color.alphaBlend(hue.withValues(alpha: dark ? 0.24 : 0.18), surface);
-  return CalTileColors(bg, fg, hue);
+  final Color hue = s.status == CalStatus.completed
+      ? kCalCompleted
+      : s.confirmation == CalConfirmation.confirmed
+          ? kCalConfirmed
+          : kCalUnconfirmed;
+  return CalTileColors(hue, white, hue);
 }
 
 // ─── Утилиты дат (локальная зона), зеркало apps/web-client/src/lib/calendar.ts ───

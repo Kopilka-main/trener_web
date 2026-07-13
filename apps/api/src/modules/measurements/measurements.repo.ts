@@ -8,6 +8,7 @@ export type MeasurementRow = {
   clientId: string;
   date: string;
   weightKg: number | null;
+  skeletalMuscleKg: number | null;
   bodyFatPct: number | null;
   bicepsCm: number | null;
   chestCm: number | null;
@@ -28,6 +29,7 @@ export type CreateMeasurementInput = {
   date: string;
   createdByClient: boolean;
   weightKg?: number | null;
+  skeletalMuscleKg?: number | null;
   bodyFatPct?: number | null;
   bicepsCm?: number | null;
   chestCm?: number | null;
@@ -44,6 +46,7 @@ export type CreateMeasurementInput = {
 export type MeasurementPatchInput = {
   date?: string;
   weightKg?: number | null;
+  skeletalMuscleKg?: number | null;
   bodyFatPct?: number | null;
   bicepsCm?: number | null;
   chestCm?: number | null;
@@ -63,6 +66,7 @@ const columns = {
   clientId: measurements.clientId,
   date: measurements.date,
   weightKg: measurements.weightKg,
+  skeletalMuscleKg: measurements.skeletalMuscleKg,
   bodyFatPct: measurements.bodyFatPct,
   bicepsCm: measurements.bicepsCm,
   chestCm: measurements.chestCm,
@@ -102,6 +106,7 @@ export function makeMeasurementsRepo(db: Db) {
           clientId,
           date: input.date,
           weightKg: input.weightKg ?? null,
+          skeletalMuscleKg: input.skeletalMuscleKg ?? null,
           bodyFatPct: input.bodyFatPct ?? null,
           bicepsCm: input.bicepsCm ?? null,
           chestCm: input.chestCm ?? null,

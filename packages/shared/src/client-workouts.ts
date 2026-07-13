@@ -77,6 +77,10 @@ export const completeWorkoutRequestSchema = z.object({
   durationSec: optInt,
   trainerNote: z.string().trim().max(2000).nullish(),
   rpe: z.number().int().min(1).max(10).nullish(),
+  // Смещение таймзоны устройства тренера от UTC в минутах (как Dart
+  // timeZoneOffset.inMinutes, +180 для МСК). По нему сервер проставляет ЛОКАЛЬНОЕ
+  // время авто-созданного занятия (иначе оно бы шло по времени сервера/UTC).
+  tzOffsetMinutes: z.number().int().nullish(),
 });
 export type CompleteWorkoutRequest = z.infer<typeof completeWorkoutRequestSchema>;
 

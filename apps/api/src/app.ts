@@ -240,8 +240,15 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     notify: (clientId, trainerId, build) => {
       void pushSvc.notifyClientFrom(clientId, trainerId, build).catch(() => undefined);
     },
-    onCompleted: (trainerId, clientId, workoutId, workoutName, completedAt) =>
-      sessionsSvc.reconcileFromWorkout(trainerId, clientId, workoutId, workoutName, completedAt),
+    onCompleted: (trainerId, clientId, workoutId, workoutName, completedAt, tzOffsetMinutes) =>
+      sessionsSvc.reconcileFromWorkout(
+        trainerId,
+        clientId,
+        workoutId,
+        workoutName,
+        completedAt,
+        tzOffsetMinutes,
+      ),
   });
   registerPackagesModule(app, { db: deps.db, clock });
   registerAccountingModule(app, { db: deps.db, clock });

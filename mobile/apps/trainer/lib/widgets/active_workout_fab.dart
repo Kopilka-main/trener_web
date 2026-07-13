@@ -1,10 +1,11 @@
+import 'dart:async';
+
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/active_workout_state.dart';
-import '../api/trainer_clients.dart';
 import '../api/trainer_workouts.dart';
 import '../router.dart';
 
@@ -26,10 +27,15 @@ class _ActiveWorkoutFabState extends ConsumerState<ActiveWorkoutFab> {
 
   GoRouter? _router;
   String _location = '/';
+  Timer? _tick; // раз в секунду обновляет таймер тренировки на бейдже
 
   @override
   void initState() {
     super.initState();
+    // Тикаем, пока идёт тренировка, чтобы таймер на бейдже шёл.
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && ref.read(activeWorkoutProvider) != null) setState(() {});
+    });
     // «Мы на экране проведения?» определяем по текущему маршруту роутера, а не
     // по ручному флагу — тот застревал при навигации вперёд (go_router держит
     // экран в стеке, dispose не вызывается) и FAB пропадал до перезапуска.
@@ -49,8 +55,18 @@ class _ActiveWorkoutFabState extends ConsumerState<ActiveWorkoutFab> {
 
   @override
   void dispose() {
+    _tick?.cancel();
     _router?.routerDelegate.removeListener(_onRouteChange);
     super.dispose();
+  }
+
+  /// Длительность «M:SS» (или «H:MM:SS» от часа).
+  String _fmt(int totalSec) {
+    final int s = totalSec % 60;
+    final int m = (totalSec ~/ 60) % 60;
+    final int h = totalSec ~/ 3600;
+    String two(int n) => n.toString().padLeft(2, '0');
+    return h > 0 ? '$h:${two(m)}:${two(s)}' : '$m:${two(s)}';
   }
 
   @override
@@ -64,18 +80,16 @@ class _ActiveWorkoutFabState extends ConsumerState<ActiveWorkoutFab> {
     final bool onActiveScreen =
         _location.startsWith('/active/') || ref.watch(activeWorkoutOnScreenProvider);
     final bool show = authed && aw != null && !onActiveScreen;
-    // Имя занимающегося (клиента) по clientId; если ещё не подгрузился — покажем
-    // название тренировки как запасной вариант.
+    // На бейдже — ТАЙМЕР идущей тренировки (не имя клиента). startedAt берём из
+    // самой тренировки (кэш провайдера); тикер выше обновляет раз в секунду.
     String label = '';
     if (show) {
-      final List<Client> clients = ref.watch(trainerClientsProvider).valueOrNull ?? <Client>[];
-      for (final Client cl in clients) {
-        if (cl.id == aw.clientId) {
-          label = cl.fullName;
-          break;
-        }
-      }
-      if (label.isEmpty) label = aw.name;
+      final Workout? wk =
+          ref.watch(trainerWorkoutProvider((clientId: aw.clientId, wid: aw.workoutId))).valueOrNull;
+      final DateTime? started = wk?.startedAt;
+      final int sec =
+          started != null ? DateTime.now().difference(started).inSeconds.clamp(0, 1 << 30) : 0;
+      label = _fmt(sec);
     }
     return Stack(
       children: <Widget>[

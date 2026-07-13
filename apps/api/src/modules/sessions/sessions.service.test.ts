@@ -25,6 +25,7 @@ function row(over: Partial<SessionRow> = {}): SessionRow {
 function fakeRepo(over: Partial<SessionsRepo> = {}): SessionsRepo {
   return {
     isClientLinked: vi.fn(() => Promise.resolve(true)),
+    clientHasAccount: vi.fn(() => Promise.resolve(true)),
     create: vi.fn(() => Promise.resolve(row())),
     listByTrainer: vi.fn(() => Promise.resolve([])),
     getForTrainer: vi.fn(() => Promise.resolve(null)),
@@ -301,6 +302,25 @@ describe('sessions.service', () => {
       );
       expect(update).not.toHaveBeenCalled();
       expect(notify).toHaveBeenCalledTimes(1);
+    });
+
+    it('клиент без аккаунта → проведённое сразу confirmed, без пуша на согласование', async () => {
+      const createConducted = vi.fn(() => Promise.resolve(row({ status: 'completed' })));
+      const notify = vi.fn();
+      const svc = makeSessionsService(
+        fakeRepo({
+          clientHasAccount: vi.fn(() => Promise.resolve(false)),
+          findByWorkoutId: vi.fn(() => Promise.resolve(null)),
+          findEarliestPlanned: vi.fn(() => Promise.resolve(null)),
+          createConducted,
+        }),
+        { newId: () => 'newid', notifyClientPending: notify },
+      );
+      await svc.reconcileFromWorkout('A', 'c1', 'w1', 'Ноги', completedAt);
+      expect(createConducted).toHaveBeenCalledWith(
+        expect.objectContaining({ clientId: 'c1', clientConfirmation: 'confirmed' }),
+      );
+      expect(notify).not.toHaveBeenCalled();
     });
   });
 });

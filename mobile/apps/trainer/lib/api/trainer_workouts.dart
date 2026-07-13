@@ -192,13 +192,19 @@ class TrainerWorkoutsApi {
   /// Добавить один подход к упражнению на позиции pos (копия плановых параметров
   /// шаблона — используется для «+1» без удержания).
   Future<Workout> addSet(String clientId, String wid, int pos, WorkoutSet template) async {
+    // Копируем ТЕКУЩИЕ значения подхода (факт, если отредактирован, иначе план) —
+    // иначе «+1» после правки атрибутов копировал старый план. Отдых — плановый.
+    final num? reps = template.actualReps ?? template.plannedReps;
+    final num? weight = template.actualWeightKg ?? template.plannedWeightKg;
+    final num? time = template.actualTimeSec ?? template.plannedTimeSec;
+    final num? rest = template.plannedRestSec;
     final Map<String, dynamic> r = await _api.postJson(
       '${_base(clientId, wid)}/exercises/$pos/sets',
       <String, dynamic>{
-        if (template.plannedReps != null) 'plannedReps': template.plannedReps,
-        if (template.plannedWeightKg != null) 'plannedWeightKg': template.plannedWeightKg,
-        if (template.plannedTimeSec != null) 'plannedTimeSec': template.plannedTimeSec,
-        if (template.plannedRestSec != null) 'plannedRestSec': template.plannedRestSec,
+        'plannedReps': ?reps,
+        'plannedWeightKg': ?weight,
+        'plannedTimeSec': ?time,
+        'plannedRestSec': ?rest,
       },
     );
     return _unwrap(r);
@@ -229,7 +235,14 @@ class TrainerWorkoutsApi {
   Future<Workout> complete(String clientId, String wid, {int? durationSec}) async {
     final Map<String, dynamic> r = await _api.postJson(
       '${_base(clientId, wid)}/complete',
-      <String, dynamic>{'durationSec': ?durationSec, 'rpe': null, 'trainerNote': null},
+      <String, dynamic>{
+        'durationSec': ?durationSec,
+        'rpe': null,
+        'trainerNote': null,
+        // Смещение таймзоны устройства — сервер проставит локальное время
+        // авто-созданного занятия (иначе оно шло бы по UTC).
+        'tzOffsetMinutes': DateTime.now().timeZoneOffset.inMinutes,
+      },
     );
     await ActiveWorkoutPointer.clear();
     return _unwrap(r);

@@ -10,6 +10,7 @@ const noteField = z.string().trim().max(2000).nullish();
 export const createMeasurementRequestSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
   weightKg: metricField,
+  skeletalMuscleKg: metricField,
   bodyFatPct: metricField,
   bicepsCm: metricField,
   chestCm: metricField,
@@ -36,6 +37,7 @@ export const measurementResponseSchema = z.object({
   clientId: z.string(),
   date: z.string(),
   weightKg: z.number().nullable(),
+  skeletalMuscleKg: z.number().nullable(),
   bodyFatPct: z.number().nullable(),
   bicepsCm: z.number().nullable(),
   chestCm: z.number().nullable(),

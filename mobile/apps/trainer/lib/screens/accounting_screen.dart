@@ -957,6 +957,91 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
     }
   }
 
+  /// Развёрнутый график рассрочки (только для дохода-пакета с рассрочкой):
+  /// «Внесено» зелёным + остаток в скобках + чекбоксы платежей.
+  Widget _installmentSection(AppColors c) {
+    final String? cid = widget.edit?.clientId;
+    final String? pid = widget.edit?.packageId;
+    if (!_isPkg || cid == null || pid == null) return const SizedBox.shrink();
+    final TPackage? p = (ref.watch(clientPackagesProvider(cid)).valueOrNull ?? const <TPackage>[])
+        .where((TPackage x) => x.id == pid)
+        .firstOrNull;
+    if (p == null || !p.isInstallment) return const SizedBox.shrink();
+    final List<TInstallment> items = <TInstallment>[...p.installments]
+      ..sort((TInstallment a, TInstallment b) => a.dueDate.compareTo(b.dueDate));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const SizedBox(height: 16),
+        Text('РАССРОЧКА', style: AppFonts.mono(size: 10, color: c.inkMutedXl, weight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        Row(
+          children: <Widget>[
+            Text('Внесено ', style: TextStyle(fontSize: 14, color: c.inkMuted)),
+            Text(_money(p.paidSum), style: AppFonts.mono(size: 14, color: c.success, weight: FontWeight.w700)),
+            const SizedBox(width: 6),
+            Text('(осталось ${_money(p.dueSum)})',
+                style: AppFonts.mono(size: 13, color: c.inkMuted, weight: FontWeight.w500)),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text('Оплачено ${p.paidCount} из ${p.installments.length}',
+            style: TextStyle(fontSize: 13, color: c.inkMuted)),
+        const SizedBox(height: 8),
+        for (int i = 0; i < items.length; i++) ...<Widget>[
+          if (i > 0) const SizedBox(height: 6),
+          _installmentCheckRow(c, cid, pid, items[i]),
+        ],
+      ],
+    );
+  }
+
+  Widget _installmentCheckRow(AppColors c, String clientId, String packageId, TInstallment it) {
+    String dueLabel(String iso) {
+      final DateTime? d = DateTime.tryParse(iso);
+      return d == null ? iso : '${d.day} ${_ruMonthsShort[d.month - 1]} ${d.year}';
+    }
+
+    return InkWell(
+      onTap: () => _toggleInstallment(clientId, packageId, it),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(
+          children: <Widget>[
+            Icon(it.isPaid ? Icons.check_box : Icons.check_box_outline_blank,
+                size: 20, color: it.isPaid ? c.success : c.inkMutedXl),
+            const SizedBox(width: 8),
+            Text(dueLabel(it.dueDate),
+                style: AppFonts.mono(size: 13, color: it.isPaid ? c.inkMuted : c.ink, weight: FontWeight.w600)),
+            const Spacer(),
+            Text(_money(it.amount),
+                style: AppFonts.mono(size: 13, color: it.isPaid ? c.inkMuted : c.ink, weight: FontWeight.w700)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggleInstallment(String clientId, String packageId, TInstallment it) async {
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    try {
+      final TrainerClientCardApi api = ref.read(trainerClientCardApiProvider);
+      if (it.isPaid) {
+        await api.unpayInstallment(clientId, packageId, it.id);
+      } else {
+        await api.payInstallment(clientId, packageId, it.id);
+      }
+      ref.invalidate(clientPackagesProvider(clientId));
+      ref.invalidate(trainerIncomesProvider);
+    } catch (_) {
+      if (mounted) {
+        m.showSnackBar(SnackBar(
+            content: Text(it.isPaid ? 'Не удалось снять отметку' : 'Не удалось отметить платёж')));
+      }
+    }
+  }
+
   /// Имя выбранного клиента по id (для показа в поле-кнопке).
   String? _clientName() {
     final String? id = _clientId;
@@ -1059,7 +1144,8 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
     final AppColors c = context.colors;
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 4, 20, 16 + MediaQuery.of(context).viewInsets.bottom),
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -1099,6 +1185,8 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
           ),
           const SizedBox(height: 10),
           _dateField(c),
+          // Доход-пакет с рассрочкой — развёрнутый график с чекбоксами платежей.
+          _installmentSection(c),
           if (!_isPkg) ...<Widget>[
             const SizedBox(height: 10),
             SelectAllTextField(
@@ -1141,6 +1229,7 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
             ),
           ],
         ],
+      ),
       ),
     );
   }

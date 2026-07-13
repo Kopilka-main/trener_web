@@ -46,13 +46,14 @@ function formatWhen(date: string, time: string): string {
 }
 
 const pad2 = (n: number): string => String(n).padStart(2, '0');
-// Дата/время из момента завершения (локальное время сервера). Для корректных дат
-// сервер должен идти в таймзоне тренера (или совпадать с ней).
+// Дата/время из UTC-компонентов Date. Локальное время тренера получаем, СДВИНУВ
+// момент завершения на его tz-offset (см. reconcileFromWorkout) — тогда UTC-getter
+// возвращает его настенное время, независимо от таймзоны сервера.
 function dateOf(d: Date): string {
-  return `${String(d.getFullYear())}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  return `${String(d.getUTCFullYear())}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
 }
 function timeOf(d: Date): string {
-  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
 }
 
 export function makeSessionsService(repo: SessionsRepo, deps: SessionsDeps) {
@@ -98,20 +99,36 @@ export function makeSessionsService(repo: SessionsRepo, deps: SessionsDeps) {
       workoutId: string,
       workoutName: string,
       completedAt: Date,
+      tzOffsetMinutes = 0,
     ): Promise<void> {
+      // Локальное настенное время тренера = UTC + его offset.
+      const local = new Date(completedAt.getTime() + tzOffsetMinutes * 60_000);
+      // Клиент без аккаунта приложения согласовывать занятия не может — проведённое
+      // сразу помечаем 'confirmed' и не шлём просьбу подтвердить.
+      const hasAccount = await repo.clientHasAccount(clientId);
       const linked = await repo.findByWorkoutId(trainerId, clientId, workoutId);
       if (linked) {
-        if (linked.status !== 'completed') {
-          await repo.update(trainerId, linked.id, { status: 'completed' });
+        if (
+          linked.status !== 'completed' ||
+          (!hasAccount && linked.clientConfirmation !== 'confirmed')
+        ) {
+          await repo.update(trainerId, linked.id, {
+            status: 'completed',
+            ...(hasAccount ? {} : { clientConfirmation: 'confirmed' as const }),
+          });
         }
         return;
       }
 
-      const date = dateOf(completedAt);
+      const date = dateOf(local);
       const planned = await repo.findEarliestPlanned(trainerId, clientId, date);
       if (planned) {
-        await repo.update(trainerId, planned.id, { status: 'completed', workoutId });
-        if (deps.notifyClientPending) {
+        await repo.update(trainerId, planned.id, {
+          status: 'completed',
+          workoutId,
+          ...(hasAccount ? {} : { clientConfirmation: 'confirmed' as const }),
+        });
+        if (hasAccount && deps.notifyClientPending) {
           deps.notifyClientPending(clientId, trainerId, (trainerName) => ({
             title: 'Тренировка проведена',
             body: `${trainerName} отметил занятие ${formatWhen(planned.date, planned.startTime)} как проведённое`,
@@ -121,7 +138,7 @@ export function makeSessionsService(repo: SessionsRepo, deps: SessionsDeps) {
         return;
       }
 
-      const startTime = timeOf(completedAt);
+      const startTime = timeOf(local);
       await repo.createConducted({
         id: deps.newId(),
         trainerId,
@@ -130,8 +147,9 @@ export function makeSessionsService(repo: SessionsRepo, deps: SessionsDeps) {
         date,
         startTime,
         title: workoutName,
+        clientConfirmation: hasAccount ? 'pending' : 'confirmed',
       });
-      if (deps.notifyClientPending) {
+      if (hasAccount && deps.notifyClientPending) {
         deps.notifyClientPending(clientId, trainerId, (trainerName) => ({
           title: 'Подтвердите тренировку',
           body: `${trainerName} провёл тренировку ${formatWhen(date, startTime)} — согласуйте её`,

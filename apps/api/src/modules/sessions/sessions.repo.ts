@@ -1,6 +1,6 @@
 import { and, asc, eq, gte, lte } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
-import { sessions, trainerClients } from '../../db/schema.js';
+import { clients, sessions, trainerClients } from '../../db/schema.js';
 import type { SessionResponse, SessionStatus } from '@trener/shared';
 
 export type SessionRow = {
@@ -96,6 +96,16 @@ export function makeSessionsRepo(db: Db) {
     return !!row;
   }
 
+  // Привязан ли клиент к аккаунту приложения (clients.account_id задан). Если нет —
+  // подтверждать занятие некому, поэтому проведённое сразу считается согласованным.
+  async function clientHasAccount(clientId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ accountId: clients.accountId })
+      .from(clients)
+      .where(eq(clients.id, clientId));
+    return !!(row && row.accountId);
+  }
+
   // Занятие тренера или null (scoped по trainer_id).
   // Локальная функция, чтобы переиспользовать без проблем с `this`.
   async function getForTrainerLocal(trainerId: string, id: string): Promise<SessionRow | null> {
@@ -108,6 +118,7 @@ export function makeSessionsRepo(db: Db) {
 
   return {
     isClientLinked,
+    clientHasAccount,
 
     getForTrainer: getForTrainerLocal,
 
@@ -174,7 +185,8 @@ export function makeSessionsRepo(db: Db) {
     },
 
     // Создать УЖЕ проведённое занятие (по факту завершённой тренировки без события).
-    // clientConfirmation остаётся 'pending' (дефолт) — клиент согласует постфактум.
+    // clientConfirmation по умолчанию 'pending' (клиент согласует постфактум); для
+    // непривязанного клиента вызывающий передаёт 'confirmed' — согласовывать некому.
     async createConducted(input: {
       id: string;
       trainerId: string;
@@ -183,6 +195,7 @@ export function makeSessionsRepo(db: Db) {
       date: string;
       startTime: string;
       title: string | null;
+      clientConfirmation?: 'pending' | 'confirmed';
     }): Promise<SessionRow> {
       const [row] = await db
         .insert(sessions)
@@ -197,6 +210,7 @@ export function makeSessionsRepo(db: Db) {
           title: input.title,
           isOnline: 0,
           status: 'completed',
+          clientConfirmation: input.clientConfirmation ?? 'pending',
         })
         .returning(cols);
       if (!row) throw new Error('insert failed');

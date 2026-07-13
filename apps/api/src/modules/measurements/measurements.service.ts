@@ -25,6 +25,7 @@ function toResponse(r: MeasurementRow): MeasurementResponse {
     clientId: r.clientId,
     date: r.date,
     weightKg: r.weightKg,
+    skeletalMuscleKg: r.skeletalMuscleKg,
     bodyFatPct: r.bodyFatPct,
     bicepsCm: r.bicepsCm,
     chestCm: r.chestCm,
@@ -55,6 +56,8 @@ export function makeMeasurementsService(repo: MeasurementsRepo, deps: Measuremen
         createdByClient: deps.createdByClient ?? false,
       };
       if (input.weightKg !== undefined) data.weightKg = input.weightKg ?? null;
+      if (input.skeletalMuscleKg !== undefined)
+        data.skeletalMuscleKg = input.skeletalMuscleKg ?? null;
       if (input.bodyFatPct !== undefined) data.bodyFatPct = input.bodyFatPct ?? null;
       if (input.bicepsCm !== undefined) data.bicepsCm = input.bicepsCm ?? null;
       if (input.chestCm !== undefined) data.chestCm = input.chestCm ?? null;
@@ -98,6 +101,8 @@ export function makeMeasurementsService(repo: MeasurementsRepo, deps: Measuremen
       const patch: MeasurementPatchInput = {};
       if (input.date !== undefined) patch.date = input.date;
       if (input.weightKg !== undefined) patch.weightKg = input.weightKg ?? null;
+      if (input.skeletalMuscleKg !== undefined)
+        patch.skeletalMuscleKg = input.skeletalMuscleKg ?? null;
       if (input.bodyFatPct !== undefined) patch.bodyFatPct = input.bodyFatPct ?? null;
       if (input.bicepsCm !== undefined) patch.bicepsCm = input.bicepsCm ?? null;
       if (input.chestCm !== undefined) patch.chestCm = input.chestCm ?? null;

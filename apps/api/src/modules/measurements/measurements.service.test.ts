@@ -9,6 +9,7 @@ function row(over: Partial<MeasurementRow> = {}): MeasurementRow {
     clientId: 'c1',
     date: '2026-06-01',
     weightKg: 80,
+    skeletalMuscleKg: null,
     bodyFatPct: null,
     bicepsCm: null,
     chestCm: null,

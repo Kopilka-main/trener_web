@@ -126,13 +126,15 @@ String packageProgressLabel(({int done, int total})? p) {
 
 /// Тренировка клиента (срез для карточки).
 class TWorkout {
-  TWorkout({required this.id, required this.name, required this.status, required this.completedAt, required this.exerciseCount, required this.createdByClient});
+  TWorkout({required this.id, required this.name, required this.status, required this.completedAt, required this.exerciseCount, required this.createdByClient, required this.durationSec});
   final String id;
   final String name;
   final String status;
   final DateTime? completedAt;
   final int exerciseCount;
   final bool createdByClient;
+  // Длительность проведённой тренировки в секундах (для истории). null — нет.
+  final int? durationSec;
 
   factory TWorkout.fromJson(Map<String, dynamic> j) => TWorkout(
         id: j['id'] as String? ?? '',
@@ -141,6 +143,7 @@ class TWorkout {
         completedAt: _dt(j['completedAt'] as String?),
         exerciseCount: ((j['exercises'] as List<dynamic>?) ?? <dynamic>[]).length,
         createdByClient: j['createdByClient'] as bool? ?? false,
+        durationSec: (j['durationSec'] as num?)?.toInt(),
       );
 }
 

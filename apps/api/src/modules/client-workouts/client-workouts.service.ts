@@ -35,6 +35,7 @@ export type ClientWorkoutsDeps = {
     workoutId: string,
     workoutName: string,
     completedAt: Date,
+    tzOffsetMinutes?: number,
   ) => Promise<void> | void;
 };
 
@@ -227,6 +228,7 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
             workoutId,
             updated.name,
             updated.completedAt ?? deps.now(),
+            input.tzOffsetMinutes ?? undefined,
           );
         } catch {
           // отметка/создание занятия — побочный эффект, ошибка не критична

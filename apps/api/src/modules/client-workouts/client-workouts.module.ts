@@ -28,6 +28,7 @@ export function registerClientWorkoutsModule(
       workoutId: string,
       workoutName: string,
       completedAt: Date,
+      tzOffsetMinutes?: number,
     ) => Promise<void> | void;
   },
 ): void {
