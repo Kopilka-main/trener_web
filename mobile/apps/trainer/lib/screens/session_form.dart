@@ -9,6 +9,7 @@ import '../api/trainer_catalog.dart';
 import '../api/trainer_clients.dart';
 import '../api/trainer_gyms.dart';
 import '../api/trainer_home.dart';
+import '../widgets/income_form.dart' show pickClientSearch;
 
 /// Выбор тренировки-плана для занятия: уже привязанная (existing) или шаблон.
 class _WorkoutPick {
@@ -148,12 +149,7 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
       showDragHandle: true,
       builder: (BuildContext ctx) {
         final AppColors c = ctx.colors;
-        // Общие (clientId == null) + персональные клиента занятия; без клиента — только общие.
         final String? cid = _clientId;
-        final List<WorkoutTemplate> templates =
-            (ref.watch(trainerTemplatesProvider).valueOrNull ?? <WorkoutTemplate>[])
-                .where((WorkoutTemplate t) => t.clientId == null || t.clientId == cid)
-                .toList();
         return SizedBox(
           height: MediaQuery.of(ctx).size.height * 0.7,
           child: Column(
@@ -163,45 +159,65 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 child: Text('Выбрать тренировку', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.ink)),
               ),
-              if (templates.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Text('Шаблонов нет. Создайте их в базе знаний.', style: TextStyle(color: c.inkMuted)),
-                )
-              else
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    itemCount: templates.length,
-                    itemBuilder: (BuildContext c2, int i) {
-                      final WorkoutTemplate t = templates[i];
-                      return GestureDetector(
-                        onTap: () => Navigator.pop(ctx, t),
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
-                          child: Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+              // Отдельный Consumer: шторка сама подписывается на провайдер и
+              // перерисовывается, когда список догрузится. Раньше провайдер читался
+              // один раз при построении шторки — при ПЕРВОМ открытии он ещё грузился,
+              // и список был пуст (появлялся только при повторном открытии из кэша).
+              Expanded(
+                child: Consumer(
+                  builder: (BuildContext ctx2, WidgetRef ref2, Widget? _) {
+                    return ref2.watch(trainerTemplatesProvider).when(
+                      loading: () => const Center(child: CircularProgressIndicator()),
+                      error: (Object e, StackTrace _) =>
+                          Center(child: Text('Не удалось загрузить', style: TextStyle(color: c.inkMuted))),
+                      data: (List<WorkoutTemplate> all) {
+                        // Общие (clientId == null) + персональные клиента занятия; без клиента — только общие.
+                        final List<WorkoutTemplate> templates = all
+                            .where((WorkoutTemplate t) => t.clientId == null || t.clientId == cid)
+                            .toList();
+                        if (templates.isEmpty) {
+                          return Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Text('Шаблонов нет. Создайте их в базе знаний.',
+                                style: TextStyle(color: c.inkMuted)),
+                          );
+                        }
+                        return ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          itemCount: templates.length,
+                          itemBuilder: (BuildContext c2, int i) {
+                            final WorkoutTemplate t = templates[i];
+                            return GestureDetector(
+                              onTap: () => Navigator.pop(ctx, t),
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+                                child: Row(
                                   children: <Widget>[
-                                    Text(t.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
-                                    Text('${t.exercises.length} упр.${t.categoryTag != null ? ' · ${t.categoryTag}' : ''}',
-                                        style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: <Widget>[
+                                          Text(t.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                                          Text('${t.exercises.length} упр.${t.categoryTag != null ? ' · ${t.categoryTag}' : ''}',
+                                              style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+                                        ],
+                                      ),
+                                    ),
+                                    Icon(Icons.chevron_right, size: 18, color: c.inkMutedXl),
                                   ],
                                 ),
                               ),
-                              Icon(Icons.chevron_right, size: 18, color: c.inkMutedXl),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                            );
+                          },
+                        );
+                      },
+                    );
+                  },
                 ),
+              ),
             ],
           ),
         );
@@ -283,6 +299,17 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
     }
   }
 
+  /// Подпись поля клиента: имя выбранного (из активных, иначе из занятия) или
+  /// «Без клиента».
+  String _clientLabel(List<Client> active) {
+    if (_clientId == null) return 'Без клиента';
+    for (final Client cl in active) {
+      if (cl.id == _clientId) return cl.fullName;
+    }
+    final String? sn = widget.session?.clientName;
+    return (sn != null && sn.trim().isNotEmpty) ? sn : 'Клиент';
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppColors c = context.colors;
@@ -301,17 +328,31 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
             Text(_isEdit ? 'Занятие' : 'Новое занятие',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
             const SizedBox(height: 16),
-            // Клиент.
-            DropdownButtonFormField<String?>(
-              initialValue: _clientId,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Клиент', border: OutlineInputBorder()),
-              items: <DropdownMenuItem<String?>>[
-                const DropdownMenuItem<String?>(value: null, child: Text('Без клиента')),
-                ...active.map((Client cl) => DropdownMenuItem<String?>(
-                    value: cl.id, child: Text(cl.fullName, overflow: TextOverflow.ellipsis))),
-              ],
-              onChanged: (String? v) => setState(() => _clientId = v),
+            // Клиент — выбор через поиск (по тапу). «×» очищает (без клиента).
+            InkWell(
+              onTap: () async {
+                final Client? picked = await pickClientSearch(context, ref, selectedId: _clientId);
+                if (picked != null) setState(() => _clientId = picked.id);
+              },
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  labelText: 'Клиент',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: _clientId == null
+                      ? const Icon(Icons.search)
+                      : IconButton(
+                          icon: const Icon(Icons.close),
+                          tooltip: 'Без клиента',
+                          onPressed: () => setState(() => _clientId = null),
+                        ),
+                ),
+                child: Text(
+                  _clientLabel(active),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: _clientId == null ? c.inkMuted : c.ink),
+                ),
+              ),
             ),
             const SizedBox(height: 12),
             // Дата + время.
