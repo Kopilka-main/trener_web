@@ -18,6 +18,8 @@ export 'src/media/authed_avatar.dart';
 export 'src/media/catalog_media.dart';
 export 'src/media/media_cache.dart';
 export 'src/media/photo_viewer.dart';
+export 'src/offline/kv_store.dart';
+export 'src/offline/outbox.dart';
 export 'src/storage/local_json_store.dart';
 export 'src/auth/token_store.dart';
 export 'src/push/push_service.dart';

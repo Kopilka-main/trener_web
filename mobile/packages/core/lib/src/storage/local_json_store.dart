@@ -3,9 +3,11 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+import '../offline/kv_store.dart';
+
 /// Простой файловый кэш JSON в каталоге поддержки приложения.
 /// Используется для офлайн-хранения данных каталога упражнений.
-class LocalJsonStore {
+class LocalJsonStore implements KvStore {
   LocalJsonStore._();
   static final LocalJsonStore instance = LocalJsonStore._();
 
@@ -23,6 +25,7 @@ class LocalJsonStore {
   File _file(Directory dir, String key) => File('${dir.path}/$key.json');
 
   /// Прочитать список объектов по ключу (или null, если кэша нет/он битый).
+  @override
   Future<List<Map<String, dynamic>>?> readList(String key) async {
     try {
       final Directory dir = await _ensureDir();
@@ -37,6 +40,7 @@ class LocalJsonStore {
   }
 
   /// Записать список объектов по ключу (ошибки записи проглатываем).
+  @override
   Future<void> writeList(String key, List<Map<String, dynamic>> value) async {
     try {
       final Directory dir = await _ensureDir();
