@@ -1,6 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import 'media_cache.dart';
+
 /// Прямоугольная картинка из приватного файла (Bearer-токен) с дисковым кэшем.
 /// Для прогресс-фото и других защищённых изображений.
 class AuthedImage extends StatelessWidget {
@@ -20,6 +22,7 @@ class AuthedImage extends StatelessWidget {
           ? ph
           : CachedNetworkImage(
               imageUrl: url!,
+              cacheManager: mediaCache,
               httpHeaders: token != null ? <String, String>{'Authorization': 'Bearer $token'} : null,
               fit: fit,
               placeholder: (_, _) => ph,
@@ -60,6 +63,7 @@ class AuthedAvatar extends StatelessWidget {
     return ClipOval(
       child: CachedNetworkImage(
         imageUrl: url!,
+        cacheManager: mediaCache,
         httpHeaders: token != null ? <String, String>{'Authorization': 'Bearer $token'} : null,
         width: radius * 2,
         height: radius * 2,

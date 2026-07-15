@@ -1,6 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import 'media_cache.dart';
+
 /// Полноэкранный просмотр приватного фото (Bearer-токен) с зумом и опциональным
 /// удалением. Открывается тапом по миниатюре (например, прогресс-фото). Общий
 /// компонент для тренерского и клиентского приложений.
@@ -101,6 +103,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
                 child: Center(
                   child: CachedNetworkImage(
                     imageUrl: widget.url,
+                    cacheManager: mediaCache,
                     httpHeaders:
                         widget.token != null ? <String, String>{'Authorization': 'Bearer ${widget.token}'} : null,
                     fit: BoxFit.contain,

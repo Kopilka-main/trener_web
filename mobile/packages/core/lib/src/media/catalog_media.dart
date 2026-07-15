@@ -6,6 +6,7 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:video_player/video_player.dart';
 
 import '../theme/app_theme.dart';
+import 'media_cache.dart';
 
 /// Собрать абсолютный URL медиа каталога из base (например https://app.fitbond.ru)
 /// и относительного пути (/api/catalog-media/...). Возвращает null, если пути нет.
@@ -41,6 +42,7 @@ class CatalogThumb extends StatelessWidget {
           ? placeholder
           : CachedNetworkImage(
               imageUrl: url!,
+              cacheManager: mediaCache,
               width: size,
               height: size,
               fit: BoxFit.cover,
@@ -109,7 +111,7 @@ class _CatalogMediaViewState extends State<CatalogMediaView> {
 
   Future<void> _initVideo(String url) async {
     try {
-      final File file = await DefaultCacheManager().getSingleFile(url);
+      final File file = await mediaCache.getSingleFile(url);
       if (!mounted) return;
       final VideoPlayerController c = VideoPlayerController.file(file);
       await c.initialize();
@@ -198,6 +200,7 @@ class _CatalogMediaViewState extends State<CatalogMediaView> {
     } else if (!video && _hasImage) {
       child = CachedNetworkImage(
         imageUrl: widget.imageUrl!,
+        cacheManager: mediaCache,
         fit: BoxFit.contain,
         placeholder: (_, _) => Container(color: bg),
         errorWidget: (_, _, _) => Container(color: bg),
@@ -206,6 +209,7 @@ class _CatalogMediaViewState extends State<CatalogMediaView> {
       // video=true, но видео ещё не готово/недоступно — показываем фото.
       child = CachedNetworkImage(
         imageUrl: widget.imageUrl!,
+        cacheManager: mediaCache,
         fit: BoxFit.contain,
         placeholder: (_, _) => Container(color: bg),
         errorWidget: (_, _, _) => Container(color: bg),
@@ -273,7 +277,7 @@ class _MediaToggle extends StatelessWidget {
 
 /// Тёплый прогрев кэша превью (фоновая загрузка миниатюр для офлайна).
 Future<void> prefetchThumbs(Iterable<String> urls) async {
-  final BaseCacheManager cm = DefaultCacheManager();
+  final BaseCacheManager cm = mediaCache;
   for (final String u in urls) {
     if (u.isEmpty) continue;
     try {
