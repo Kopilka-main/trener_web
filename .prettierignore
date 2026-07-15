@@ -8,3 +8,7 @@ package-lock.json
 # Автогенерируемые drizzle-kit файлы — prettier не должен их трогать
 # (drizzle-kit перегенерирует в своём формате → вечный конфликт)
 **/drizzle/meta
+
+# Вшитый сид каталога упражнений — большой дата-файл, не форматируем
+# (регенерируется скриптом tool/gen-exercise-seed.sh в минифицированном виде)
+mobile/apps/trainer/assets/exercises.json
