@@ -6,6 +6,7 @@ import {
   clientWorkoutSets,
   exercises,
 } from '../../db/schema.js';
+import type { ImportWorkoutRequest } from '@trener/shared';
 
 export type WorkoutSetRow = {
   setIndex: number;
@@ -319,6 +320,83 @@ export function makeClientWorkoutsRepo(db: Db) {
         if (setValues.length > 0) await tx.insert(clientWorkoutSets).values(setValues);
       });
       return getFull(trainerId, clientId, plan.id);
+    },
+
+    // Идемпотентный импорт офлайн-проведённой тренировки: если запись с этим
+    // idempotencyKey уже есть — вернуть её (created=false); иначе вставить
+    // workout+exercises+sets сразу в финальном виде (created=true).
+    // null = одно из упражнений невидимо тренеру.
+    async importWithKey(
+      trainerId: string,
+      clientId: string,
+      id: string,
+      input: ImportWorkoutRequest,
+    ): Promise<{ row: WorkoutRow; created: boolean } | null> {
+      // Уже импортировали этот ключ? Вернуть существующую (идемпотентность).
+      const [dup] = await db
+        .select({ id: clientWorkouts.id })
+        .from(clientWorkouts)
+        .where(
+          and(
+            eq(clientWorkouts.trainerId, trainerId),
+            eq(clientWorkouts.idempotencyKey, input.idempotencyKey),
+          ),
+        );
+      if (dup) {
+        const existing = await getFull(trainerId, clientId, dup.id);
+        return existing ? { row: existing, created: false } : null;
+      }
+
+      // Проверка видимости упражнений тренеру (как в create): все exerciseId
+      // должны быть личными этого тренера или глобальными.
+      const visible = await areExercisesVisible(
+        trainerId,
+        input.exercises.map((e) => e.exerciseId),
+      );
+      if (!visible) return null;
+
+      await db.transaction(async (tx) => {
+        await tx.insert(clientWorkouts).values({
+          id,
+          trainerId,
+          clientId,
+          sourceTemplateId: input.sourceTemplateId ?? null,
+          name: input.name,
+          status: input.status,
+          startedAt: input.startedAt ? new Date(input.startedAt) : null,
+          completedAt: input.completedAt ? new Date(input.completedAt) : null,
+          durationSec: input.durationSec ?? null,
+          trainerNote: input.trainerNote ?? null,
+          rpe: input.rpe ?? null,
+          createdByClient: false,
+          excludedFromBalance: input.excludedFromBalance ?? false,
+          idempotencyKey: input.idempotencyKey,
+        });
+
+        for (let pos = 0; pos < input.exercises.length; pos++) {
+          const ex = input.exercises[pos]!;
+          await tx
+            .insert(clientWorkoutExercises)
+            .values({ workoutId: id, position: pos, exerciseId: ex.exerciseId });
+          const setValues = ex.sets.map((s, i) => ({
+            workoutId: id,
+            exercisePosition: pos,
+            setIndex: i,
+            plannedReps: s.plannedReps ?? null,
+            plannedWeightKg: s.plannedWeightKg ?? null,
+            plannedTimeSec: s.plannedTimeSec ?? null,
+            plannedRestSec: s.plannedRestSec ?? null,
+            actualReps: s.actualReps ?? null,
+            actualWeightKg: s.actualWeightKg ?? null,
+            actualTimeSec: s.actualTimeSec ?? null,
+            done: s.done ? 1 : 0,
+          }));
+          if (setValues.length > 0) await tx.insert(clientWorkoutSets).values(setValues);
+        }
+      });
+
+      const full = await getFull(trainerId, clientId, id);
+      return full ? { row: full, created: true } : null;
     },
 
     async listForClient(

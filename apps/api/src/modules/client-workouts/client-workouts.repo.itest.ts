@@ -149,6 +149,33 @@ describe.skipIf(!url)('client-workouts.repo (integration)', () => {
     expect(await repo.listForClient('B', 'c1')).toEqual([]);
   });
 
+  it('importWithKey создаёт completed-тренировку и идемпотентен по ключу', async () => {
+    const key = '22222222-2222-4222-8222-222222222222';
+    const doc = {
+      idempotencyKey: key,
+      name: 'Импорт',
+      status: 'completed' as const,
+      startedAt: '2026-07-13T09:00:00.000Z',
+      completedAt: '2026-07-13T10:00:00.000Z',
+      durationSec: 3600,
+      exercises: [{ exerciseId: 'g1', sets: [{ plannedReps: 10, actualReps: 9, done: true }] }],
+    };
+
+    const first = await repo.importWithKey('A', 'c1', 'wk_import_1', doc);
+    expect(first?.created).toBe(true);
+    expect(first?.row.status).toBe('completed');
+    expect(first?.row.exercises[0]?.sets[0]?.actualReps).toBe(9);
+    expect(first?.row.exercises[0]?.sets[0]?.done).toBe(true);
+
+    // Повторная отправка того же ключа — НЕ дублирует, возвращает ту же запись.
+    const second = await repo.importWithKey('A', 'c1', 'wk_import_2', doc);
+    expect(second?.created).toBe(false);
+    expect(second?.row.id).toBe(first?.row.id);
+
+    const all = await repo.listForClient('A', 'c1', 'all');
+    expect(all.filter((w) => w.name === 'Импорт')).toHaveLength(1);
+  });
+
   it('remove удаляет каскадом (упражнения и подходы исчезают)', async () => {
     await repo.create('A', 'c1', plan);
     expect(await repo.remove('A', 'c1', 'w1')).toBe(true);
