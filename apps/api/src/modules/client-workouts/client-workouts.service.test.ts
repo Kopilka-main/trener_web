@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { ClientWorkoutsRepo, WorkoutRow } from './client-workouts.repo.js';
+import type { ImportWorkoutRequest } from '@trener/shared';
 import { makeClientWorkoutsService } from './client-workouts.service.js';
 
 function row(over: Partial<WorkoutRow> = {}): WorkoutRow {
@@ -57,11 +58,21 @@ function fakeRepo(over: Partial<ClientWorkoutsRepo> = {}): ClientWorkoutsRepo {
     reorderExercises: vi.fn(() => Promise.resolve(row())),
     addSet: vi.fn(() => Promise.resolve(row())),
     deleteSet: vi.fn(() => Promise.resolve(row())),
+    importWithKey: vi.fn(() => Promise.resolve({ row: row(), created: true })),
     ...over,
   };
 }
 
 const deps = { newId: () => 'newid', now: () => new Date('2026-05-31T10:00:00.000Z') };
+
+const importDocFixture: ImportWorkoutRequest = {
+  idempotencyKey: '11111111-1111-4111-8111-111111111111',
+  name: 'Имп',
+  status: 'completed',
+  startedAt: '2026-05-31T09:00:00.000Z',
+  completedAt: '2026-05-31T10:00:00.000Z',
+  exercises: [{ exerciseId: 'g1', sets: [{ plannedReps: 10, actualReps: 9, done: true }] }],
+};
 
 describe('client-workouts.service', () => {
   it('create генерирует id, прокидывает scope тренер+клиент и резолвит ответ', async () => {
@@ -580,5 +591,41 @@ describe('client-workouts.service', () => {
       deps,
     );
     await expect(svc.deleteSet('A', 'c1', 'w1', 0, 5)).rejects.toMatchObject({ status: 404 });
+  });
+
+  // --- import ---
+
+  it('import: создаёт запись и вызывает onCompleted (баланс/календарь) один раз', async () => {
+    const onCompleted = vi.fn();
+    const importWithKey = vi.fn(() =>
+      Promise.resolve({ row: row({ status: 'completed', name: 'Имп' }), created: true }),
+    );
+    const svc = makeClientWorkoutsService(fakeRepo({ importWithKey }), { ...deps, onCompleted });
+    const res = await svc.import('A', 'c1', importDocFixture);
+    expect(res.name).toBe('Имп');
+    expect(onCompleted).toHaveBeenCalledTimes(1);
+  });
+
+  it('import: повторный ключ (created=false) НЕ вызывает onCompleted второй раз', async () => {
+    const onCompleted = vi.fn();
+    const importWithKey = vi.fn(() =>
+      Promise.resolve({ row: row({ status: 'completed' }), created: false }),
+    );
+    const svc = makeClientWorkoutsService(fakeRepo({ importWithKey }), { ...deps, onCompleted });
+    await svc.import('A', 'c1', importDocFixture);
+    expect(onCompleted).not.toHaveBeenCalled();
+  });
+
+  it('import: excludedFromBalance → onCompleted НЕ вызывается', async () => {
+    const onCompleted = vi.fn();
+    const importWithKey = vi.fn(() =>
+      Promise.resolve({
+        row: row({ status: 'completed', excludedFromBalance: true }),
+        created: true,
+      }),
+    );
+    const svc = makeClientWorkoutsService(fakeRepo({ importWithKey }), { ...deps, onCompleted });
+    await svc.import('A', 'c1', { ...importDocFixture, excludedFromBalance: true });
+    expect(onCompleted).not.toHaveBeenCalled();
   });
 });

@@ -15,6 +15,7 @@ import type {
   AddWorkoutExerciseRequest,
   AddWorkoutSetRequest,
   WorkoutResponse,
+  ImportWorkoutRequest,
 } from '@trener/shared';
 import { AppError, notFound } from '../../errors.js';
 
@@ -119,6 +120,29 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
         }));
       }
       return toResponse(row);
+    },
+
+    // Импорт офлайн-проведённой тренировки. Идемпотентно по input.idempotencyKey:
+    // повторная отправка возвращает существующую запись и НЕ повторяет побочки.
+    async import(
+      trainerId: string,
+      clientId: string,
+      input: ImportWorkoutRequest,
+    ): Promise<WorkoutResponse> {
+      const res = await repo.importWithKey(trainerId, clientId, deps.newId(), input);
+      if (!res) throw unknownExercise();
+      // Побочки завершения — только для НОВОЙ, проведённой (completed) и учитываемой
+      // в балансе записи. Повтор (created=false) и historical/skipped — без побочек.
+      if (
+        res.created &&
+        res.row.status === 'completed' &&
+        !res.row.excludedFromBalance &&
+        deps.onCompleted
+      ) {
+        const completedAt = res.row.completedAt ?? deps.now();
+        await deps.onCompleted(trainerId, clientId, res.row.id, res.row.name, completedAt);
+      }
+      return toResponse(res.row);
     },
 
     async list(
