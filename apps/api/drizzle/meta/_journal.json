@@ -449,6 +449,13 @@
       "when": 1783689632464,
       "tag": "0063_chunky_forgotten_one",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1784124106953,
+      "tag": "0064_freezing_scorpion",
+      "breakpoints": true
     }
   ]
 }

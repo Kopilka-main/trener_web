@@ -297,12 +297,17 @@ export const clientWorkouts = pgTable(
     // и не попадает в календарь (reconcile не вызывается).
     excludedFromBalance: boolean('excluded_from_balance').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    // Ключ идемпотентности офлайн-импорта (клиентский UUID). NULL для обычных записей.
+    idempotencyKey: text('idempotency_key'),
   },
   (t) => [
     check(
       'client_workouts_status_chk',
       sql`${t.status} IN ('draft', 'active', 'completed', 'skipped')`,
     ),
+    uniqueIndex('client_workouts_idempotency_key_uq')
+      .on(t.idempotencyKey)
+      .where(sql`${t.idempotencyKey} IS NOT NULL`),
   ],
 );
 
