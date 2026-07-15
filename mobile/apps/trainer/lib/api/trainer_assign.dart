@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:core/core.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Упражнение каталога тренера (для назначения тренировки).
@@ -140,7 +143,29 @@ class TrainerCatalogNotifier extends AsyncNotifier<List<TExercise>> {
       Future<void>(() => _refresh());
       return TrainerAssignApi._sorted(cached);
     }
+    // Диск-кэша ещё нет (первый запуск): показываем вшитый сид каталога сразу —
+    // работает даже без сети на самом первом запуске, — а в фоне тянем свежую
+    // версию с сервера (она заменит сид и запишется в кэш).
+    final List<Map<String, dynamic>>? seed = await _loadSeed();
+    if (seed != null && seed.isNotEmpty) {
+      Future<void>(() => _refresh());
+      return TrainerAssignApi._sorted(seed);
+    }
     return _fetch();
+  }
+
+  /// Вшитый сид каталога (assets/exercises.json) — та же форма, что кэш и ответ
+  /// /api/exercises (массив ExerciseResponse). Нужен, чтобы упражнения были даже
+  /// на самом первом запуске без сети. Пересборка сида — tool/gen-exercise-seed.sh.
+  Future<List<Map<String, dynamic>>?> _loadSeed() async {
+    try {
+      final String raw = await rootBundle.loadString('assets/exercises.json');
+      final dynamic data = jsonDecode(raw);
+      if (data is List) return data.cast<Map<String, dynamic>>();
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<List<TExercise>> _fetch() async {

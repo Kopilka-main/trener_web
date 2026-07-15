@@ -96,6 +96,9 @@ flutter:
 
   assets:
     - assets/sounds/beep.wav
+    # Вшитый сид каталога упражнений — упражнения доступны офлайн на самом
+    # первом запуске (до первой сетевой загрузки). Пересборка: tool/gen-exercise-seed.sh
+    - assets/exercises.json
 
   # To add assets to your application, add an assets section, like this:
   # assets:
