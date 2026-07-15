@@ -21,6 +21,7 @@ export 'src/media/photo_viewer.dart';
 export 'src/offline/kv_store.dart';
 export 'src/offline/network_status.dart';
 export 'src/offline/outbox.dart';
+export 'src/offline/sync_engine.dart';
 export 'src/storage/local_json_store.dart';
 export 'src/auth/token_store.dart';
 export 'src/push/push_service.dart';

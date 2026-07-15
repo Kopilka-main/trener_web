@@ -99,6 +99,9 @@ class Outbox {
   Future<void> markSending(String id) =>
       _mutate(id, (it) => it.status = OutboxStatus.sending);
 
+  Future<void> markPending(String id) =>
+      _mutate(id, (it) => it.status = OutboxStatus.pending);
+
   Future<void> markFailed(String id, String error) => _mutate(id, (it) {
         it.status = OutboxStatus.failed;
         it.attempts += 1;
