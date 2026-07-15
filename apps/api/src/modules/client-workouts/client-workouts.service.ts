@@ -140,7 +140,20 @@ export function makeClientWorkoutsService(repo: ClientWorkoutsRepo, deps: Client
         deps.onCompleted
       ) {
         const completedAt = res.row.completedAt ?? deps.now();
-        await deps.onCompleted(trainerId, clientId, res.row.id, res.row.name, completedAt);
+        // Связка с календарём (best-effort): не роняем импорт при ошибке — запись уже
+        // создана, повторная отправка с тем же ключом ничего не воссоздаст.
+        try {
+          await deps.onCompleted(
+            trainerId,
+            clientId,
+            res.row.id,
+            res.row.name,
+            completedAt,
+            input.tzOffsetMinutes ?? undefined,
+          );
+        } catch {
+          // отметка/создание занятия — побочный эффект, ошибка не критична
+        }
       }
       return toResponse(res.row);
     },

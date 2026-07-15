@@ -339,6 +339,7 @@ export function makeClientWorkoutsRepo(db: Db) {
         .where(
           and(
             eq(clientWorkouts.trainerId, trainerId),
+            eq(clientWorkouts.clientId, clientId),
             eq(clientWorkouts.idempotencyKey, input.idempotencyKey),
           ),
         );
