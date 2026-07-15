@@ -9,6 +9,7 @@ import {
   addWorkoutSetRequestSchema,
   addWorkoutToHistoryRequestSchema,
   reorderWorkoutExercisesRequestSchema,
+  importWorkoutRequestSchema,
   workoutResponseSchema,
   workoutListResponseSchema,
 } from '@trener/shared';
@@ -68,6 +69,23 @@ export function clientWorkoutsRoutes(
       void reply.status(201);
       return { workout };
     },
+  );
+
+  // Идемпотентный импорт целиком офлайн-проведённой (или пропущенной) тренировки:
+  // повторная отправка с тем же idempotencyKey возвращает уже созданную запись.
+  typed.post(
+    '/api/clients/:id/workouts/import',
+    {
+      preHandler,
+      schema: {
+        params: clientParams,
+        body: importWorkoutRequestSchema,
+        response: { 200: workoutWrap },
+      },
+    },
+    async (req) => ({
+      workout: await svc.import(trainerId(req), req.params.id, req.body),
+    }),
   );
 
   typed.get(

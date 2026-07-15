@@ -197,4 +197,54 @@ describe.skipIf(!url)('client-workouts routes (integration)', () => {
     });
     expect(res.statusCode).toBe(401);
   });
+
+  it('POST import: создаёт тренировку, повтор ключа не дублирует, без auth → 401', async () => {
+    const cid = await createClient();
+    const key = '33333333-3333-4333-8333-333333333333';
+    const body = {
+      idempotencyKey: key,
+      name: 'Импорт-роут',
+      status: 'completed',
+      startedAt: '2026-07-13T09:00:00.000Z',
+      completedAt: '2026-07-13T10:00:00.000Z',
+      exercises: [{ exerciseId: 'g1', sets: [{ plannedReps: 10, actualReps: 8, done: true }] }],
+    };
+
+    const r1 = await app.inject({
+      method: 'POST',
+      url: `/api/clients/${cid}/workouts/import`,
+      cookies: { sid },
+      payload: body,
+    });
+    expect(r1.statusCode).toBe(200);
+    const w1 = r1.json<WorkoutResp>().workout;
+    expect(w1.status).toBe('completed');
+
+    const r2 = await app.inject({
+      method: 'POST',
+      url: `/api/clients/${cid}/workouts/import`,
+      cookies: { sid },
+      payload: body,
+    });
+    expect(r2.statusCode).toBe(200);
+    expect(r2.json<WorkoutResp>().workout.id).toBe(w1.id);
+
+    const list = await app.inject({
+      method: 'GET',
+      url: `/api/clients/${cid}/workouts`,
+      cookies: { sid },
+    });
+    expect(
+      list
+        .json<{ workouts: { name: string }[] }>()
+        .workouts.filter((w) => w.name === 'Импорт-роут'),
+    ).toHaveLength(1);
+
+    const noAuth = await app.inject({
+      method: 'POST',
+      url: `/api/clients/${cid}/workouts/import`,
+      payload: body,
+    });
+    expect(noAuth.statusCode).toBe(401);
+  });
 });
