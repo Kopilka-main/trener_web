@@ -72,3 +72,47 @@ describe('client-workouts schemas', () => {
     expect(() => completeWorkoutRequestSchema.parse({ rpe: 11 })).toThrow();
   });
 });
+
+import { importWorkoutRequestSchema } from './client-workouts.js';
+
+describe('importWorkoutRequestSchema', () => {
+  const base = {
+    idempotencyKey: '11111111-1111-4111-8111-111111111111',
+    name: 'Верх',
+    status: 'completed' as const,
+    startedAt: '2026-07-13T09:00:00.000Z',
+    completedAt: '2026-07-13T10:00:00.000Z',
+    exercises: [
+      {
+        exerciseId: 'ex1',
+        sets: [
+          { plannedReps: 10, plannedRestSec: 90, actualReps: 9, done: true },
+          { plannedReps: 10, done: false },
+        ],
+      },
+    ],
+  };
+
+  it('принимает валидный документ проведённой тренировки', () => {
+    const r = importWorkoutRequestSchema.safeParse(base);
+    expect(r.success).toBe(true);
+  });
+
+  it('требует idempotencyKey в формате uuid', () => {
+    const r = importWorkoutRequestSchema.safeParse({ ...base, idempotencyKey: 'not-a-uuid' });
+    expect(r.success).toBe(false);
+  });
+
+  it('требует done у каждого подхода', () => {
+    const r = importWorkoutRequestSchema.safeParse({
+      ...base,
+      exercises: [{ exerciseId: 'ex1', sets: [{ plannedReps: 10 }] }],
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('отвергает статус draft/active (импорт только терминальной)', () => {
+    const r = importWorkoutRequestSchema.safeParse({ ...base, status: 'active' });
+    expect(r.success).toBe(false);
+  });
+});

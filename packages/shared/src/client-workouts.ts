@@ -84,6 +84,45 @@ export const completeWorkoutRequestSchema = z.object({
 });
 export type CompleteWorkoutRequest = z.infer<typeof completeWorkoutRequestSchema>;
 
+// --- Импорт офлайн-проведённой тренировки (idempotent) ---
+
+// Один подход с ФАКТОМ (planned + actual + done) — то, что накопилось при проведении.
+export const importSetSchema = z.object({
+  plannedReps: optInt,
+  plannedWeightKg: optNum,
+  plannedTimeSec: optInt,
+  plannedRestSec: z.number().int().min(0).max(3600).nullish(),
+  actualReps: z.number().int().nullish(),
+  actualWeightKg: optNum,
+  actualTimeSec: z.number().int().nullish(),
+  done: z.boolean(),
+});
+export type ImportSet = z.infer<typeof importSetSchema>;
+
+export const importWorkoutExerciseSchema = z.object({
+  exerciseId: z.string(),
+  sets: z.array(importSetSchema).min(1),
+});
+export type ImportWorkoutExercise = z.infer<typeof importWorkoutExerciseSchema>;
+
+export const importWorkoutRequestSchema = z.object({
+  // Клиентский UUID — ключ идемпотентности (повторная отправка не дублирует).
+  idempotencyKey: z.string().uuid(),
+  name,
+  sourceTemplateId: z.string().nullish(),
+  // Импортируем только терминальную (проведённую/пропущенную) тренировку.
+  status: z.enum(['completed', 'skipped']),
+  startedAt: z.string().nullable(),
+  completedAt: z.string().nullable(),
+  durationSec: optInt,
+  trainerNote: z.string().trim().max(2000).nullish(),
+  rpe: z.number().int().min(1).max(10).nullish(),
+  excludedFromBalance: z.boolean().optional(),
+  tzOffsetMinutes: z.number().int().nullish(),
+  exercises: z.array(importWorkoutExerciseSchema),
+});
+export type ImportWorkoutRequest = z.infer<typeof importWorkoutRequestSchema>;
+
 // --- Ответы ---
 
 export const workoutSetResponseSchema = z.object({
