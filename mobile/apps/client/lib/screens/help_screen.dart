@@ -1,6 +1,8 @@
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/dev_mode_flag.dart';
 import 'support_chat_screen.dart';
 
 /// Пара «вопрос-ответ» для раздела «Частые вопросы».
@@ -52,11 +54,11 @@ const List<_Faq> _faqs = <_Faq>[
 
 /// Экран «Помощь с приложением»: раскрывающиеся частые вопросы и переход к
 /// переписке с поддержкой ([SupportChatScreen]).
-class HelpScreen extends StatelessWidget {
+class HelpScreen extends ConsumerWidget {
   const HelpScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final AppColors c = context.colors;
     return Scaffold(
       backgroundColor: c.bg,
@@ -73,6 +75,54 @@ class HelpScreen extends StatelessWidget {
               MaterialPageRoute<void>(builder: (_) => const SupportChatScreen()),
             ),
           ),
+          const SizedBox(height: 8),
+          _RateAppButton(
+            // App Store ID клиентского приложения (FitFlow).
+            onTap: () =>
+                ref.read(appReviewServiceProvider).openStoreListing(context, appStoreId: '6782938590'),
+          ),
+          const SizedBox(height: 20),
+          const _SectionLabel('Дополнительно'),
+          const SizedBox(height: 8),
+          _DevModeCard(
+            value: ref.watch(devModeEnabledProvider),
+            onChanged: (bool v) => ref.read(devModeEnabledProvider.notifier).set(v),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Тумблер «Режим разработчика»: включает плавающую кнопку «Сообщить о проблеме».
+class _DevModeCard extends StatelessWidget {
+  const _DevModeCard({required this.value, required this.onChanged});
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.bug_report_outlined, size: 22, color: c.ink),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('Режим разработчика',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                const SizedBox(height: 2),
+                Text('Кнопка «Сообщить о проблеме» на экранах — помогайте тестировать.',
+                    style: TextStyle(fontSize: 12, color: c.inkMutedXl)),
+              ],
+            ),
+          ),
+          Switch(value: value, onChanged: onChanged),
         ],
       ),
     );
@@ -105,6 +155,45 @@ class _SupportButton extends StatelessWidget {
                       style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
                   const SizedBox(height: 2),
                   Text('Задать вопрос или сообщить о проблеме',
+                      style: TextStyle(fontSize: 12, color: c.inkMutedXl)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Icon(Icons.chevron_right, size: 20, color: c.inkMutedXl),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Заметный пункт «Оценить приложение» → карточка приложения в сторе.
+class _RateAppButton extends StatelessWidget {
+  const _RateAppButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
+        child: Row(
+          children: <Widget>[
+            Icon(Icons.star_outline, size: 22, color: c.ink),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text('Оценить приложение',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                  const SizedBox(height: 2),
+                  Text('Поставьте оценку в сторе — это помогает развивать приложение',
                       style: TextStyle(fontSize: 12, color: c.inkMutedXl)),
                 ],
               ),

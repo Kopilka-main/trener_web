@@ -16,6 +16,7 @@ import '../api/trainer_client_stats.dart';
 import '../api/trainer_clients.dart';
 import '../api/trainer_home.dart';
 import '../api/trainer_workouts.dart';
+import 'support_chat_screen.dart';
 import 'template_edit_screen.dart' show ExerciseSelect;
 
 // ─── Утилиты ───
@@ -440,6 +441,15 @@ class _ConductorState extends ConsumerState<_Conductor> {
       ref.invalidate(trainerSessionsProvider);
       // Прогресс/обзор по упражнениям учитывают завершённую тренировку.
       ref.invalidate(clientWorkoutsRawProvider(_clientId));
+      if (!mounted) return;
+      // Даём диалогу «Оцените приложение» шанс показаться после успешной
+      // тренировки — и только потом уходим с экрана.
+      await ref.read(appReviewServiceProvider).maybePromptAfterSuccess(
+        context,
+        onNegative: (BuildContext ctx) => Navigator.of(ctx).push<void>(
+          MaterialPageRoute<void>(builder: (_) => const SupportChatScreen()),
+        ),
+      );
       if (!mounted) return;
       nav.pop();
       m.showSnackBar(const SnackBar(content: Text('Тренировка завершена')));

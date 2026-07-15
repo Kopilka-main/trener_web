@@ -12,6 +12,7 @@ import 'api/client_packages.dart';
 import 'api/client_workouts.dart';
 import 'router.dart';
 import 'widgets/birthday_gate.dart';
+import 'widgets/dev_report_fab.dart';
 import 'widgets/onboarding_gate.dart';
 
 /// Наблюдатель data-провайдеров: при смене пользователя сбрасываем их кэш,
@@ -90,7 +91,28 @@ class _ClientAppState extends ConsumerState<ClientApp> {
       ref.read(sessionProvider.notifier).bootstrap();
       // Лог экранов (аналитика): один на приложение, слушает смену маршрута.
       _analytics = ScreenAnalytics(ref)..start();
+      _checkAppUpdate();
     });
+  }
+
+  /// Server-driven проверка «требуется обновление»: тянем /api/app-info и, если
+  /// номер сборки ниже minBuild, показываем неигнорируемый диалог. Ошибки молчим.
+  Future<void> _checkAppUpdate() async {
+    try {
+      final Map<String, dynamic> data = await ref.read(apiClientProvider).getJson('/api/app-info');
+      final Map<String, dynamic>? e = data['client'] as Map<String, dynamic>?;
+      if (e == null) return;
+      final BuildContext? ctx = ref.read(routerProvider).routerDelegate.navigatorKey.currentContext;
+      if (ctx == null || !ctx.mounted) return;
+      await maybeForceUpdate(
+        ctx,
+        minBuild: (e['minBuild'] as num?)?.toInt() ?? 0,
+        androidUrl: e['android'] as String? ?? '',
+        iosUrl: e['ios'] as String? ?? '',
+      );
+    } catch (_) {
+      // сеть/парсинг недоступны — не блокируем запуск
+    }
   }
 
   @override
@@ -124,13 +146,15 @@ class _ClientAppState extends ConsumerState<ClientApp> {
       }
     });
     return MaterialApp.router(
-      title: 'Trener — клиент',
+      title: 'FitFlow me',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(AppColors.light),
       darkTheme: buildAppTheme(AppColors.dark),
       themeMode: ref.watch(themeModeProvider),
       builder: (BuildContext context, Widget? child) => BirthdayGate(
-        child: OnboardingGate(child: child ?? const SizedBox.shrink()),
+        child: OnboardingGate(
+          child: DevReportFab(child: child ?? const SizedBox.shrink()),
+        ),
       ),
       // routerConfig разложен на части, чтобы подставить свой BackButtonDispatcher
       // (см. _backDispatcher): системный «назад» не закрывает приложение.

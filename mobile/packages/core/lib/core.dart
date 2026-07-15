@@ -30,4 +30,5 @@ export 'src/ui/confirm_dialog.dart';
 export 'src/ui/day_month_picker.dart';
 export 'src/ui/select_all_text_field.dart';
 export 'src/theme/theme_controller.dart';
+export 'src/update/update_check.dart';
 export 'src/util/phone_format.dart';

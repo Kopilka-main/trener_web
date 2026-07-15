@@ -12,6 +12,7 @@ import { realClock } from './core/app-deps.js';
 import { makeErrorHandler } from './plugins/error-handler.js';
 import { tenantContext } from './plugins/tenant-context.js';
 import { healthRoutes } from './modules/health/health.routes.js';
+import { appInfoRoutes } from './modules/app-info/app-info.routes.js';
 import { legalRoutes } from './modules/legal/legal.routes.js';
 import { makeAuthRepo } from './modules/auth/auth.repo.js';
 import { makeFilesRepo } from './modules/files/files.repo.js';
@@ -320,6 +321,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
 
   healthRoutes(app);
+  appInfoRoutes(app);
   legalRoutes(app);
   return app;
 }

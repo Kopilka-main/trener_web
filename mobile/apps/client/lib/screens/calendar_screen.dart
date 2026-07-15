@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/client_auth.dart';
 import '../api/client_calendar.dart';
+import 'support_chat_screen.dart';
 
 /// Календарь клиента: переиспользуемый SessionsCalendar (День/Неделя/Месяц) +
 /// шит занятия с подтверждением/отклонением участия. Вид и поведение — как в вебе.
@@ -145,6 +146,17 @@ class _SessionSheetState extends ConsumerState<_SessionSheet> {
       await ref.read(clientCalendarApiProvider).confirm(widget.session.id, accept: accept);
       ref.invalidate(clientSessionsProvider);
       if (!mounted) return;
+      if (accept) {
+        // Подтверждение участия — позитивное действие клиента; даём шанс
+        // показать «Оцените приложение», прежде чем закрыть шит.
+        await ref.read(appReviewServiceProvider).maybePromptAfterSuccess(
+          context,
+          onNegative: (BuildContext ctx) => Navigator.of(ctx).push<void>(
+            MaterialPageRoute<void>(builder: (_) => const SupportChatScreen()),
+          ),
+        );
+        if (!mounted) return;
+      }
       nav.pop();
       messenger.showSnackBar(
         SnackBar(content: Text(accept ? 'Участие подтверждено' : 'Занятие отклонено')),

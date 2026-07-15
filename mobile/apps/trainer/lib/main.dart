@@ -125,7 +125,28 @@ class _TrainerAppState extends ConsumerState<TrainerApp> {
       _initDeepLinks();
       // Лог экранов (аналитика): один на приложение, слушает смену маршрута.
       _analytics = ScreenAnalytics(ref)..start();
+      _checkAppUpdate();
     });
+  }
+
+  /// Server-driven проверка «требуется обновление»: тянем /api/app-info и, если
+  /// номер сборки ниже minBuild, показываем неигнорируемый диалог. Ошибки молчим.
+  Future<void> _checkAppUpdate() async {
+    try {
+      final Map<String, dynamic> data = await ref.read(apiClientProvider).getJson('/api/app-info');
+      final Map<String, dynamic>? e = data['trainer'] as Map<String, dynamic>?;
+      if (e == null) return;
+      final BuildContext? ctx = ref.read(routerProvider).routerDelegate.navigatorKey.currentContext;
+      if (ctx == null || !ctx.mounted) return;
+      await maybeForceUpdate(
+        ctx,
+        minBuild: (e['minBuild'] as num?)?.toInt() ?? 0,
+        androidUrl: e['android'] as String? ?? '',
+        iosUrl: e['ios'] as String? ?? '',
+      );
+    } catch (_) {
+      // сеть/парсинг недоступны — не блокируем запуск
+    }
   }
 
   /// Подписка на deep-link/app-link привязки клиента по QR:

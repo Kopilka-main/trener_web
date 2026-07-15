@@ -183,54 +183,64 @@ class _GlobalNavBarState extends ConsumerState<GlobalNavBar> {
       (Icons.calendar_month_rounded, '/calendar'),
       (Icons.account_balance_wallet_rounded, '/accounting'),
     ];
-    // Плавающая овальная плашка по центру: только иконки, тесно; активная —
-    // акцентным цветом (без подложки).
+    // Общий стиль плашек (полупрозрачный фон, обводка, тень) — одинаков у
+    // основного меню и у отдельной функциональной кнопки.
+    final Color pillBg = c.card.withValues(alpha: 0.7);
+    final Border pillBorder = Border.all(color: c.line);
+    final List<BoxShadow> pillShadow = <BoxShadow>[
+      BoxShadow(color: Colors.black.withValues(alpha: 0.22), blurRadius: 16, offset: const Offset(0, 4)),
+    ];
+    // Основное меню — овальная плашка + РЯДОМ отдельная плашка с контекстной
+    // функциональной кнопкой (кружок, т.к. одна кнопка) в том же стиле.
     return Center(
-      child: Container(
-        decoration: BoxDecoration(
-          // Полупрозрачный фон (30% прозрачности) — контент под панелью просвечивает.
-          color: c.card.withValues(alpha: 0.7),
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: c.line),
-          boxShadow: <BoxShadow>[
-            BoxShadow(color: Colors.black.withValues(alpha: 0.22), blurRadius: 16, offset: const Offset(0, 4)),
-          ],
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            for (final (IconData, String?) t in tabs)
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: t.$2 == null ? _back : () => _go(t.$2!),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  child: Icon(
-                    t.$1,
-                    size: 26,
-                    color: (t.$2 != null && _location == t.$2) ? c.accent : c.inkMuted,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Container(
+            decoration: BoxDecoration(
+              color: pillBg,
+              borderRadius: BorderRadius.circular(30),
+              border: pillBorder,
+              boxShadow: pillShadow,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                for (final (IconData, String?) t in tabs)
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: t.$2 == null ? _back : () => _go(t.$2!),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      child: Icon(
+                        t.$1,
+                        size: 26,
+                        color: (t.$2 != null && _location == t.$2) ? c.accent : c.inkMuted,
+                      ),
+                    ),
                   ),
+              ],
+            ),
+          ),
+          if (showFab) ...<Widget>[
+            const SizedBox(width: 8),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: fab.onTap,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: pillBg,
+                  shape: BoxShape.circle,
+                  border: pillBorder,
+                  boxShadow: pillShadow,
                 ),
+                padding: const EdgeInsets.all(12),
+                child: Icon(fab.icon, size: 26, color: c.accent),
               ),
-            // Кнопка-«плюс» текущего экрана в стиле FAB (акцентный кружок).
-            if (showFab)
-              Padding(
-                padding: const EdgeInsets.only(left: 4),
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: fab.onTap,
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(color: c.accent, shape: BoxShape.circle),
-                    child: Icon(fab.icon, size: 22, color: c.accentOn),
-                  ),
-                ),
-              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }

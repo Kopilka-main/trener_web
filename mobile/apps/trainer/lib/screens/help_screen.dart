@@ -77,6 +77,8 @@ class HelpScreen extends ConsumerWidget {
           for (final _QA qa in _faq) _FaqTile(qa),
           const SizedBox(height: 20),
           const _SupportEntry(),
+          const SizedBox(height: 8),
+          const _RateAppEntry(),
           const SizedBox(height: 20),
           const _SectionHeader(icon: Icons.tune, title: 'Дополнительно'),
           const SizedBox(height: 10),
@@ -178,6 +180,57 @@ class _SupportEntry extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         'Задать вопрос или сообщить о проблеме',
+                        style: TextStyle(fontSize: 12.5, height: 1.35, color: c.inkMuted),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(Icons.chevron_right, color: c.inkMuted),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Пункт-кнопка «Оценить приложение» — открывает карточку приложения в сторе.
+class _RateAppEntry extends ConsumerWidget {
+  const _RateAppEntry();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppColors c = context.colors;
+    return Container(
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12)),
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          // App Store ID тренерского приложения (FitFlow CRM).
+          onTap: () => ref
+              .read(appReviewServiceProvider)
+              .openStoreListing(context, appStoreId: '6782923177'),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: <Widget>[
+                Icon(Icons.star_outline, size: 24, color: c.accent),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'Оценить приложение',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w700, color: c.ink),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Поставьте оценку в сторе — это помогает развивать приложение',
                         style: TextStyle(fontSize: 12.5, height: 1.35, color: c.inkMuted),
                       ),
                     ],

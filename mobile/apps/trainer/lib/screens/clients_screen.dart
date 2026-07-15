@@ -102,6 +102,8 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
   bool _sortBySession = false; // false → алфавит, true → по ближайшему занятию
   bool _activeOnly = false; // показывать только клиентов с оплаченными тренировками
   _Format _format = _Format.all;
+  // Проверку «подскажи про клиентское приложение» делаем один раз за жизнь экрана.
+  bool _clientAppNudgeChecked = false;
   // Контроллер контекстной кнопки «+» нижнего меню (захватываем заранее — снятие
   // откладываем на кадр, менять провайдер прямо в dispose нельзя).
   late final _navFabCtrl = ref.read(navFabProvider.notifier);
@@ -159,6 +161,11 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
 
     return Scaffold(
       body: SafeArea(
+        // Низ НЕ резервируем: список идёт во всю высоту (за плавающим меню), а
+        // отступ под меню задаём как scroll-padding самого списка (см. _alphaList/
+        // _sessionList) — тогда последний контакт прокручивается над меню, а не
+        // упирается в пустую полосу внизу экрана.
+        bottom: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -243,6 +250,13 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                   ),
                 ),
                 data: (List<Client> all) {
+                  // Раз за сессию экрана — подсказка про клиентское приложение
+                  // (если есть клиенты, но ни один не подключён).
+                  if (!_clientAppNudgeChecked && all.isNotEmpty) {
+                    _clientAppNudgeChecked = true;
+                    WidgetsBinding.instance
+                        .addPostFrameCallback((_) => _maybeShowClientAppNudge(all));
+                  }
                   if (_activeOnly && activeAsync!.isLoading) {
                     return const Center(child: CircularProgressIndicator());
                   }
@@ -285,7 +299,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
     final List<Client> sorted = <Client>[...clients]
       ..sort((Client a, Client b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
+      padding: EdgeInsets.fromLTRB(16, 4, 16, MediaQuery.of(context).padding.bottom + 16),
       itemCount: sorted.length,
       itemBuilder: (BuildContext ctx, int i) => _ClientRow(client: sorted[i], next: next[sorted[i].id]),
     );
@@ -317,7 +331,57 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
       items.add(const _GroupHeader(text: 'Без занятий'));
       items.addAll(without.map((Client cl) => _ClientRow(client: cl, next: null)));
     }
-    return ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 96), children: items);
+    return ListView(padding: EdgeInsets.fromLTRB(16, 4, 16, MediaQuery.of(context).padding.bottom + 16), children: items);
+  }
+
+  /// Подсказка «у клиентов есть приложение»: показываем в «Клиентах» не чаще
+  /// раза в день, только если есть клиенты и НИ ОДИН не подключён (нет accountId).
+  /// Как только тренер подключит хотя бы одного — условие ложно, больше не
+  /// показываем. Кнопка «Не показывать» отключает подсказку насовсем.
+  Future<void> _maybeShowClientAppNudge(List<Client> all) async {
+    if (all.isEmpty || all.any((Client c) => c.isConnected)) return;
+    final List<Map<String, dynamic>>? raw =
+        await LocalJsonStore.instance.readList('client_app_nudge');
+    final Map<String, dynamic> state =
+        (raw != null && raw.isNotEmpty) ? Map<String, dynamic>.from(raw.first) : <String, dynamic>{};
+    if (state['disabled'] == true) return;
+    final String today = DateTime.now().toIso8601String().substring(0, 10);
+    if (state['lastShownDate'] == today) return;
+    state['lastShownDate'] = today;
+    await LocalJsonStore.instance.writeList('client_app_nudge', <Map<String, dynamic>>[state]);
+    if (!mounted) return;
+    final AppColors c = context.colors;
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        backgroundColor: c.card,
+        title: Text('У клиентов есть приложение', style: TextStyle(color: c.ink)),
+        content: Text(
+          'Если клиент установит приложение «FitFlow me» и вы свяжете его карточку '
+          '(по ID или QR клиента), появятся:\n\n'
+          '• чат с клиентом;\n'
+          '• согласование тренировок;\n'
+          '• клиент видит свой прогресс и историю тренировок.\n\n'
+          'Попросите клиента установить приложение и передать вам ID/QR — добавьте его в карточке клиента.',
+          style: TextStyle(color: c.inkMuted, height: 1.4),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              state['disabled'] = true;
+              await LocalJsonStore.instance
+                  .writeList('client_app_nudge', <Map<String, dynamic>>[state]);
+            },
+            child: const Text('Не показывать'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Понятно'),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -414,6 +478,32 @@ class _ClientRow extends ConsumerWidget {
                   ],
                 ),
               ),
+              // Индикатор связи: зелёный линк — клиент подключён; красный разрыв —
+              // нет синхронизации, тап по нему поясняет, что нужно связать клиента
+              // (тап перехватывается локально и не открывает карточку).
+              if (client.isConnected)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Icon(Icons.link, size: 18, color: c.success),
+                )
+              else
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      behavior: SnackBarBehavior.floating,
+                      content: const Text(
+                        'Клиент не синхронизирован. Попросите его установить «FitFlow me» '
+                        'и свяжитесь по ID или QR из его приложения.',
+                      ),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: Icon(Icons.link_off, size: 18, color: c.danger),
+                  ),
+                ),
+              const SizedBox(width: 6),
               Icon(Icons.chevron_right, size: 18, color: c.inkMutedXl),
             ],
           ),
@@ -941,7 +1031,10 @@ Future<String?> _showConnectDialog(BuildContext context) {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text('Чтобы писать клиенту, укажите его клиентский номер (ID) из приложения клиента.',
+            Text(
+                'Клиент должен установить приложение «FitFlow me» и передать вам свой ID '
+                '(или QR) из него — введите его ниже. После связки появятся чат, '
+                'согласование тренировок и доступ клиента к своему прогрессу и истории.',
                 style: TextStyle(fontSize: 13, color: c.inkMuted)),
             const SizedBox(height: 12),
             SelectAllTextField(
@@ -2564,7 +2657,8 @@ class ClientProfileScreen extends ConsumerWidget {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        // Низ учитывает резерв под глобальное меню навигации.
+        padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
         children: <Widget>[
           // Центрированная шапка: аватар + имя + формат/возраст.
           Center(
