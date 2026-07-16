@@ -226,12 +226,58 @@ class LocalWorkoutController {
 
   String _key(String id) => 'local_workout_$id';
 
+  /// Ключ индекса активных локальных документов (чтобы их можно было перечислить
+  /// для «продолжить»). Значение — список кратких записей {id, clientId, name,
+  /// status, createdAt}. Сам документ лежит под `local_workout_<id>`.
+  static const String _indexKey = 'local_workouts';
+
   Future<void> _save(LocalWorkout w) => _store.writeList(_key(w.id), [w.toJson()]);
+
+  Future<List<Map<String, dynamic>>> _readIndex() async =>
+      (await _store.readList(_indexKey)) ?? <Map<String, dynamic>>[];
+
+  /// Добавить/обновить запись документа в индексе (по id).
+  Future<void> _indexUpsert(LocalWorkout w) async {
+    final List<Map<String, dynamic>> idx = await _readIndex();
+    idx.removeWhere((Map<String, dynamic> e) => e['id'] == w.id);
+    idx.add(<String, dynamic>{
+      'id': w.id,
+      'clientId': w.clientId,
+      'name': w.name,
+      'status': w.status,
+      'createdAt': (w.startedAt ?? DateTime.now()).toIso8601String(),
+    });
+    await _store.writeList(_indexKey, idx);
+  }
+
+  /// Убрать запись из индекса (документ уже завершён/отправлен на импорт).
+  Future<void> _indexRemove(String id) async {
+    final List<Map<String, dynamic>> idx = await _readIndex();
+    idx.removeWhere((Map<String, dynamic> e) => e['id'] == id);
+    await _store.writeList(_indexKey, idx);
+  }
 
   Future<LocalWorkout?> load(String id) async {
     final raw = await _store.readList(_key(id));
     if (raw == null || raw.isEmpty) return null;
     return LocalWorkout.fromJson(raw.first);
+  }
+
+  /// Активные локальные документы клиента (по индексу → load каждого). Для
+  /// карточки «продолжить» в клиентских тренировках.
+  Future<List<LocalWorkout>> activeFor(String clientId) async {
+    final List<Map<String, dynamic>> idx = await _readIndex();
+    final List<String> ids = <String>[
+      for (final Map<String, dynamic> e in idx)
+        if (e['clientId'] == clientId && (e['status'] as String? ?? 'active') != 'completed')
+          e['id'] as String,
+    ];
+    final List<LocalWorkout> out = <LocalWorkout>[];
+    for (final String id in ids) {
+      final LocalWorkout? w = await load(id);
+      if (w != null && w.status != 'completed') out.add(w);
+    }
+    return out;
   }
 
   Future<LocalWorkout> createFromPlan({
@@ -260,6 +306,7 @@ class LocalWorkoutController {
       exercises: exercises,
     );
     await _save(w);
+    await _indexUpsert(w);
     return w;
   }
 
@@ -367,5 +414,7 @@ class LocalWorkoutController {
       kind: 'workout.import',
       payload: <String, dynamic>{'clientId': w.clientId, 'doc': w.toImportPayload()},
     );
+    // Документ ушёл в очередь на импорт — убираем из индекса активных.
+    await _indexRemove(w.id);
   }
 }

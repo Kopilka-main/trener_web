@@ -63,6 +63,21 @@ void main() {
     expect(q.first.payload['clientId'], 'cl1');
   });
 
+  test('индекс: createFromPlan → activeFor содержит; complete → пусто', () async {
+    final w = await ctrl.createFromPlan(
+      clientId: 'cl1',
+      name: 'В',
+      plan: [(exerciseId: 'ex1', name: 'Жим', set: planned(10))],
+    );
+    final active = await ctrl.activeFor('cl1');
+    expect(active.map((e) => e.id), contains(w.id));
+    // Индекс скоуплен по клиенту.
+    expect(await ctrl.activeFor('cl2'), isEmpty);
+    // Завершение убирает документ из индекса активных.
+    await ctrl.complete(w, durationSec: 100);
+    expect(await ctrl.activeFor('cl1'), isEmpty);
+  });
+
   test('toWorkout отражает документ для UI', () async {
     final w = await ctrl.createFromPlan(
       clientId: 'cl1',

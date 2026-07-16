@@ -28,6 +28,12 @@ final localWorkoutControllerProvider = Provider<LocalWorkoutController>(
   (ref) => LocalWorkoutController(ref.read(kvStoreProvider), ref.read(outboxProvider)),
 );
 
+/// Активные локальные документы клиента (для карточки «продолжить»). Пересчёт —
+/// по инвалидации после создания/завершения проведения.
+final localWorkoutsProvider = FutureProvider.family<List<LocalWorkout>, String>(
+  (ref, String clientId) => ref.read(localWorkoutControllerProvider).activeFor(clientId),
+);
+
 /// online = есть сетевой интерфейс И бэкенд реально отвечает. Пересчёт при смене
 /// connectivity и раз в 20 c (на случай «Wi-Fi есть, интернета нет»).
 final isOnlineProvider = StreamProvider<bool>((ref) async* {
