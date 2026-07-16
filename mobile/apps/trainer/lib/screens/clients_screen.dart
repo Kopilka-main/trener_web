@@ -1244,9 +1244,16 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       if (id.isNotEmpty) await _openConduct(id);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
+      // Сеть подвела (в т.ч. «мигающая» связь, когда isOnlineProvider ещё не
+      // успел стать false) — бесшовно уходим в локальное проведение вместо
+      // ошибки. Для excluded (историческая запись) локального пути нет.
+      if (!excluded && isOfflineError(e)) {
+        await _conductLocal(name, exercises, null);
+        return;
+      }
       m.showSnackBar(const SnackBar(content: Text('Не удалось создать тренировку')));
     }
   }
