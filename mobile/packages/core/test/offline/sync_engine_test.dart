@@ -110,6 +110,24 @@ void main() {
     expect(await outbox.list(), isEmpty);
   });
 
+  test('countLive не считает dead-letter элемент', () async {
+    await outbox.enqueue(kind: 'bad', payload: {});
+    final engine = SyncEngine(
+      outbox,
+      handlers: {
+        'bad': (_) async => throw Exception('400'),
+      },
+      maxAttempts: 2,
+    );
+    await engine.drain(); // attempts=1, failed
+    await engine.drain(); // attempts=2 == maxAttempts → dead-letter
+    await outbox.enqueue(kind: 'ok', payload: {}); // ещё живой (pending) элемент
+
+    final total = await outbox.list();
+    expect(total, hasLength(2)); // dead-letter не удаляется из хранилища
+    expect(await engine.countLive(), 1);
+  });
+
   test('параллельные drain() не отправляют один элемент дважды (реентрант-гвард)', () async {
     await outbox.enqueue(kind: 'k', payload: {});
     var calls = 0;

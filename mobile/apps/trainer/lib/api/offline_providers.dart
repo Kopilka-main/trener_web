@@ -80,11 +80,12 @@ final syncEngineProvider = Provider<SyncEngine>((ref) {
   );
 });
 
-/// Число элементов в очереди (для индикатора «N ждут отправки»).
+/// Число ЖИВЫХ элементов в очереди (для индикатора «N ждут отправки»).
+/// Dead-letter (отравленные, см. [SyncEngine.isDeadLetter]) не считаем: слив
+/// их больше никогда не тронет, и они не должны вечно висеть в индикаторе.
 final syncStatusProvider = FutureProvider<int>((ref) async {
   ref.watch(_syncTick);
-  final items = await ref.read(outboxProvider).list();
-  return items.length;
+  return ref.read(syncEngineProvider).countLive();
 });
 
 // Тик для перечитывания статуса после enqueue/слива.

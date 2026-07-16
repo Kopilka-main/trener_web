@@ -47,6 +47,19 @@ class SyncEngine {
   /// по завершении прогоняем `_drainOnce()` ещё раз, чтобы его не потерять.
   bool _rerun = false;
 
+  /// Dead-letter: сервер отверг элемент [maxAttempts] раз подряд — дальше не
+  /// переигрываем, чтобы не мусорить каждый drain(). Данные не теряем (элемент
+  /// остаётся в Outbox), но он больше не "живой" — используется и в цикле
+  /// слива (пропустить), и в [countLive] (не считать в индикаторе).
+  bool isDeadLetter(OutboxItem item) =>
+      item.status == OutboxStatus.failed && item.attempts >= maxAttempts;
+
+  /// Элементы очереди, которые ещё будут отправлены (исключая dead-letter).
+  /// Источник правды для индикатора «N ждут отправки» — dead-letter висел бы
+  /// в счётчике вечно, хотя слив его больше никогда не тронет.
+  Future<int> countLive() async =>
+      (await _outbox.list()).where((i) => !isDeadLetter(i)).length;
+
   /// Слить очередь. Если слив уже идёт — не запускаем второй параллельно (иначе
   /// двойная отправка), а взводим повтор и возвращаем нейтральный результат.
   Future<SyncResult> drain() async {
@@ -89,7 +102,7 @@ class SyncEngine {
       }
     }
     for (final item in items) {
-      if (item.status == OutboxStatus.failed && item.attempts >= maxAttempts) {
+      if (isDeadLetter(item)) {
         // Отравленный элемент: сервер уже отверг его maxAttempts раз — дальше
         // не переигрываем (dead-letter), чтобы не мусорить каждый drain().
         continue;
