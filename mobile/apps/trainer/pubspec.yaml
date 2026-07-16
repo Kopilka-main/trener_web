@@ -63,6 +63,10 @@ dependencies:
   flutter_svg: ^2.3.0
   # UUID клиентских id локальных документов (idempotencyKey офлайн-очереди).
   uuid: ^4.5.1
+  # Статус связи (Wi-Fi/моб. сеть) для офлайн-баннера и синк-движка.
+  connectivity_plus: ^6.1.0
+  # StreamGroup.merge для слияния connectivity + периодической пробы API.
+  async: ^2.11.0
 
 dev_dependencies:
   flutter_test:

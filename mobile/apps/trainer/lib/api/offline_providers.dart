@@ -1,0 +1,87 @@
+import 'dart:async';
+
+import 'package:async/async.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:core/core.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'local_workout.dart';
+import 'trainer_workouts.dart';
+
+/// Обработчик элемента 'workout.import': достаёт clientId+doc и шлёт через sender.
+/// Выделен для тестируемости (sender инъектируется).
+SyncHandler makeWorkoutImportHandler(
+  Future<void> Function(String clientId, Map<String, dynamic> doc) sender,
+) {
+  return (OutboxItem item) async {
+    final clientId = item.payload['clientId'] as String;
+    final doc = (item.payload['doc'] as Map).cast<String, dynamic>();
+    await sender(clientId, doc);
+  };
+}
+
+final kvStoreProvider = Provider<KvStore>((ref) => LocalJsonStore.instance);
+
+final outboxProvider = Provider<Outbox>((ref) => Outbox(ref.read(kvStoreProvider)));
+
+final localWorkoutControllerProvider = Provider<LocalWorkoutController>(
+  (ref) => LocalWorkoutController(ref.read(kvStoreProvider), ref.read(outboxProvider)),
+);
+
+/// online = есть сетевой интерфейс И бэкенд реально отвечает. Пересчёт при смене
+/// connectivity и раз в 20 c (на случай «Wi-Fi есть, интернета нет»).
+final isOnlineProvider = StreamProvider<bool>((ref) async* {
+  final api = ref.read(apiClientProvider);
+  Future<bool> reachable() async {
+    try {
+      // Любой ответ (даже 401/404) = сервер достижим. Ошибка сети → офлайн.
+      await api.getJson('/api/ping');
+      return true;
+    } catch (e) {
+      return !isOfflineError(e);
+    }
+  }
+
+  final ns = NetworkStatus(
+    hasInterface: () async =>
+        !(await Connectivity().checkConnectivity()).contains(ConnectivityResult.none),
+    reachable: reachable,
+  );
+
+  yield await ns.isOnline();
+  final sub = Connectivity().onConnectivityChanged;
+  final ticker = Stream<void>.periodic(const Duration(seconds: 20));
+  await for (final _ in StreamGroup.merge<void>([sub.map((_) {}), ticker])) {
+    final online = await ns.isOnline();
+    yield online;
+    if (online) unawaited(drainOnline(ref));
+  }
+});
+
+final syncEngineProvider = Provider<SyncEngine>((ref) {
+  final api = ref.read(trainerWorkoutsApiProvider);
+  return SyncEngine(
+    ref.read(outboxProvider),
+    isOffline: isOfflineError,
+    handlers: {
+      'workout.import': makeWorkoutImportHandler(api.importWorkout),
+    },
+  );
+});
+
+/// Число элементов в очереди (для индикатора «N ждут отправки»).
+final syncStatusProvider = FutureProvider<int>((ref) async {
+  ref.watch(_syncTick);
+  final items = await ref.read(outboxProvider).list();
+  return items.length;
+});
+
+// Тик для перечитывания статуса после enqueue/слива.
+final _syncTick = StateProvider<int>((ref) => 0);
+
+/// Слить очередь (при online и после enqueue). Обновляет индикатор.
+Future<void> drainOnline(Ref ref) async {
+  await ref.read(syncEngineProvider).drain();
+  ref.read(_syncTick.notifier).state++;
+  ref.invalidate(syncStatusProvider);
+}
