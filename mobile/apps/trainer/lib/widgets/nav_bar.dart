@@ -168,14 +168,16 @@ class _GlobalNavBarState extends ConsumerState<GlobalNavBar> {
             padding: mq.padding.copyWith(bottom: mq.padding.bottom + reserve),
             viewPadding: mq.viewPadding.copyWith(bottom: mq.viewPadding.bottom + reserve),
           ),
-          // Баннер офлайна/синка — тонкой полосой над контентом на всех вкладках
-          // (скрыт, когда онлайн и очередь пуста).
-          child: Column(
-            children: <Widget>[
-              const OfflineBanner(),
-              Expanded(child: widget.child),
-            ],
-          ),
+          child: widget.child,
+        ),
+        // Ярлык офлайна/синка — АБСОЛЮТНО сверху по центру, поверх контента:
+        // не занимает место в layout (интерфейс не сдвигается). Скрыт, когда
+        // онлайн и очередь пуста.
+        Positioned(
+          top: mq.padding.top + 6,
+          left: 0,
+          right: 0,
+          child: const Center(child: OfflineBanner()),
         ),
         if (showBar)
           Positioned(left: 0, right: 0, bottom: mq.padding.bottom + 10, child: _bar(context)),

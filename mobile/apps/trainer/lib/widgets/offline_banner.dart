@@ -4,7 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/offline_providers.dart';
 
-/// Тонкая полоса статуса связи/синка. Скрыта, когда онлайн и очередь пуста.
+/// Маленький плавающий ярлык статуса связи/синка: «офлайн (N)» без сети или
+/// «синхр. (N)» при сливе очереди онлайн. Скрыт, когда онлайн и очередь пуста.
+/// Размещается абсолютно (в [Positioned] поверх контента) — НЕ занимает место в
+/// layout и не сдвигает интерфейс. [IgnorePointer] пропускает тапы под ярлыком
+/// (например по AppBar), поэтому он ничего не перекрывает функционально.
 class OfflineBanner extends ConsumerWidget {
   const OfflineBanner({super.key});
 
@@ -16,32 +20,28 @@ class OfflineBanner extends ConsumerWidget {
 
     if (online && pending == 0) return const SizedBox.shrink();
 
-    final (IconData icon, String text, Color bg) = online
-        ? (Icons.sync, 'Синхронизация… ($pending)', c.chip)
-        : (
-            Icons.cloud_off_outlined,
-            pending > 0
-                ? 'Офлайн — $pending изменений отправятся при связи'
-                : 'Офлайн — изменения сохранятся и отправятся при связи',
-            c.chip
-          );
+    final String count = pending > 0 ? ' ($pending)' : '';
+    final (IconData icon, String text) =
+        online ? (Icons.sync, 'синхр.$count') : (Icons.cloud_off_outlined, 'офлайн$count');
 
-    // Отступ сверху под системную область (статус-бар), чтобы полоса не пряталась
-    // за ним; когда баннер скрыт (выше) — отступ не добавляется.
-    return SafeArea(
-      bottom: false,
+    return IgnorePointer(
       child: Container(
-        width: double.infinity,
-        color: bg,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: c.card.withValues(alpha: 0.92),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: c.line),
+          boxShadow: <BoxShadow>[
+            BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 8, offset: const Offset(0, 2)),
+          ],
+        ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(icon, size: 16, color: c.inkMuted),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(text,
-                  style: TextStyle(fontSize: 12, color: c.inkMuted, fontWeight: FontWeight.w600)),
-            ),
+            Icon(icon, size: 13, color: c.inkMuted),
+            const SizedBox(width: 5),
+            Text(text,
+                style: TextStyle(fontSize: 11, color: c.inkMuted, fontWeight: FontWeight.w600)),
           ],
         ),
       ),
