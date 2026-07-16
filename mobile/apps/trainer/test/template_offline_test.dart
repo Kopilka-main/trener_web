@@ -32,8 +32,10 @@ class _FakeExerciseCatalog extends TrainerCatalogNotifier {
       ];
 }
 
-/// Заглушка отправителя шаблонов: по умолчанию сервер недоступен (бросает —
-/// элемент остаётся в очереди), [succeed] переключает на «сервер принял».
+/// Заглушка отправителя шаблонов: по умолчанию сервер недоступен — бросает
+/// СЕТЕВОЙ DioException, поэтому элемент остаётся в очереди в статусе pending
+/// (как в реальном офлайне; важно для коалесинга не синканного create).
+/// [succeed] переключает на «сервер принял».
 class _FakeTemplateApi extends TrainerCatalogApi {
   _FakeTemplateApi(super.ref);
   bool succeed = false;
@@ -45,18 +47,18 @@ class _FakeTemplateApi extends TrainerCatalogApi {
 
   @override
   Future<void> createTemplate(Map<String, dynamic> body, {String? clientId}) async {
-    if (!succeed) throw Exception('нет связи (тест)');
+    if (!succeed) throw _dio(DioExceptionType.connectionError);
     created.add(body);
   }
 
   @override
   Future<void> updateTemplate(String id, Map<String, dynamic> body) async {
-    if (!succeed) throw Exception('нет связи (тест)');
+    if (!succeed) throw _dio(DioExceptionType.connectionError);
   }
 
   @override
   Future<void> deleteTemplate(String id) async {
-    if (!succeed) throw Exception('нет связи (тест)');
+    if (!succeed) throw _dio(DioExceptionType.connectionError);
     deleted.add(id);
   }
 }
@@ -150,7 +152,7 @@ void main() {
     expect(queue.first['kind'], 'template.create');
   });
 
-  test('deleteOffline убирает карточку из кэша и ставит template.delete в очередь', () async {
+  test('createOffline+deleteOffline того же id (не синкан) → очередь пуста', () async {
     await container.read(trainerTemplatesProvider.notifier).createOffline(<String, dynamic>{
       'name': 'Ноги',
       'categoryTag': null,
@@ -163,54 +165,100 @@ void main() {
 
     await container.read(trainerTemplatesProvider.notifier).deleteOffline(id);
 
+    // Карточка ушла из state и кэша.
     final List<WorkoutTemplate> after =
         container.read(trainerTemplatesProvider).valueOrNull ?? <WorkoutTemplate>[];
     expect(after.any((WorkoutTemplate t) => t.id == id), false);
-
     final List<Map<String, dynamic>> cached =
         await store.readList('trainer_templates') ?? <Map<String, dynamic>>[];
     expect(cached.any((Map<String, dynamic> e) => e['id'] == id), false);
 
+    // Коалесинг: create ещё не синкан → удалён из очереди, delete НЕ ставится.
     final List<Map<String, dynamic>> queue = await store.readList('outbox') ?? <Map<String, dynamic>>[];
-    expect(
-      queue.map((Map<String, dynamic> e) => e['kind']),
-      containsAll(<String>['template.create', 'template.delete']),
-    );
+    expect(queue, isEmpty);
   });
 
-  test('updateOffline оптимистично заменяет запись в кэше и ставит template.update', () async {
-    await container.read(trainerTemplatesProvider.notifier).createOffline(<String, dynamic>{
-      'name': 'Спина',
-      'categoryTag': null,
-      'shortDescription': null,
-      'exercises': <Map<String, dynamic>>[],
-    });
+  test('createOffline+updateOffline того же id (не синкан) → один template.create с новым body', () async {
+    await container.read(trainerTemplatesProvider.notifier).createOffline(
+      <String, dynamic>{
+        'name': 'Спина',
+        'categoryTag': null,
+        'shortDescription': null,
+        'exercises': <Map<String, dynamic>>[],
+      },
+      clientId: 'cl_007',
+    );
     final String id = (container.read(trainerTemplatesProvider).valueOrNull ?? <WorkoutTemplate>[])
         .firstWhere((WorkoutTemplate t) => t.name == 'Спина')
         .id;
 
     await container.read(trainerTemplatesProvider.notifier).updateOffline(id, <String, dynamic>{
       'name': 'Спина + бицепс',
+      'categoryTag': null,
+      'shortDescription': null,
       'exercises': <Map<String, dynamic>>[
         <String, dynamic>{'exerciseId': 'ex1', 'sets': 3, 'reps': 10, 'restSec': 90},
       ],
     });
 
-    // Оптимистичная замена в state: id тот же, поля обновлены.
+    // Оптимистичная замена в state: id тот же, поля обновлены, имя резолвится.
     final WorkoutTemplate updated = (container.read(trainerTemplatesProvider).valueOrNull ?? <WorkoutTemplate>[])
         .firstWhere((WorkoutTemplate t) => t.id == id);
     expect(updated.name, 'Спина + бицепс');
-    expect(updated.exercises, hasLength(1));
-    expect(updated.exercises.first.exerciseName, 'Жим лёжа'); // имя резолвится из каталога
+    expect(updated.exercises.first.exerciseName, 'Жим лёжа');
 
-    // И тот же id в кэше (замена, а не дубль).
+    // Тот же id в кэше (замена, не дубль).
     final List<Map<String, dynamic>> cached =
         await store.readList('trainer_templates') ?? <Map<String, dynamic>>[];
     expect(cached.where((Map<String, dynamic> e) => e['id'] == id), hasLength(1));
-    expect(cached.firstWhere((Map<String, dynamic> e) => e['id'] == id)['name'], 'Спина + бицепс');
+
+    // Коалесинг: РОВНО один элемент — create с обновлённым body (отдельного update нет),
+    // прежний clientId сохранён.
+    final List<Map<String, dynamic>> queue = await store.readList('outbox') ?? <Map<String, dynamic>>[];
+    expect(queue, hasLength(1));
+    expect(queue.single['kind'], 'template.create');
+    final Map<String, dynamic> body =
+        ((queue.single['payload'] as Map)['body'] as Map).cast<String, dynamic>();
+    expect(body['name'], 'Спина + бицепс');
+    expect(body['clientId'], 'cl_007');
+  });
+
+  test('updateOffline серверного шаблона (нет create в очереди) → ставит template.update', () async {
+    // Шаблон с серверным id уже в кэше, без create-элемента в очереди.
+    await store.writeList('trainer_templates', <Map<String, dynamic>>[
+      <String, dynamic>{
+        'id': 'srv_1',
+        'name': 'Грудь',
+        'categoryTag': null,
+        'shortDescription': null,
+        'exercises': <Map<String, dynamic>>[],
+      },
+    ]);
+
+    await container.read(trainerTemplatesProvider.notifier).updateOffline('srv_1', <String, dynamic>{
+      'name': 'Грудь тяжёлая',
+      'categoryTag': null,
+      'shortDescription': null,
+      'exercises': <Map<String, dynamic>>[],
+    });
 
     final List<Map<String, dynamic>> queue = await store.readList('outbox') ?? <Map<String, dynamic>>[];
     expect(queue.map((Map<String, dynamic> e) => e['kind']), contains('template.update'));
+    final Map<String, dynamic> cached = (await store.readList('trainer_templates') ?? <Map<String, dynamic>>[])
+        .firstWhere((Map<String, dynamic> e) => e['id'] == 'srv_1');
+    expect(cached['name'], 'Грудь тяжёлая');
+  });
+
+  test('deleteOffline серверного шаблона (нет create в очереди) → ставит template.delete', () async {
+    await store.writeList('trainer_templates', <Map<String, dynamic>>[
+      <String, dynamic>{'id': 'srv_2', 'name': 'Плечи', 'exercises': <Map<String, dynamic>>[]},
+    ]);
+
+    await container.read(trainerTemplatesProvider.notifier).deleteOffline('srv_2');
+
+    final List<Map<String, dynamic>> queue = await store.readList('outbox') ?? <Map<String, dynamic>>[];
+    expect(queue.map((Map<String, dynamic> e) => e['kind']), contains('template.delete'));
+    expect(queue.single['payload']['id'], 'srv_2');
   });
 
   // ─── Ветки обработчиков очереди через РЕАЛЬНЫЙ SyncEngine + Outbox ───

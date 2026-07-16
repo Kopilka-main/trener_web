@@ -19,7 +19,9 @@ class OutboxItem {
 
   final String id;
   final String kind;
-  final Map<String, dynamic> payload;
+  /// Доменные данные. Не final: коалесинг мутаций до отправки может переписать
+  /// payload ещё не синканного элемента (см. [Outbox.patchPayload]).
+  Map<String, dynamic> payload;
   final int createdAt;
   OutboxStatus status;
   int attempts;
@@ -72,6 +74,27 @@ class Outbox {
       _store.writeList(_key, items.map((e) => e.toJson()).toList());
 
   Future<List<OutboxItem>> list() => _load();
+
+  /// Первый ещё НЕ отправляемый (status != sending) элемент, удовлетворяющий
+  /// [test], в порядке FIFO — или null. Для коалесинга мутаций одного объекта
+  /// (правка/удаление ещё не синканного create).
+  Future<OutboxItem?> firstPending(bool Function(OutboxItem) test) async {
+    final items = await _load();
+    for (final item in items) {
+      if (item.status == OutboxStatus.sending) continue;
+      if (test(item)) return item;
+    }
+    return null;
+  }
+
+  /// Переписать payload элемента [id] (коалесинг: обновляем тело ещё не
+  /// отправленного элемента вместо постановки нового).
+  Future<void> patchPayload(String id, Map<String, dynamic> payload) =>
+      _mutate(id, (it) => it.payload = payload);
+
+  /// Убрать элемент из очереди по id (алиас [markSent] — семантика «больше не
+  /// нужен»: коалесинг удаления ещё не синканного create).
+  Future<void> remove(String id) => markSent(id);
 
   Future<OutboxItem> enqueue({
     required String kind,

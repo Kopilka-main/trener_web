@@ -54,4 +54,34 @@ void main() {
     expect(list, hasLength(1));
     expect(list.first.payload['x'], 9);
   });
+
+  test('firstPending находит первый подходящий не-sending элемент', () async {
+    await outbox.enqueue(kind: 'template.create', payload: {'clientLocalId': 'a'});
+    final b = await outbox.enqueue(kind: 'template.create', payload: {'clientLocalId': 'b'});
+    final found = await outbox.firstPending(
+        (i) => i.kind == 'template.create' && i.payload['clientLocalId'] == 'b');
+    expect(found?.id, b.id);
+    final none = await outbox.firstPending((i) => i.payload['clientLocalId'] == 'z');
+    expect(none, isNull);
+  });
+
+  test('firstPending пропускает элементы в статусе sending', () async {
+    final a = await outbox.enqueue(kind: 'k', payload: {'clientLocalId': 'a'});
+    await outbox.markSending(a.id);
+    final found = await outbox.firstPending((i) => i.payload['clientLocalId'] == 'a');
+    expect(found, isNull);
+  });
+
+  test('patchPayload переписывает payload элемента (персистентно)', () async {
+    final a = await outbox.enqueue(kind: 'template.create', payload: {'body': {'name': 'A'}});
+    await outbox.patchPayload(a.id, {'body': {'name': 'B'}});
+    final list = await outbox.list();
+    expect((list.single.payload['body'] as Map)['name'], 'B');
+  });
+
+  test('remove убирает элемент из очереди', () async {
+    final a = await outbox.enqueue(kind: 'k', payload: {});
+    await outbox.remove(a.id);
+    expect(await outbox.list(), isEmpty);
+  });
 }

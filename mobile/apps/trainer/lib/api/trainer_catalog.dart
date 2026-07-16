@@ -210,12 +210,23 @@ class TrainerTemplatesNotifier extends CachedListNotifier<WorkoutTemplate> {
     if (!stillQueued) ref.invalidateSelf();
   }
 
+  /// Первый ещё не отправленный `template.create` этого локального шаблона
+  /// ([clientLocalId] == [localId]) в очереди — или null. Корреляция нужна,
+  /// т.к. клиентский uuid карточки ≠ серверный id (сервер присвоит свой при
+  /// сливе), и правку/удаление до синка нельзя слать как отдельный
+  /// update/delete по клиентскому id.
+  Future<OutboxItem?> _pendingCreateFor(String localId) => ref
+      .read(outboxProvider)
+      .firstPending((OutboxItem i) =>
+          i.kind == 'template.create' && i.payload['clientLocalId'] == localId);
+
   /// Создать шаблон офлайн-безопасно: оптимистичная карточка (клиентский uuid,
   /// имена упражнений из каталога) сразу в state+кэш, элемент очереди
   /// 'template.create'. [clientId] задан → персональный шаблон.
   Future<void> createOffline(Map<String, dynamic> body, {String? clientId}) async {
+    final String localId = const Uuid().v4();
     final Map<String, dynamic> raw = <String, dynamic>{
-      'id': const Uuid().v4(),
+      'id': localId,
       'name': body['name'],
       'categoryTag': body['categoryTag'],
       'shortDescription': body['shortDescription'],
@@ -230,16 +241,19 @@ class TrainerTemplatesNotifier extends CachedListNotifier<WorkoutTemplate> {
       ...body,
       'clientId': ?clientId,
     };
+    // clientLocalId — корреляционный ключ карточки для коалесинга (на сервер НЕ
+    // уходит: обработчик шлёт только payload['body']).
     final OutboxItem item = await ref.read(outboxProvider).enqueue(
           kind: 'template.create',
-          payload: <String, dynamic>{'body': queueBody},
+          payload: <String, dynamic>{'clientLocalId': localId, 'body': queueBody},
         );
     await drainOnline(ref);
     await _invalidateIfSent(item.id);
   }
 
-  /// Изменить шаблон офлайн-безопасно: оптимистично заменяет запись в кэше,
-  /// элемент очереди 'template.update' (PATCH идемпотентен на сервере).
+  /// Изменить шаблон офлайн-безопасно: оптимистично заменяет запись в кэше.
+  /// Если шаблон ещё не синкан (в очереди висит его `template.create`) —
+  /// перезаписываем тело этого create (коалесинг), иначе ставим `template.update`.
   Future<void> updateOffline(String id, Map<String, dynamic> body) async {
     final List<Map<String, dynamic>> list = await _rawCache();
     final int i = list.indexWhere((Map<String, dynamic> e) => e['id'] == id);
@@ -252,6 +266,26 @@ class TrainerTemplatesNotifier extends CachedListNotifier<WorkoutTemplate> {
     }
     await _applyRaw(list);
 
+    final OutboxItem? pendingCreate = await _pendingCreateFor(id);
+    if (pendingCreate != null) {
+      // Правка не синканного шаблона: обновляем тело create вместо отдельного
+      // update (иначе update ушёл бы по клиентскому id → 404 → правка теряется).
+      // Сохраняем clientId из тела create (scope не меняется при правке).
+      final Map<String, dynamic> createBody =
+          (pendingCreate.payload['body'] as Map).cast<String, dynamic>();
+      final Map<String, dynamic> newBody = <String, dynamic>{
+        ...body,
+        'clientId': ?createBody['clientId'],
+      };
+      await ref.read(outboxProvider).patchPayload(
+            pendingCreate.id,
+            <String, dynamic>{'clientLocalId': id, 'body': newBody},
+          );
+      await drainOnline(ref);
+      await _invalidateIfSent(pendingCreate.id);
+      return;
+    }
+
     final OutboxItem item = await ref.read(outboxProvider).enqueue(
           kind: 'template.update',
           payload: <String, dynamic>{'id': id, 'body': body},
@@ -260,12 +294,21 @@ class TrainerTemplatesNotifier extends CachedListNotifier<WorkoutTemplate> {
     await _invalidateIfSent(item.id);
   }
 
-  /// Удалить шаблон офлайн-безопасно: оптимистично убирает запись из кэша,
-  /// элемент очереди 'template.delete'.
+  /// Удалить шаблон офлайн-безопасно: оптимистично убирает запись из кэша. Если
+  /// шаблон ещё не синкан (в очереди висит его `template.create`) — просто
+  /// удаляем этот create (на сервере шаблона ещё нет), иначе ставим
+  /// `template.delete`.
   Future<void> deleteOffline(String id) async {
     final List<Map<String, dynamic>> list = await _rawCache()
       ..removeWhere((Map<String, dynamic> e) => e['id'] == id);
     await _applyRaw(list);
+
+    final OutboxItem? pendingCreate = await _pendingCreateFor(id);
+    if (pendingCreate != null) {
+      await ref.read(outboxProvider).remove(pendingCreate.id);
+      await drainOnline(ref); // обновить индикатор очереди
+      return;
+    }
 
     final OutboxItem item = await ref.read(outboxProvider).enqueue(
           kind: 'template.delete',
