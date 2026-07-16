@@ -194,10 +194,29 @@ class TrainerClientCardApi {
     return ((r['packages'] as List<dynamic>?) ?? <dynamic>[]).cast<Map<String, dynamic>>().map(TPackage.fromJson).toList();
   }
 
+  /// Список тренировок клиента — cache-first: успех сети кэшируем под
+  /// `client_workouts_<id>`; офлайн отдаём из кэша (иначе экран «Тренировки»
+  /// уходил бы в ошибку и до кнопки «Провести» было не добраться). Нет кэша
+  /// офлайн — пустой список (экран рендерится, локальное проведение доступно).
   Future<List<TWorkout>> workouts(String clientId) async {
-    final Map<String, dynamic> r = await _api.getJson('/api/clients/$clientId/workouts');
-    final List<TWorkout> list = ((r['workouts'] as List<dynamic>?) ?? <dynamic>[])
-        .cast<Map<String, dynamic>>().map(TWorkout.fromJson).toList();
+    final String key = 'client_workouts_$clientId';
+    final KvStore store = LocalJsonStore.instance;
+    try {
+      final Map<String, dynamic> r = await _api.getJson('/api/clients/$clientId/workouts');
+      final List<Map<String, dynamic>> raw =
+          ((r['workouts'] as List<dynamic>?) ?? <dynamic>[]).cast<Map<String, dynamic>>();
+      await store.writeList(key, raw);
+      return _parseWorkouts(raw);
+    } catch (e) {
+      if (!isOfflineError(e)) rethrow;
+      final List<Map<String, dynamic>>? cached = await store.readList(key);
+      if (cached == null) return <TWorkout>[];
+      return _parseWorkouts(cached);
+    }
+  }
+
+  List<TWorkout> _parseWorkouts(List<Map<String, dynamic>> raw) {
+    final List<TWorkout> list = raw.map(TWorkout.fromJson).toList();
     list.sort((TWorkout a, TWorkout b) =>
         (b.completedAt ?? DateTime(0)).compareTo(a.completedAt ?? DateTime(0)));
     return list;
