@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../api/active_workout_state.dart';
 import '../router.dart';
+import 'offline_banner.dart';
 
 /// Можно ли вернуться назад = в стеке корневого навигатора больше одного экрана.
 /// Держится актуальным наблюдателем ниже (ловит и go_router-, и imperative-переходы).
@@ -161,7 +162,14 @@ class _GlobalNavBarState extends ConsumerState<GlobalNavBar> {
             padding: mq.padding.copyWith(bottom: mq.padding.bottom + reserve),
             viewPadding: mq.viewPadding.copyWith(bottom: mq.viewPadding.bottom + reserve),
           ),
-          child: widget.child,
+          // Баннер офлайна/синка — тонкой полосой над контентом на всех вкладках
+          // (скрыт, когда онлайн и очередь пуста).
+          child: Column(
+            children: <Widget>[
+              const OfflineBanner(),
+              Expanded(child: widget.child),
+            ],
+          ),
         ),
         if (showBar)
           Positioned(left: 0, right: 0, bottom: mq.padding.bottom + 10, child: _bar(context)),

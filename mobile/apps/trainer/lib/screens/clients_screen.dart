@@ -16,6 +16,8 @@ import '../api/trainer_client_stats.dart';
 import '../api/trainer_clients.dart';
 import '../api/trainer_medical.dart';
 import '../api/trainer_workouts.dart';
+import '../api/local_workout.dart';
+import '../api/offline_providers.dart';
 import '../widgets/income_form.dart';
 import '../widgets/nav_bar.dart';
 import 'accounting_screen.dart';
@@ -1135,6 +1137,89 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
     await _openConduct(w.id);
   }
 
+  /// Провести тренировку по плану (не историческую). Офлайн → локальный документ
+  /// (offline-first: создать+провести+завершить без сети, при связи — импорт);
+  /// онлайн → существующий серверный путь (assign + серверный экран проведения).
+  /// [exercises] — серверный формат плана (как для assign/шаблона).
+  Future<void> _conductPlan(String name, List<Map<String, dynamic>> exercises,
+      {String? sourceTemplateId}) async {
+    final bool offline = ref.read(isOnlineProvider).valueOrNull == false;
+    if (offline) {
+      await _conductLocal(name, exercises, sourceTemplateId);
+      return;
+    }
+    await _createAndOpen(name, exercises);
+  }
+
+  /// Локальное (offline) проведение: собрать план в локальный формат, создать
+  /// документ и открыть экран проведения в локальном режиме.
+  Future<void> _conductLocal(
+      String name, List<Map<String, dynamic>> exercises, String? sourceTemplateId) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final NavigatorState nav = Navigator.of(context);
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    try {
+      final LocalWorkout w = await ref.read(localWorkoutControllerProvider).createFromPlan(
+            clientId: _cid,
+            name: name,
+            sourceTemplateId: sourceTemplateId,
+            plan: _mapsToPlan(exercises),
+          );
+      ref.invalidate(localWorkoutsProvider(_cid));
+      if (!mounted) return;
+      setState(() => _busy = false);
+      await nav.push<void>(MaterialPageRoute<void>(
+        builder: (_) => ActiveWorkoutScreen.local(localWorkoutId: w.id),
+      ));
+      ref.invalidate(localWorkoutsProvider(_cid));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      m.showSnackBar(const SnackBar(content: Text('Не удалось создать тренировку')));
+    }
+  }
+
+  /// Серверный план (exercises c sets) → локальный формат (один LocalSet на
+  /// подход). Имена упражнений берём из каталога по exerciseId.
+  List<({String exerciseId, String name, LocalSet set})> _mapsToPlan(
+      List<Map<String, dynamic>> exercises) {
+    final List<TExercise> catalog = ref.read(trainerCatalogProvider).valueOrNull ?? <TExercise>[];
+    final Map<String, TExercise> byId = <String, TExercise>{
+      for (final TExercise e in catalog) e.id: e,
+    };
+    final List<({String exerciseId, String name, LocalSet set})> out =
+        <({String exerciseId, String name, LocalSet set})>[];
+    for (final Map<String, dynamic> ex in exercises) {
+      final String id = ex['exerciseId'] as String? ?? '';
+      final String nm = byId[id]?.name ?? 'Упражнение';
+      final List<Map<String, dynamic>> sets =
+          ((ex['sets'] as List<dynamic>?) ?? const <dynamic>[]).cast<Map<String, dynamic>>();
+      for (final Map<String, dynamic> s in sets) {
+        out.add((
+          exerciseId: id,
+          name: nm,
+          set: LocalSet(
+            setIndex: 0,
+            plannedReps: s['plannedReps'] as num?,
+            plannedWeightKg: s['plannedWeightKg'] as num?,
+            plannedTimeSec: s['plannedTimeSec'] as num?,
+            plannedRestSec: s['plannedRestSec'] as num?,
+          ),
+        ));
+      }
+    }
+    return out;
+  }
+
+  /// Открыть локальный документ на продолжение (resume).
+  Future<void> _openLocal(String localWorkoutId) async {
+    await Navigator.of(context).push<void>(MaterialPageRoute<void>(
+      builder: (_) => ActiveWorkoutScreen.local(localWorkoutId: localWorkoutId),
+    ));
+    if (mounted) ref.invalidate(localWorkoutsProvider(_cid));
+  }
+
   /// Создать черновик и открыть редактор. [exercises] — план (пустой/из шаблона).
   /// [excluded] — историческая запись (постфактум, без влияния на баланс/календарь).
   Future<void> _createAndOpen(String name, List<Map<String, dynamic>> exercises,
@@ -1201,6 +1286,11 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
   /// плану (без гейта согласования — провести можно будет по тапу). Прежние
   /// неподтверждённые черновики тренера убираем, чтобы наверху была одна — новая.
   Future<void> _stageDraft(String name, List<Map<String, dynamic>> plan) async {
+    // Офлайн: сразу проводим локально (серверная «staging» недоступна без сети).
+    if (ref.read(isOnlineProvider).valueOrNull == false) {
+      await _conductLocal(name, plan, null);
+      return;
+    }
     if (_busy) return;
     setState(() => _busy = true);
     final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
@@ -1231,8 +1321,9 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
       showDragHandle: true,
       builder: (_) => _TemplatePickerSheet(
         clientId: _cid,
-        onCreateNew: () =>
-            _createAndOpen('Новая тренировка', <Map<String, dynamic>>[], excluded: excluded),
+        onCreateNew: () => excluded
+            ? _createAndOpen('Новая тренировка', <Map<String, dynamic>>[], excluded: true)
+            : _conductPlan('Новая тренировка', <Map<String, dynamic>>[]),
       ),
     );
     if (t == null) return;
@@ -1253,7 +1344,11 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
               },
             ))
         .toList();
-    await _createAndOpen(t.name, ex, excluded: excluded);
+    if (excluded) {
+      await _createAndOpen(t.name, ex, excluded: true);
+    } else {
+      await _conductPlan(t.name, ex, sourceTemplateId: t.id);
+    }
   }
 
   /// Ретроспективно зафиксировать уже проведённую тренировку: лист вариантов
@@ -1471,6 +1566,11 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
           final List<TWorkout> history = all.where((TWorkout w) => w.status == 'completed' || w.status == 'skipped').toList()
             ..sort((TWorkout a, TWorkout b) => (b.completedAt ?? DateTime(0)).compareTo(a.completedAt ?? DateTime(0)));
 
+          // Активные ЛОКАЛЬНЫЕ документы (offline-first, «продолжить») — сверху,
+          // дополнительно к серверной карточке (её не убираем).
+          final List<LocalWorkout> locals =
+              ref.watch(localWorkoutsProvider(_cid)).valueOrNull ?? <LocalWorkout>[];
+
           // Ближайшее запланированное занятие клиента (дата/время) — для подзаголовка.
           final Session? nextSess =
               _nextSessionByClient(ref.watch(trainerSessionsProvider).valueOrNull ?? <Session>[])[_cid];
@@ -1483,6 +1583,12 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
             children: <Widget>[
               Text(header, style: AppFonts.mono(size: 11, color: c.inkMutedXl, weight: FontWeight.w700)),
               const SizedBox(height: 8),
+              // Локальные (offline) активные документы — «Продолжить» (resume).
+              for (final LocalWorkout d in locals)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _LocalResumeCard(doc: d, onTap: () => _openLocal(d.id)),
+                ),
               if (current.isNotEmpty)
                 _CurrentWorkoutCard(
                   w: current.first,
@@ -1823,6 +1929,45 @@ class _CurrentWorkoutCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(color: c.accent, borderRadius: BorderRadius.circular(12)),
               child: Text(active ? 'Продолжить' : 'Начать тренировку',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.accentOn)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Карточка локального (offline) документа — «Продолжить». Тап открывает экран
+/// проведения в локальном режиме (resume; переживает перезапуск приложения).
+class _LocalResumeCard extends StatelessWidget {
+  const _LocalResumeCard({required this.doc, required this.onTap});
+  final LocalWorkout doc;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(doc.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
+            const SizedBox(height: 4),
+            Text('${doc.exercises.length} упр. · идёт (на устройстве)',
+                style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500)),
+            const SizedBox(height: 12),
+            Container(
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(color: c.accent, borderRadius: BorderRadius.circular(12)),
+              child: Text('Продолжить',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.accentOn)),
             ),
           ],

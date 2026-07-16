@@ -9,6 +9,8 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../api/active_workout_state.dart';
+import '../api/local_workout.dart';
+import '../api/offline_providers.dart';
 import '../api/trainer_assign.dart';
 import '../api/trainer_calendar.dart';
 import '../api/trainer_client_card.dart';
@@ -76,14 +78,30 @@ List<_ExGroup> _groupExercises(List<WorkoutExercise> exs) {
 /// затем: черновик → план + «Начать»; активная → таймер, чек-лист, отдых,
 /// завершение. Зеркало веб ActiveWorkoutPage (тренерский scope).
 class ActiveWorkoutScreen extends ConsumerWidget {
-  const ActiveWorkoutScreen({super.key, required this.clientId, required this.workoutId});
-  final String clientId;
-  final String workoutId;
+  /// Серверный режим (как раньше): грузит тренировку по (clientId, workoutId) и
+  /// проводит её прямыми серверными вызовами. Используется календарём/главной/FAB.
+  const ActiveWorkoutScreen({super.key, required this.clientId, required this.workoutId})
+      : localWorkoutId = null;
+
+  /// Локальный (offline-first) режим: проведение идёт через локальный документ
+  /// [LocalWorkout] (persist на диск, resume при перезапуске), при завершении —
+  /// в Outbox на импорт. UI тот же — меняется только источник данных и действия.
+  const ActiveWorkoutScreen.local({super.key, required String this.localWorkoutId})
+      : clientId = null,
+        workoutId = null;
+
+  final String? clientId;
+  final String? workoutId;
+  final String? localWorkoutId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Локальный режим — грузим документ внутри _Conductor (в initState).
+    if (localWorkoutId != null) {
+      return _Conductor.local(localWorkoutId: localWorkoutId!);
+    }
     final AsyncValue<Workout> w =
-        ref.watch(trainerWorkoutProvider((clientId: clientId, wid: workoutId)));
+        ref.watch(trainerWorkoutProvider((clientId: clientId!, wid: workoutId!)));
     return w.when(
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (Object e, _) => Scaffold(
@@ -96,7 +114,7 @@ class ActiveWorkoutScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: () => ref.invalidate(
-                    trainerWorkoutProvider((clientId: clientId, wid: workoutId))),
+                    trainerWorkoutProvider((clientId: clientId!, wid: workoutId!))),
                 child: const Text('Повторить'),
               ),
             ],
@@ -104,23 +122,36 @@ class ActiveWorkoutScreen extends ConsumerWidget {
         ),
       ),
       data: (Workout workout) =>
-          _Conductor(clientId: clientId, workout: workout),
+          _Conductor(clientId: clientId!, workout: workout),
     );
   }
 }
 
 class _Conductor extends ConsumerStatefulWidget {
-  const _Conductor({required this.clientId, required this.workout});
-  final String clientId;
-  final Workout workout;
+  const _Conductor({required this.clientId, required this.workout}) : localWorkoutId = null;
+  const _Conductor.local({required String this.localWorkoutId})
+      : clientId = null,
+        workout = null;
+  final String? clientId;
+  final Workout? workout;
+  final String? localWorkoutId;
 
   @override
   ConsumerState<_Conductor> createState() => _ConductorState();
 }
 
 class _ConductorState extends ConsumerState<_Conductor> {
-  late Workout _w = widget.workout;
+  // Источник рендера (обе ветки): в серверном режиме обновляется ответами API, в
+  // локальном — пересчитывается из _doc.toWorkout() после каждого действия.
+  late Workout _w;
+  // Локальный документ (только в offline-режиме); в серверном — null.
+  LocalWorkout? _doc;
+  bool _loading = true;
+  bool _notFound = false;
   bool _busy = false;
+
+  bool get _isLocal => widget.localWorkoutId != null;
+  LocalWorkoutController get _ctrl => ref.read(localWorkoutControllerProvider);
   // Раскрытые блоки упражнений (по exerciseId) — по умолчанию пусто = все свёрнуты.
   final Set<String> _expandedGroups = <String>{};
   // Инлайн-редактирование одной метрики прямо в строке подхода (без шторки):
@@ -139,25 +170,60 @@ class _ConductorState extends ConsumerState<_Conductor> {
   // застревал true и FAB пропадал везде).
   late final _onScreenCtrl = ref.read(activeWorkoutOnScreenProvider.notifier);
 
-  String get _clientId => widget.clientId;
+  String get _clientId => widget.clientId ?? _doc?.clientId ?? '';
   TrainerWorkoutsApi get _api => ref.read(trainerWorkoutsApiProvider);
+
+  /// Пересчёт рендер-модели из локального документа (после каждого действия).
+  void _sync() {
+    if (mounted && _doc != null) setState(() => _w = _doc!.toWorkout());
+  }
 
   @override
   void initState() {
     super.initState();
+    if (_isLocal) {
+      _loadLocal();
+    } else {
+      _w = widget.workout!;
+      _loading = false;
+    }
     // Раз в секунду обновляем таймер общего времени тренировки (пока active).
     _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted && _w.status == WorkoutStatus.active) setState(() {});
+      if (mounted && !_loading && _w.status == WorkoutStatus.active) setState(() {});
     });
     // Пока открыт экран проведения — скрываем плавающий FAB; если тренировка
-    // уже active — регистрируем её как «идущую» (на случай прямого входа/возврата).
+    // уже active — регистрируем её как «идущую» (только серверный режим: FAB и
+    // указатель «идёт тренировка» серверные; локальный resume — через список).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _onScreenCtrl.state = true;
-      if (_w.status == WorkoutStatus.active) {
+      if (!_isLocal && !_loading && _w.status == WorkoutStatus.active) {
         ref.read(activeWorkoutProvider.notifier).set(_clientId, _w.id, _w.name);
       }
     });
+  }
+
+  /// Загрузить локальный документ с диска (resume: переживает перезапуск).
+  Future<void> _loadLocal() async {
+    final LocalWorkout? d = await _ctrl.load(widget.localWorkoutId!);
+    if (!mounted) return;
+    setState(() {
+      _doc = d;
+      if (d != null) _w = d.toWorkout();
+      _notFound = d == null;
+      _loading = false;
+    });
+  }
+
+  /// Слить очередь синка (после локального завершения). WidgetRef-совместимо —
+  /// не используем drainOnline(Ref), т.к. здесь ref — WidgetRef.
+  Future<void> _drain() async {
+    try {
+      await ref.read(syncEngineProvider).drain();
+    } catch (_) {
+      // офлайн/ошибка — элемент остаётся в очереди, уйдёт при связи
+    }
+    if (mounted) ref.invalidate(syncStatusProvider);
   }
 
   @override
@@ -276,7 +342,23 @@ class _ConductorState extends ConsumerState<_Conductor> {
             final TExercise? ex = byId[e.key];
             if (ex == null) continue;
             for (int i = 0; i < e.value; i++) {
-              await _run(() => _api.addExercise(_clientId, _w.id, ex));
+              if (_isLocal) {
+                await _ctrl.addExercise(
+                  _doc!,
+                  exerciseId: ex.id,
+                  name: ex.name,
+                  set: LocalSet(
+                    setIndex: 0,
+                    plannedReps: ex.defaultReps,
+                    plannedWeightKg: ex.defaultWeightKg,
+                    plannedTimeSec: ex.defaultTimeSec,
+                    plannedRestSec: ex.restSec ?? 90,
+                  ),
+                );
+                _sync();
+              } else {
+                await _run(() => _api.addExercise(_clientId, _w.id, ex));
+              }
             }
           }
         },
@@ -339,6 +421,25 @@ class _ConductorState extends ConsumerState<_Conductor> {
     );
   }
 
+  /// Обновление подхода: локально — через контроллер (+пересчёт), иначе серверно.
+  Future<void> _updSet(int pos, int setIndex, Map<String, dynamic> body) async {
+    if (_isLocal) {
+      await _ctrl.updateSet(
+        _doc!,
+        pos,
+        setIndex,
+        actualReps: body['actualReps'] as num?,
+        actualWeightKg: body['actualWeightKg'] as num?,
+        actualTimeSec: body['actualTimeSec'] as num?,
+        plannedRestSec: body['plannedRestSec'] as num?,
+        done: body['done'] as bool?,
+      );
+      _sync();
+    } else {
+      await _run(() => _api.updateSet(_clientId, _w.id, pos, setIndex, body));
+    }
+  }
+
   Future<void> _toggleDone(WorkoutExercise ex, WorkoutSet s) async {
     // Лёгкая тактильная отдача — понятно, что нажатие «выполнено» сработало.
     HapticFeedback.lightImpact();
@@ -349,21 +450,40 @@ class _ConductorState extends ConsumerState<_Conductor> {
       if (s.plannedWeightKg != null) body['actualWeightKg'] = s.plannedWeightKg;
       if (s.plannedTimeSec != null) body['actualTimeSec'] = s.plannedTimeSec;
     }
-    await _run(() => _api.updateSet(_clientId, _w.id, ex.position, s.setIndex, body));
+    await _updSet(ex.position, s.setIndex, body);
     if (next) _startRest(ex, s);
   }
 
   /// «+1» на свайпе: молча добавляет копию подхода (те же плановые параметры).
   Future<void> _addSetCopy(int pos, WorkoutSet s) async {
     HapticFeedback.lightImpact();
-    await _run(() => _api.addSet(_clientId, _w.id, pos, s));
+    if (_isLocal) {
+      await _ctrl.addSet(_doc!, pos);
+      _sync();
+    } else {
+      await _run(() => _api.addSet(_clientId, _w.id, pos, s));
+    }
   }
 
   /// Удалить подход со свайпа — с подтверждением. Последний подход упражнения
-  /// удаляет и само упражнение (обрабатывается бэкендом).
+  /// удаляет и само упражнение (обрабатывается бэкендом / контроллером).
   Future<void> _confirmDeleteSet(int pos, WorkoutSet s) async {
     if (!await confirmDelete(context, title: 'Удалить подход?')) return;
-    await _run(() => _api.deleteSet(_clientId, _w.id, pos, s.setIndex));
+    if (_isLocal) {
+      await _ctrl.deleteSet(_doc!, pos, s.setIndex);
+      _sync();
+    } else {
+      await _run(() => _api.deleteSet(_clientId, _w.id, pos, s.setIndex));
+    }
+  }
+
+  /// Перестановка блоков упражнений (order — старые позиции в новом порядке).
+  void _reorder(List<int> order) {
+    if (_isLocal) {
+      _ctrl.reorder(_doc!, order).then((_) => _sync());
+    } else {
+      _run(() => _api.reorderExercises(_clientId, _w.id, order));
+    }
   }
 
   /// Начать тренировку → active, и зарегистрировать её как «идущую» для FAB.
@@ -432,6 +552,31 @@ class _ConductorState extends ConsumerState<_Conductor> {
     final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
     final NavigatorState nav = Navigator.of(context);
     setState(() => _busy = true);
+    // Локальный режим: завершаем документ (в Outbox на импорт) и уходим. Баланс,
+    // календарь и история пересчитаются на сервере при импорте.
+    if (_isLocal) {
+      try {
+        final String cid = _doc!.clientId;
+        await _ctrl.complete(_doc!, durationSec: el > 0 ? el : null);
+        ref.invalidate(localWorkoutsProvider(cid));
+        unawaited(_drain());
+        if (!mounted) return;
+        await ref.read(appReviewServiceProvider).maybePromptAfterSuccess(
+          context,
+          onNegative: (BuildContext ctx) => Navigator.of(ctx).push<void>(
+            MaterialPageRoute<void>(builder: (_) => const SupportChatScreen()),
+          ),
+        );
+        if (!mounted) return;
+        nav.pop();
+        m.showSnackBar(const SnackBar(content: Text('Тренировка завершена')));
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _busy = false);
+        m.showSnackBar(const SnackBar(content: Text('Не удалось завершить тренировку')));
+      }
+      return;
+    }
     try {
       await _api.complete(_clientId, _w.id, durationSec: el > 0 ? el : null);
       ref.read(activeWorkoutProvider.notifier).clear(); // тренировка завершена → убрать FAB
@@ -508,6 +653,15 @@ class _ConductorState extends ConsumerState<_Conductor> {
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_notFound) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: const Center(child: Text('Тренировка не найдена')),
+      );
+    }
     final AppColors c = context.colors;
     return Scaffold(
       appBar: AppBar(
@@ -672,7 +826,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
             final _ExGroup moved = gs.removeAt(oldI);
             gs.insert(newI, moved);
             final List<int> order = <int>[for (final _ExGroup g in gs) ...g.positions];
-            _run(() => _api.reorderExercises(_clientId, _w.id, order));
+            _reorder(order);
           },
           itemBuilder: (BuildContext ctx, int i) {
             final _ExGroup g = groups[i];
@@ -744,7 +898,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
       _MetricKind.time => <String, dynamic>{'actualTimeSec': value},
       _MetricKind.rest => <String, dynamic>{'plannedRestSec': value},
     };
-    await _run(() => _api.updateSet(_clientId, _w.id, rec.pos, rec.setIndex, body));
+    await _updSet(rec.pos, rec.setIndex, body);
   }
 
   /// Завершить инлайн-редактирование: убрать поле (клавиатура закроется вместе с
