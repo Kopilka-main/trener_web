@@ -1273,6 +1273,35 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
     }
   }
 
+  /// Удалить локальную (офлайн) тренировку, ждущую отправки на сервер — в т.ч.
+  /// «застрявшую» dead-letter (сервер никогда её не примет, см.
+  /// TrainerTemplatesNotifier.isUnsynced). Убирает элемент 'workout.import' из
+  /// очереди (если ещё там — независимо от статуса, включая failed) и сам
+  /// локальный документ; дальше карточка и счётчик синка обновляются.
+  Future<void> _deletePendingLocal(LocalWorkout d) async {
+    final bool ok = await confirmDelete(
+      context,
+      title: 'Удалить тренировку?',
+      message: '«${d.name}» будет удалена без отправки на сервер.',
+    );
+    if (!ok) return;
+    final Outbox outbox = ref.read(outboxProvider);
+    final List<OutboxItem> items = await outbox.list();
+    OutboxItem? queued;
+    for (final OutboxItem i in items) {
+      if (i.kind != 'workout.import') continue;
+      final Map<String, dynamic>? doc = (i.payload['doc'] as Map?)?.cast<String, dynamic>();
+      if (doc?['idempotencyKey'] == d.id) {
+        queued = i;
+        break;
+      }
+    }
+    if (queued != null) await outbox.remove(queued.id);
+    await ref.read(localWorkoutControllerProvider).purge(d.id);
+    ref.invalidate(pendingLocalWorkoutsProvider(_cid));
+    ref.invalidate(syncStatusProvider);
+  }
+
   /// Удалить назначенную тренировку (черновик/активную) у клиента.
   Future<void> _cancelWorkout(TWorkout w) async {
     final bool ok = await confirmDelete(
@@ -1680,7 +1709,11 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
       for (final LocalWorkout d in pendingLocals)
         (
           completedAt: d.completedAt,
-          build: () => _PendingHistoryCard(key: ValueKey<String>('pending-${d.id}'), doc: d),
+          build: () => _PendingHistoryCard(
+                key: ValueKey<String>('pending-${d.id}'),
+                doc: d,
+                onDelete: () => _deletePendingLocal(d),
+              ),
         ),
       for (final TWorkout w in history)
         (
@@ -1947,8 +1980,9 @@ class _HistoryCardState extends ConsumerState<_HistoryCard> {
 /// Показывается в истории до синка — нейтральная пометка «ждёт отправки»
 /// (без красного), состав берём прямо из локального документа (без сети).
 class _PendingHistoryCard extends StatefulWidget {
-  const _PendingHistoryCard({super.key, required this.doc});
+  const _PendingHistoryCard({super.key, required this.doc, required this.onDelete});
   final LocalWorkout doc;
+  final VoidCallback onDelete;
   @override
   State<_PendingHistoryCard> createState() => _PendingHistoryCardState();
 }
@@ -1964,62 +1998,79 @@ class _PendingHistoryCardState extends State<_PendingHistoryCard> {
     final LocalWorkout d = widget.doc;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Container(
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      child: Slidable(
+        key: ValueKey<String>('pending-hist-${d.id}'),
+        // Свайп влево → удалить (та же форма, что у серверной карточки истории).
+        endActionPane: ActionPane(
+          motion: const DrawerMotion(),
+          extentRatio: 0.28,
           children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 9, 10, 9),
-              child: Row(
-                children: <Widget>[
-                  Icon(Icons.fitness_center, size: 18, color: c.inkMuted),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => setState(() => _expanded = !_expanded),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(d.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
-                          Text(
-                            <String>[
-                              '${d.exercises.length} упр.',
-                              if ((d.durationSec ?? 0) > 0) _fmtDur(d.durationSec!),
-                            ].join(' · '),
-                            style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500),
-                          ),
-                        ],
+            SlidableAction(
+              onPressed: (_) => widget.onDelete(),
+              backgroundColor: c.danger,
+              foregroundColor: Colors.white,
+              icon: Icons.delete_outline,
+              label: 'Удалить',
+            ),
+          ],
+        ),
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 9, 10, 9),
+                child: Row(
+                  children: <Widget>[
+                    Icon(Icons.fitness_center, size: 18, color: c.inkMuted),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => setState(() => _expanded = !_expanded),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(d.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                            Text(
+                              <String>[
+                                '${d.exercises.length} упр.',
+                                if ((d.durationSec ?? 0) > 0) _fmtDur(d.durationSec!),
+                              ].join(' · '),
+                              style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: c.chip, borderRadius: BorderRadius.circular(10)),
-                    child: Text('ждёт отправки',
-                        style: AppFonts.mono(size: 10, color: c.inkMuted, weight: FontWeight.w700)),
-                  ),
-                  const SizedBox(width: 6),
-                  GestureDetector(
-                    onTap: () => setState(() => _expanded = !_expanded),
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(color: c.cardElevated, shape: BoxShape.circle),
-                      child: Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                          size: 18, color: c.inkMuted),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: c.chip, borderRadius: BorderRadius.circular(10)),
+                      child: Text('ждёт отправки',
+                          style: AppFonts.mono(size: 10, color: c.inkMuted, weight: FontWeight.w700)),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: () => setState(() => _expanded = !_expanded),
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(color: c.cardElevated, shape: BoxShape.circle),
+                        child: Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                            size: 18, color: c.inkMuted),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            if (_expanded) _composition(c, d),
-          ],
+              if (_expanded) _composition(c, d),
+            ],
+          ),
         ),
       ),
     );

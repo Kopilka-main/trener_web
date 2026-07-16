@@ -125,6 +125,51 @@ void main() {
     expect(await ctrl.load(w.id), isNull);
   });
 
+  test(
+      'удаление «ждёт отправки» (в т.ч. dead-letter): purge + элемент workout.import '
+      'исчезает из очереди', () async {
+    final w = await ctrl.createFromPlan(
+      clientId: 'cl1',
+      name: 'Общий шаблон',
+      sourceTemplateId: 'unsynced-local-uuid', // шаблон без серверного id (см. isUnsynced)
+      plan: [(exerciseId: 'ex1', name: 'Жим', set: planned(10))],
+    );
+    await ctrl.complete(w, durationSec: 600);
+
+    // Симулируем dead-letter: сервер отверг импорт (FK на несинканный шаблон)
+    // maxAttempts раз — элемент застрял как failed, drain() его больше не тронет.
+    final beforeQueue = await outbox.list();
+    expect(beforeQueue, hasLength(1));
+    final String outboxId = beforeQueue.first.id;
+    for (int i = 0; i < 5; i++) {
+      await outbox.markFailed(outboxId, 'FK violation: unknown sourceTemplateId');
+    }
+    final failedItem = (await outbox.list()).single;
+    expect(failedItem.status, OutboxStatus.failed);
+    expect(failedItem.attempts, 5);
+
+    // Свайп-удаление ждущей карточки: найти элемент очереди по kind+idempotencyKey
+    // (firstPending пропустил бы sending, но не failed — тут ищем по list()
+    // явно, т.к. элемент может быть в любом статусе, включая failed).
+    final List<OutboxItem> items = await outbox.list();
+    OutboxItem? queued;
+    for (final item in items) {
+      if (item.kind != 'workout.import') continue;
+      final doc = (item.payload['doc'] as Map).cast<String, dynamic>();
+      if (doc['idempotencyKey'] == w.id) {
+        queued = item;
+        break;
+      }
+    }
+    expect(queued, isNotNull);
+    await outbox.remove(queued!.id);
+    await ctrl.purge(w.id);
+
+    expect(await outbox.list(), isEmpty);
+    expect(await ctrl.pendingFor('cl1'), isEmpty);
+    expect(await ctrl.load(w.id), isNull);
+  });
+
   test('makeWorkoutImportHandler зовёт purge(id) после успешной отправки', () async {
     final List<String> sent = <String>[];
     final List<String> purged = <String>[];
