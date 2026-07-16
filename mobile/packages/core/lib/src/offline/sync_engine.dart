@@ -27,12 +27,16 @@ class SyncEngine {
     this._outbox, {
     required Map<String, SyncHandler> handlers,
     bool Function(Object error)? isOffline,
+    this.maxAttempts = 5,
   })  : _handlers = handlers,
         _isOffline = isOffline ?? ((e) => e is OfflineException);
 
   final Outbox _outbox;
   final Map<String, SyncHandler> _handlers;
   final bool Function(Object error) _isOffline;
+  /// Сколько раз переигрывать элемент, отвергнутый сервером (не сетевая
+  /// ошибка), прежде чем оставить его как dead-letter (не трогать на drain()).
+  final int maxAttempts;
 
   Future<SyncResult> drain() async {
     int sent = 0;
@@ -40,6 +44,11 @@ class SyncEngine {
     final items = await _outbox.list();
     for (final item in items) {
       if (item.status == OutboxStatus.sending) continue;
+      if (item.status == OutboxStatus.failed && item.attempts >= maxAttempts) {
+        // Отравленный элемент: сервер уже отверг его maxAttempts раз — дальше
+        // не переигрываем (dead-letter), чтобы не мусорить каждый drain().
+        continue;
+      }
       await _outbox.markSending(item.id);
       final handler = _handlers[item.kind];
       if (handler == null) {

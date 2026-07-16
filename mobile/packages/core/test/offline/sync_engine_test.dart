@@ -62,4 +62,33 @@ void main() {
     expect(left, hasLength(2));
     expect(left.first.status, OutboxStatus.pending);
   });
+
+  test('отравленный элемент (постоянный отказ сервера) перестаёт вызываться после maxAttempts', () async {
+    await outbox.enqueue(kind: 'bad', payload: {});
+    var calls = 0;
+    final engine = SyncEngine(
+      outbox,
+      handlers: {
+        'bad': (_) async {
+          calls++;
+          throw Exception('400');
+        },
+      },
+      maxAttempts: 3,
+    );
+    // 3 прогона drain() исчерпывают лимит попыток — обработчик вызывается 3 раза.
+    await engine.drain();
+    await engine.drain();
+    await engine.drain();
+    expect(calls, 3);
+    final afterLimit = await outbox.list();
+    expect(afterLimit.single.attempts, 3);
+    // Дальнейшие drain() не трогают dead-letter элемент.
+    await engine.drain();
+    await engine.drain();
+    expect(calls, 3);
+    final still = await outbox.list();
+    expect(still.single.status, OutboxStatus.failed);
+    expect(still.single.attempts, 3);
+  });
 }

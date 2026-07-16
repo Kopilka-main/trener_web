@@ -286,15 +286,24 @@ class LocalWorkoutController {
     String? sourceTemplateId,
     required List<({String exerciseId, String name, LocalSet set})> plan,
   }) async {
+    // Соседние (подряд идущие) записи плана с одинаковым exerciseId — это подходы
+    // ОДНОГО упражнения (шаблон «N подходов»): группируем их в один LocalExercise
+    // с несколькими LocalSet (setIndex 0..n), как делает онлайн-путь. Иначе
+    // «4 подхода» превращались бы в 4 отдельные позиции по 1 подходу.
     final exercises = <LocalExercise>[];
-    for (var i = 0; i < plan.length; i++) {
-      final p = plan[i];
-      exercises.add(LocalExercise(
-        position: i,
-        exerciseId: p.exerciseId,
-        name: p.name,
-        sets: [p.set..setIndex = 0],
-      ));
+    for (final p in plan) {
+      final LocalExercise? last = exercises.isEmpty ? null : exercises.last;
+      if (last != null && last.exerciseId == p.exerciseId) {
+        p.set.setIndex = last.sets.length;
+        last.sets.add(p.set);
+      } else {
+        exercises.add(LocalExercise(
+          position: exercises.length,
+          exerciseId: p.exerciseId,
+          name: p.name,
+          sets: [p.set..setIndex = 0],
+        ));
+      }
     }
     final w = LocalWorkout(
       id: _uuid.v4(),

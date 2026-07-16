@@ -189,7 +189,9 @@ class _ConductorState extends ConsumerState<_Conductor> {
     }
     // Раз в секунду обновляем таймер общего времени тренировки (пока active).
     _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted && !_loading && _w.status == WorkoutStatus.active) setState(() {});
+      if (mounted && !_loading && !_notFound && _w.status == WorkoutStatus.active) {
+        setState(() {});
+      }
     });
     // Пока открыт экран проведения — скрываем плавающий FAB; если тренировка
     // уже active — регистрируем её как «идущую» (только серверный режим: FAB и
@@ -285,6 +287,26 @@ class _ConductorState extends ConsumerState<_Conductor> {
     }
   }
 
+  /// Аналог [_run] для локальных действий (пишут на диск через контроллер, без
+  /// сети): busy-guard + пересчёт рендер-модели ([_sync]) при успехе, при
+  /// ошибке — SnackBar «Не удалось сохранить» и сброс _busy (иначе бросок при
+  /// записи на диск проглатывался бы и busy застревал бы навсегда).
+  Future<void> _runLocal(Future<void> Function() action) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    try {
+      await action();
+      if (!mounted) return;
+      _sync();
+      setState(() => _busy = false);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      m.showSnackBar(const SnackBar(content: Text('Не удалось сохранить')));
+    }
+  }
+
   /// Сохранить плановый подход без busy-блокировки (правка полей в черновике),
   /// чтобы не блокировать кнопку «Начать».
   Future<void> _savePlanned(WorkoutExercise ex, WorkoutSet s, Map<String, dynamic> body) async {
@@ -343,19 +365,18 @@ class _ConductorState extends ConsumerState<_Conductor> {
             if (ex == null) continue;
             for (int i = 0; i < e.value; i++) {
               if (_isLocal) {
-                await _ctrl.addExercise(
-                  _doc!,
-                  exerciseId: ex.id,
-                  name: ex.name,
-                  set: LocalSet(
-                    setIndex: 0,
-                    plannedReps: ex.defaultReps,
-                    plannedWeightKg: ex.defaultWeightKg,
-                    plannedTimeSec: ex.defaultTimeSec,
-                    plannedRestSec: ex.restSec ?? 90,
-                  ),
-                );
-                _sync();
+                await _runLocal(() => _ctrl.addExercise(
+                      _doc!,
+                      exerciseId: ex.id,
+                      name: ex.name,
+                      set: LocalSet(
+                        setIndex: 0,
+                        plannedReps: ex.defaultReps,
+                        plannedWeightKg: ex.defaultWeightKg,
+                        plannedTimeSec: ex.defaultTimeSec,
+                        plannedRestSec: ex.restSec ?? 90,
+                      ),
+                    ));
               } else {
                 await _run(() => _api.addExercise(_clientId, _w.id, ex));
               }
@@ -424,17 +445,16 @@ class _ConductorState extends ConsumerState<_Conductor> {
   /// Обновление подхода: локально — через контроллер (+пересчёт), иначе серверно.
   Future<void> _updSet(int pos, int setIndex, Map<String, dynamic> body) async {
     if (_isLocal) {
-      await _ctrl.updateSet(
-        _doc!,
-        pos,
-        setIndex,
-        actualReps: body['actualReps'] as num?,
-        actualWeightKg: body['actualWeightKg'] as num?,
-        actualTimeSec: body['actualTimeSec'] as num?,
-        plannedRestSec: body['plannedRestSec'] as num?,
-        done: body['done'] as bool?,
-      );
-      _sync();
+      await _runLocal(() => _ctrl.updateSet(
+            _doc!,
+            pos,
+            setIndex,
+            actualReps: body['actualReps'] as num?,
+            actualWeightKg: body['actualWeightKg'] as num?,
+            actualTimeSec: body['actualTimeSec'] as num?,
+            plannedRestSec: body['plannedRestSec'] as num?,
+            done: body['done'] as bool?,
+          ));
     } else {
       await _run(() => _api.updateSet(_clientId, _w.id, pos, setIndex, body));
     }
@@ -458,8 +478,7 @@ class _ConductorState extends ConsumerState<_Conductor> {
   Future<void> _addSetCopy(int pos, WorkoutSet s) async {
     HapticFeedback.lightImpact();
     if (_isLocal) {
-      await _ctrl.addSet(_doc!, pos);
-      _sync();
+      await _runLocal(() => _ctrl.addSet(_doc!, pos));
     } else {
       await _run(() => _api.addSet(_clientId, _w.id, pos, s));
     }
@@ -470,19 +489,18 @@ class _ConductorState extends ConsumerState<_Conductor> {
   Future<void> _confirmDeleteSet(int pos, WorkoutSet s) async {
     if (!await confirmDelete(context, title: 'Удалить подход?')) return;
     if (_isLocal) {
-      await _ctrl.deleteSet(_doc!, pos, s.setIndex);
-      _sync();
+      await _runLocal(() => _ctrl.deleteSet(_doc!, pos, s.setIndex));
     } else {
       await _run(() => _api.deleteSet(_clientId, _w.id, pos, s.setIndex));
     }
   }
 
   /// Перестановка блоков упражнений (order — старые позиции в новом порядке).
-  void _reorder(List<int> order) {
+  Future<void> _reorder(List<int> order) async {
     if (_isLocal) {
-      _ctrl.reorder(_doc!, order).then((_) => _sync());
+      await _runLocal(() => _ctrl.reorder(_doc!, order));
     } else {
-      _run(() => _api.reorderExercises(_clientId, _w.id, order));
+      await _run(() => _api.reorderExercises(_clientId, _w.id, order));
     }
   }
 
@@ -891,7 +909,10 @@ class _ConductorState extends ConsumerState<_Conductor> {
   /// Сохранить значение показателя [rec] из текущего текста поля (не трогает
   /// _editingMetric — используется и при переключении на другую метрику).
   Future<void> _saveMetricValue(({int pos, int setIndex, _MetricKind kind}) rec) async {
-    final num value = num.tryParse(_metricCtrl.text.trim().replaceAll(',', '.')) ?? 0;
+    final num raw = num.tryParse(_metricCtrl.text.trim().replaceAll(',', '.')) ?? 0;
+    // Сервер требует ПОВТОРЫ/ВРЕМЯ/ОТДЫХ целыми (иначе синк даёт 400) — ВЕС
+    // остаётся дробным.
+    final num value = rec.kind == _MetricKind.weight ? raw : raw.round();
     final Map<String, dynamic> body = switch (rec.kind) {
       _MetricKind.reps => <String, dynamic>{'actualReps': value},
       _MetricKind.weight => <String, dynamic>{'actualWeightKg': value},

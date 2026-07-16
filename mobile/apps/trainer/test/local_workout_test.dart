@@ -78,6 +78,23 @@ void main() {
     expect(await ctrl.activeFor('cl1'), isEmpty);
   });
 
+  test('createFromPlan группирует подряд идущие записи одного exerciseId в один LocalExercise', () async {
+    final w = await ctrl.createFromPlan(
+      clientId: 'cl1',
+      name: 'Верх',
+      plan: [
+        (exerciseId: 'ex1', name: 'Жим', set: planned(10)),
+        (exerciseId: 'ex1', name: 'Жим', set: planned(8)),
+      ],
+    );
+    expect(w.exercises, hasLength(1));
+    expect(w.exercises.first.sets, hasLength(2));
+    expect(w.exercises.first.sets[0].setIndex, 0);
+    expect(w.exercises.first.sets[1].setIndex, 1);
+    expect(w.exercises.first.sets[0].plannedReps, 10);
+    expect(w.exercises.first.sets[1].plannedReps, 8);
+  });
+
   test('toWorkout отражает документ для UI', () async {
     final w = await ctrl.createFromPlan(
       clientId: 'cl1',
