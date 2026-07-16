@@ -220,6 +220,14 @@ class TrainerTemplatesNotifier extends CachedListNotifier<WorkoutTemplate> {
       .firstPending((OutboxItem i) =>
           i.kind == 'template.create' && i.payload['clientLocalId'] == localId);
 
+  /// Шаблон [templateId] ещё НЕ синкан на сервер (в очереди висит его ещё не
+  /// отправленный `template.create`) — у него только клиентский uuid, серверного
+  /// id нет. Слать такой id как `sourceTemplateId` при импорте тренировки нельзя:
+  /// сервер отвергнет импорт (FK на несуществующий шаблон) навсегда (не сетевая
+  /// ошибка → dead-letter после исчерпания попыток слива).
+  Future<bool> isUnsynced(String templateId) async =>
+      await _pendingCreateFor(templateId) != null;
+
   /// Создать шаблон офлайн-безопасно: оптимистичная карточка (клиентский uuid,
   /// имена упражнений из каталога) сразу в state+кэш, элемент очереди
   /// 'template.create'. [clientId] задан → персональный шаблон.

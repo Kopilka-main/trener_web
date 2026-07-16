@@ -152,6 +152,24 @@ void main() {
     expect(queue.first['kind'], 'template.create');
   });
 
+  test('isUnsynced: true для шаблона с висящим template.create, false для серверного id', () async {
+    await container.read(trainerTemplatesProvider.notifier).createOffline(<String, dynamic>{
+      'name': 'Кардио',
+      'categoryTag': null,
+      'shortDescription': null,
+      'exercises': <Map<String, dynamic>>[],
+    });
+    final String localId = (container.read(trainerTemplatesProvider).valueOrNull ?? <WorkoutTemplate>[])
+        .firstWhere((WorkoutTemplate t) => t.name == 'Кардио')
+        .id;
+
+    // Не синкан (create ещё висит в очереди, сеть недоступна в _FakeTemplateApi.succeed=false).
+    expect(await container.read(trainerTemplatesProvider.notifier).isUnsynced(localId), true);
+
+    // Обычный серверный id (никакого create в очереди с таким clientLocalId нет).
+    expect(await container.read(trainerTemplatesProvider.notifier).isUnsynced('srv_random_id'), false);
+  });
+
   test('createOffline+deleteOffline того же id (не синкан) → очередь пуста', () async {
     await container.read(trainerTemplatesProvider.notifier).createOffline(<String, dynamic>{
       'name': 'Ноги',

@@ -1169,10 +1169,18 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
     final NavigatorState nav = Navigator.of(context);
     final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
     try {
+      // Шаблон ещё не синкан (только клиентский uuid, серверного id нет) →
+      // не слать его id в импорт: сервер отвергнет навсегда (FK), и тренировка
+      // застрянет «ждёт отправки» без возможности слиться. Связь с шаблоном
+      // второстепенна — лучше импортировать без неё.
+      final String? safeSourceTemplateId = (sourceTemplateId != null &&
+              await ref.read(trainerTemplatesProvider.notifier).isUnsynced(sourceTemplateId))
+          ? null
+          : sourceTemplateId;
       final LocalWorkout w = await ref.read(localWorkoutControllerProvider).createFromPlan(
             clientId: _cid,
             name: name,
-            sourceTemplateId: sourceTemplateId,
+            sourceTemplateId: safeSourceTemplateId,
             plan: _mapsToPlan(exercises),
           );
       ref.invalidate(localWorkoutsProvider(_cid));
