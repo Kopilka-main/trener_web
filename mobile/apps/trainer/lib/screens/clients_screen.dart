@@ -1583,6 +1583,12 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
           final List<LocalWorkout> locals =
               ref.watch(localWorkoutsProvider(_cid)).valueOrNull ?? <LocalWorkout>[];
 
+          // Завершённые ЛОКАЛЬНЫЕ документы, ещё ждущие отправки на сервер —
+          // подмешиваем в историю (нейтральная пометка «ждёт отправки»), чтобы
+          // проведённая офлайн тренировка не пропадала из вида до синка.
+          final List<LocalWorkout> pendingLocals =
+              ref.watch(pendingLocalWorkoutsProvider(_cid)).valueOrNull ?? <LocalWorkout>[];
+
           // Ближайшее запланированное занятие клиента (дата/время) — для подзаголовка.
           final Session? nextSess =
               _nextSessionByClient(ref.watch(trainerSessionsProvider).valueOrNull ?? <Session>[])[_cid];
@@ -1613,12 +1619,12 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
                   onTemplate: _pickTemplate,
                   onCreateTemplate: _createTemplate,
                 ),
-              if (history.isNotEmpty) ...<Widget>[
+              if (history.isNotEmpty || pendingLocals.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 20),
-                Text('ИСТОРИЯ ТРЕНИРОВОК · ${history.length}',
+                Text('ИСТОРИЯ ТРЕНИРОВОК · ${history.length + pendingLocals.length}',
                     style: AppFonts.mono(size: 11, color: c.inkMutedXl, weight: FontWeight.w700)),
                 const SizedBox(height: 8),
-                ..._historyGrouped(c, history),
+                ..._historyGrouped(c, history, pendingLocals),
               ],
               // Ретро-запись уже проведённой тренировки в историю клиента.
               const SizedBox(height: 16),
@@ -1648,11 +1654,38 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
     );
   }
 
-  List<Widget> _historyGrouped(AppColors c, List<TWorkout> history) {
+  /// Собирает историю тренера (сервер) и локальные документы, ждущие
+  /// отправки, в ЕДИНУЮ ленту, сгруппированную по дате завершения (desc) —
+  /// офлайн-записи должны встать на своё хронологическое место, а не отдельным
+  /// блоком.
+  List<Widget> _historyGrouped(
+      AppColors c, List<TWorkout> history, List<LocalWorkout> pendingLocals) {
+    final List<({DateTime? completedAt, Widget Function() build})> rows =
+        <({DateTime? completedAt, Widget Function() build})>[
+      for (final LocalWorkout d in pendingLocals)
+        (
+          completedAt: d.completedAt,
+          build: () => _PendingHistoryCard(key: ValueKey<String>('pending-${d.id}'), doc: d),
+        ),
+      for (final TWorkout w in history)
+        (
+          completedAt: w.completedAt,
+          build: () => _HistoryCard(
+                key: ValueKey<String>(w.id),
+                workout: w,
+                clientId: _cid,
+                busy: _busy,
+                onRepeat: () => _repeatWorkout(w),
+                onEdit: () => _openConduct(w.id),
+                onDelete: () => _cancelWorkout(w),
+              ),
+        ),
+    ]..sort((a, b) => (b.completedAt ?? DateTime(0)).compareTo(a.completedAt ?? DateTime(0)));
+
     final List<Widget> out = <Widget>[];
     String? lastDate;
-    for (final TWorkout w in history) {
-      final DateTime? d = w.completedAt;
+    for (final ({DateTime? completedAt, Widget Function() build}) row in rows) {
+      final DateTime? d = row.completedAt;
       final String key = d != null
           ? '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}'
           : 'Без даты';
@@ -1663,15 +1696,7 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
         ));
         lastDate = key;
       }
-      out.add(_HistoryCard(
-        key: ValueKey<String>(w.id),
-        workout: w,
-        clientId: _cid,
-        busy: _busy,
-        onRepeat: () => _repeatWorkout(w),
-        onEdit: () => _openConduct(w.id),
-        onDelete: () => _cancelWorkout(w),
-      ));
+      out.add(row.build());
     }
     return out;
   }
@@ -1896,6 +1921,118 @@ class _HistoryCardState extends ConsumerState<_HistoryCard> {
           );
         },
       ),
+    );
+  }
+}
+
+/// Карточка завершённой ОФЛАЙН тренировки, ещё не отправленной на сервер.
+/// Показывается в истории до синка — нейтральная пометка «ждёт отправки»
+/// (без красного), состав берём прямо из локального документа (без сети).
+class _PendingHistoryCard extends StatefulWidget {
+  const _PendingHistoryCard({super.key, required this.doc});
+  final LocalWorkout doc;
+  @override
+  State<_PendingHistoryCard> createState() => _PendingHistoryCardState();
+}
+
+class _PendingHistoryCardState extends State<_PendingHistoryCard> {
+  bool _expanded = false;
+
+  String _fmtDur(int sec) => sec < 60 ? '$sec с' : calHumanDuration(sec ~/ 60);
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    final LocalWorkout d = widget.doc;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(14)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 9, 10, 9),
+              child: Row(
+                children: <Widget>[
+                  Icon(Icons.fitness_center, size: 18, color: c.inkMuted),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => setState(() => _expanded = !_expanded),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(d.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                          Text(
+                            <String>[
+                              '${d.exercises.length} упр.',
+                              if ((d.durationSec ?? 0) > 0) _fmtDur(d.durationSec!),
+                            ].join(' · '),
+                            style: AppFonts.mono(size: 12, color: c.inkMuted, weight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(color: c.chip, borderRadius: BorderRadius.circular(10)),
+                    child: Text('ждёт отправки',
+                        style: AppFonts.mono(size: 10, color: c.inkMuted, weight: FontWeight.w700)),
+                  ),
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: () => setState(() => _expanded = !_expanded),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(color: c.cardElevated, shape: BoxShape.circle),
+                      child: Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                          size: 18, color: c.inkMuted),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (_expanded) _composition(c, d),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _composition(AppColors c, LocalWorkout d) {
+    // Только упражнения с ≥1 ВЫПОЛНЕННЫМ подходом (пропущенные не показываем) —
+    // как у серверной карточки истории.
+    final List<LocalExercise> exs = d.exercises
+        .where((LocalExercise ex) => ex.sets.any((LocalSet s) => s.done))
+        .toList()
+      ..sort((LocalExercise a, LocalExercise b) => a.position - b.position);
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(border: Border(top: BorderSide(color: c.line))),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+      child: exs.isEmpty
+          ? Text('Нет выполненных упражнений', style: TextStyle(fontSize: 12, color: c.inkMuted))
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                for (final LocalExercise ex in exs)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Text(ex.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: c.ink)),
+                  ),
+              ],
+            ),
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:core/core.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:trener_trainer/api/local_workout.dart';
+import 'package:trener_trainer/api/offline_providers.dart';
 
 class _FakeStore implements KvStore {
   final Map<String, List<Map<String, dynamic>>> _d = {};
@@ -93,6 +94,60 @@ void main() {
     expect(w.exercises.first.sets[1].setIndex, 1);
     expect(w.exercises.first.sets[0].plannedReps, 10);
     expect(w.exercises.first.sets[1].plannedReps, 8);
+  });
+
+  test('complete → документ в pendingFor(clientId) и НЕ в activeFor', () async {
+    final w = await ctrl.createFromPlan(
+      clientId: 'cl1',
+      name: 'В',
+      plan: [(exerciseId: 'ex1', name: 'Жим', set: planned(10))],
+    );
+    await ctrl.complete(w, durationSec: 100);
+    final pending = await ctrl.pendingFor('cl1');
+    expect(pending.map((e) => e.id), contains(w.id));
+    expect(pending.first.status, 'completed');
+    // Скоуплен по клиенту.
+    expect(await ctrl.pendingFor('cl2'), isEmpty);
+    final active = await ctrl.activeFor('cl1');
+    expect(active.map((e) => e.id), isNot(contains(w.id)));
+  });
+
+  test('purge удаляет документ и запись индекса', () async {
+    final w = await ctrl.createFromPlan(
+      clientId: 'cl1',
+      name: 'В',
+      plan: [(exerciseId: 'ex1', name: 'Жим', set: planned(10))],
+    );
+    await ctrl.complete(w, durationSec: 100);
+    await ctrl.purge(w.id);
+    expect(await ctrl.pendingFor('cl1'), isEmpty);
+    expect(await ctrl.activeFor('cl1'), isEmpty);
+    expect(await ctrl.load(w.id), isNull);
+  });
+
+  test('makeWorkoutImportHandler зовёт purge(id) после успешной отправки', () async {
+    final List<String> sent = <String>[];
+    final List<String> purged = <String>[];
+    final handler = makeWorkoutImportHandler(
+      (String clientId, Map<String, dynamic> doc) async {
+        sent.add(doc['idempotencyKey'] as String);
+      },
+      (String id) async {
+        purged.add(id);
+      },
+    );
+    final item = OutboxItem(
+      id: 'i1',
+      kind: 'workout.import',
+      createdAt: 0,
+      payload: <String, dynamic>{
+        'clientId': 'cl1',
+        'doc': <String, dynamic>{'idempotencyKey': 'w1', 'status': 'completed'},
+      },
+    );
+    await handler(item);
+    expect(sent, <String>['w1']);
+    expect(purged, <String>['w1']);
   });
 
   test('toWorkout отражает документ для UI', () async {

@@ -9,15 +9,19 @@ import 'local_workout.dart';
 import 'trainer_catalog.dart';
 import 'trainer_workouts.dart';
 
-/// Обработчик элемента 'workout.import': достаёт clientId+doc и шлёт через sender.
-/// Выделен для тестируемости (sender инъектируется).
+/// Обработчик элемента 'workout.import': достаёт clientId+doc и шлёт через
+/// sender; после УСПЕШНОЙ отправки зовёт purge(id) — убрать локальный
+/// документ (дальше история берётся с сервера). sender и purge инъектируются
+/// по отдельности для тестируемости (провайдеры внутрь фабрики не тянем).
 SyncHandler makeWorkoutImportHandler(
   Future<void> Function(String clientId, Map<String, dynamic> doc) sender,
+  Future<void> Function(String id) purge,
 ) {
   return (OutboxItem item) async {
     final clientId = item.payload['clientId'] as String;
     final doc = (item.payload['doc'] as Map).cast<String, dynamic>();
     await sender(clientId, doc);
+    await purge(doc['idempotencyKey'] as String);
   };
 }
 
@@ -33,6 +37,12 @@ final localWorkoutControllerProvider = Provider<LocalWorkoutController>(
 /// по инвалидации после создания/завершения проведения.
 final localWorkoutsProvider = FutureProvider.family<List<LocalWorkout>, String>(
   (ref, String clientId) => ref.read(localWorkoutControllerProvider).activeFor(clientId),
+);
+
+/// Завершённые локальные документы клиента, ещё ждущие отправки (импорта) —
+/// подмешиваются в историю до синка (см. `LocalWorkoutController.pendingFor`).
+final pendingLocalWorkoutsProvider = FutureProvider.family<List<LocalWorkout>, String>(
+  (ref, String clientId) => ref.read(localWorkoutControllerProvider).pendingFor(clientId),
 );
 
 /// online = есть сетевой интерфейс И бэкенд реально отвечает. Пересчёт при смене
@@ -72,7 +82,10 @@ final syncEngineProvider = Provider<SyncEngine>((ref) {
     ref.read(outboxProvider),
     isOffline: isOfflineError,
     handlers: {
-      'workout.import': makeWorkoutImportHandler(api.importWorkout),
+      'workout.import': makeWorkoutImportHandler(
+        api.importWorkout,
+        ref.read(localWorkoutControllerProvider).purge,
+      ),
       'template.create': makeTemplateCreateHandler(catalogApi),
       'template.update': makeTemplateUpdateHandler(catalogApi),
       'template.delete': makeTemplateDeleteHandler(catalogApi),

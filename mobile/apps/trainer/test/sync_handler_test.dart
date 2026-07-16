@@ -9,7 +9,7 @@ void main() {
     final handler = makeWorkoutImportHandler((clientId, doc) async {
       gotClient = clientId;
       gotDoc = doc;
-    });
+    }, (id) async {});
     final item = OutboxItem(
       id: 'i1',
       kind: 'workout.import',

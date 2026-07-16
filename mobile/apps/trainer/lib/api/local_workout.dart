@@ -410,7 +410,10 @@ class LocalWorkoutController {
     }
   }
 
-  /// Завершить: пометить completed и поставить в очередь на импорт.
+  /// Завершить: пометить completed и поставить в очередь на импорт. Индекс НЕ
+  /// чистим — статус в нём обновляется на completed, чтобы документ остался
+  /// виден в истории (pendingFor) до успешной отправки. `activeFor` уже
+  /// фильтрует completed, так что «продолжить» не подхватит завершённый.
   Future<void> complete(LocalWorkout w, {int? durationSec}) async {
     w.status = 'completed';
     w.completedAt = DateTime.now();
@@ -419,11 +422,35 @@ class LocalWorkoutController {
             ? DateTime.now().difference(w.startedAt!).inSeconds
             : null);
     await _save(w);
+    await _indexUpsert(w);
     await _outbox.enqueue(
       kind: 'workout.import',
       payload: <String, dynamic>{'clientId': w.clientId, 'doc': w.toImportPayload()},
     );
-    // Документ ушёл в очередь на импорт — убираем из индекса активных.
-    await _indexRemove(w.id);
+  }
+
+  /// Завершённые локальные документы клиента, ещё ждущие импорта (статус
+  /// completed в индексе = ещё не отправлены). Подмешиваются в историю с
+  /// пометкой «ждёт отправки» до purge().
+  Future<List<LocalWorkout>> pendingFor(String clientId) async {
+    final List<Map<String, dynamic>> idx = await _readIndex();
+    final List<String> ids = <String>[
+      for (final Map<String, dynamic> e in idx)
+        if (e['clientId'] == clientId && (e['status'] as String? ?? '') == 'completed')
+          e['id'] as String,
+    ];
+    final List<LocalWorkout> out = <LocalWorkout>[];
+    for (final String id in ids) {
+      final LocalWorkout? w = await load(id);
+      if (w != null && w.status == 'completed') out.add(w);
+    }
+    return out;
+  }
+
+  /// Убрать документ и запись индекса — вызывается ПОСЛЕ успешной отправки
+  /// на сервер (дальше история клиента берётся уже с сервера).
+  Future<void> purge(String id) async {
+    await _store.writeList(_key(id), <Map<String, dynamic>>[]);
+    await _indexRemove(id);
   }
 }
