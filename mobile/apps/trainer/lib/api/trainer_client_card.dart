@@ -1,6 +1,8 @@
 import 'package:core/core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'offline_providers.dart';
+
 DateTime? _dt(String? s) => s != null ? DateTime.tryParse(s)?.toLocal() : null;
 
 /// Один платёж графика рассрочки.
@@ -197,10 +199,11 @@ class TrainerClientCardApi {
   /// Список тренировок клиента — cache-first: успех сети кэшируем под
   /// `client_workouts_<id>`; офлайн отдаём из кэша (иначе экран «Тренировки»
   /// уходил бы в ошибку и до кнопки «Провести» было не добраться). Нет кэша
-  /// офлайн — пустой список (экран рендерится, локальное проведение доступно).
+  /// офлайн — пробрасываем исходную ошибку (не сетевые — 404/500 — тоже
+  /// пробрасываем как есть, без кэша), как в `TrainerWorkoutsApi.fetch`.
   Future<List<TWorkout>> workouts(String clientId) async {
+    final KvStore store = _ref.read(kvStoreProvider);
     final String key = 'client_workouts_$clientId';
-    final KvStore store = LocalJsonStore.instance;
     try {
       final Map<String, dynamic> r = await _api.getJson('/api/clients/$clientId/workouts');
       final List<Map<String, dynamic>> raw =
@@ -210,7 +213,7 @@ class TrainerClientCardApi {
     } catch (e) {
       if (!isOfflineError(e)) rethrow;
       final List<Map<String, dynamic>>? cached = await store.readList(key);
-      if (cached == null) return <TWorkout>[];
+      if (cached == null) rethrow;
       return _parseWorkouts(cached);
     }
   }
