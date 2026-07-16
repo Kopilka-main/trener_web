@@ -70,7 +70,8 @@ class HelpScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Помощь с приложением')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        // Низ учитывает резерв под глобальное меню навигации.
+        padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 16),
         children: <Widget>[
           const _SectionHeader(icon: Icons.help_outline, title: 'Частые вопросы'),
           const SizedBox(height: 10),

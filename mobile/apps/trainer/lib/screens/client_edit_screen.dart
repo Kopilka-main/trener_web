@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../api/trainer_clients.dart';
+import 'connect_scan_screen.dart';
 
 /// Типы контактов и их оформление (зеркало веб CONTACT_ADD).
 class _ContactType {
@@ -625,7 +626,23 @@ Future<String?> _showConnectDialog(BuildContext context, {String? excludeClientI
               SelectAllTextField(
                 controller: code,
                 autofocus: true,
-                decoration: const InputDecoration(labelText: 'Код из приложения клиента', border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                  labelText: 'Код из приложения клиента',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    tooltip: 'Сканировать QR-код',
+                    icon: const Icon(Icons.qr_code_scanner),
+                    onPressed: () async {
+                      final String? scanned = await scanConnectCode(ctx);
+                      if (scanned != null) {
+                        setLocal(() {
+                          code.text = scanned;
+                          error = null;
+                        });
+                      }
+                    },
+                  ),
+                ),
               ),
               if (error != null) ...<Widget>[
                 const SizedBox(height: 8),

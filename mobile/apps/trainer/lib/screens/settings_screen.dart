@@ -507,6 +507,9 @@ class _ThemeSwitch extends ConsumerWidget {
           SizedBox(
             width: double.infinity,
             child: SegmentedButton<ThemeMode>(
+              // Без галочки у выбранного — иначе она сдвигает текст и «Светлая»
+              // переносится на две строки; выбор показываем только заливкой.
+              showSelectedIcon: false,
               segments: const <ButtonSegment<ThemeMode>>[
                 ButtonSegment<ThemeMode>(value: ThemeMode.system, label: Text('Система')),
                 ButtonSegment<ThemeMode>(value: ThemeMode.light, label: Text('Светлая')),

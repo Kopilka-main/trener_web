@@ -23,6 +23,7 @@ import 'active_workout_screen.dart';
 import 'calendar_screen.dart';
 import 'client_edit_screen.dart';
 import 'client_medical_screen.dart';
+import 'connect_scan_screen.dart';
 import 'exercise_progress.dart';
 import 'template_edit_screen.dart';
 
@@ -1040,7 +1041,18 @@ Future<String?> _showConnectDialog(BuildContext context) {
             SelectAllTextField(
               controller: code,
               autofocus: true,
-              decoration: const InputDecoration(labelText: 'ID клиента', border: OutlineInputBorder()),
+              decoration: InputDecoration(
+                labelText: 'ID клиента',
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  tooltip: 'Сканировать QR-код',
+                  icon: const Icon(Icons.qr_code_scanner),
+                  onPressed: () async {
+                    final String? scanned = await scanConnectCode(ctx);
+                    if (scanned != null) code.text = scanned;
+                  },
+                ),
+              ),
             ),
           ],
         ),
