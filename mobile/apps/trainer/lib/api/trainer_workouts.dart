@@ -2,6 +2,7 @@ import 'package:core/core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'active_workout_pointer.dart';
+import 'offline_providers.dart';
 import 'trainer_assign.dart';
 
 /// Статус тренировки (зеркало workoutStatusSchema).
@@ -142,9 +143,27 @@ class TrainerWorkoutsApi {
   Future<Workout> _unwrap(Map<String, dynamic> r) =>
       Future<Workout>.value(Workout.fromJson((r['workout'] as Map<String, dynamic>?) ?? <String, dynamic>{}));
 
+  /// Ключ кэша полной детали тренировки (для повтора из истории офлайн).
+  String _detailCacheKey(String wid) => 'workout_detail_$wid';
+
+  /// Загрузить деталь тренировки. Успех сети — кэшируем сырой объект под
+  /// `workout_detail_<id>` (нужен для сборки плана повтора офлайн). Сетевая
+  /// ошибка — отдаём из кэша, если он есть; иначе пробрасываем исходную ошибку
+  /// (не сетевые ошибки — 404/500 — тоже пробрасываем как есть, без кэша).
   Future<Workout> fetch(String clientId, String wid) async {
-    final Map<String, dynamic> r = await _api.getJson(_base(clientId, wid));
-    return _unwrap(r);
+    final KvStore store = _ref.read(kvStoreProvider);
+    final String key = _detailCacheKey(wid);
+    try {
+      final Map<String, dynamic> r = await _api.getJson(_base(clientId, wid));
+      final Map<String, dynamic> raw = (r['workout'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+      await store.writeList(key, <Map<String, dynamic>>[raw]);
+      return _unwrap(r);
+    } catch (e) {
+      if (!isOfflineError(e)) rethrow;
+      final List<Map<String, dynamic>>? cached = await store.readList(key);
+      if (cached == null || cached.isEmpty) rethrow;
+      return _unwrap(<String, dynamic>{'workout': cached.first});
+    }
   }
 
   /// Удалить тренировку (отменить назначенную/черновик). Если удаляемая —
