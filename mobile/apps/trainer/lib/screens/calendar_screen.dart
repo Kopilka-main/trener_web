@@ -9,6 +9,7 @@ import '../api/trainer_clients.dart';
 import '../api/trainer_home.dart';
 import '../api/trainer_workouts.dart';
 import '../widgets/nav_bar.dart';
+import '../widgets/no_connection_view.dart';
 import 'active_workout_screen.dart';
 import 'clients_screen.dart' show ClientDetailScreen;
 import 'session_form.dart';
@@ -107,7 +108,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 skipLoadingOnRefresh: true,
                 skipLoadingOnReload: true,
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (Object e, _) => _Retry(onRetry: () => ref.invalidate(trainerSessionsProvider)),
+                error: (Object e, _) => isOfflineError(e)
+                    ? NoConnectionView(onRetry: () => ref.invalidate(trainerSessionsProvider))
+                    : _Retry(onRetry: () => ref.invalidate(trainerSessionsProvider)),
                 data: (List<Session> raw) {
                   // ОБЩИЙ календарь тренера (с главной): онлайн скрыты — только очные.
                   // КЛИЕНТСКИЙ (scoped): показываем ВСЕ занятия тренера — занятия

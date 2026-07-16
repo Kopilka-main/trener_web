@@ -6,6 +6,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import '../api/trainer_assign.dart';
 import '../api/trainer_catalog.dart';
 import '../widgets/nav_bar.dart';
+import '../widgets/no_connection_view.dart';
 import 'exercise_edit_screen.dart';
 import 'template_edit_screen.dart';
 
@@ -155,7 +156,7 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
     final AsyncValue<List<TExercise>> catalog = ref.watch(trainerCatalogProvider);
     return catalog.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (Object e, _) => _err(c, () => ref.invalidate(trainerCatalogProvider)),
+      error: (Object e, _) => _err(c, e, () => ref.invalidate(trainerCatalogProvider)),
       data: (List<TExercise> all) {
         final List<String> groups = <String>{
           for (final TExercise e in all)
@@ -268,7 +269,7 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
     final AsyncValue<List<WorkoutTemplate>> templates = ref.watch(trainerTemplatesProvider);
     return templates.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (Object e, _) => _err(c, () => ref.invalidate(trainerTemplatesProvider)),
+      error: (Object e, _) => _err(c, e, () => ref.invalidate(trainerTemplatesProvider)),
       data: (List<WorkoutTemplate> all) {
         // Общие/персональные по clientId. Чипы categoryTag — только для общих.
         final List<WorkoutTemplate> general =
@@ -372,16 +373,18 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
   Widget _empty(AppColors c, String text) =>
       Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(text, textAlign: TextAlign.center, style: TextStyle(color: c.inkMuted))));
 
-  Widget _err(AppColors c, VoidCallback retry) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text('Не удалось загрузить', style: TextStyle(color: c.inkMuted)),
-            const SizedBox(height: 12),
-            FilledButton(onPressed: retry, child: const Text('Повторить')),
-          ],
-        ),
-      );
+  Widget _err(AppColors c, Object error, VoidCallback retry) => isOfflineError(error)
+      ? NoConnectionView(onRetry: retry)
+      : Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text('Не удалось загрузить', style: TextStyle(color: c.inkMuted)),
+              const SizedBox(height: 12),
+              FilledButton(onPressed: retry, child: const Text('Повторить')),
+            ],
+          ),
+        );
 }
 
 /// Строка шаблона тренировки в базе знаний: свайп влево — [Дубль][Ред.][Удал.];

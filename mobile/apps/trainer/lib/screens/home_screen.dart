@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../api/trainer_home.dart';
 import '../api/trainer_notifications.dart';
+import '../widgets/no_connection_view.dart';
 import 'active_workout_screen.dart';
 
 String _pad2(int n) => n.toString().padLeft(2, '0');
@@ -60,18 +61,20 @@ class HomeScreen extends ConsumerWidget {
       body: SafeArea(
         child: home.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (Object e, _) => Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                const Text('Не удалось загрузить главную'),
-                const SizedBox(height: 12),
-                FilledButton(
-                    onPressed: () => ref.invalidate(trainerHomeProvider),
-                    child: const Text('Повторить')),
-              ],
-            ),
-          ),
+          error: (Object e, _) => isOfflineError(e)
+              ? NoConnectionView(onRetry: () => ref.invalidate(trainerHomeProvider))
+              : Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      const Text('Не удалось загрузить главную'),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                          onPressed: () => ref.invalidate(trainerHomeProvider),
+                          child: const Text('Повторить')),
+                    ],
+                  ),
+                ),
           data: (HomeData d) {
             // Один acid-fill: непрочитанные сообщения в приоритете (как в вебе),
             // иначе — уведомления. Плитка «Сообщения» акцентна при unread > 0.

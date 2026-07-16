@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/trainer_clients.dart';
+import '../widgets/no_connection_view.dart';
 
 /// Превью аккаунта по коду из QR (кэшируется по коду, чтобы «Повторить»
 /// перезагружало через invalidate).
@@ -80,10 +81,12 @@ class _LinkConfirmScreenState extends ConsumerState<LinkConfirmScreen> {
       body: SafeArea(
         child: preview.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (Object e, _) => _ErrorState(
-            message: describeApiError(e, fallback: 'Не удалось загрузить данные аккаунта.'),
-            onRetry: () => ref.invalidate(_linkPreviewProvider(widget.code)),
-          ),
+          error: (Object e, _) => isOfflineError(e)
+              ? NoConnectionView(onRetry: () => ref.invalidate(_linkPreviewProvider(widget.code)))
+              : _ErrorState(
+                  message: describeApiError(e, fallback: 'Не удалось загрузить данные аккаунта.'),
+                  onRetry: () => ref.invalidate(_linkPreviewProvider(widget.code)),
+                ),
           data: (LinkPreview p) => _body(context, p),
         ),
       ),

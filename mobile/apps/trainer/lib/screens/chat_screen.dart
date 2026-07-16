@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/trainer_chat.dart';
+import '../widgets/no_connection_view.dart';
 
 /// Тред переписки тренера с конкретным клиентом. Поллинг + отметка прочтения.
 class ChatScreen extends ConsumerStatefulWidget {
@@ -104,19 +105,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       appBar: AppBar(title: Text(widget.clientName)),
       body: chat.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              const Text('Не удалось загрузить чат'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(trainerChatMessagesProvider(widget.clientId)),
-                child: const Text('Повторить'),
+        error: (Object e, _) => isOfflineError(e)
+            ? NoConnectionView(
+                onRetry: () => ref.invalidate(trainerChatMessagesProvider(widget.clientId)))
+            : Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    const Text('Не удалось загрузить чат'),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: () => ref.invalidate(trainerChatMessagesProvider(widget.clientId)),
+                      child: const Text('Повторить'),
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
-        ),
         data: (TrainerChatThread d) => ChatThreadView(
           messages: d.messages,
           myRole: SenderRole.trainer,

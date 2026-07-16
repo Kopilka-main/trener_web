@@ -11,6 +11,7 @@ import '../api/trainer_gyms.dart';
 import '../widgets/expense_form.dart';
 import '../widgets/income_form.dart';
 import '../widgets/nav_bar.dart';
+import '../widgets/no_connection_view.dart';
 
 // ─── Утилиты ───
 const List<String> _ruMonthsShort = <String>[
@@ -273,10 +274,13 @@ class _AccountingScreenState extends ConsumerState<AccountingScreen> {
     final AsyncValue<List<Expense>> exp = ref.watch(trainerExpensesProvider);
     if (inc.isLoading || exp.isLoading) return const Center(child: CircularProgressIndicator());
     if (inc.hasError || exp.hasError) {
-      return _err(c, () {
+      final Object error = inc.error ?? exp.error!;
+      void retry() {
         ref.invalidate(trainerIncomesProvider);
         ref.invalidate(trainerExpensesProvider);
-      });
+      }
+
+      return isOfflineError(error) ? NoConnectionView(onRetry: retry) : _err(c, retry);
     }
     final List<Income> incomes =
         (inc.valueOrNull ?? <Income>[]).where((Income e) => _inRange(e.date)).toList();

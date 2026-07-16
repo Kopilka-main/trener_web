@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/trainer_chat.dart';
+import '../widgets/no_connection_view.dart';
 
 const List<String> _ruMonths = <String>[
   'янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
@@ -67,19 +68,21 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
           Expanded(
             child: convos.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (Object e, _) => Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    const Text('Не удалось загрузить чаты'),
-                    const SizedBox(height: 12),
-                    FilledButton(
-                      onPressed: () => ref.invalidate(trainerConversationsProvider),
-                      child: const Text('Повторить'),
+              error: (Object e, _) => isOfflineError(e)
+                  ? NoConnectionView(onRetry: () => ref.invalidate(trainerConversationsProvider))
+                  : Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          const Text('Не удалось загрузить чаты'),
+                          const SizedBox(height: 12),
+                          FilledButton(
+                            onPressed: () => ref.invalidate(trainerConversationsProvider),
+                            child: const Text('Повторить'),
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
-              ),
               data: (List<Conversation> list) {
                 final List<Conversation> filtered = q.isEmpty
                     ? list

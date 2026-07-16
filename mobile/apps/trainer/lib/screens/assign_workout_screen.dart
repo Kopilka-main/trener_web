@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/trainer_assign.dart';
+import '../widgets/no_connection_view.dart';
 
 /// Назначение тренировки клиенту: имя + набор упражнений (с числом подходов) →
 /// создаётся черновик у клиента («Назначено тренером»).
@@ -206,7 +207,9 @@ class _ExercisePickerState extends ConsumerState<_ExercisePicker> {
           Expanded(
             child: catalog.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (Object e, _) => Center(child: Text('Не удалось загрузить каталог', style: TextStyle(color: c.inkMuted))),
+              error: (Object e, _) => isOfflineError(e)
+                  ? NoConnectionView(onRetry: () => ref.invalidate(trainerCatalogProvider))
+                  : Center(child: Text('Не удалось загрузить каталог', style: TextStyle(color: c.inkMuted))),
               data: (List<TExercise> all) {
                 final List<String> groups = <String>{
                   for (final TExercise e in all)

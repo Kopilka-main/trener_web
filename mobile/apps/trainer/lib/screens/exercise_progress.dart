@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/trainer_assign.dart';
 import '../api/trainer_client_stats.dart';
+import '../widgets/no_connection_view.dart';
 
 // ─── Форматирование (зеркало web ClientStatsPage) ───
 
@@ -67,10 +68,12 @@ class ExerciseProgressTab extends ConsumerWidget {
         padding: const EdgeInsets.all(24),
         child: Text('Загрузка…', style: TextStyle(color: c.inkMuted)),
       ),
-      error: (Object e, _) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text('Не удалось загрузить статистику.', style: TextStyle(color: c.inkMuted)),
-      ),
+      error: (Object e, _) => isOfflineError(e)
+          ? NoConnectionView(onRetry: () => ref.invalidate(clientExerciseOverviewProvider(clientId)))
+          : Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text('Не удалось загрузить статистику.', style: TextStyle(color: c.inkMuted)),
+            ),
       data: (List<ExerciseOverview> list) {
         if (list.isEmpty) {
           return Padding(
@@ -191,8 +194,10 @@ class _ExerciseDetailScreenState extends ConsumerState<ExerciseDetailScreen> {
       appBar: AppBar(title: const Text('Прогресс')),
       body: raw.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object e, _) =>
-            Center(child: Text('Не удалось загрузить', style: TextStyle(color: c.inkMuted))),
+        error: (Object e, _) => isOfflineError(e)
+            ? NoConnectionView(
+                onRetry: () => ref.invalidate(clientWorkoutsRawProvider(widget.clientId)))
+            : Center(child: Text('Не удалось загрузить', style: TextStyle(color: c.inkMuted))),
         data: (List<Map<String, dynamic>> all) {
           final ExerciseHistory? h = aggregateExerciseHistory(all, widget.exerciseId);
           if (h == null || h.points.isEmpty) {

@@ -10,6 +10,7 @@ import '../api/trainer_clients.dart';
 import '../api/trainer_gyms.dart';
 import '../api/trainer_home.dart';
 import '../widgets/income_form.dart' show pickClientSearch;
+import '../widgets/no_connection_view.dart';
 
 /// Выбор тренировки-плана для занятия: уже привязанная (existing) или шаблон.
 class _WorkoutPick {
@@ -169,8 +170,11 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
                   builder: (BuildContext ctx2, WidgetRef ref2, Widget? _) {
                     return ref2.watch(trainerTemplatesProvider).when(
                       loading: () => const Center(child: CircularProgressIndicator()),
-                      error: (Object e, StackTrace _) =>
-                          Center(child: Text('Не удалось загрузить', style: TextStyle(color: c.inkMuted))),
+                      error: (Object e, StackTrace _) => isOfflineError(e)
+                          ? NoConnectionView(
+                              onRetry: () => ref2.invalidate(trainerTemplatesProvider))
+                          : Center(
+                              child: Text('Не удалось загрузить', style: TextStyle(color: c.inkMuted))),
                       data: (List<WorkoutTemplate> all) {
                         // Общие (clientId == null) + персональные клиента занятия; без клиента — только общие.
                         final List<WorkoutTemplate> templates = all

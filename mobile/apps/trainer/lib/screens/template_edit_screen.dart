@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/trainer_assign.dart';
 import '../api/trainer_catalog.dart';
+import '../widgets/no_connection_view.dart';
 
 /// Результат «создать тренировку у клиента»: имя + план подходов для черновика,
 /// который клиентский экран поставит наверх (в дополнение к сохранённому шаблону).
@@ -577,7 +578,9 @@ class _AddExercisePickerState extends ConsumerState<_AddExercisePicker> {
           Expanded(
             child: catalog.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (Object e, _) => Center(child: Text('Не удалось загрузить каталог', style: TextStyle(color: c.inkMuted))),
+              error: (Object e, _) => isOfflineError(e)
+                  ? NoConnectionView(onRetry: () => ref.invalidate(trainerCatalogProvider))
+                  : Center(child: Text('Не удалось загрузить каталог', style: TextStyle(color: c.inkMuted))),
               data: (List<TExercise> all) {
                 final List<String> groups = <String>{
                   for (final TExercise e in all)
@@ -734,7 +737,9 @@ class _ExerciseSelectState extends ConsumerState<ExerciseSelect> {
       ),
       body: catalog.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object e, _) => Center(child: Text('Не удалось загрузить каталог', style: TextStyle(color: c.inkMuted))),
+        error: (Object e, _) => isOfflineError(e)
+            ? NoConnectionView(onRetry: () => ref.invalidate(trainerCatalogProvider))
+            : Center(child: Text('Не удалось загрузить каталог', style: TextStyle(color: c.inkMuted))),
         data: (List<TExercise> all) {
           final List<String> groups = <String>{
             for (final TExercise e in all)

@@ -18,6 +18,7 @@ import '../api/trainer_client_stats.dart';
 import '../api/trainer_clients.dart';
 import '../api/trainer_home.dart';
 import '../api/trainer_workouts.dart';
+import '../widgets/no_connection_view.dart';
 import 'support_chat_screen.dart';
 import 'template_edit_screen.dart' show ExerciseSelect;
 
@@ -106,20 +107,24 @@ class ActiveWorkoutScreen extends ConsumerWidget {
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (Object e, _) => Scaffold(
         appBar: AppBar(),
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              const Text('Не удалось загрузить тренировку'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(
-                    trainerWorkoutProvider((clientId: clientId!, wid: workoutId!))),
-                child: const Text('Повторить'),
+        body: isOfflineError(e)
+            ? NoConnectionView(
+                onRetry: () => ref.invalidate(
+                    trainerWorkoutProvider((clientId: clientId!, wid: workoutId!))))
+            : Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    const Text('Не удалось загрузить тренировку'),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: () => ref.invalidate(
+                          trainerWorkoutProvider((clientId: clientId!, wid: workoutId!))),
+                      child: const Text('Повторить'),
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
-        ),
       ),
       data: (Workout workout) =>
           _Conductor(clientId: clientId!, workout: workout),

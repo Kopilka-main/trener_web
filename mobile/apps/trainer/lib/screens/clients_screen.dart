@@ -21,6 +21,7 @@ import '../api/local_workout.dart';
 import '../api/offline_providers.dart';
 import '../widgets/income_form.dart';
 import '../widgets/nav_bar.dart';
+import '../widgets/no_connection_view.dart';
 import 'accounting_screen.dart';
 import 'active_workout_screen.dart';
 import 'calendar_screen.dart';
@@ -241,18 +242,20 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
             Expanded(
               child: clients.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (Object e, _) => Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Text('Не удалось загрузить клиентов', style: TextStyle(color: c.inkMuted)),
-                      const SizedBox(height: 12),
-                      FilledButton(
-                          onPressed: () => ref.invalidate(trainerClientsProvider),
-                          child: const Text('Повторить')),
-                    ],
-                  ),
-                ),
+                error: (Object e, _) => isOfflineError(e)
+                    ? NoConnectionView(onRetry: () => ref.invalidate(trainerClientsProvider))
+                    : Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Text('Не удалось загрузить клиентов', style: TextStyle(color: c.inkMuted)),
+                            const SizedBox(height: 12),
+                            FilledButton(
+                                onPressed: () => ref.invalidate(trainerClientsProvider),
+                                child: const Text('Повторить')),
+                          ],
+                        ),
+                      ),
                 data: (List<Client> all) {
                   // Раз за сессию экрана — подсказка про клиентское приложение
                   // (если есть клиенты, но ни один не подключён).
@@ -1885,8 +1888,11 @@ class _HistoryCardState extends ConsumerState<_HistoryCard> {
           padding: EdgeInsets.symmetric(vertical: 8),
           child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
         ),
-        error: (Object e, _) =>
-            Text('Не удалось загрузить состав', style: TextStyle(fontSize: 12, color: c.inkMuted)),
+        error: (Object e, _) => isOfflineError(e)
+            ? NoConnectionView(
+                onRetry: () => ref.invalidate(
+                    trainerWorkoutProvider((clientId: widget.clientId, wid: widget.workout.id))))
+            : Text('Не удалось загрузить состав', style: TextStyle(fontSize: 12, color: c.inkMuted)),
         data: (Workout wd) {
           // Только упражнения с ≥1 ВЫПОЛНЕННЫМ подходом (пропущенные не показываем).
           final List<WorkoutExercise> exs = wd.exercises
@@ -2645,7 +2651,10 @@ class _PhotosTabState extends ConsumerState<_PhotosTab> {
             const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator())),
           ],
           error: (Object e, _) => <Widget>[
-            Text('Не удалось загрузить фото', style: TextStyle(color: c.inkMuted)),
+            isOfflineError(e)
+                ? NoConnectionView(
+                    onRetry: () => ref.invalidate(clientPhotosCardProvider(widget.clientId)))
+                : Text('Не удалось загрузить фото', style: TextStyle(color: c.inkMuted)),
           ],
           data: (List<TClientPhoto> list) {
             if (list.isEmpty) {
@@ -3120,7 +3129,9 @@ class _PackagesBlockState extends ConsumerState<_PackagesBlock> {
     final AsyncValue<List<TPackage>> pkgs = ref.watch(clientPackagesProvider(clientId));
     return pkgs.when(
       loading: () => const _Empty('Загрузка…'),
-      error: (Object e, _) => const _Empty('Не удалось загрузить'),
+      error: (Object e, _) => isOfflineError(e)
+          ? NoConnectionView(onRetry: () => ref.invalidate(clientPackagesProvider(clientId)))
+          : const _Empty('Не удалось загрузить'),
       data: (List<TPackage> all) {
         final List<TPackage> active = all.where((TPackage p) => p.isActive).toList();
         // История платежей: доходы, привязанные к этому клиенту.
@@ -3443,7 +3454,9 @@ class _MeasurementsBlock extends ConsumerWidget {
     final AsyncValue<List<TMeasurement>> ms = ref.watch(clientMeasurementsProvider(clientId));
     return ms.when(
       loading: () => const _Empty('Загрузка…'),
-      error: (Object e, _) => const _Empty('Не удалось загрузить'),
+      error: (Object e, _) => isOfflineError(e)
+          ? NoConnectionView(onRetry: () => ref.invalidate(clientMeasurementsProvider(clientId)))
+          : const _Empty('Не удалось загрузить'),
       data: (List<TMeasurement> all) {
         if (all.isEmpty) return const _Empty('Замеров пока нет');
         // Показываем ВСЕ замеры (newest-first); свайп влево — правка/удаление.
