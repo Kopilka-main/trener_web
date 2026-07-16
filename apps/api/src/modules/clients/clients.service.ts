@@ -246,7 +246,7 @@ export function makeClientsService(
     },
 
     async unlink(trainerId: string, clientId: string): Promise<void> {
-      const ok = await repo.unlink(trainerId, clientId);
+      const ok = await repo.unlink(trainerId, clientId, deps.newId);
       if (!ok) throw notFound('Клиент не найден');
     },
 

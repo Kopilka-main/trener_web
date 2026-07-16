@@ -1098,16 +1098,21 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
   }
 
   /// Живую тренировку можно провести только по согласованному (подтверждённому
-  /// клиентом) занятию. Непривязанному клиенту согласовывать не с кем — разрешаем.
-  /// Иначе показываем окно и возвращаем false (тренировку не создаём/не открываем).
+  /// клиентом) занятию, дата которого — сегодня или в прошлом. Будущее
+  /// согласованное занятие права провести «сейчас» не даёт. Непривязанному
+  /// клиенту согласовывать не с кем — разрешаем. Иначе показываем окно и
+  /// возвращаем false (тренировку не создаём/не открываем).
   Future<bool> _canConductNow() async {
     if (!widget.client.isConnected) return true;
     try {
       final List<Session> sessions = await ref.read(trainerSessionsProvider.future);
+      // Дата в формате YYYY-MM-DD — сравнение строк совпадает с хронологическим.
+      final String todayIso = _isoDate(DateTime.now());
       final bool hasConfirmed = sessions.any((Session s) =>
           s.clientId == _cid &&
           s.status == SessionStatus.planned &&
-          s.confirmation == ClientConfirmation.confirmed);
+          s.confirmation == ClientConfirmation.confirmed &&
+          s.date.compareTo(todayIso) <= 0);
       if (hasConfirmed) return true;
     } catch (_) {
       return true; // не удалось проверить — не блокируем
@@ -2399,40 +2404,9 @@ class _PhotosTab extends ConsumerStatefulWidget {
 }
 
 class _PhotosTabState extends ConsumerState<_PhotosTab> {
-  String _angle = 'front';
   DateTime _date = DateTime.now();
   bool _uploading = false;
   String? _error;
-
-  Future<void> _pick() async {
-    if (_uploading) return;
-    // Захватываем messenger до async-гэпа (pickImage) — иначе линт на context.
-    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
-    final XFile? p =
-        await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 85);
-    if (p == null) return;
-    setState(() {
-      _uploading = true;
-      _error = null;
-    });
-    try {
-      await ref.read(trainerClientCardApiProvider).uploadPhoto(
-            widget.clientId,
-            date: _isoDate(_date),
-            angle: _angle,
-            filePath: p.path,
-            fileName: p.name,
-          );
-      if (!mounted) return;
-      ref.invalidate(clientPhotosCardProvider(widget.clientId));
-      m.showSnackBar(const SnackBar(content: Text('Фото добавлено')));
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _error = 'Не удалось загрузить фото.');
-    } finally {
-      if (mounted) setState(() => _uploading = false);
-    }
-  }
 
   /// Мультизагрузка: до 3 фото одним выбором, ракурс по индексу
   /// (0→спереди, 1→сбоку, 2→сзади), дата — выбранная `_date`.
@@ -2505,16 +2479,6 @@ class _PhotosTabState extends ConsumerState<_PhotosTab> {
                 ),
               ),
               const SizedBox(height: 12),
-              _BodyPoseGuide(value: _angle, onSelect: (String a) => setState(() => _angle = a)),
-              const SizedBox(height: 12),
-              _DashedPickButton(
-                icon: Icons.add_photo_alternate_outlined,
-                label: _uploading
-                    ? 'Загрузка · ${_kAngleLabels[_angle]}…'
-                    : 'Выбрать фото · ${_kAngleLabels[_angle]}',
-                onTap: _uploading ? null : _pick,
-              ),
-              const SizedBox(height: 8),
               _DashedPickButton(
                 icon: Icons.burst_mode_outlined,
                 label: _uploading ? 'Загрузка…' : 'Загрузить до 3 фото · спереди · сбоку · сзади',
@@ -2691,100 +2655,6 @@ class _DashedPickButton extends StatelessWidget {
 
 /// Силуэтный гид «как встать»: три позы (спереди/сбоку/сзади), активная подсвечена.
 /// Зеркало клиентского `_BodyPoseGuide`.
-class _BodyPoseGuide extends StatelessWidget {
-  const _BodyPoseGuide({required this.value, required this.onSelect});
-  final String value;
-  final ValueChanged<String> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppColors c = context.colors;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text('В облегающей одежде или белье, телефон на уровне пояса, ровный фон, вся фигура в кадре.',
-            style: TextStyle(fontSize: 12, height: 1.3, color: c.inkMuted)),
-        const SizedBox(height: 8),
-        Row(
-          children: <Widget>[
-            for (final MapEntry<String, String> e in _kAngleLabels.entries) ...<Widget>[
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => onSelect(e.key),
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      color: value == e.key ? c.accent.withValues(alpha: 0.10) : c.cardElevated,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: value == e.key ? c.accent : c.line),
-                    ),
-                    child: Column(
-                      children: <Widget>[
-                        SizedBox(
-                          height: 56,
-                          child: CustomPaint(
-                            size: const Size(40, 56),
-                            painter: _SilhouettePainter(
-                              pose: e.key,
-                              color: value == e.key ? c.accent : c.inkMutedXl,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(e.value,
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: value == e.key ? c.ink : c.inkMuted)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              if (e.key != _kAngleLabels.keys.last) const SizedBox(width: 8),
-            ],
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-/// Силуэт-«тушка» для подсказки ракурса (фронт/спина — симметрично, сбоку —
-/// профиль). Зеркало клиентского `_SilhouettePainter`.
-class _SilhouettePainter extends CustomPainter {
-  _SilhouettePainter({required this.pose, required this.color});
-  final String pose;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final double sx = size.width / 80;
-    final double sy = size.height / 170;
-    final Paint paint = Paint()..color = color..style = PaintingStyle.fill;
-    Rect r(double x, double y, double w, double h) =>
-        Rect.fromLTWH(x * sx, y * sy, w * sx, h * sy);
-    void rr(double x, double y, double w, double h, double rad) => canvas.drawRRect(
-        RRect.fromRectAndRadius(r(x, y, w, h), Radius.circular(rad * sx)), paint);
-
-    if (pose == 'side') {
-      canvas.drawCircle(Offset(33 * sx, 16 * sy), 11 * sx, paint);
-      rr(30, 30, 17, 56, 8.5);
-      rr(32, 84, 9, 66, 4.5);
-      rr(39, 84, 9, 66, 4.5);
-    } else {
-      canvas.drawCircle(Offset(40 * sx, 15 * sy), 11 * sx, paint);
-      rr(25, 32, 30, 52, 9); // торс
-      rr(30, 83, 9, 66, 4.5);
-      rr(41, 83, 9, 66, 4.5);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_SilhouettePainter old) => old.pose != pose || old.color != color;
-}
-
 /// Раздел «Профиль»: контакты/данные + замеры + правка через ClientEditScreen.
 class ClientProfileScreen extends ConsumerWidget {
   const ClientProfileScreen({super.key, required this.client});
@@ -3396,6 +3266,29 @@ Widget _pkgRow(AppColors c, String label, String value,
 class _MeasurementsBlock extends ConsumerWidget {
   const _MeasurementsBlock({required this.clientId});
   final String clientId;
+
+  Future<void> _edit(BuildContext context, WidgetRef ref, TMeasurement m) async {
+    final bool? saved = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: context.colors.bg,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _MeasureForm(clientId: clientId, edit: m),
+    );
+    if (saved == true) ref.invalidate(clientMeasurementsProvider(clientId));
+  }
+
+  Future<void> _delete(BuildContext context, WidgetRef ref, TMeasurement m) async {
+    final ScaffoldMessengerState msg = ScaffoldMessenger.of(context);
+    if (!await confirmDelete(context, title: 'Удалить замер?')) return;
+    try {
+      await ref.read(trainerClientCardApiProvider).deleteMeasurement(clientId, m.id);
+      ref.invalidate(clientMeasurementsProvider(clientId));
+    } catch (_) {
+      msg.showSnackBar(const SnackBar(content: Text('Не удалось удалить')));
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AppColors c = context.colors;
@@ -3405,13 +3298,48 @@ class _MeasurementsBlock extends ConsumerWidget {
       error: (Object e, _) => const _Empty('Не удалось загрузить'),
       data: (List<TMeasurement> all) {
         if (all.isEmpty) return const _Empty('Замеров пока нет');
-        // Показываем ВСЕ замеры (newest-first), каждый — отдельной карточкой.
+        // Показываем ВСЕ замеры (newest-first); свайп влево — правка/удаление.
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
+            // Кнопка «Динамика»: графики по каждому показателю во времени подряд.
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).push<void>(MaterialPageRoute<void>(
+                  builder: (_) => MeasurementDynamicsScreen(measurements: all),
+                )),
+                icon: const Icon(Icons.show_chart, size: 18),
+                label: const Text('Динамика'),
+              ),
+            ),
+            const SizedBox(height: 12),
             for (int i = 0; i < all.length; i++) ...<Widget>[
               if (i > 0) const SizedBox(height: 12),
-              _measureCard(c, all[i]),
+              Slidable(
+                key: ValueKey<String>('m-${all[i].id}'),
+                endActionPane: ActionPane(
+                  motion: const DrawerMotion(),
+                  extentRatio: 0.42,
+                  children: <Widget>[
+                    SlidableAction(
+                      onPressed: (_) => _edit(context, ref, all[i]),
+                      backgroundColor: c.cardElevated,
+                      foregroundColor: c.ink,
+                      icon: Icons.edit_outlined,
+                      label: 'Изм.',
+                    ),
+                    SlidableAction(
+                      onPressed: (_) => _delete(context, ref, all[i]),
+                      backgroundColor: c.danger,
+                      foregroundColor: Colors.white,
+                      icon: Icons.delete_outline,
+                      label: 'Удал.',
+                    ),
+                  ],
+                ),
+                child: _measureCard(c, all[i]),
+              ),
             ],
           ],
         );
@@ -3454,6 +3382,64 @@ class _MeasurementsBlock extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Число без хвостового «.0» (для подписей на графике).
+String _fmtMetric(num v) {
+  final double d = v.toDouble();
+  return d == d.roundToDouble() ? d.toInt().toString() : d.toString();
+}
+
+/// Экран «Динамика замеров»: по каждому показателю — отдельный график во времени,
+/// один за другим (состав тела, затем обхваты). Показываются только показатели,
+/// у которых есть хотя бы одна точка. Переиспользует [ChartCard] из динамики
+/// упражнений.
+class MeasurementDynamicsScreen extends StatelessWidget {
+  const MeasurementDynamicsScreen({super.key, required this.measurements});
+  final List<TMeasurement> measurements;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors c = context.colors;
+    // Старые → новые для оси времени (список приходит newest-first).
+    final List<TMeasurement> asc = <TMeasurement>[...measurements]
+      ..sort((TMeasurement a, TMeasurement b) => (a.date ?? DateTime(0)).compareTo(b.date ?? DateTime(0)));
+
+    String kg(num v) => '${_fmtMetric(v)} кг';
+    String cm(num v) => '${_fmtMetric(v)} см';
+    String pct(num v) => '${_fmtMetric(v)} %';
+
+    // (заголовок, извлечение значения из замера, формат подписи).
+    final List<(String, num? Function(TMeasurement), String Function(num))> defs =
+        <(String, num? Function(TMeasurement), String Function(num))>[
+      ('Вес', (TMeasurement m) => m.weightKg, kg),
+      ('Скел. мышцы', (TMeasurement m) => m.skeletalMuscleKg, kg),
+      ('% жира', (TMeasurement m) => m.bodyFatPct, pct),
+      for (final _MetricDef g in _kGirths)
+        (g.label, (TMeasurement m) => m.metrics[g.label], cm),
+    ];
+
+    final List<Widget> cards = <Widget>[];
+    for (final (String, num? Function(TMeasurement), String Function(num)) d in defs) {
+      final List<(DateTime?, double)> points = <(DateTime?, double)>[
+        for (final TMeasurement m in asc)
+          if (d.$2(m) != null) (m.date, d.$2(m)!.toDouble()),
+      ];
+      if (points.isEmpty) continue;
+      if (cards.isNotEmpty) cards.add(const SizedBox(height: 12));
+      cards.add(ChartCard(title: d.$1, color: c.accent, recordsOnly: false, points: points, format: d.$3));
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Динамика')),
+      body: cards.isEmpty
+          ? Center(child: Text('Нет данных для графика', style: TextStyle(fontSize: 14, color: c.inkMuted)))
+          : ListView(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
+              children: cards,
+            ),
     );
   }
 }
@@ -3556,19 +3542,34 @@ String _fullDate(DateTime d) => '${d.day} ${_ruMonths[d.month - 1]} ${d.year}';
 /// вызов тренерского API (`addMeasurement`) в общий скоуп. Возвращает `true`
 /// через Navigator.pop при успешном сохранении.
 class _MeasureForm extends ConsumerStatefulWidget {
-  const _MeasureForm({required this.clientId});
+  const _MeasureForm({required this.clientId, this.edit});
   final String clientId;
+  // Если задан — форма в режиме правки: поля предзаполнены, сохранение — PATCH.
+  final TMeasurement? edit;
   @override
   ConsumerState<_MeasureForm> createState() => _MeasureFormState();
 }
 
 class _MeasureFormState extends ConsumerState<_MeasureForm> {
   late final Map<String, TextEditingController> _ctrls = <String, TextEditingController>{
-    for (final _MetricDef m in _kMetrics) m.key: TextEditingController(),
+    for (final _MetricDef m in _kMetrics) m.key: TextEditingController(text: _initial(m)),
   };
-  final TextEditingController _note = TextEditingController();
-  DateTime _date = DateTime.now();
+  late final TextEditingController _note = TextEditingController(text: widget.edit?.note ?? '');
+  late DateTime _date = widget.edit?.date ?? DateTime.now();
   bool _busy = false;
+
+  /// Текущее значение метрики из редактируемого замера (для префилла), либо ''.
+  String _initial(_MetricDef m) {
+    final TMeasurement? e = widget.edit;
+    if (e == null) return '';
+    final num? v = switch (m.key) {
+      'weightKg' => e.weightKg,
+      'skeletalMuscleKg' => e.skeletalMuscleKg,
+      'bodyFatPct' => e.bodyFatPct,
+      _ => e.metrics[m.label],
+    };
+    return v?.toString() ?? '';
+  }
 
   @override
   void dispose() {
@@ -3583,23 +3584,39 @@ class _MeasureFormState extends ConsumerState<_MeasureForm> {
 
   Future<void> _save() async {
     if (_busy) return;
-    // Только заполненные метрики (пустые не шлём); дату шлём всегда.
+    final TMeasurement? e = widget.edit;
     final Map<String, dynamic> body = <String, dynamic>{'date': _isoDate(_date)};
-    for (final _MetricDef m in _kMetrics) {
-      final String raw = _ctrls[m.key]!.text.trim();
-      if (raw.isNotEmpty) {
-        final num? v = _n(raw);
-        if (v != null) body[m.key] = v;
+    if (e != null) {
+      // Правка: шлём все поля (значение или null) — пустое поле очищает метрику.
+      for (final _MetricDef m in _kMetrics) {
+        final String raw = _ctrls[m.key]!.text.trim();
+        body[m.key] = raw.isEmpty ? null : _n(raw);
       }
+      final String note = _note.text.trim();
+      body['note'] = note.isEmpty ? null : note;
+    } else {
+      // Создание: только заполненные метрики (пустые не шлём); дату — всегда.
+      for (final _MetricDef m in _kMetrics) {
+        final String raw = _ctrls[m.key]!.text.trim();
+        if (raw.isNotEmpty) {
+          final num? v = _n(raw);
+          if (v != null) body[m.key] = v;
+        }
+      }
+      final String note = _note.text.trim();
+      if (note.isNotEmpty) body['note'] = note;
+      if (body.length == 1) return; // только дата — нечего сохранять
     }
-    final String note = _note.text.trim();
-    if (note.isNotEmpty) body['note'] = note;
-    if (body.length == 1) return; // только дата — нечего сохранять
     setState(() => _busy = true);
     final NavigatorState nav = Navigator.of(context);
     final ScaffoldMessengerState msg = ScaffoldMessenger.of(context);
     try {
-      await ref.read(trainerClientCardApiProvider).addMeasurement(widget.clientId, body);
+      final TrainerClientCardApi api = ref.read(trainerClientCardApiProvider);
+      if (e != null) {
+        await api.updateMeasurement(widget.clientId, e.id, body);
+      } else {
+        await api.addMeasurement(widget.clientId, body);
+      }
       if (!mounted) return;
       nav.pop(true);
     } catch (_) {
@@ -3620,7 +3637,7 @@ class _MeasureFormState extends ConsumerState<_MeasureForm> {
         children: <Widget>[
           Row(
             children: <Widget>[
-              Text('Новый замер',
+              Text(widget.edit != null ? 'Правка замера' : 'Новый замер',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.ink)),
               const Spacer(),
               _dateChip(c),

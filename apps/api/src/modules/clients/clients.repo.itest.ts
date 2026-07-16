@@ -44,7 +44,7 @@ describe.skipIf(!url)('clients.repo (integration)', () => {
     });
     expect(upd?.firstName).toBe('Новое');
     expect(upd?.status).toBe('archived');
-    expect(await repo.unlink('A', 'c1')).toBe(true);
+    expect(await repo.unlink('A', 'c1', () => 'inc1')).toBe(true);
     expect(await repo.getForTrainer('A', 'c1')).toBeNull();
   });
 

@@ -224,7 +224,7 @@ class _ExerciseDetailScreenState extends ConsumerState<ExerciseDetailScreen> {
               ),
               const SizedBox(height: 12),
               if (h.isTimeBased) ...<Widget>[
-                _ChartCard(
+                ChartCard(
                   title: 'Максимальное время',
                   color: c.accent,
                   recordsOnly: _recordsOnly,
@@ -232,7 +232,7 @@ class _ExerciseDetailScreenState extends ConsumerState<ExerciseDetailScreen> {
                   format: _fmtSeconds,
                 ),
                 const SizedBox(height: 12),
-                _ChartCard(
+                ChartCard(
                   title: 'Суммарное время',
                   color: c.danger,
                   recordsOnly: _recordsOnly,
@@ -240,7 +240,7 @@ class _ExerciseDetailScreenState extends ConsumerState<ExerciseDetailScreen> {
                   format: _fmtSeconds,
                 ),
               ] else ...<Widget>[
-                _ChartCard(
+                ChartCard(
                   title: 'Тоннаж',
                   color: c.accent,
                   recordsOnly: _recordsOnly,
@@ -248,7 +248,7 @@ class _ExerciseDetailScreenState extends ConsumerState<ExerciseDetailScreen> {
                   format: (num v) => _fmtTonnage(v.round()),
                 ),
                 const SizedBox(height: 12),
-                _ChartCard(
+                ChartCard(
                   title: 'Максимальный вес',
                   color: c.danger,
                   recordsOnly: _recordsOnly,
@@ -347,8 +347,12 @@ class _InfoLine extends StatelessWidget {
 /// Карточка-график одной метрики: заголовок + значение + дельта + спарклайн с
 /// реперными точками. Тап по графику выбирает ближайшую точку и показывает её
 /// дату/значение.
-class _ChartCard extends StatefulWidget {
-  const _ChartCard({
+/// Карточка-график одного показателя во времени: заголовок, текущее/выбранное
+/// значение, спарклайн с тапом по точкам, тренд «% к первой». Переиспользуется
+/// для динамики упражнений и замеров тела.
+class ChartCard extends StatefulWidget {
+  const ChartCard({
+    super.key,
     required this.title,
     required this.color,
     required this.recordsOnly,
@@ -362,14 +366,14 @@ class _ChartCard extends StatefulWidget {
   final String Function(num) format;
 
   @override
-  State<_ChartCard> createState() => _ChartCardState();
+  State<ChartCard> createState() => _ChartCardState();
 }
 
-class _ChartCardState extends State<_ChartCard> {
+class _ChartCardState extends State<ChartCard> {
   int? _sel;
 
   @override
-  void didUpdateWidget(_ChartCard old) {
+  void didUpdateWidget(ChartCard old) {
     super.didUpdateWidget(old);
     if (old.recordsOnly != widget.recordsOnly || old.points != widget.points) _sel = null;
   }

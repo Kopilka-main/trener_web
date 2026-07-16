@@ -101,7 +101,8 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
   late final TextEditingController _location =
       TextEditingController(text: widget.session?.location ?? '');
   late bool _online = widget.session?.isOnline ?? false;
-  late SessionStatus _status = widget.session?.status ?? SessionStatus.planned;
+  // Статус не редактируется в форме — сохраняем текущий (или planned при создании).
+  late final SessionStatus _status = widget.session?.status ?? SessionStatus.planned;
   late _WorkoutPick? _workoutPick = widget.session?.workoutId != null
       ? _WorkoutPick.existing(widget.session!.workoutId!, 'Тренировка привязана')
       : null;
@@ -429,19 +430,6 @@ class _SessionFormState extends ConsumerState<_SessionForm> {
               ),
               _GymQuickPick(onPick: (String name) => setState(() => _location.text = name)),
             ],
-            if (_isEdit) ...<Widget>[
-              const SizedBox(height: 16),
-              Text('СТАТУС', style: AppFonts.mono(size: 10, color: c.inkMutedXl, weight: FontWeight.w700)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: <Widget>[
-                  _StatusChip(label: 'Запланировано', active: _status == SessionStatus.planned, onTap: () => setState(() => _status = SessionStatus.planned)),
-                  _StatusChip(label: 'Проведено', active: _status == SessionStatus.completed, onTap: () => setState(() => _status = SessionStatus.completed)),
-                  _StatusChip(label: 'Отменено', active: _status == SessionStatus.cancelled, onTap: () => setState(() => _status = SessionStatus.cancelled)),
-                ],
-              ),
-            ],
             const SizedBox(height: 20),
             Row(
               children: <Widget>[
@@ -490,26 +478,6 @@ class _PickerField extends StatelessWidget {
       child: InputDecorator(
         decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
         child: Text(value),
-      ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.label, required this.active, required this.onTap});
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) {
-    final AppColors c = context.colors;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        decoration: BoxDecoration(color: active ? c.accent : c.chip, borderRadius: BorderRadius.circular(20)),
-        child: Text(label,
-            style: AppFonts.mono(size: 12, color: active ? c.accentOn : c.inkMuted, weight: FontWeight.w600)),
       ),
     );
   }

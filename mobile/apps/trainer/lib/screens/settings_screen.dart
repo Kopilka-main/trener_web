@@ -68,7 +68,8 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ),
         data: (TrainerProfile a) => ListView(
-          padding: const EdgeInsets.all(16),
+          // Низ учитывает резерв под глобальное меню навигации.
+          padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
           children: <Widget>[
             if (a.pendingDeletionAt != null) ...<Widget>[
               _DeletionBanner(

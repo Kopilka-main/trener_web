@@ -1,6 +1,6 @@
-import { and, eq, ne } from 'drizzle-orm';
+import { and, type Column, eq, ne, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
-import { clients, trainerClients } from '../../db/schema.js';
+import { clients, expenses, incomes, paymentPackages, trainerClients } from '../../db/schema.js';
 import type { ClientStatus, Contact } from '@trener/shared';
 
 export type ClientRow = {
@@ -212,12 +212,84 @@ export function makeClientsRepo(db: Db) {
     },
 
     // «Удаление» = разрыв связи (персона и данные других тренеров сохраняются).
-    async unlink(trainerId: string, clientId: string): Promise<boolean> {
-      const res = await db
-        .delete(trainerClients)
-        .where(and(eq(trainerClients.trainerId, trainerId), eq(trainerClients.clientId, clientId)))
-        .returning({ clientId: trainerClients.clientId });
-      return res.length > 0;
+    // Финансовые записи этого тренера при этом НЕ должны осиротеть: клиент выходит
+    // из скоупа, а его id остаётся в incomes/expenses/пакетах — из-за чего запись
+    // потом нельзя ни отредактировать (проверка «клиент связан»), ни удалить (API
+    // пакетов гейтится доступом к клиенту). Поэтому в одной транзакции:
+    //   1) у ручных доходов/расходов обнуляем clientId и дописываем в примечание
+    //      пометку «Имя (профиль удалён)»;
+    //   2) проданные пакеты (кроме отменённых) конвертируем в обычные доходы с той
+    //      же суммой/датой (итоги бухгалтерии не меняются) и удаляем пакеты;
+    //   3) разрываем связь тренер—клиент.
+    async unlink(trainerId: string, clientId: string, newId: () => string): Promise<boolean> {
+      return db.transaction(async (tx) => {
+        const res = await tx
+          .delete(trainerClients)
+          .where(
+            and(eq(trainerClients.trainerId, trainerId), eq(trainerClients.clientId, clientId)),
+          )
+          .returning({ clientId: trainerClients.clientId });
+        if (res.length === 0) return false;
+
+        const [c] = await tx
+          .select({ firstName: clients.firstName, lastName: clients.lastName })
+          .from(clients)
+          .where(eq(clients.id, clientId));
+        const fullName = c ? `${c.firstName} ${c.lastName ?? ''}`.trim() : '';
+        const marker = fullName ? `${fullName} (профиль удалён)` : 'Профиль клиента удалён';
+
+        // «note» → note с дописанной пометкой (или сама пометка, если было пусто).
+        const stamped = (col: Column) =>
+          sql`CASE WHEN ${col} IS NULL OR ${col} = '' THEN ${marker} ELSE ${col} || ' · ' || ${marker} END`;
+
+        await tx
+          .update(incomes)
+          .set({ clientId: null, note: stamped(incomes.note) })
+          .where(and(eq(incomes.trainerId, trainerId), eq(incomes.clientId, clientId)));
+        await tx
+          .update(expenses)
+          .set({ clientId: null, note: stamped(expenses.note) })
+          .where(and(eq(expenses.trainerId, trainerId), eq(expenses.clientId, clientId)));
+
+        const pkgs = await tx
+          .select({
+            totalPaid: paymentPackages.totalPaid,
+            startsAt: paymentPackages.startsAt,
+            workoutType: paymentPackages.workoutType,
+            note: paymentPackages.note,
+            tags: paymentPackages.tags,
+          })
+          .from(paymentPackages)
+          .where(
+            and(
+              eq(paymentPackages.trainerId, trainerId),
+              eq(paymentPackages.clientId, clientId),
+              ne(paymentPackages.status, 'cancelled'),
+            ),
+          );
+        for (const p of pkgs) {
+          const type = p.workoutType?.trim();
+          const base = p.note && p.note.trim() !== '' ? `${p.note} · ${marker}` : marker;
+          await tx.insert(incomes).values({
+            id: newId(),
+            trainerId,
+            category: 'Пакет тренировок',
+            amount: p.totalPaid,
+            date: p.startsAt,
+            clientId: null,
+            note: type ? `${type} · ${base}` : base,
+            tags: p.tags,
+          });
+        }
+        // Пакеты клиента больше не нужны (график рассрочки снесётся каскадом).
+        await tx
+          .delete(paymentPackages)
+          .where(
+            and(eq(paymentPackages.trainerId, trainerId), eq(paymentPackages.clientId, clientId)),
+          );
+
+        return true;
+      });
     },
   };
 }

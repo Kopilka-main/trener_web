@@ -23,3 +23,8 @@ my.fitbond.ru {
 msg.fitbond.ru {
 	reverse_proxy messenger-web:80
 }
+
+# Zil — статичная вебапка (мини-стек /opt/zil, nginx zil-web через сеть proxy).
+myzil.ru, www.myzil.ru {
+	reverse_proxy zil-web:80
+}

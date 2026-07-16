@@ -149,7 +149,8 @@ class TWorkout {
 
 /// Замер клиента.
 class TMeasurement {
-  TMeasurement({required this.date, required this.weightKg, required this.skeletalMuscleKg, required this.bodyFatPct, required this.metrics, required this.note, required this.createdByClient});
+  TMeasurement({required this.id, required this.date, required this.weightKg, required this.skeletalMuscleKg, required this.bodyFatPct, required this.metrics, required this.note, required this.createdByClient});
+  final String id;
   final DateTime? date;
   final num? weightKg;
   final num? skeletalMuscleKg;
@@ -171,6 +172,7 @@ class TMeasurement {
       if (v != null) m[e.value] = v;
     }
     return TMeasurement(
+      id: j['id'] as String? ?? '',
       date: _dt(j['date'] as String?),
       weightKg: j['weightKg'] as num?,
       skeletalMuscleKg: j['skeletalMuscleKg'] as num?,
@@ -219,6 +221,16 @@ class TrainerClientCardApi {
   /// [body] уже содержит `date` и только заполненные метрики/заметку.
   Future<void> addMeasurement(String clientId, Map<String, dynamic> body) async {
     await _api.postJson('/api/clients/$clientId/measurements', body);
+  }
+
+  /// Обновить замер (только заполненные поля в [body]; отсутствующие не трогаются).
+  Future<void> updateMeasurement(String clientId, String measurementId, Map<String, dynamic> body) async {
+    await _api.patchJson('/api/clients/$clientId/measurements/$measurementId', body);
+  }
+
+  /// Удалить замер клиента.
+  Future<void> deleteMeasurement(String clientId, String measurementId) async {
+    await _api.deleteJson('/api/clients/$clientId/measurements/$measurementId');
   }
 
   /// Загрузить фото прогресса клиента (multipart, поле `photo`). Пишет в общий

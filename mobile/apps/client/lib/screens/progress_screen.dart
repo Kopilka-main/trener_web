@@ -1250,32 +1250,9 @@ class _PhotosTab extends ConsumerStatefulWidget {
 }
 
 class _PhotosTabState extends ConsumerState<_PhotosTab> {
-  String _angle = 'front';
   DateTime _date = DateTime.now();
   bool _uploading = false;
   String? _error;
-
-  Future<void> _pick() async {
-    if (_uploading) return;
-    final XFile? p =
-        await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 85);
-    if (p == null) return;
-    setState(() {
-      _uploading = true;
-      _error = null;
-    });
-    try {
-      await ref.read(clientPhotosApiProvider).upload(
-          date: _iso(_date), angle: _angle, filePath: p.path, fileName: p.name);
-      if (!mounted) return;
-      ref.invalidate(clientPhotosProvider);
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _error = 'Не удалось загрузить фото.');
-    } finally {
-      if (mounted) setState(() => _uploading = false);
-    }
-  }
 
   Future<void> _pickMulti() async {
     if (_uploading) return;
@@ -1369,19 +1346,9 @@ class _PhotosTabState extends ConsumerState<_PhotosTab> {
                 ),
               ),
               const SizedBox(height: 12),
-              _BodyPoseGuide(value: _angle, onSelect: (String a) => setState(() => _angle = a)),
-              const SizedBox(height: 12),
-              _DashedButton(
-                icon: Icons.add_photo_alternate_outlined,
-                label: _uploading
-                    ? 'Загрузка · ${kAngleLabels[_angle]}…'
-                    : 'Выбрать фото · ${kAngleLabels[_angle]}',
-                onTap: _uploading ? null : _pick,
-              ),
-              const SizedBox(height: 8),
               _DashedButton(
                 icon: Icons.burst_mode_outlined,
-                label: 'Загрузить до 3 фото · спереди · сбоку · сзади',
+                label: _uploading ? 'Загрузка…' : 'Загрузить до 3 фото · спереди · сбоку · сзади',
                 onTap: _uploading ? null : _pickMulti,
               ),
             ],
@@ -1497,99 +1464,6 @@ class _PhotoTile extends StatelessWidget {
   }
 }
 
-/// Силуэтный гид «как встать»: три позы (спереди/сбоку/сзади), активная подсвечена.
-class _BodyPoseGuide extends StatelessWidget {
-  const _BodyPoseGuide({required this.value, required this.onSelect});
-  final String value;
-  final ValueChanged<String> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppColors c = context.colors;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text('В облегающей одежде или белье, телефон на уровне пояса, ровный фон, вся фигура в кадре.',
-            style: TextStyle(fontSize: 12, height: 1.3, color: c.inkMuted)),
-        const SizedBox(height: 8),
-        Row(
-          children: <Widget>[
-            for (final MapEntry<String, String> e in kAngleLabels.entries) ...<Widget>[
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => onSelect(e.key),
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      color: value == e.key ? c.accent.withValues(alpha: 0.10) : c.cardElevated,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: value == e.key ? c.accent : c.line),
-                    ),
-                    child: Column(
-                      children: <Widget>[
-                        SizedBox(
-                          height: 56,
-                          child: CustomPaint(
-                            size: const Size(40, 56),
-                            painter: _SilhouettePainter(
-                              pose: e.key,
-                              color: value == e.key ? c.accent : c.inkMutedXl,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(e.value,
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: value == e.key ? c.ink : c.inkMuted)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              if (e.key != kAngleLabels.keys.last) const SizedBox(width: 8),
-            ],
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-/// Силуэт-«тушка» для подсказки ракурса (фронт/спина — симметрично, сбоку — профиль).
-class _SilhouettePainter extends CustomPainter {
-  _SilhouettePainter({required this.pose, required this.color});
-  final String pose;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final double sx = size.width / 80;
-    final double sy = size.height / 170;
-    final Paint paint = Paint()..color = color..style = PaintingStyle.fill;
-    Rect r(double x, double y, double w, double h) =>
-        Rect.fromLTWH(x * sx, y * sy, w * sx, h * sy);
-    void rr(double x, double y, double w, double h, double rad) => canvas.drawRRect(
-        RRect.fromRectAndRadius(r(x, y, w, h), Radius.circular(rad * sx)), paint);
-
-    if (pose == 'side') {
-      canvas.drawCircle(Offset(33 * sx, 16 * sy), 11 * sx, paint);
-      rr(30, 30, 17, 56, 8.5);
-      rr(32, 84, 9, 66, 4.5);
-      rr(39, 84, 9, 66, 4.5);
-    } else {
-      canvas.drawCircle(Offset(40 * sx, 15 * sy), 11 * sx, paint);
-      rr(25, 32, 30, 52, 9); // торс
-      rr(30, 83, 9, 66, 4.5);
-      rr(41, 83, 9, 66, 4.5);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_SilhouettePainter old) => old.pose != pose || old.color != color;
-}
 
 // ─── Hold-to-delete (удержание без диалога подтверждения) ──────────────────────
 

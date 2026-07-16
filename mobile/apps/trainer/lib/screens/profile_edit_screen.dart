@@ -178,7 +178,8 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        // Низ учитывает резерв под глобальное меню навигации.
+        padding: EdgeInsets.fromLTRB(16, 8, 16, MediaQuery.of(context).padding.bottom + 24),
         children: <Widget>[
           Center(
             child: Column(
