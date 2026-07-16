@@ -69,6 +69,8 @@ dependencies:
   connectivity_plus: ^6.1.0
   # StreamGroup.merge для слияния connectivity + периодической пробы API.
   async: ^2.11.0
+  # Номер сборки — онбординг показывается один раз после каждого обновления.
+  package_info_plus: ^9.0.1
 
 dev_dependencies:
   flutter_test:

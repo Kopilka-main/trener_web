@@ -1,31 +1,44 @@
 import 'package:core/core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
-/// Локальное файловое хранилище флага «показать онбординг новому тренеру».
-/// Ставится ОДИН раз при успешной регистрации, снимается после прохождения
-/// приветственной карусели. Существующие пользователи (просто логин) флаг не
-/// получают — онбординг не видят.
+/// Локальное хранилище: номер сборки, на котором тренер уже видел онбординг.
+/// Онбординг показывается, если текущая сборка приложения отличается от
+/// сохранённой (новая установка ИЛИ обновление) — то есть один раз после
+/// КАЖДОГО обновления, всем пользователям (а не только новым при регистрации).
 class _OnboardingFlagStore {
   _OnboardingFlagStore._();
-  static const String _key = 'trainer_onboarding_pending';
+  static const String _key = 'trainer_onboarding_seen_build';
 
-  static Future<bool> read() async {
+  static Future<String?> readSeenBuild() async {
     final List<Map<String, dynamic>>? list = await LocalJsonStore.instance.readList(_key);
-    if (list == null || list.isEmpty) return false;
-    return list.first['pending'] == true;
+    if (list == null || list.isEmpty) return null;
+    return list.first['build'] as String?;
   }
 
-  static Future<void> write(bool pending) => LocalJsonStore.instance.writeList(
+  static Future<void> writeSeenBuild(String build) => LocalJsonStore.instance.writeList(
         _key,
         <Map<String, dynamic>>[
-          <String, dynamic>{'pending': pending},
+          <String, dynamic>{'build': build},
         ],
       );
 }
 
-/// Реактивный флаг «показать онбординг». Гидратируется из локального хранилища
-/// при старте (дефолт false — существующие пользователи карусель не видят),
-/// поднимается в true при регистрации и снимается по завершении онбординга.
+/// Текущий номер сборки приложения (`buildNumber`, напр. «16» из 1.4.0+16).
+/// Пусто, если определить не удалось — тогда онбординг не навязываем.
+Future<String> _currentBuild() async {
+  try {
+    final PackageInfo info = await PackageInfo.fromPlatform();
+    return info.buildNumber;
+  } catch (_) {
+    return '';
+  }
+}
+
+/// Реактивный флаг «показать онбординг». По умолчанию false; при старте
+/// поднимается в true, если текущая сборка приложения ещё не «видела» онбординг
+/// (новая установка или обновление). Снимается по завершении карусели с
+/// запоминанием текущей сборки — до следующего обновления больше не показывается.
 class OnboardingPendingNotifier extends Notifier<bool> {
   @override
   bool build() {
@@ -34,22 +47,22 @@ class OnboardingPendingNotifier extends Notifier<bool> {
   }
 
   Future<void> _hydrate() async {
-    // Поднимаем флаг, только если он реально сохранён — false никогда не
-    // «перезатирает» уже установленный setPending().
-    if (await _OnboardingFlagStore.read()) state = true;
+    final String current = await _currentBuild();
+    if (current.isEmpty) return; // не смогли определить сборку — не навязываемся
+    final String? seen = await _OnboardingFlagStore.readSeenBuild();
+    // Показываем, если на ТЕКУЩЕЙ сборке онбординг ещё не проходили.
+    if (seen != current) state = true;
   }
 
-  /// Пометить онбординг к показу. Вызывается при успешной регистрации нового
-  /// тренера (не при логине).
-  void setPending() {
-    state = true;
-    _OnboardingFlagStore.write(true);
-  }
+  /// Показать немедленно (успешная регистрация нового тренера).
+  void setPending() => state = true;
 
-  /// Онбординг пройден или пропущен — больше не показывать.
-  void complete() {
+  /// Онбординг пройден/пропущен на текущей сборке — до следующего обновления
+  /// больше не показывать. Запоминаем текущий номер сборки.
+  Future<void> complete() async {
     state = false;
-    _OnboardingFlagStore.write(false);
+    final String current = await _currentBuild();
+    if (current.isNotEmpty) await _OnboardingFlagStore.writeSeenBuild(current);
   }
 }
 
