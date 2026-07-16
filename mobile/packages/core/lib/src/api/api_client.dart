@@ -47,6 +47,23 @@ String describeApiError(Object error, {String fallback = 'Что-то пошло
   return fallback;
 }
 
+/// true, если ошибка — сетевой сбой (нет связи с сервером), а НЕ ответ сервера.
+/// Используется движком синка: сетевой сбой прерывает слив, ответ сервера — нет.
+bool isOfflineError(Object error) {
+  if (error is DioException) {
+    switch (error.type) {
+      case DioExceptionType.connectionError:
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+        return true;
+      default:
+        return false;
+    }
+  }
+  return false;
+}
+
 /// Возвращает текущий токен сессии (или null, если не авторизован).
 typedef TokenProvider = Future<String?> Function();
 

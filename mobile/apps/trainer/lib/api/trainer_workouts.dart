@@ -257,6 +257,12 @@ class TrainerWorkoutsApi {
     );
     return _unwrap(r);
   }
+
+  /// Импорт целиком офлайн-проведённой тренировки (идемпотентно по
+  /// doc['idempotencyKey']). Тело — importWorkoutRequest (см. @trener/shared).
+  Future<void> importWorkout(String clientId, Map<String, dynamic> doc) async {
+    await _api.postJson('/api/clients/$clientId/workouts/import', doc);
+  }
 }
 
 final Provider<TrainerWorkoutsApi> trainerWorkoutsApiProvider =
