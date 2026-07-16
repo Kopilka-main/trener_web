@@ -170,14 +170,13 @@ class _GlobalNavBarState extends ConsumerState<GlobalNavBar> {
           ),
           child: widget.child,
         ),
-        // Ярлык офлайна/синка — АБСОЛЮТНО сверху по центру, поверх контента:
+        // Ярлык офлайна/синка — АБСОЛЮТНО в левом верхнем углу, поверх контента:
         // не занимает место в layout (интерфейс не сдвигается). Скрыт, когда
         // онлайн и очередь пуста.
         Positioned(
           top: mq.padding.top + 6,
-          left: 0,
-          right: 0,
-          child: const Center(child: OfflineBanner()),
+          left: 12,
+          child: const OfflineBanner(),
         ),
         if (showBar)
           Positioned(left: 0, right: 0, bottom: mq.padding.bottom + 10, child: _bar(context)),
