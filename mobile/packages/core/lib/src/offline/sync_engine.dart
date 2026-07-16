@@ -38,7 +38,36 @@ class SyncEngine {
   /// ошибка), прежде чем оставить его как dead-letter (не трогать на drain()).
   final int maxAttempts;
 
+  /// Реентрант-гвард: слив уже идёт. Триггеров несколько (мутации шаблонов,
+  /// 20-сек тикер, экран проведения), а инстанс движка один на провайдер —
+  /// поэтому два параллельных слива могут повторно отправить один элемент
+  /// (для `template.create` без идемпотентности это дубль на сервере).
+  bool _draining = false;
+  /// Во время активного слива пришёл ещё один запрос (или добавился элемент) —
+  /// по завершении прогоняем `_drainOnce()` ещё раз, чтобы его не потерять.
+  bool _rerun = false;
+
+  /// Слить очередь. Если слив уже идёт — не запускаем второй параллельно (иначе
+  /// двойная отправка), а взводим повтор и возвращаем нейтральный результат.
   Future<SyncResult> drain() async {
+    if (_draining) {
+      _rerun = true;
+      return const SyncResult(sent: 0, failed: 0, stoppedOffline: false);
+    }
+    _draining = true;
+    try {
+      SyncResult res = await _drainOnce();
+      while (_rerun) {
+        _rerun = false;
+        res = await _drainOnce();
+      }
+      return res;
+    } finally {
+      _draining = false;
+    }
+  }
+
+  Future<SyncResult> _drainOnce() async {
     int sent = 0;
     int failed = 0;
     final items = await _outbox.list();

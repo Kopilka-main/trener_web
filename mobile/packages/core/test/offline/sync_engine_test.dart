@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:core/core.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -90,5 +92,49 @@ void main() {
     final still = await outbox.list();
     expect(still.single.status, OutboxStatus.failed);
     expect(still.single.attempts, 3);
+  });
+
+  test('параллельные drain() не отправляют один элемент дважды (реентрант-гвард)', () async {
+    await outbox.enqueue(kind: 'k', payload: {});
+    var calls = 0;
+    final gate = Completer<void>();
+    final engine = SyncEngine(outbox, handlers: {
+      'k': (_) async {
+        calls++;
+        await gate.future; // держим первый слив в полёте, пока стартует второй
+      },
+    });
+    // Оба стартуют, пока элемент ещё в очереди: без гварда второй тоже отправит.
+    final f1 = engine.drain();
+    final f2 = engine.drain();
+    gate.complete();
+    await Future.wait<SyncResult>([f1, f2]);
+    expect(calls, 1);
+    expect(await outbox.list(), isEmpty);
+  });
+
+  test('элемент, добавленный во время слива, отправляется повторным прогоном', () async {
+    var calls = 0;
+    final gate = Completer<void>();
+    late final SyncEngine engine;
+    engine = SyncEngine(outbox, handlers: {
+      'first': (_) async {
+        calls++;
+        // Пока первый в полёте — кладём второй элемент и стартуем параллельный
+        // drain (взведёт _rerun), который должен подхватиться после завершения.
+        await outbox.enqueue(kind: 'second', payload: {});
+        unawaited(engine.drain());
+        await gate.future;
+      },
+      'second': (_) async => calls++,
+    });
+    await outbox.enqueue(kind: 'first', payload: {});
+    final f1 = engine.drain();
+    gate.complete();
+    await f1;
+    // Дать повторному прогону завершиться.
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, 2);
+    expect(await outbox.list(), isEmpty);
   });
 }
