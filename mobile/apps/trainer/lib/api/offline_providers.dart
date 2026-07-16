@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'local_workout.dart';
 import 'trainer_catalog.dart';
+import 'trainer_client_card.dart';
 import 'trainer_workouts.dart';
 
 /// Обработчик элемента 'workout.import': достаёт clientId+doc и шлёт через
@@ -112,7 +113,7 @@ final _syncTick = StateProvider<int>((ref) => 0);
 
 /// Слить очередь (при online и после enqueue). Обновляет индикатор.
 Future<void> drainOnline(Ref ref) async {
-  await ref.read(syncEngineProvider).drain();
+  final SyncResult res = await ref.read(syncEngineProvider).drain();
   ref.read(_syncTick.notifier).state++;
   ref.invalidate(syncStatusProvider);
   // Успешный слив мог отправить локальные тренировки (purge) — без этого
@@ -120,4 +121,13 @@ Future<void> drainOnline(Ref ref) async {
   // старыми данными до ухода/возврата.
   ref.invalidate(localWorkoutsProvider);
   ref.invalidate(pendingLocalWorkoutsProvider);
+  // Что-то реально ушло на сервер → перечитать серверные списки. Иначе
+  // отправленная тренировка пропадала из истории: локальную карточку убрал
+  // purge, а серверный список оставался старым (запись появлялась только
+  // после перезапуска). Инвалидируем только по факту отправки — лишний
+  // рефетч на каждый пустой слив не нужен.
+  if (res.sent > 0) {
+    ref.invalidate(clientWorkoutsCardProvider);
+    ref.invalidate(trainerTemplatesProvider);
+  }
 }
