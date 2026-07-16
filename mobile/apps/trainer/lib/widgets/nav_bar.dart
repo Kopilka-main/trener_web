@@ -145,7 +145,13 @@ class _GlobalNavBarState extends ConsumerState<GlobalNavBar> {
     final bool onHome = _location == '/home';
     // Прячем, когда открыта выдвижная шторка (плашка не всплывает поверх неё).
     final bool sheetOpen = navSheetOpen.value;
-    final bool showBar = authed && !onConduct && !keyboard && !onHome && !sheetOpen;
+    // Место под плашку резервируем ВСЕГДА, когда меню в принципе может показаться
+    // (НЕ зависит от onHome) — иначе переход Главная↔раздел менял нижний отступ,
+    // и плитки Главной дёргались (сдвигались) до отрисовки новой страницы.
+    final bool menuPossible = authed && !onConduct && !keyboard && !sheetOpen;
+    // Саму плашку не рисуем на Главной — но резерв места одинаков, поэтому
+    // переход между Главной и разделом больше не двигает контент.
+    final bool showBar = menuPossible && !onHome;
     // ВАЖНО: структура дерева СТАБИЛЬНА (всегда Stack > MediaQuery > child).
     // Раньше при showBar=false возвращался голый widget.child — из-за смены
     // структуры go_router-навигатор переподключался в дереве и ОТМЕНЯЛ pop, из-за
@@ -154,7 +160,7 @@ class _GlobalNavBarState extends ConsumerState<GlobalNavBar> {
     // Плашка ПЛАВАЕТ поверх контента (фон под ней — сама страница), а резерв
     // снизу (через MediaQuery) раздвигает SafeArea/отступы, чтобы концовка
     // страницы не залезала под плашку.
-    final double reserve = showBar ? _reserve : 0;
+    final double reserve = menuPossible ? _reserve : 0;
     return Stack(
       children: <Widget>[
         MediaQuery(
