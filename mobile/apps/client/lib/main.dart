@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -77,8 +79,11 @@ class ClientApp extends ConsumerStatefulWidget {
   ConsumerState<ClientApp> createState() => _ClientAppState();
 }
 
-class _ClientAppState extends ConsumerState<ClientApp> {
+class _ClientAppState extends ConsumerState<ClientApp> with WidgetsBindingObserver {
   ScreenAnalytics? _analytics;
+  // Глобальный автоопрос ленты, пока приложение на переднем плане (вебсокетов
+  // нет): держит главную/уведомления свежими без перезапуска.
+  Timer? _feedPoll;
   // Системный «назад» не закрывает приложение: обычный pop (с учётом PopScope
   // экранов), а на корне стека — уход на главную вместо выхода.
   late final BackButtonDispatcher _backDispatcher =
@@ -87,12 +92,44 @@ class _ClientAppState extends ConsumerState<ClientApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(sessionProvider.notifier).bootstrap();
       // Лог экранов (аналитика): один на приложение, слушает смену маршрута.
       _analytics = ScreenAnalytics(ref)..start();
       _checkAppUpdate();
     });
+    _startFeedPoll();
+  }
+
+  /// Регулярный автоопрос источников ленты (занятия/тренировки/чат/пакеты/
+  /// главная/непрочитанные), пока приложение на переднем плане. Без него новые
+  /// уведомления (напр. занятие на согласование) появлялись только после
+  /// перезапуска — как поллинг в тренерском приложении, но общий на всё приложение.
+  void _startFeedPoll() {
+    _feedPoll?.cancel();
+    _feedPoll = Timer.periodic(const Duration(seconds: 25), (_) => _refreshFeed());
+  }
+
+  void _refreshFeed() {
+    if (!mounted) return;
+    if (ref.read(sessionProvider).status != AuthStatus.authenticated) return;
+    ref.invalidate(clientSessionsProvider);
+    ref.invalidate(clientWorkoutsProvider);
+    ref.invalidate(clientChatProvider);
+    ref.invalidate(clientUnreadProvider);
+    ref.invalidate(clientPackagesProvider);
+    ref.invalidate(clientHomeProvider);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshFeed(); // вернулись в приложение → сразу освежить, потом по таймеру
+      _startFeedPoll();
+    } else if (state == AppLifecycleState.paused) {
+      _feedPoll?.cancel(); // в фоне сервер не опрашиваем
+    }
   }
 
   /// Server-driven проверка «требуется обновление»: тянем /api/app-info и, если
@@ -117,6 +154,8 @@ class _ClientAppState extends ConsumerState<ClientApp> {
 
   @override
   void dispose() {
+    _feedPoll?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _analytics?.dispose();
     super.dispose();
   }

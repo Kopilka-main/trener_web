@@ -168,12 +168,24 @@ List<_Notif> _build({
     }
   }
 
-  // Проведённые, но не согласованные за 30 дней.
+  // Прошедшие, но не согласованные за 30 дней — и проведённые, и просто
+  // назначенные на прошедшую дату (status planned): их тоже надо согласовать,
+  // иначе занятие на 15-е, открытое 16-го, ниоткуда не всплывает.
   final DateTime ago30 = now.subtract(const Duration(days: 30));
   for (final Session s in sessions) {
-    if (s.status != SessionStatus.completed || s.confirmation != ClientConfirmation.pending) continue;
+    if (s.status == SessionStatus.cancelled || s.confirmation != ClientConfirmation.pending) continue;
     if (!s.start.isBefore(now) || s.start.isBefore(ago30)) continue;
-    out.add(_Notif(id: 'confirm:${s.id}', kind: _Kind.confirm, text: 'Подтвердите проведённую тренировку ${_whenLabel(s)}', to: '/calendar', sessionId: s.id, date: _dateOnly(calParseIso(s.date))));
+    final bool done = s.status == SessionStatus.completed;
+    out.add(_Notif(
+      id: 'confirm:${s.id}',
+      kind: _Kind.confirm,
+      text: done
+          ? 'Подтвердите проведённую тренировку ${_whenLabel(s)}'
+          : 'Подтвердите занятие ${_whenLabel(s)}',
+      to: '/calendar',
+      sessionId: s.id,
+      date: _dateOnly(calParseIso(s.date)),
+    ));
   }
 
   // Скоро занятие — ближайшее не-pending в пределах 24ч.
