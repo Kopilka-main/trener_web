@@ -6,6 +6,7 @@ import 'package:core/core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'local_workout.dart';
+import 'trainer_catalog.dart';
 import 'trainer_workouts.dart';
 
 /// Обработчик элемента 'workout.import': достаёт clientId+doc и шлёт через sender.
@@ -66,11 +67,15 @@ final isOnlineProvider = StreamProvider<bool>((ref) async* {
 
 final syncEngineProvider = Provider<SyncEngine>((ref) {
   final api = ref.read(trainerWorkoutsApiProvider);
+  final catalogApi = ref.read(trainerCatalogApiProvider);
   return SyncEngine(
     ref.read(outboxProvider),
     isOffline: isOfflineError,
     handlers: {
       'workout.import': makeWorkoutImportHandler(api.importWorkout),
+      'template.create': makeTemplateCreateHandler(catalogApi),
+      'template.update': makeTemplateUpdateHandler(catalogApi),
+      'template.delete': makeTemplateDeleteHandler(catalogApi),
     },
   );
 });

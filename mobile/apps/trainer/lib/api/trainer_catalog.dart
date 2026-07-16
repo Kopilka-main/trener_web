@@ -1,5 +1,6 @@
 import 'package:core/core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
 import 'offline_providers.dart';
 import 'trainer_assign.dart';
@@ -172,7 +173,145 @@ class TrainerTemplatesNotifier extends CachedListNotifier<WorkoutTemplate> {
     list.sort((WorkoutTemplate a, WorkoutTemplate b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return list;
   }
+
+  Future<List<Map<String, dynamic>>> _rawCache() async =>
+      (await store.readList(cacheKey)) ?? <Map<String, dynamic>>[];
+
+  /// Пишет [raw] в кэш и синхронно обновляет state — один путь для онлайн и
+  /// офлайн мутаций (оптимистичное обновление).
+  Future<void> _applyRaw(List<Map<String, dynamic>> raw) async {
+    await store.writeList(cacheKey, raw);
+    state = AsyncData<List<WorkoutTemplate>>(parse(raw));
+  }
+
+  /// Дописывает `exerciseName` в raw-позициях шаблона по каталогу упражнений
+  /// (сервер их в теле запроса не присылает — нужны только для оптимистичной
+  /// карточки, которую строим на клиенте).
+  List<Map<String, dynamic>> _withExerciseNames(dynamic exercisesIn) {
+    final List<TExercise> catalog = ref.read(trainerCatalogProvider).valueOrNull ?? <TExercise>[];
+    final Map<String, String> namesById = <String, String>{
+      for (final TExercise e in catalog) e.id: e.name,
+    };
+    return ((exercisesIn as List<dynamic>?) ?? <dynamic>[]).map((dynamic e) {
+      final Map<String, dynamic> m = (e as Map).cast<String, dynamic>();
+      return <String, dynamic>{
+        ...m,
+        'exerciseName': namesById[m['exerciseId']] ?? 'Упражнение',
+      };
+    }).toList();
+  }
+
+  /// Онлайн-слив забрал элемент [outboxItemId] (сервер подтвердил) → сверяем
+  /// оптимистичную карточку с сервером. Если элемент остался в очереди (нет
+  /// связи или сервер отверг) — рефетч не делаем, карточка живёт в кэше до связи.
+  Future<void> _invalidateIfSent(String outboxItemId) async {
+    final List<OutboxItem> remaining = await ref.read(outboxProvider).list();
+    final bool stillQueued = remaining.any((OutboxItem i) => i.id == outboxItemId);
+    if (!stillQueued) ref.invalidateSelf();
+  }
+
+  /// Создать шаблон офлайн-безопасно: оптимистичная карточка (клиентский uuid,
+  /// имена упражнений из каталога) сразу в state+кэш, элемент очереди
+  /// 'template.create'. [clientId] задан → персональный шаблон.
+  Future<void> createOffline(Map<String, dynamic> body, {String? clientId}) async {
+    final Map<String, dynamic> raw = <String, dynamic>{
+      'id': const Uuid().v4(),
+      'name': body['name'],
+      'categoryTag': body['categoryTag'],
+      'shortDescription': body['shortDescription'],
+      'exercises': _withExerciseNames(body['exercises']),
+      'clientId': ?clientId,
+    };
+    final List<Map<String, dynamic>> list = await _rawCache();
+    list.insert(0, raw);
+    await _applyRaw(list);
+
+    final Map<String, dynamic> queueBody = <String, dynamic>{
+      ...body,
+      'clientId': ?clientId,
+    };
+    final OutboxItem item = await ref.read(outboxProvider).enqueue(
+          kind: 'template.create',
+          payload: <String, dynamic>{'body': queueBody},
+        );
+    await drainOnline(ref);
+    await _invalidateIfSent(item.id);
+  }
+
+  /// Изменить шаблон офлайн-безопасно: оптимистично заменяет запись в кэше,
+  /// элемент очереди 'template.update' (PATCH идемпотентен на сервере).
+  Future<void> updateOffline(String id, Map<String, dynamic> body) async {
+    final List<Map<String, dynamic>> list = await _rawCache();
+    final int i = list.indexWhere((Map<String, dynamic> e) => e['id'] == id);
+    if (i != -1) {
+      final Map<String, dynamic> merged = <String, dynamic>{...list[i], ...body};
+      if (body.containsKey('exercises')) {
+        merged['exercises'] = _withExerciseNames(body['exercises']);
+      }
+      list[i] = merged;
+    }
+    await _applyRaw(list);
+
+    final OutboxItem item = await ref.read(outboxProvider).enqueue(
+          kind: 'template.update',
+          payload: <String, dynamic>{'id': id, 'body': body},
+        );
+    await drainOnline(ref);
+    await _invalidateIfSent(item.id);
+  }
+
+  /// Удалить шаблон офлайн-безопасно: оптимистично убирает запись из кэша,
+  /// элемент очереди 'template.delete'.
+  Future<void> deleteOffline(String id) async {
+    final List<Map<String, dynamic>> list = await _rawCache()
+      ..removeWhere((Map<String, dynamic> e) => e['id'] == id);
+    await _applyRaw(list);
+
+    final OutboxItem item = await ref.read(outboxProvider).enqueue(
+          kind: 'template.delete',
+          payload: <String, dynamic>{'id': id},
+        );
+    await drainOnline(ref);
+    await _invalidateIfSent(item.id);
+  }
 }
 
 final AsyncNotifierProvider<TrainerTemplatesNotifier, List<WorkoutTemplate>> trainerTemplatesProvider =
     AsyncNotifierProvider<TrainerTemplatesNotifier, List<WorkoutTemplate>>(TrainerTemplatesNotifier.new);
+
+/// Обработчик 'template.create': шлёт создание шаблона на сервер (переиспользуем
+/// [TrainerCatalogApi.createTemplate] как sender). Клиентский (оптимистичный) id
+/// карточки не передаётся — сервер присвоит свой; после успешного слива
+/// нотифайер делает invalidateSelf (рефетч заменит карточку серверной).
+SyncHandler makeTemplateCreateHandler(TrainerCatalogApi api) {
+  return (OutboxItem item) async {
+    final Map<String, dynamic> body = (item.payload['body'] as Map).cast<String, dynamic>();
+    await api.createTemplate(body);
+  };
+}
+
+/// Обработчик 'template.update': PATCH идемпотентен на сервере; 404 (шаблон уже
+/// удалён либо create ещё не дошёл) — считаем успехом (глотаем).
+SyncHandler makeTemplateUpdateHandler(TrainerCatalogApi api) {
+  return (OutboxItem item) async {
+    final String id = item.payload['id'] as String;
+    final Map<String, dynamic> body = (item.payload['body'] as Map).cast<String, dynamic>();
+    try {
+      await api.updateTemplate(id, body);
+    } catch (e) {
+      if (isOfflineError(e) || apiErrorStatus(e) != 404) rethrow;
+    }
+  };
+}
+
+/// Обработчик 'template.delete': 404 — шаблон уже удалён, считаем успехом.
+SyncHandler makeTemplateDeleteHandler(TrainerCatalogApi api) {
+  return (OutboxItem item) async {
+    final String id = item.payload['id'] as String;
+    try {
+      await api.deleteTemplate(id);
+    } catch (e) {
+      if (isOfflineError(e) || apiErrorStatus(e) != 404) rethrow;
+    }
+  };
+}
