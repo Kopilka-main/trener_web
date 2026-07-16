@@ -61,6 +61,8 @@ dependencies:
   # Свайп-действия на строке подхода (+1 / изменить / удалить) в проведении тренировки.
   flutter_slidable: ^4.0.3
   flutter_svg: ^2.3.0
+  # UUID клиентских id локальных документов (idempotencyKey офлайн-очереди).
+  uuid: ^4.5.1
 
 dev_dependencies:
   flutter_test:
