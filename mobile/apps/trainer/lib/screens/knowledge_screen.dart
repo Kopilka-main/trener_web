@@ -68,36 +68,26 @@ class _KnowledgeScreenState extends ConsumerState<KnowledgeScreen> {
   }
 
   /// Дубль шаблона: копия с тем же составом и scope (общий/персональный).
+  /// Офлайн-метод нотифайера оптимистично обновляет state+кэш и сам не бросает.
   Future<void> _duplicateTemplate(WorkoutTemplate t) async {
-    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
-    try {
-      await ref.read(trainerCatalogApiProvider).createTemplate(
-        <String, dynamic>{
-          'name': '${t.name} (копия)',
-          'categoryTag': t.categoryTag,
-          'shortDescription': t.shortDescription,
-          'exercises': t.exercises.map((TemplateExercise e) => e.toPayload()).toList(),
-        },
-        clientId: t.clientId,
-      );
-      ref.invalidate(trainerTemplatesProvider);
-    } catch (_) {
-      m.showSnackBar(const SnackBar(content: Text('Не удалось создать дубль')));
-    }
+    await ref.read(trainerTemplatesProvider.notifier).createOffline(
+      <String, dynamic>{
+        'name': '${t.name} (копия)',
+        'categoryTag': t.categoryTag,
+        'shortDescription': t.shortDescription,
+        'exercises': t.exercises.map((TemplateExercise e) => e.toPayload()).toList(),
+      },
+      clientId: t.clientId,
+    );
   }
 
-  /// Удалить шаблон (с подтверждением).
+  /// Удалить шаблон (с подтверждением). Офлайн-метод нотифайера оптимистично
+  /// убирает запись из state+кэш и сам не бросает.
   Future<void> _deleteTemplate(WorkoutTemplate t) async {
     final bool ok = await confirmDelete(context,
         title: 'Удалить тренировку?', message: '«${t.name}» будет удалена.');
     if (!ok || !mounted) return;
-    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
-    try {
-      await ref.read(trainerCatalogApiProvider).deleteTemplate(t.id);
-      ref.invalidate(trainerTemplatesProvider);
-    } catch (_) {
-      m.showSnackBar(const SnackBar(content: Text('Не удалось удалить')));
-    }
+    await ref.read(trainerTemplatesProvider.notifier).deleteOffline(t.id);
   }
 
   @override

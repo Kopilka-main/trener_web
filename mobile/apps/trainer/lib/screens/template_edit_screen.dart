@@ -139,7 +139,7 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
     setState(() => _busy = true);
     final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
     final NavigatorState nav = Navigator.of(context);
-    final TrainerCatalogApi api = ref.read(trainerCatalogApiProvider);
+    final TrainerTemplatesNotifier notifier = ref.read(trainerTemplatesProvider.notifier);
     final Map<String, dynamic> body = <String, dynamic>{
       'name': name,
       'categoryTag': _tag,
@@ -148,11 +148,10 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
     };
     try {
       if (_isEdit) {
-        await api.updateTemplate(widget.template!.id, body);
+        await notifier.updateOffline(widget.template!.id, body);
       } else {
-        await api.createTemplate(body, clientId: widget.clientId);
+        await notifier.createOffline(body, clientId: widget.clientId);
       }
-      ref.invalidate(trainerTemplatesProvider);
       if (!mounted) return;
       // Клиентский «Создать тренировку»: помимо шаблона возвращаем план, чтобы
       // экран клиента поставил по нему черновик наверх. Иначе — обычный true.
@@ -162,6 +161,8 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
         nav.pop(true);
       }
     } catch (_) {
+      // Страховка от неожиданных ошибок: офлайн-методы нотифайера сами не
+      // бросают (оптимистичный кэш + очередь), поэтому этот путь — редкость.
       if (!mounted) return;
       setState(() => _busy = false);
       m.showSnackBar(const SnackBar(content: Text('Не удалось сохранить шаблон')));
@@ -204,11 +205,11 @@ class _TemplateEditScreenState extends ConsumerState<TemplateEditScreen> {
     setState(() => _busy = true);
     final NavigatorState nav = Navigator.of(context);
     try {
-      await ref.read(trainerCatalogApiProvider).deleteTemplate(widget.template!.id);
-      ref.invalidate(trainerTemplatesProvider);
+      await ref.read(trainerTemplatesProvider.notifier).deleteOffline(widget.template!.id);
       if (!mounted) return;
       nav.pop(true);
     } catch (_) {
+      // Страховка: deleteOffline сам не бросает при штатной работе очереди.
       if (!mounted) return;
       setState(() => _busy = false);
     }
