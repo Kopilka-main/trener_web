@@ -94,6 +94,22 @@ void main() {
     expect(still.single.attempts, 3);
   });
 
+  test('элемент, застрявший в sending (эмуляция убитого процесса), переигрывается при drain()', () async {
+    final a = await outbox.enqueue(kind: 'k', payload: {'n': 1});
+    // Эмулируем прерванный слив: markSending записан на диск, но "процесс"
+    // (этот SyncEngine) больше никогда не вызовет handler — как при
+    // kill/crash между markSending и ответом сервера.
+    await outbox.markSending(a.id);
+    var calls = 0;
+    final engine = SyncEngine(outbox, handlers: {
+      'k': (_) async => calls++,
+    });
+    final res = await engine.drain();
+    expect(calls, 1);
+    expect(res.sent, 1);
+    expect(await outbox.list(), isEmpty);
+  });
+
   test('параллельные drain() не отправляют один элемент дважды (реентрант-гвард)', () async {
     await outbox.enqueue(kind: 'k', payload: {});
     var calls = 0;

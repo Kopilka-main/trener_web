@@ -71,8 +71,24 @@ class SyncEngine {
     int sent = 0;
     int failed = 0;
     final items = await _outbox.list();
+    // Переигранный "sending": drain() гарантирует, что в этом процессе на
+    // входе сюда не идёт никакой другой отправки (реентрант-гвард в drain()
+    // не даёт войти в _drainOnce() параллельно) — значит любой элемент,
+    // застрявший в sending прямо сейчас, остался от прерванного слива в
+    // прошлом (приложение убили/упало между markSending и ответом сервера).
+    // Не сбросить его — значит он никогда больше не попадёт ни в отправку,
+    // ни выйдет из счётчика очереди (вечное «(1)»). Компромисс: если запрос
+    // на самом деле дошёл до сервера, а подтверждение потерялось, переигровка
+    // продублирует его на сервере — для workout.import безопасно
+    // (идемпотентность по idempotencyKey), для template.create — редкий
+    // дубль, что предпочтительнее вечно висящей очереди.
     for (final item in items) {
-      if (item.status == OutboxStatus.sending) continue;
+      if (item.status == OutboxStatus.sending) {
+        await _outbox.markPending(item.id);
+        item.status = OutboxStatus.pending;
+      }
+    }
+    for (final item in items) {
       if (item.status == OutboxStatus.failed && item.attempts >= maxAttempts) {
         // Отравленный элемент: сервер уже отверг его maxAttempts раз — дальше
         // не переигрываем (dead-letter), чтобы не мусорить каждый drain().
