@@ -1,6 +1,7 @@
 import 'package:core/core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'offline_providers.dart';
 import 'trainer_assign.dart';
 
 /// Таксономия групп мышц и тегов шаблонов (зеркало apps/web/src/lib/muscleGroups.ts).
@@ -125,13 +126,16 @@ class TrainerCatalogApi {
 
   // ─── Шаблоны ───
   Future<List<WorkoutTemplate>> templates() async {
-    final Map<String, dynamic> r = await _api.getJson('/api/workout-templates');
-    final List<WorkoutTemplate> list = ((r['templates'] as List<dynamic>?) ?? <dynamic>[])
-        .cast<Map<String, dynamic>>()
-        .map(WorkoutTemplate.fromJson)
-        .toList();
+    final List<Map<String, dynamic>> raw = await templatesRaw();
+    final List<WorkoutTemplate> list = raw.map(WorkoutTemplate.fromJson).toList();
     list.sort((WorkoutTemplate a, WorkoutTemplate b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return list;
+  }
+
+  /// Сырые записи шаблонов (для кэша cache-first, см. [TrainerTemplatesNotifier]).
+  Future<List<Map<String, dynamic>>> templatesRaw() async {
+    final Map<String, dynamic> r = await _api.getJson('/api/workout-templates');
+    return ((r['templates'] as List<dynamic>?) ?? <dynamic>[]).cast<Map<String, dynamic>>();
   }
 
   /// [clientId] задан → персональный шаблон для этого клиента; иначе общий.
@@ -154,5 +158,21 @@ class TrainerCatalogApi {
 final Provider<TrainerCatalogApi> trainerCatalogApiProvider =
     Provider<TrainerCatalogApi>((ref) => TrainerCatalogApi(ref));
 
-final FutureProvider<List<WorkoutTemplate>> trainerTemplatesProvider =
-    FutureProvider<List<WorkoutTemplate>>((ref) => ref.read(trainerCatalogApiProvider).templates());
+class TrainerTemplatesNotifier extends CachedListNotifier<WorkoutTemplate> {
+  @override
+  String get cacheKey => 'trainer_templates';
+  @override
+  KvStore get store => ref.read(kvStoreProvider);
+  @override
+  Future<List<Map<String, dynamic>>> fetchRaw() =>
+      ref.read(trainerCatalogApiProvider).templatesRaw();
+  @override
+  List<WorkoutTemplate> parse(List<Map<String, dynamic>> raw) {
+    final List<WorkoutTemplate> list = raw.map(WorkoutTemplate.fromJson).toList();
+    list.sort((WorkoutTemplate a, WorkoutTemplate b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return list;
+  }
+}
+
+final AsyncNotifierProvider<TrainerTemplatesNotifier, List<WorkoutTemplate>> trainerTemplatesProvider =
+    AsyncNotifierProvider<TrainerTemplatesNotifier, List<WorkoutTemplate>>(TrainerTemplatesNotifier.new);

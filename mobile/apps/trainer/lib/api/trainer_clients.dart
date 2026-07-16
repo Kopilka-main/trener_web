@@ -1,6 +1,8 @@
 import 'package:core/core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'offline_providers.dart';
+
 /// Бросается при claim, когда аккаунт по коду не найден (бэк отвечает 422 с
 /// кодом CLIENT_ACCOUNT_NOT_FOUND). Экран показывает «Аккаунт не найден».
 class ClientAccountNotFound implements Exception {
@@ -130,14 +132,17 @@ class TrainerClientsApi {
   ApiClient get _api => _ref.read(apiClientProvider);
 
   Future<List<Client>> load() async {
-    final Map<String, dynamic> r = await _api.getJson('/api/clients');
-    final List<Client> list = ((r['clients'] as List<dynamic>?) ?? <dynamic>[])
-        .cast<Map<String, dynamic>>()
-        .map(Client.fromJson)
-        .toList();
+    final List<Map<String, dynamic>> raw = await clientsRaw();
+    final List<Client> list = raw.map(Client.fromJson).toList();
     list.sort((Client a, Client b) =>
         a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
     return list;
+  }
+
+  /// Сырые записи клиентов (для кэша cache-first, см. [TrainerClientsNotifier]).
+  Future<List<Map<String, dynamic>>> clientsRaw() async {
+    final Map<String, dynamic> r = await _api.getJson('/api/clients');
+    return ((r['clients'] as List<dynamic>?) ?? <dynamic>[]).cast<Map<String, dynamic>>();
   }
 
   /// Один клиент по id (свежий снимок — для карточки/диалога подключения).
@@ -293,8 +298,25 @@ class TrainerClientsApi {
 final Provider<TrainerClientsApi> trainerClientsApiProvider =
     Provider<TrainerClientsApi>((ref) => TrainerClientsApi(ref));
 
-final FutureProvider<List<Client>> trainerClientsProvider =
-    FutureProvider<List<Client>>((ref) => ref.read(trainerClientsApiProvider).load());
+class TrainerClientsNotifier extends CachedListNotifier<Client> {
+  @override
+  String get cacheKey => 'trainer_clients';
+  @override
+  KvStore get store => ref.read(kvStoreProvider);
+  @override
+  Future<List<Map<String, dynamic>>> fetchRaw() =>
+      ref.read(trainerClientsApiProvider).clientsRaw();
+  @override
+  List<Client> parse(List<Map<String, dynamic>> raw) {
+    final List<Client> list = raw.map(Client.fromJson).toList();
+    list.sort((Client a, Client b) =>
+        a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
+    return list;
+  }
+}
+
+final AsyncNotifierProvider<TrainerClientsNotifier, List<Client>> trainerClientsProvider =
+    AsyncNotifierProvider<TrainerClientsNotifier, List<Client>>(TrainerClientsNotifier.new);
 
 /// Один клиент по id — свежий снимок для карточки (статус подключения, теги, заметки).
 final FutureProviderFamily<Client, String> trainerClientProvider =
