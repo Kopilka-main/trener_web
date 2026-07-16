@@ -170,7 +170,8 @@ class TrainerWorkoutsApi {
   /// та, на которую указывает «Вернуться к тренировке», сбрасываем указатель.
   Future<void> delete(String clientId, String wid) async {
     await _api.deleteJson(_base(clientId, wid));
-    final ({String clientId, String workoutId, String name})? ptr = await ActiveWorkoutPointer.read();
+    final ({String clientId, String workoutId, String name, bool local})? ptr =
+        await ActiveWorkoutPointer.read();
     if (ptr?.workoutId == wid) await ActiveWorkoutPointer.clear();
   }
 

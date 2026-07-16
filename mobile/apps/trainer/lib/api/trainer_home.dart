@@ -142,8 +142,12 @@ class TrainerHomeApi {
     // Идущая тренировка: берём локальный указатель и подтверждаем его статус
     // одним лёгким запросом. Если тренировка уже не active — сбрасываем указатель.
     String? resumeClientId, resumeWorkoutId, resumeName, resumeClientName;
-    final ({String clientId, String workoutId, String name})? ptr = await ActiveWorkoutPointer.read();
-    if (ptr != null) {
+    final ({String clientId, String workoutId, String name, bool local})? ptr =
+        await ActiveWorkoutPointer.read();
+    // Локальный (офлайн) указатель не сверяем сетевым запросом — плитку
+    // «Вернуться к тренировке» для него не строим здесь: её роль уже играет
+    // плавающий FAB (ActiveWorkoutFab), которому не нужен server-round-trip.
+    if (ptr != null && !ptr.local) {
       final Map<String, dynamic> wr = await _safe('/api/clients/${ptr.clientId}/workouts/${ptr.workoutId}');
       final Map<String, dynamic>? wj = wr['workout'] as Map<String, dynamic>?;
       if (wj != null && wj['status'] == 'active') {

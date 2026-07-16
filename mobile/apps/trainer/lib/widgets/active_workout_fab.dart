@@ -6,8 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/active_workout_state.dart';
+import '../api/offline_providers.dart';
 import '../api/trainer_workouts.dart';
 import '../router.dart';
+import '../screens/active_workout_screen.dart';
 
 /// Оверлей поверх всего приложения: если идёт (незавершённая) тренировка и мы не
 /// на экране её проведения — рисуем перетаскиваемый плавающий бейдж «Идёт
@@ -81,12 +83,18 @@ class _ActiveWorkoutFabState extends ConsumerState<ActiveWorkoutFab> {
         _location.startsWith('/active/') || ref.watch(activeWorkoutOnScreenProvider);
     final bool show = authed && aw != null && !onActiveScreen;
     // На бейдже — ТАЙМЕР идущей тренировки (не имя клиента). startedAt берём из
-    // самой тренировки (кэш провайдера); тикер выше обновляет раз в секунду.
+    // самой тренировки: серверной — из кэша провайдера, локальной — из
+    // локального документа (без сети). Тикер выше обновляет раз в секунду.
     String label = '';
     if (show) {
-      final Workout? wk =
-          ref.watch(trainerWorkoutProvider((clientId: aw.clientId, wid: aw.workoutId))).valueOrNull;
-      final DateTime? started = wk?.startedAt;
+      final DateTime? started;
+      if (aw.local) {
+        started = ref.watch(localWorkoutByIdProvider(aw.workoutId)).valueOrNull?.startedAt;
+      } else {
+        final Workout? wk =
+            ref.watch(trainerWorkoutProvider((clientId: aw.clientId, wid: aw.workoutId))).valueOrNull;
+        started = wk?.startedAt;
+      }
       final int sec =
           started != null ? DateTime.now().difference(started).inSeconds.clamp(0, 1 << 30) : 0;
       label = _fmt(sec);
@@ -115,6 +123,17 @@ class _ActiveWorkoutFabState extends ConsumerState<ActiveWorkoutFab> {
         onPanUpdate: (DragUpdateDetails d) =>
             setState(() => _pos = Offset(left + d.delta.dx, top + d.delta.dy)),
         onTap: () {
+          if (aw.local) {
+            // Локальная тренировка не живёт на маршруте `/active/...` (тот
+            // только для серверной) — открываем поверх всего через корневой
+            // навигатор, как это делает список клиента при «продолжить».
+            ref.read(routerProvider).routerDelegate.navigatorKey.currentState?.push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => ActiveWorkoutScreen.local(localWorkoutId: aw.workoutId),
+                  ),
+                );
+            return;
+          }
           // Сбрасываем кэш тренировки, чтобы экран проведения открылся со СВЕЖИМ
           // статусом (active), а не устаревшим черновиком (draft) из кэша.
           ref.invalidate(trainerWorkoutProvider((clientId: aw.clientId, wid: aw.workoutId)));

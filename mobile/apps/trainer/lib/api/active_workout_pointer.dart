@@ -13,19 +13,31 @@ class ActiveWorkoutPointer {
     required String clientId,
     required String workoutId,
     required String name,
+    bool local = false,
   }) =>
       LocalJsonStore.instance.writeList(_key, <Map<String, dynamic>>[
-        <String, dynamic>{'clientId': clientId, 'workoutId': workoutId, 'name': name},
+        <String, dynamic>{
+          'clientId': clientId,
+          'workoutId': workoutId,
+          'name': name,
+          'local': local,
+        },
       ]);
 
-  static Future<({String clientId, String workoutId, String name})?> read() async {
+  static Future<({String clientId, String workoutId, String name, bool local})?> read() async {
     final List<Map<String, dynamic>>? list = await LocalJsonStore.instance.readList(_key);
     if (list == null || list.isEmpty) return null;
     final Map<String, dynamic> m = list.first;
     final String? cid = m['clientId'] as String?;
     final String? wid = m['workoutId'] as String?;
     if (cid == null || cid.isEmpty || wid == null || wid.isEmpty) return null;
-    return (clientId: cid, workoutId: wid, name: m['name'] as String? ?? 'Тренировка');
+    // Обратная совместимость: старый указатель без поля `local` — серверный.
+    return (
+      clientId: cid,
+      workoutId: wid,
+      name: m['name'] as String? ?? 'Тренировка',
+      local: m['local'] as bool? ?? false,
+    );
   }
 
   static Future<void> clear() =>

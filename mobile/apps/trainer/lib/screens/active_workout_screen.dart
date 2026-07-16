@@ -577,6 +577,8 @@ class _ConductorState extends ConsumerState<_Conductor> {
         final String cid = _doc!.clientId;
         await _ctrl.complete(_doc!, durationSec: el > 0 ? el : null);
         ref.invalidate(localWorkoutsProvider(cid));
+        ref.invalidate(pendingLocalWorkoutsProvider(cid));
+        ref.read(activeWorkoutProvider.notifier).clear(); // тренировка завершена → убрать FAB
         unawaited(_drain());
         if (!mounted) return;
         await ref.read(appReviewServiceProvider).maybePromptAfterSuccess(

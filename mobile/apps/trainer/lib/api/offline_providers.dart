@@ -45,6 +45,12 @@ final pendingLocalWorkoutsProvider = FutureProvider.family<List<LocalWorkout>, S
   (ref, String clientId) => ref.read(localWorkoutControllerProvider).pendingFor(clientId),
 );
 
+/// Один локальный документ по id (FAB читает отсюда таймер локальной
+/// тренировки, не дёргая сеть).
+final localWorkoutByIdProvider = FutureProvider.family<LocalWorkout?, String>(
+  (ref, String id) => ref.read(localWorkoutControllerProvider).load(id),
+);
+
 /// online = есть сетевой интерфейс И бэкенд реально отвечает. Пересчёт при смене
 /// connectivity и раз в 20 c (на случай «Wi-Fi есть, интернета нет»).
 final isOnlineProvider = StreamProvider<bool>((ref) async* {
@@ -109,4 +115,9 @@ Future<void> drainOnline(Ref ref) async {
   await ref.read(syncEngineProvider).drain();
   ref.read(_syncTick.notifier).state++;
   ref.invalidate(syncStatusProvider);
+  // Успешный слив мог отправить локальные тренировки (purge) — без этого
+  // карточка «ждёт отправки» и список «продолжить» висели бы на экране со
+  // старыми данными до ухода/возврата.
+  ref.invalidate(localWorkoutsProvider);
+  ref.invalidate(pendingLocalWorkoutsProvider);
 }

@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../api/active_workout_state.dart';
 import '../api/trainer_accounting.dart';
 import '../api/trainer_assign.dart';
 import '../api/trainer_calendar.dart';
@@ -1172,6 +1173,9 @@ class _ClientWorkoutsScreenState extends ConsumerState<ClientWorkoutsScreen> {
             plan: _mapsToPlan(exercises),
           );
       ref.invalidate(localWorkoutsProvider(_cid));
+      // Регистрируем как «идущую» для плавающего FAB — иначе после выхода
+      // назад к клиенту/на главную вернуться к ней можно только через список.
+      ref.read(activeWorkoutProvider.notifier).set(_cid, w.id, w.name, local: true);
       if (!mounted) return;
       setState(() => _busy = false);
       await nav.push<void>(MaterialPageRoute<void>(
