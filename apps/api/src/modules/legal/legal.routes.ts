@@ -5,8 +5,15 @@ import type { FastifyInstance } from 'fastify';
  * Отдаётся без авторизации по GET /privacy на обоих доменах (app./my.fitbond.ru).
  * HTML встроен в код — не зависит от статики/CWD, работает сразу после деплоя.
  */
-const UPDATED = '6 июля 2026';
+const UPDATED = '17 июля 2026';
 const CONTACT_EMAIL = 'shlyapnikovna@gmail.com';
+/**
+ * Имя разработчика — ДОЛЖНО совпадать с полем «Разработчик» на странице приложения
+ * в Google Play (аккаунт 8338613102977358925). Иначе проверка отклоняет обновление
+ * с формулировкой «Сведения о приложении или разработчике не совпадают» (так и было
+ * 20.07.2026: в политике не значилось ни названия приложения, ни разработчика).
+ */
+const DEVELOPER = 'SmartSpend';
 
 const PRIVACY_HTML = `<!doctype html>
 <html lang="ru">
@@ -14,7 +21,7 @@ const PRIVACY_HTML = `<!doctype html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="index,follow" />
-<title>Политика конфиденциальности — FitBond</title>
+<title>Политика конфиденциальности — FitFlow и FitFlow CRM (SmartSpend)</title>
 <style>
   :root { color-scheme: light dark; }
   body { max-width: 760px; margin: 0 auto; padding: 24px 18px 64px;
@@ -29,10 +36,16 @@ const PRIVACY_HTML = `<!doctype html>
 </head>
 <body>
   <h1>Политика конфиденциальности</h1>
-  <p class="muted">Приложения «FitBond» (для тренера и для клиента). Обновлено: ${UPDATED}.</p>
+  <p class="muted">Приложения «FitFlow» / «FitFlow me» (для клиента) и «FitFlow CRM»
+  (для тренера). Разработчик: ${DEVELOPER}. Обновлено: ${UPDATED}.</p>
 
-  <p>Настоящая Политика описывает, какие данные обрабатываются в мобильных и веб-приложениях
-  FitBond (далее — «Приложение»), с какой целью и как вы можете управлять своими данными.
+  <p>Настоящая Политика относится к мобильным приложениям разработчика <b>${DEVELOPER}</b>:
+  <b>«FitFlow»</b> (также «FitFlow me», приложение для клиента, идентификатор
+  <code>ru.fitbond.trener_client</code>) и <b>«FitFlow CRM»</b> (приложение для тренера,
+  идентификатор <code>ru.fitbond.trener_trainer</code>), а также к веб-версии сервиса
+  (далее вместе — «Приложение»). Она описывает, какие данные обрабатываются, с какой целью
+  и как вы можете управлять своими данными. Контакт для связи:
+  <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.
   Используя Приложение, вы соглашаетесь с условиями настоящей Политики.</p>
 
   <h2>1. Какие данные мы обрабатываем</h2>
@@ -86,7 +99,9 @@ const PRIVACY_HTML = `<!doctype html>
   <ul>
     <li>получить доступ к своим данным и исправить их в профиле Приложения;</li>
     <li>удалить отдельные данные (тренировки, замеры, фото, сообщения) средствами Приложения;</li>
-    <li>удалить аккаунт и связанные с ним данные — обратившись к нам по адресу ниже;</li>
+    <li>удалить аккаунт и связанные с ним данные — прямо в Приложении: «Профиль» → «Удалить аккаунт»
+      (в течение 3 дней удаление можно отменить, затем данные удаляются безвозвратно), либо по запросу
+      на адрес ниже. Подробнее: <a href="/account-deletion">Удаление аккаунта</a>;</li>
     <li>отключить push-уведомления в настройках Приложения или устройства;</li>
     <li>отозвать согласие на обработку.</li>
   </ul>
@@ -111,7 +126,7 @@ const DELETION_HTML = `<!doctype html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="index,follow" />
-<title>Удаление аккаунта — FitBond</title>
+<title>Удаление аккаунта — FitFlow и FitFlow CRM (SmartSpend)</title>
 <style>
   :root { color-scheme: light dark; }
   body { max-width: 760px; margin: 0 auto; padding: 24px 18px 64px;
@@ -126,14 +141,17 @@ const DELETION_HTML = `<!doctype html>
 </head>
 <body>
   <h1>Удаление аккаунта</h1>
-  <p class="muted">Приложения «FitBond» (для тренера и для клиента). Обновлено: ${UPDATED}.</p>
+  <p class="muted">Приложения «FitFlow» / «FitFlow me» (для клиента) и «FitFlow CRM»
+  (для тренера). Разработчик: ${DEVELOPER}. Обновлено: ${UPDATED}.</p>
 
-  <p>На этой странице описано, как пользователь приложения «FitBond» может запросить удаление
-  своего аккаунта и связанных с ним данных.</p>
+  <p>На этой странице описано, как пользователь приложений разработчика <b>${DEVELOPER}</b> —
+  <b>«FitFlow»</b> (также «FitFlow me», <code>ru.fitbond.trener_client</code>) и
+  <b>«FitFlow CRM»</b> (<code>ru.fitbond.trener_trainer</code>) — может запросить удаление
+  своего аккаунта и связанных с ним данных. Контакт: ${CONTACT_EMAIL}.</p>
 
   <h2>Как удалить аккаунт в приложении</h2>
   <ol>
-    <li>Откройте приложение «FitBond» и войдите в свой аккаунт.</li>
+    <li>Откройте приложение («FitFlow CRM» или «FitFlow me») и войдите в свой аккаунт.</li>
     <li>Перейдите в раздел <b>«Профиль»</b> (нижняя навигация).</li>
     <li>Прокрутите вниз и нажмите <b>«Удалить аккаунт»</b>.</li>
     <li>Подтвердите удаление.</li>
@@ -145,7 +163,7 @@ const DELETION_HTML = `<!doctype html>
   <h2>Удаление по запросу (если нет доступа к приложению)</h2>
   <p>Если вы не можете войти в приложение, отправьте запрос на удаление с темой «Удаление аккаунта»
   и адресом эл. почты вашего аккаунта на
-  <a href="mailto:${CONTACT_EMAIL}?subject=Удаление%20аккаунта%20FitBond">${CONTACT_EMAIL}</a>.
+  <a href="mailto:${CONTACT_EMAIL}?subject=Удаление%20аккаунта%20FitFlow">${CONTACT_EMAIL}</a>.
   Мы обработаем запрос и удалим аккаунт в течение 30 дней.</p>
 
   <h2>Какие данные удаляются</h2>
