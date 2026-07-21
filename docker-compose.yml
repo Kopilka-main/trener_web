@@ -1,6 +1,17 @@
+# Общие настройки логов: без них json-file растёт безгранично и рано или поздно
+# забивает диск — с ростом трафика это одна из самых частых причин падения.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '5'
+
 services:
   postgres:
     image: postgres:16
+    # Без restart упавшая БД остаётся лежать до ручного вмешательства.
+    restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -21,6 +32,22 @@ services:
   api:
     image: ${API_IMAGE:-trener-api:local}
     build: { context: ., dockerfile: apps/api/Dockerfile }
+    restart: unless-stopped
+    logging: *logging
+    # Проба — liveness (в БД не ходит): перезапускаем только реально зависший
+    # процесс. Если завязать на БД, недоступность базы уводила бы живой API в
+    # цикл перезапусков. Готовность к трафику проверяет деплой через /ready.
+    # Используем node, а не curl: его в образе node:20-alpine нет.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     environment:
       NODE_ENV: production
       PORT: 3001
@@ -62,6 +89,8 @@ services:
   nginx:
     image: ${WEB_IMAGE:-trener-web:local}
     build: { context: ., dockerfile: apps/web/Dockerfile }
+    restart: unless-stopped
+    logging: *logging
     # Порт открыт только на localhost: для healthcheck деплоя и отладки.
     # Публичный доступ — через caddy (TLS), не напрямую.
     ports: ['127.0.0.1:8080:80']
@@ -70,6 +99,8 @@ services:
   web-client:
     image: ${WEB_CLIENT_IMAGE:-trener-web-client:local}
     build: { context: ., dockerfile: apps/web-client/Dockerfile }
+    restart: unless-stopped
+    logging: *logging
     ports: ['127.0.0.1:8081:80']
     depends_on: [api]
 
@@ -78,6 +109,7 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    logging: *logging
     ports: ['80:80', '443:443']
     environment:
       ACME_EMAIL: ${ACME_EMAIL:-admin@fitbond.ru}
@@ -95,6 +127,7 @@ services:
   backup:
     image: postgres:16
     restart: unless-stopped
+    logging: *logging
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
       # Сколько суток хранить бэкапы (старше — удаляются). По умолчанию 7.
