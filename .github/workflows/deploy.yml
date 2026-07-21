@@ -69,21 +69,61 @@ jobs:
             set -e
             cd /opt/trener
             export API_IMAGE WEB_IMAGE WEB_CLIENT_IMAGE
+
+            # Образы работающей версии — чтобы вернуться к ней, если новая не
+            # взлетит. Пусто при самом первом деплое (откатываться некуда).
+            prev_image() {
+              cid=$(docker compose ps -q "$1" 2>/dev/null || true)
+              [ -n "$cid" ] && docker inspect --format='{{.Config.Image}}' "$cid" 2>/dev/null || true
+            }
+            PREV_API=$(prev_image api)
+            PREV_WEB=$(prev_image nginx)
+            PREV_WEB_CLIENT=$(prev_image web-client)
+            echo "предыдущие образы: api=$PREV_API web=$PREV_WEB web-client=$PREV_WEB_CLIENT"
+
             # Логин в GHCR: образы приватные, серверу нужна авторизация для pull.
             # GITHUB_TOKEN действует только во время этого прогона воркфлоу.
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$(echo "$GHCR_USER" | tr '[:upper:]' '[:lower:]')" --password-stdin
             docker compose pull
+
+            # Миграции ДО подъёма новой версии: если упадут, set -e прервёт деплой
+            # и в проде останется работать прежняя версия.
             docker compose run --rm api node apps/api/dist/migrate.js
+
             docker compose up -d
+
+            # Проверяем readiness (ходит в БД), а не просто liveness: «процесс
+            # поднялся» ещё не значит «сервис может обслуживать запросы».
             for i in $(seq 1 30); do
-              if curl -fsS http://localhost:8080/api/health | grep -q '"ok":true'; then
-                echo "healthcheck ok"
+              if curl -fsS http://localhost:8080/api/health/ready | grep -q '"ok":true'; then
+                echo "деплой успешен: сервис готов"
                 exit 0
               fi
-              echo "waiting for api... ($i)"
+              echo "ждём готовности api... ($i)"
               sleep 2
             done
-            echo "healthcheck failed"
+
+            # ВНИМАНИЕ: откат возвращает КОД, но не откатывает уже применённую
+            # миграцию — старый код встретит новую схему. Поэтому миграции должны
+            # быть обратно совместимыми (expand/contract: сначала добавляем, код
+            # переезжает, удаляем лишь в следующем релизе).
+            echo "СЕРВИС НЕ ПОДНЯЛСЯ — откатываюсь на предыдущие образы"
+            if [ -n "$PREV_API" ]; then
+              API_IMAGE="$PREV_API" \
+              WEB_IMAGE="${PREV_WEB:-$WEB_IMAGE}" \
+              WEB_CLIENT_IMAGE="${PREV_WEB_CLIENT:-$WEB_CLIENT_IMAGE}" \
+                docker compose up -d
+              for i in $(seq 1 30); do
+                if curl -fsS http://localhost:8080/api/health/ready | grep -q '"ok":true'; then
+                  echo "откат выполнен: прежняя версия снова обслуживает"
+                  break
+                fi
+                sleep 2
+              done
+            else
+              echo "откат невозможен: предыдущая версия не найдена (первый деплой)"
+            fi
+            # Деплой всё равно считаем провальным — чтобы CI горел и это заметили.
             exit 1
         env:
           COOKIE_SECRET: ${{ secrets.COOKIE_SECRET }}
