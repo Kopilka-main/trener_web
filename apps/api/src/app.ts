@@ -2,6 +2,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { sql } from 'drizzle-orm';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
@@ -320,7 +321,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     createClientSession: (clientAccountId) => clientAuthSvc.startSessionForClient(clientAccountId),
   });
 
-  healthRoutes(app);
+  // readiness ходит в БД дешёвым `select 1` — этого достаточно, чтобы отличить
+  // «процесс поднялся» от «сервис реально готов обслуживать запросы».
+  healthRoutes(app, async () => {
+    await deps.db.execute(sql`select 1`);
+  });
   appInfoRoutes(app);
   legalRoutes(app);
   return app;
