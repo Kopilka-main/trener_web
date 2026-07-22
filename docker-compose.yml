@@ -73,6 +73,9 @@ services:
       TELEGRAM_SUPPORT_CHAT_ID: ${TELEGRAM_SUPPORT_CHAT_ID:-}
       # SOCKS5-прокси для Telegram (обход блокировки через SSH-туннель на зарубежный VPS).
       TELEGRAM_SOCKS_PROXY: ${TELEGRAM_SOCKS_PROXY:-}
+      # Группа отчётности по продукту (ежедневно + недельный итог). Пусто → выключено.
+      TELEGRAM_REPORT_CHAT_ID: ${TELEGRAM_REPORT_CHAT_ID:-}
+      REPORT_HOUR: ${REPORT_HOUR:-9}
       # Аналитика экранов: ключ админ-выборки GET /api/analytics/sessions (x-admin-key). Пусто → 503.
       ANALYTICS_ADMIN_KEY: ${ANALYTICS_ADMIN_KEY:-}
       # Папка глобального медиа каталога упражнений (картинки/видео).

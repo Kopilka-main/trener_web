@@ -4,6 +4,9 @@ import { createDb } from './db/client.js';
 import { realClock } from './core/app-deps.js';
 import { makeStorage } from './files/storage.js';
 import { startRemindersScheduler } from './modules/reminders/reminders.scheduler.js';
+import { startReportsScheduler } from './modules/reports/reports.scheduler.js';
+import { makeReportsRepo } from './modules/reports/reports.repo.js';
+import { makeTelegramClient } from './modules/support/telegram.js';
 
 const env = parseEnv(process.env);
 const { db } = createDb(env.DATABASE_URL);
@@ -39,6 +42,28 @@ buildApp({
           app.log.error({ err }, msg);
         },
       });
+
+      // Отчётность по продукту в Telegram-группу: ежедневная сводка за вчера и
+      // недельный итог по понедельникам. Без токена/чата — молча выключено.
+      if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_REPORT_CHAT_ID) {
+        const tg = makeTelegramClient(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_REPORT_CHAT_ID, {
+          apiBase: env.TELEGRAM_API_BASE,
+          socksProxy: env.TELEGRAM_SOCKS_PROXY,
+          logWarn: (msg) => {
+            app.log.warn(msg);
+          },
+        });
+        startReportsScheduler({
+          repo: makeReportsRepo(db),
+          send: (text) => tg.sendToGeneral(text),
+          now: realClock.now,
+          hour: env.REPORT_HOUR,
+          log: (msg, err) => {
+            app.log.error({ err }, msg);
+          },
+        });
+        app.log.info('[reports] отчёты в Telegram включены');
+      }
     }),
   )
   .catch((err: unknown) => {

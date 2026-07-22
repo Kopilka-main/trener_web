@@ -39,6 +39,11 @@ const envSchema = z.object({
   // SOCKS5-прокси для запросов к Telegram (host:port или socks5://host:port).
   // Обход блокировки: запрос идёт через SSH-туннель на зарубежный VPS. Пусто → напрямую.
   TELEGRAM_SOCKS_PROXY: z.string().default(''),
+  // Группа для отчётности по продукту (ежедневная сводка + недельный итог).
+  // Отдельный чат от поддержки, тот же бот. Пусто → отчёты выключены.
+  TELEGRAM_REPORT_CHAT_ID: z.string().default(''),
+  // Час отправки отчёта по локальному времени сервера.
+  REPORT_HOUR: z.coerce.number().int().min(0).max(23).default(9),
 });
 
 export type Env = z.infer<typeof envSchema>;
