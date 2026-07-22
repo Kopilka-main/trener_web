@@ -2,14 +2,26 @@ import { describe, it, expect } from 'vitest';
 import { formatReport, num, type ReportData } from './reports.format.js';
 
 const base: ReportData = {
+  totals: [
+    { label: 'Тренеры', now: 62, was: 55 },
+    { label: 'Занятия', now: 282, was: 161 },
+  ],
   growth: {
     newTrainers: 3,
     newClientAccounts: 11,
-    totalTrainers: 128,
-    totalClientAccounts: 642,
     activeTrainers: 42,
     activeClients: 96,
     linkedPairs: 310,
+  },
+  leaders: [{ name: 'top@x.co', clients: 25 }],
+  newTrainers: [{ name: 'vk_1@oauth.fitbond', via: 'vk' }],
+  sync: [{ name: 'gym@x.co', linked: 11, total: 11 }],
+  audience: {
+    platforms: [
+      { platform: 'ios', users: 84 },
+      { platform: 'android', users: 16 },
+    ],
+    avgSessionMin: 3.0,
   },
   business: {
     workoutsCompleted: 87,
@@ -37,20 +49,31 @@ describe('num', () => {
 });
 
 describe('formatReport', () => {
-  it('включает все четыре блока и заголовок', () => {
+  it('включает все блоки и заголовок', () => {
     const t = formatReport('Отчёт за 21 июля', base);
     expect(t).toContain('Отчёт за 21 июля');
-    expect(t).toContain('РОСТ');
-    expect(t).toContain('ДЕЙСТВИЯ');
+    expect(t).toContain('БАЗА');
+    expect(t).toContain('Тренеры: 62 (+7)');
+    expect(t).toContain('ЛИДЕРЫ');
+    expect(t).toContain('top@x.co — 25');
+    expect(t).toContain('вход через vk');
+    expect(t).toContain('11/11');
+    expect(t).toContain('ios 84%');
+    expect(t).toContain('3.0 мин');
+    expect(t).toContain('ЗА ПЕРИОД');
     expect(t).toContain('ЗДОРОВЬЕ');
     expect(t).toContain('ЭКРАНЫ');
     expect(t).toContain('42 000 ₽');
   });
 
-  it('без прошлого периода дельту не показывает (нечего сравнивать)', () => {
+  it('без прошлого периода не сравнивает метрики периода (сравнивать не с чем)', () => {
     const t = formatReport('за вчера', base);
-    expect(t).toContain('Новые тренеры: 3 · всего 128');
-    expect(t).not.toContain('(+');
+    // Блок «БАЗА» сравнивает сам с собой (was→now), поэтому дельта там есть всегда.
+    expect(t).toContain('Тренеры: 62 (+7)');
+    // А метрики за период без prev идут голыми числами.
+    expect(t).toContain('Новые тренеры: 3 · клиенты: 11');
+    expect(t).toContain('Проведено тренировок: 87\n');
+    expect(t).toContain('Ошибок: 12\n');
   });
 
   it('с прошлым периодом показывает рост, падение и равенство', () => {

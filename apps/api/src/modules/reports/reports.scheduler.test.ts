@@ -3,15 +3,18 @@ import { startReportsScheduler, dayLabel, startOfDay } from './reports.scheduler
 import type { ReportData } from './reports.format.js';
 
 const empty: ReportData = {
+  totals: [],
   growth: {
     newTrainers: 0,
     newClientAccounts: 0,
-    totalTrainers: 0,
-    totalClientAccounts: 0,
     activeTrainers: 0,
     activeClients: 0,
     linkedPairs: 0,
   },
+  leaders: [],
+  newTrainers: [],
+  sync: [],
+  audience: { platforms: [], avgSessionMin: 0 },
   business: {
     workoutsCompleted: 0,
     sessionsCreated: 0,
